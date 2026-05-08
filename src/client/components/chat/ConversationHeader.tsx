@@ -55,6 +55,9 @@ interface ConversationHeaderProps {
   messageCount: number
   estimatedTokens: number
   maxTokens: number
+  /** Source of `estimatedTokens`: 'api' = ground-truth from last LLM call,
+   *  'estimate' = local BPE-based estimate. Default 'estimate'. */
+  contextSource?: 'api' | 'estimate'
   toolCallCount: number
   isToolCallsOpen: boolean
   queueState?: { isProcessing: boolean; queueSize: number }
@@ -95,6 +98,7 @@ export const ConversationHeader = memo(function ConversationHeader({
   messageCount,
   estimatedTokens,
   maxTokens,
+  contextSource,
   toolCallCount,
   isToolCallsOpen,
   queueState,

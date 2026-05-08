@@ -119,8 +119,12 @@ function estimateMessageFilesTokens(
   return total
 }
 
+// Backed by gpt-tokenizer (BPE) — within ~5-15% of provider tokenizers,
+// vastly more accurate than chars/4 on JSON / YAML / CLI output that
+// dominates tool-heavy Kins.
+import { countTokens as countTokensShared } from '@/shared/token-estimator'
 function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4)
+  return countTokensShared(text)
 }
 
 /**

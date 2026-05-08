@@ -238,7 +238,15 @@ export function ContextViewerDialog({ open, onOpenChange, kinId, taskId, session
           {data?.tokenEstimate && data.contextWindow && data.contextWindow > 0 && (
             <div className="mt-3 space-y-1.5">
               <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                <span>{formatTokenCount(data.tokenEstimate.total)} / {formatTokenCount(data.contextWindow)}</span>
+                <span className="flex items-center gap-1">
+                  <span
+                    className="rounded bg-muted px-1 py-px text-[9px] font-medium text-muted-foreground/80"
+                    title={t('chat.contextSource.estimateHint', { defaultValue: 'Local BPE estimate. The chat banner shows the provider-reported value when available.' })}
+                  >
+                    ~
+                  </span>
+                  <span>{formatTokenCount(data.tokenEstimate.total)} / {formatTokenCount(data.contextWindow)}</span>
+                </span>
                 <span>{Math.round((data.tokenEstimate.total / data.contextWindow) * 100)}%</span>
               </div>
               <div className="relative flex h-2.5 w-full overflow-hidden rounded-full bg-muted">

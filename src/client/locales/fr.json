@@ -570,6 +570,10 @@
       "cacheHit": "Cache hit",
       "headlineHint": "≈ équivalent tokens facturé. Cliquer pour le détail complet."
     },
+    "contextSource": {
+      "estimateHint": "Estimation locale (tokenizer BPE). Le bandeau du chat affiche la valeur retournée par le provider quand elle est disponible.",
+      "apiHint": "Valeur retournée par le provider lors du dernier appel (réelle)."
+    },
     "cacheChip": {
       "aria": "État du cache au dernier tour",
       "title": "Cache (dernier tour)",

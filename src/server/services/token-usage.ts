@@ -33,11 +33,17 @@ const log = createLogger('token-usage')
 /**
  * Aggregate token usage across all steps of a multi-step LLM turn.
  * Returns null on timeout or if no usage data is available.
+ *
+ * `peakStepInputTokens` is the largest single-step input we saw across
+ * the turn — the closest provider-reported number to "current context
+ * size". It's the value to use for displaying the live context banner,
+ * because the aggregate `inputTokens` field is the SUM across steps and
+ * inflates with every tool round-trip.
  */
 export async function aggregateStepUsage(
   stepResults: Array<{ usage: PromiseLike<Record<string, unknown>> }>,
   timeoutMs = 5000,
-): Promise<MessageTokenUsage | null> {
+): Promise<(MessageTokenUsage & { peakStepInputTokens?: number }) | null> {
   if (stepResults.length === 0) return null
   try {
     const settled = await Promise.race([
@@ -46,10 +52,13 @@ export async function aggregateStepUsage(
     ])
     const turn = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 }
     let hasData = false
+    let peakStepInputTokens = 0
     for (const s of settled) {
       if (s.status === 'fulfilled' && s.value) {
         const v = s.value as Record<string, unknown>
-        turn.inputTokens += (v.inputTokens as number) ?? 0
+        const stepInput = (v.inputTokens as number) ?? 0
+        if (stepInput > peakStepInputTokens) peakStepInputTokens = stepInput
+        turn.inputTokens += stepInput
         turn.outputTokens += (v.outputTokens as number) ?? 0
         turn.totalTokens += (v.totalTokens as number) ?? 0
         const inputDetails = v.inputTokenDetails as Record<string, number> | undefined
@@ -69,6 +78,7 @@ export async function aggregateStepUsage(
       ...(turn.cacheWriteTokens > 0 ? { cacheWriteTokens: turn.cacheWriteTokens } : {}),
       ...(turn.reasoningTokens > 0 ? { reasoningTokens: turn.reasoningTokens } : {}),
       stepCount: stepResults.length,
+      ...(peakStepInputTokens > 0 ? { peakStepInputTokens } : {}),
     }
   } catch {
     log.warn('aggregateStepUsage timed out or failed')

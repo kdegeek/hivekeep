@@ -24,8 +24,13 @@ import { ensureUserContactsExist } from '@/server/services/contacts'
 import { pluginManager } from '@/server/services/plugins'
 import { logStore } from '@/server/services/log-store'
 import { sseManager } from '@/server/sse/index'
+import { preloadTokenizer } from '@/shared/token-estimator'
 
 const log = createLogger('server')
+
+// Eagerly load the BPE tokenizer (~1 MB) so the very first context-size
+// estimation uses the accurate path instead of falling back to chars/4.
+preloadTokenizer().catch((err) => log.warn({ err }, 'Tokenizer preload failed; estimator will fall back to chars/4 until first async call'))
 
 // Wire log entries to SSE broadcast for real-time frontend viewer
 logStore.setOnEntry((entry) => {

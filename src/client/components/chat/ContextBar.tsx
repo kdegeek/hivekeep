@@ -18,6 +18,9 @@ interface ContextBarProps {
   kinId: string
   estimatedTokens: number
   maxTokens: number
+  /** 'api' = ground-truth from last LLM call, 'estimate' = local BPE
+   *  estimate (used before any API roundtrip exists for the session). */
+  contextSource?: 'api' | 'estimate'
   contextBreakdown?: ContextTokenBreakdown
   pipelineStatus?: ContextPipelineStatus
   compactingPercent?: number
@@ -39,6 +42,7 @@ export function ContextBar({
   kinId,
   estimatedTokens,
   maxTokens,
+  contextSource,
   contextBreakdown,
   pipelineStatus,
   compactingPercent: compactingPct,
@@ -79,7 +83,25 @@ export function ContextBar({
                   {messageCount}
                 </span>
               )}
-              <span>{contextLabel}</span>
+              <span className="flex items-center gap-1">
+                {contextSource === 'estimate' && (
+                  <span
+                    className="rounded bg-muted px-1 py-px text-[9px] font-medium text-muted-foreground/80"
+                    title={t('chat.contextSource.estimateHint', { defaultValue: 'Local BPE estimate — switches to ground-truth after the first LLM call.' })}
+                  >
+                    ~
+                  </span>
+                )}
+                {contextSource === 'api' && (
+                  <span
+                    className="rounded bg-success/15 px-1 py-px text-[9px] font-medium text-success"
+                    title={t('chat.contextSource.apiHint', { defaultValue: 'Reported by the provider on the last call (ground truth).' })}
+                  >
+                    ✓
+                  </span>
+                )}
+                <span>{contextLabel}</span>
+              </span>
             </div>
             <div className="relative">
               {contextBreakdown && hasContextData ? (

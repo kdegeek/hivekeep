@@ -570,6 +570,10 @@
       "cacheHit": "Cache hit",
       "headlineHint": "≈ billable token equivalent. Click for the full breakdown."
     },
+    "contextSource": {
+      "estimateHint": "Local BPE estimate. The chat banner shows the provider-reported value when available.",
+      "apiHint": "Reported by the provider on the last call (ground truth)."
+    },
     "cacheChip": {
       "aria": "Cache state from last turn",
       "title": "Last turn cache",

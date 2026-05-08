@@ -390,6 +390,7 @@ kinRoutes.get('/:id/context-usage', async (c) => {
     return c.json({
       contextTokens: cached.contextTokens,
       contextWindow: cached.contextWindow,
+      contextSource: cached.contextSource ?? 'estimate',
       contextBreakdown: cached.breakdown ?? null,
       pipelineStatus: cached.pipelineStatus ?? null,
       compactingPercent: compacting.currentPercent,
