@@ -1,10 +1,12 @@
-import { useState, memo } from 'react'
+import { useState, useMemo, memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChatAvatar } from '@/client/components/chat/ChatAvatar'
 import { Button } from '@/client/components/ui/button'
 import { Badge } from '@/client/components/ui/badge'
 import { Progress } from '@/client/components/ui/progress'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/client/components/ui/tooltip'
+import { computeCacheHitRate, computeFreshInput } from '@/shared/billing'
+import type { MessageTokenUsage } from '@/shared/types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/client/components/ui/popover'
 import { ModelPicker, modelPickerValue } from '@/client/components/common/ModelPicker'
 import {
@@ -130,6 +132,29 @@ export const ConversationHeader = memo(function ConversationHeader({
   const hasContextData = maxTokens > 0
   const contextPercent = hasContextData ? Math.min(100, Math.round((estimatedTokens / maxTokens) * 100)) : 0
 
+  // Compute the cache state from the last assistant turn that has token usage.
+  // This gives the user a confidence signal before sending the next message:
+  // if the previous turn read a lot from cache, the prefix is likely still
+  // warm (Anthropic's 5-min ephemeral cache) and the next turn will be cheap.
+  const lastTurnCache = useMemo<{ usage: MessageTokenUsage; hitRate: number; fresh: number } | null>(() => {
+    if (!messages || messages.length === 0) return null
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
+      if (!m) continue
+      if (m.role === 'assistant' && m.tokenUsage) {
+        const cacheRead = m.tokenUsage.cacheReadTokens ?? 0
+        const cacheWrite = m.tokenUsage.cacheWriteTokens ?? 0
+        if (cacheRead === 0 && cacheWrite === 0) return null
+        return {
+          usage: m.tokenUsage,
+          hitRate: computeCacheHitRate(m.tokenUsage),
+          fresh: computeFreshInput(m.tokenUsage),
+        }
+      }
+    }
+    return null
+  }, [messages])
+
   const selectedModelName = llmModels.find((m) => m.id === model)?.name ?? model
 
   return (
@@ -166,6 +191,37 @@ export const ConversationHeader = memo(function ConversationHeader({
             <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
               {t('kin.queue', { count: queueSize })}
             </span>
+          )}
+          {lastTurnCache && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums cursor-default',
+                    lastTurnCache.hitRate >= 0.7 && 'bg-success/15 text-success',
+                    lastTurnCache.hitRate >= 0.3 && lastTurnCache.hitRate < 0.7 && 'bg-warning/15 text-warning',
+                    lastTurnCache.hitRate < 0.3 && 'bg-muted text-muted-foreground',
+                  )}
+                  aria-label={t('chat.cacheChip.aria', 'Cache state from last turn')}
+                >
+                  <Zap className="size-2.5" />
+                  {Math.round(lastTurnCache.hitRate * 100)}%
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs">
+                <div className="space-y-1 text-xs">
+                  <div className="font-medium">
+                    {t('chat.cacheChip.title', 'Last turn cache')}
+                  </div>
+                  <p className="text-muted-foreground leading-snug">
+                    {t('chat.cacheChip.hint', {
+                      defaultValue: '{{hit}}% of input was served from cache (×0.1 cost). The cache is warm — your next message should be cheap unless the prefix changes significantly.',
+                      hit: Math.round(lastTurnCache.hitRate * 100),
+                    })}
+                  </p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
 

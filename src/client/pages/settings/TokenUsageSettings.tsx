@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Button } from '@/client/components/ui/button'
 import {
   Select,
@@ -12,9 +13,20 @@ import { Card, CardContent } from '@/client/components/ui/card'
 import { Skeleton } from '@/client/components/ui/skeleton'
 import { Avatar, AvatarFallback, AvatarImage } from '@/client/components/ui/avatar'
 import { ProviderIcon } from '@/client/components/common/ProviderIcon'
-import { ArrowDownRight, ArrowUpRight, Activity, Hash, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Activity, Hash, Zap, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { api } from '@/client/lib/api'
+import { computeBillableInput, computeCacheHitRate } from '@/shared/billing'
 import type { LlmUsageRow, UsageSummaryRow } from '@/shared/types'
+
+function formatPercent(ratio: number): string {
+  return `${Math.round(ratio * 100)}%`
+}
+
+function hitRateColor(ratio: number): string {
+  if (ratio >= 0.7) return 'text-success'
+  if (ratio >= 0.3) return 'text-warning'
+  return 'text-muted-foreground/70'
+}
 
 type Period = '24h' | '7d' | '30d' | 'all'
 type GroupBy = 'provider_type' | 'model_id' | 'kin_id' | 'call_site' | 'day'
@@ -57,14 +69,24 @@ function buildQuery(params: Record<string, string | number | undefined>): string
 // ─── Summary Cards ──────────────────────────────────────────────────────────
 
 function SummaryCards({ data, loading, t }: {
-  data: { inputTokens: number; outputTokens: number; totalTokens: number; calls: number }
+  data: { inputTokens: number; outputTokens: number; totalTokens: number; cacheReadTokens: number; cacheWriteTokens: number; calls: number }
   loading: boolean
-  t: (key: string) => string
+  t: TFunction
 }) {
+  const billableInput = computeBillableInput(data)
+  const billableTotal = billableInput + data.outputTokens
+  const hitRate = computeCacheHitRate(data)
   const cards = [
-    { label: t('settings.tokenUsage.inputTokens'), value: formatTokens(data.inputTokens), icon: ArrowDownRight, color: 'text-primary' },
+    {
+      label: t('settings.tokenUsage.billableTotal'),
+      value: `≈ ${formatTokens(billableTotal)}`,
+      icon: Zap,
+      color: 'text-primary',
+      sub: hitRate > 0 ? `${formatPercent(hitRate)} ${t('settings.tokenUsage.cacheHit')}` : undefined,
+      subClass: hitRateColor(hitRate),
+    },
+    { label: t('settings.tokenUsage.inputBillable'), value: `≈ ${formatTokens(billableInput)}`, icon: ArrowDownRight, color: 'text-foreground' },
     { label: t('settings.tokenUsage.outputTokens'), value: formatTokens(data.outputTokens), icon: ArrowUpRight, color: 'text-chart-2' },
-    { label: t('settings.tokenUsage.totalTokens'), value: formatTokens(data.totalTokens), icon: Activity, color: 'text-foreground' },
     { label: t('settings.tokenUsage.apiCalls'), value: formatNumber(data.calls), icon: Hash, color: 'text-muted-foreground' },
   ]
 
@@ -82,6 +104,9 @@ function SummaryCards({ data, loading, t }: {
                   {card.label}
                 </div>
                 <div className="text-xl font-semibold tabular-nums">{card.value}</div>
+                {card.sub && (
+                  <div className={`text-[10px] tabular-nums ${card.subClass ?? 'text-muted-foreground'}`}>{card.sub}</div>
+                )}
               </>
             )}
           </CardContent>
@@ -192,7 +217,7 @@ function BreakdownTable({ rows, loading, groupBy, kinMap, t }: {
   loading: boolean
   groupBy: GroupBy
   kinMap: Map<string, KinInfo>
-  t: (key: string) => string
+  t: TFunction
 }) {
   if (loading) {
     return (
@@ -214,36 +239,44 @@ function BreakdownTable({ rows, loading, groupBy, kinMap, t }: {
 
   return (
     <div className="glass-strong rounded-lg overflow-hidden">
-      {/* Header */}
-      <div className="grid grid-cols-[1fr_80px_80px_80px_60px] gap-2 px-3 py-2 text-[10px] uppercase tracking-wider text-muted-foreground/60 border-b border-border/30">
+      {/* Header — wider grid: group | billable in | output | hit% | calls */}
+      <div className="grid grid-cols-[1fr_90px_80px_60px_60px] gap-2 px-3 py-2 text-[10px] uppercase tracking-wider text-muted-foreground/60 border-b border-border/30">
         <span>{t('settings.tokenUsage.columnGroup')}</span>
-        <span className="text-right">{t('settings.tokenUsage.columnInput')}</span>
+        <span className="text-right">{t('settings.tokenUsage.columnInputBillable')}</span>
         <span className="text-right">{t('settings.tokenUsage.columnOutput')}</span>
-        <span className="text-right">{t('settings.tokenUsage.columnTotal')}</span>
+        <span className="text-right" title={t('settings.tokenUsage.columnCacheHitFull')}>%</span>
         <span className="text-right">{t('settings.tokenUsage.columnCalls')}</span>
       </div>
       {/* Rows */}
       <div className="max-h-[300px] overflow-y-auto">
-        {rows.map((row) => (
-          <div
-            key={row.group}
-            className="grid grid-cols-[1fr_80px_80px_80px_60px] gap-2 px-3 py-1.5 text-xs hover:bg-muted/30 border-b border-border/20 items-center"
-          >
-            <RowLabel group={row.group} groupBy={groupBy} kinMap={kinMap} />
-            <span className="text-right font-mono tabular-nums text-muted-foreground">
-              {formatTokens(row.inputTokens)}
-            </span>
-            <span className="text-right font-mono tabular-nums text-muted-foreground">
-              {formatTokens(row.outputTokens)}
-            </span>
-            <span className="text-right font-mono tabular-nums font-semibold">
-              {formatTokens(row.totalTokens)}
-            </span>
-            <span className="text-right font-mono tabular-nums text-muted-foreground">
-              {formatNumber(row.count)}
-            </span>
-          </div>
-        ))}
+        {rows.map((row) => {
+          const billable = computeBillableInput(row)
+          const hit = computeCacheHitRate(row)
+          const hasCache = (row.cacheReadTokens > 0) || (row.cacheWriteTokens > 0)
+          return (
+            <div
+              key={row.group}
+              className="grid grid-cols-[1fr_90px_80px_60px_60px] gap-2 px-3 py-1.5 text-xs hover:bg-muted/30 border-b border-border/20 items-center"
+              title={hasCache
+                ? `Gross input ${formatTokens(row.inputTokens)} = fresh ${formatTokens(Math.max(0, row.inputTokens - row.cacheReadTokens - row.cacheWriteTokens))} + cache write ${formatTokens(row.cacheWriteTokens)} (×1.25) + cache read ${formatTokens(row.cacheReadTokens)} (×0.1)`
+                : undefined}
+            >
+              <RowLabel group={row.group} groupBy={groupBy} kinMap={kinMap} />
+              <span className="text-right font-mono tabular-nums font-semibold text-primary">
+                ≈ {formatTokens(billable)}
+              </span>
+              <span className="text-right font-mono tabular-nums text-muted-foreground">
+                {formatTokens(row.outputTokens)}
+              </span>
+              <span className={`text-right font-mono tabular-nums ${hasCache ? hitRateColor(hit) : 'text-muted-foreground/40'}`}>
+                {hasCache ? formatPercent(hit) : '—'}
+              </span>
+              <span className="text-right font-mono tabular-nums text-muted-foreground">
+                {formatNumber(row.count)}
+              </span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -255,7 +288,7 @@ function KinFilter({ value, onValueChange, kins, t }: {
   value: string
   onValueChange: (v: string) => void
   kins: KinInfo[]
-  t: (key: string) => string
+  t: TFunction
 }) {
   const selectedKin = kins.find((k) => k.id === value)
 
@@ -314,7 +347,7 @@ function ProviderFilter({ value, onValueChange, providers, t }: {
   value: string
   onValueChange: (v: string) => void
   providers: string[]
-  t: (key: string) => string
+  t: TFunction
 }) {
   return (
     <div className="relative">
@@ -391,14 +424,14 @@ function DetailTable({ rows, loading, page, totalCount, onPageChange, kinMap, t 
     <div className="space-y-2">
       <div className="glass-strong rounded-lg overflow-hidden">
         {/* Header */}
-        <div className="grid grid-cols-[140px_1fr_1fr_80px_70px_70px_70px_50px] gap-2 px-3 py-2 text-[10px] uppercase tracking-wider text-muted-foreground/60 border-b border-border/30">
+        <div className="grid grid-cols-[140px_1fr_1fr_80px_80px_70px_50px_50px] gap-2 px-3 py-2 text-[10px] uppercase tracking-wider text-muted-foreground/60 border-b border-border/30">
           <span>{t('settings.tokenUsage.detailDate')}</span>
           <span>{t('settings.tokenUsage.detailKin')}</span>
           <span>{t('settings.tokenUsage.detailModel')}</span>
           <span>{t('settings.tokenUsage.detailCallSite')}</span>
-          <span className="text-right">{t('settings.tokenUsage.columnInput')}</span>
+          <span className="text-right">{t('settings.tokenUsage.columnInputBillable')}</span>
           <span className="text-right">{t('settings.tokenUsage.columnOutput')}</span>
-          <span className="text-right">{t('settings.tokenUsage.columnTotal')}</span>
+          <span className="text-right" title={t('settings.tokenUsage.columnCacheHitFull')}>%</span>
           <span className="text-right">{t('settings.tokenUsage.detailSteps')}</span>
         </div>
         {/* Rows */}
@@ -406,10 +439,22 @@ function DetailTable({ rows, loading, page, totalCount, onPageChange, kinMap, t 
           {rows.map((row) => {
             const kin = row.kinId ? kinMap.get(row.kinId) : null
             const date = new Date(row.createdAt)
+            const usage = {
+              inputTokens: row.inputTokens ?? 0,
+              cacheReadTokens: row.cacheReadTokens ?? 0,
+              cacheWriteTokens: row.cacheWriteTokens ?? 0,
+            }
+            const billable = computeBillableInput(usage)
+            const hit = computeCacheHitRate(usage)
+            const hasCache = (row.cacheReadTokens ?? 0) > 0 || (row.cacheWriteTokens ?? 0) > 0
+            const fresh = Math.max(0, (row.inputTokens ?? 0) - (row.cacheReadTokens ?? 0) - (row.cacheWriteTokens ?? 0))
             return (
               <div
                 key={row.id}
-                className="grid grid-cols-[140px_1fr_1fr_80px_70px_70px_70px_50px] gap-2 px-3 py-1.5 text-xs hover:bg-muted/30 border-b border-border/20 items-center"
+                className="grid grid-cols-[140px_1fr_1fr_80px_80px_70px_50px_50px] gap-2 px-3 py-1.5 text-xs hover:bg-muted/30 border-b border-border/20 items-center"
+                title={hasCache
+                  ? `Gross input ${formatTokens(row.inputTokens ?? 0)} = fresh ${formatTokens(fresh)} + cache write ${formatTokens(row.cacheWriteTokens ?? 0)} (×1.25) + cache read ${formatTokens(row.cacheReadTokens ?? 0)} (×0.1)`
+                  : `Input ${formatTokens(row.inputTokens ?? 0)} (no cache)`}
               >
                 <span className="text-muted-foreground tabular-nums" title={date.toISOString()}>
                   {date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}{' '}
@@ -433,14 +478,14 @@ function DetailTable({ rows, loading, page, totalCount, onPageChange, kinMap, t 
                   <span className="truncate" title={row.modelId ?? undefined}>{row.modelId ?? '—'}</span>
                 </div>
                 <span className="truncate text-muted-foreground">{row.callSite}</span>
-                <span className="text-right font-mono tabular-nums text-muted-foreground">
-                  {formatTokens(row.inputTokens ?? 0)}
+                <span className="text-right font-mono tabular-nums font-semibold text-primary">
+                  ≈ {formatTokens(billable)}
                 </span>
                 <span className="text-right font-mono tabular-nums text-muted-foreground">
                   {formatTokens(row.outputTokens ?? 0)}
                 </span>
-                <span className="text-right font-mono tabular-nums font-semibold">
-                  {formatTokens(row.totalTokens ?? 0)}
+                <span className={`text-right font-mono tabular-nums ${hasCache ? hitRateColor(hit) : 'text-muted-foreground/40'}`}>
+                  {hasCache ? formatPercent(hit) : '—'}
                 </span>
                 <span className="text-right font-mono tabular-nums text-muted-foreground">
                   {row.stepCount}
@@ -602,9 +647,11 @@ export function TokenUsageSettings({ initialKinFilter }: { initialKinFilter?: st
         inputTokens: acc.inputTokens + r.inputTokens,
         outputTokens: acc.outputTokens + r.outputTokens,
         totalTokens: acc.totalTokens + r.totalTokens,
+        cacheReadTokens: acc.cacheReadTokens + (r.cacheReadTokens ?? 0),
+        cacheWriteTokens: acc.cacheWriteTokens + (r.cacheWriteTokens ?? 0),
         calls: acc.calls + r.count,
       }),
-      { inputTokens: 0, outputTokens: 0, totalTokens: 0, calls: 0 },
+      { inputTokens: 0, outputTokens: 0, totalTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, calls: 0 },
     )
   }, [summaryRows])
 

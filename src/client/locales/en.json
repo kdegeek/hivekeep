@@ -560,7 +560,19 @@
       "cacheRead": "Cache read",
       "cacheWrite": "Cache write",
       "reasoning": "Reasoning",
-      "steps": "{{count}} steps"
+      "steps": "{{count}} steps",
+      "billableTitle": "Billable equivalent",
+      "billableHint": "Cache reads cost 10% and cache writes cost 125% of fresh input — this number reflects that.",
+      "rawBreakdown": "Raw breakdown",
+      "inputGross": "Input (gross)",
+      "fresh": "fresh",
+      "cacheHit": "Cache hit",
+      "headlineHint": "≈ billable token equivalent. Click for the full breakdown."
+    },
+    "cacheChip": {
+      "aria": "Cache state from last turn",
+      "title": "Last turn cache",
+      "hint": "{{hit}}% of input was served from cache (×0.1 cost). The cache is warm — your next message should be cheap unless the prefix changes significantly."
     },
     "forceCompact": "Force compaction",
     "tooltipContext": "Context window",
@@ -1684,6 +1696,11 @@
       "columnOutput": "Output",
       "columnTotal": "Total",
       "columnCalls": "Calls",
+      "columnInputBillable": "≈ Input bil.",
+      "columnCacheHitFull": "Cache hit rate",
+      "billableTotal": "≈ Billable equiv.",
+      "inputBillable": "≈ Input billable",
+      "cacheHit": "cache hit",
       "noData": "No usage data for this period",
       "dailyTrend": "Daily trend",
       "legendInput": "Input",

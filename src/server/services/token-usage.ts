@@ -151,6 +151,8 @@ export function queryUsage(filters: UsageQueryFilters) {
       inputTokens: sql<number>`COALESCE(SUM(${llmUsage.inputTokens}), 0)`,
       outputTokens: sql<number>`COALESCE(SUM(${llmUsage.outputTokens}), 0)`,
       totalTokens: sql<number>`COALESCE(SUM(${llmUsage.totalTokens}), 0)`,
+      cacheReadTokens: sql<number>`COALESCE(SUM(${llmUsage.cacheReadTokens}), 0)`,
+      cacheWriteTokens: sql<number>`COALESCE(SUM(${llmUsage.cacheWriteTokens}), 0)`,
       count: sql<number>`COUNT(*)`,
     })
     .from(llmUsage)
@@ -182,6 +184,8 @@ export function getUsageSummary(filters: UsageQueryFilters & { groupBy: UsageGro
       inputTokens: sql<number>`COALESCE(SUM(${llmUsage.inputTokens}), 0)`,
       outputTokens: sql<number>`COALESCE(SUM(${llmUsage.outputTokens}), 0)`,
       totalTokens: sql<number>`COALESCE(SUM(${llmUsage.totalTokens}), 0)`,
+      cacheReadTokens: sql<number>`COALESCE(SUM(${llmUsage.cacheReadTokens}), 0)`,
+      cacheWriteTokens: sql<number>`COALESCE(SUM(${llmUsage.cacheWriteTokens}), 0)`,
       count: sql<number>`COUNT(*)`,
     })
     .from(llmUsage)

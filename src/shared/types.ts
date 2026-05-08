@@ -586,5 +586,7 @@ export interface UsageSummaryRow {
   inputTokens: number
   outputTokens: number
   totalTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
   count: number
 }
