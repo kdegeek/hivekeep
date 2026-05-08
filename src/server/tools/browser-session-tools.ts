@@ -1,9 +1,13 @@
 import { tool } from 'ai'
 import { z } from 'zod'
+import { eq } from 'drizzle-orm'
+import { db } from '@/server/db/index'
+import { tasks } from '@/server/db/schema'
 import { playwrightManager, parseCookieInput, type CookieSpec } from '@/server/services/playwright-manager'
 import { getPageState, locatorForRef } from '@/server/services/browser-snapshot'
 import { isBlockedUrl } from '@/server/services/web-browse'
 import { createFileFromContent } from '@/server/services/file-storage'
+import { createHumanPrompt } from '@/server/services/human-prompts'
 import { createLogger } from '@/server/logger'
 import { config } from '@/server/config'
 import type { ToolRegistration } from '@/server/tools/types'
@@ -463,4 +467,99 @@ export const browserClearCookiesTool: ToolRegistration = {
         }
       },
     }),
+}
+
+// ─── Human-in-the-loop ──────────────────────────────────────────────────────
+
+export const browserRequestHumanTool: ToolRegistration = {
+  availability: ['main', 'sub-kin'],
+  defaultDisabled: true,
+  create: (ctx) => {
+    let calledThisTurn = false
+    return tool({
+      description:
+        'Pause and ask the user to intervene on the current browser session — typically used when blocked by a captcha, an unexpected modal, a 2FA challenge, or any visual situation you cannot resolve programmatically. Captures a screenshot of the current page and presents it to the user with a Continue / Cancel choice. Your task pauses until the user responds. When the user clicks Continue, retry your previous action or call browser_screenshot again to see the new page state.',
+      inputSchema: z.object({
+        session_id: z.string(),
+        reason: z
+          .string()
+          .min(1)
+          .max(500)
+          .describe('Short, human-readable explanation of why you need help (will be shown to the user as the question).'),
+        continue_label: z
+          .string()
+          .max(40)
+          .optional()
+          .describe('Optional label for the Continue button. Default: "Continue". Match the user\'s language.'),
+        cancel_label: z
+          .string()
+          .max(40)
+          .optional()
+          .describe('Optional label for the Cancel button. Default: "Cancel". Match the user\'s language.'),
+        full_page: z
+          .boolean()
+          .optional()
+          .describe('Capture the full scrollable page instead of just the viewport. Default: false.'),
+      }),
+      execute: async ({ session_id, reason, continue_label, cancel_label, full_page }) => {
+        try {
+          if (calledThisTurn) {
+            return err('You already requested human intervention this turn. Wait for the user response before asking again.')
+          }
+          calledThisTurn = true
+
+          // Guard: cron-spawned sub-Kin tasks cannot prompt humans
+          if (ctx.taskId) {
+            const task = await db.select().from(tasks).where(eq(tasks.id, ctx.taskId)).get()
+            if (!task) return err('Task not found')
+            if (task.cronId) return err('browser_request_human is not available in cron-triggered tasks')
+            if (!task.allowHumanPrompt) return err('Human prompts are disabled for this task by the parent')
+          }
+
+          const session = playwrightManager.resolveSession(session_id, ctx.kinId)
+          const buffer = await session.page.screenshot({ type: 'png', fullPage: full_page ?? false })
+          const hostname = new URL(session.page.url()).hostname.replace(/[^a-z0-9.-]/gi, '_')
+          const name = `intervention-${hostname}-${Date.now()}`
+          const file = await createFileFromContent(ctx.kinId, name, buffer.toString('base64'), 'image/png', {
+            isBase64: true,
+            description: `Browser intervention screenshot at ${session.page.url()}`,
+            isPublic: true,
+            createdByKinId: ctx.kinId,
+          })
+          await playwrightManager.refreshSessionMeta(session)
+
+          // Description embeds the screenshot as markdown image so HumanPromptCard
+          // (now markdown-rendered) displays it inline. Cap at description.max=1000 chars.
+          const description =
+            `![${name}](${file.url})\n\n` +
+            `**URL** : ${session.page.url()}` +
+            (session.title ? `\n**Page** : ${session.title}` : '')
+
+          const { promptId } = await createHumanPrompt({
+            kinId: ctx.kinId,
+            taskId: ctx.taskId,
+            promptType: 'confirm',
+            question: reason,
+            description: description.slice(0, 1000),
+            options: [
+              { label: continue_label ?? 'Continue', value: 'continue', variant: 'success' },
+              { label: cancel_label ?? 'Cancel', value: 'cancel', variant: 'destructive' },
+            ],
+          })
+
+          log.info({ kinId: ctx.kinId, taskId: ctx.taskId, sessionId: session_id, promptId }, 'browser_request_human prompt created')
+
+          return {
+            promptId,
+            status: 'pending',
+            session_id,
+            screenshot_url: file.url,
+            message: 'The user has been shown the screenshot and asked to either Continue or Cancel. Wait for their response — it will arrive as a new message. After Continue, take a fresh screenshot or page_state to see the new state.',
+          }
+        } catch (e) {
+          return err(e instanceof Error ? e.message : String(e))
+        }
+      },
+    })
+  },
 }

@@ -21,6 +21,7 @@ import {
   browserSetCookiesTool,
   browserGetCookiesTool,
   browserClearCookiesTool,
+  browserRequestHumanTool,
 } from '@/server/tools/browser-session-tools'
 import {
   getContactTool,
@@ -228,6 +229,7 @@ export function registerAllTools(): void {
   toolRegistry.register('browser_set_cookies', browserSetCookiesTool)
   toolRegistry.register('browser_get_cookies', browserGetCookiesTool)
   toolRegistry.register('browser_clear_cookies', browserClearCookiesTool)
+  toolRegistry.register('browser_request_human', browserRequestHumanTool)
 
   // Phase 11: Contact tools
   toolRegistry.register('get_contact', getContactTool)

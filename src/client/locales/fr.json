@@ -1808,6 +1808,7 @@
       "browser_set_cookies": "Navigateur : injecter des cookies",
       "browser_get_cookies": "Navigateur : lire les cookies",
       "browser_clear_cookies": "Navigateur : effacer les cookies",
+      "browser_request_human": "Navigateur : demander de l'aide humaine",
       "http_request": "Requête HTTP",
       "browse_history": "Parcourir l'historique",
       "list_summaries": "Lister les résumés",

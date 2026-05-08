@@ -1808,6 +1808,7 @@
       "browser_set_cookies": "Browser: Set Cookies",
       "browser_get_cookies": "Browser: Get Cookies",
       "browser_clear_cookies": "Browser: Clear Cookies",
+      "browser_request_human": "Browser: Request Human",
       "http_request": "HTTP Request",
       "browse_history": "Browse History",
       "list_summaries": "List Summaries",

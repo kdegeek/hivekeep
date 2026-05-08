@@ -4,6 +4,7 @@ import { Button } from '@/client/components/ui/button'
 import { HelpCircle, Check, Loader2 } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 import { RelativeTimestamp } from '@/client/components/chat/RelativeTimestamp'
+import { MarkdownContent } from '@/client/components/chat/MarkdownContent'
 import type { HumanPromptSummary, HumanPromptOptionVariant } from '@/shared/types'
 
 interface HumanPromptCardProps {
@@ -94,9 +95,9 @@ export const HumanPromptCard = memo(function HumanPromptCard({
             <RelativeTimestamp timestamp={new Date(prompt.createdAt).toISOString()} className="shrink-0 text-[10px] text-muted-foreground/70" />
           </div>
           {prompt.description && (
-            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-              {prompt.description}
-            </p>
+            <div className="text-xs text-muted-foreground mt-1 leading-relaxed">
+              <MarkdownContent content={prompt.description} />
+            </div>
           )}
         </div>
       </div>
