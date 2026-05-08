@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# Ensure standalone bun (~/.bun/bin/bun) is found even when git invokes
+# the hook with a minimal PATH (no shell rcfile sourced).
+export PATH="$HOME/.bun/bin:$PATH"
+
 echo "🔍 Pre-commit checks..."
 
 # 1. TypeScript type checking
