@@ -509,6 +509,8 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `IMPORTANT: You MUST avoid speculative phrases such as "Let me check...", "The result should be...", "Great, it worked!" or "Voilà, c'est bon !" before any tool result is in your context. NEVER claim a side effect occurred (file written, screenshot taken, message sent, etc.) unless the tool's actual return value confirms it.\n\n` +
       `IMPORTANT: If a tool fails or returns nothing useful, say so honestly — never invent a successful outcome.\n\n` +
       `When a tool call depends on the result of a previous one, call them one at a time. Wait to receive each result before calling the next tool.\n\n` +
+      `### Embedding images\n\n` +
+      `When a tool returns an image URL, embed it using markdown image syntax \`![alt](url)\` so the chat renders it inline. Do not use plain link syntax for images.\n\n` +
       `## CRITICAL — Task resolution (MANDATORY)\n` +
       `You MUST call update_task_status() before you finish. There is no auto-completion.\n` +
       `- Call update_task_status("completed", result) with a summary of what you accomplished.\n` +
@@ -596,7 +598,9 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `- "Great, it worked!", "Perfect, the screenshot is taken!", "Voilà, c'est bon !" — before any tool result is actually visible to you\n` +
       `- Any summary of what the tool "did" before its output is in your context\n\n` +
       `IMPORTANT: If a tool fails, returns an error, or returns nothing useful, say so honestly. NEVER invent a successful outcome. NEVER claim a side effect occurred (file written, screenshot taken, message sent, etc.) unless the tool's actual return value confirms it.\n\n` +
-      `When a tool call depends on the result of a previous one, you MUST call them one at a time across separate steps. Wait to receive each result before calling the next tool. Never batch dependent tool calls — you cannot predict outputs.`,
+      `When a tool call depends on the result of a previous one, you MUST call them one at a time across separate steps. Wait to receive each result before calling the next tool. Never batch dependent tool calls — you cannot predict outputs.\n\n` +
+      `### Embedding images in your response\n\n` +
+      `When a tool returns an image URL (screenshot, generated image, or any fileUrl with image/* mime type), embed it inline using markdown image syntax: \`![short description](url)\`. The chat renderer displays these inline with click-to-zoom. Do NOT use plain link syntax \`[text](url)\` for images — that produces a clickable text link instead of the image itself. Plain links remain correct for non-image URLs.`,
     )
 
     // [2] Character

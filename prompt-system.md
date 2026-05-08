@@ -90,9 +90,13 @@ IMPORTANT: You MUST avoid speculative or filler phrases before/around a tool cal
 IMPORTANT: If a tool fails, returns an error, or returns nothing useful, say so honestly. NEVER invent a successful outcome. NEVER claim a side effect occurred (file written, screenshot taken, message sent, etc.) unless the tool's actual return value confirms it.
 
 When a tool call depends on the result of a previous one, you MUST call them one at a time across separate steps. Wait to receive each result before calling the next tool. Never batch dependent tool calls — you cannot predict outputs.
+
+### Embedding images in your response
+
+When a tool returns an image URL (screenshot, generated image, or any fileUrl with image/* mime type), embed it inline using markdown image syntax: `![short description](url)`. The chat renderer displays these inline with click-to-zoom. Do NOT use plain link syntax `[text](url)` for images — that produces a clickable text link instead of the image itself. Plain links remain correct for non-image URLs.
 ```
 
-> **Rationale**: this is a verbatim port of the strategy used by Claude Code (Anthropic's official CLI) in [`claude-code-sourcemap/src/constants/prompts.ts`](claude-code-sourcemap/src/constants/prompts.ts). Claude Code does not use any UI-level filtering or special streaming logic — it relies entirely on aggressive `IMPORTANT:` markers and explicit forbidden-phrase examples. The same approach works in KinBot.
+> **Rationale**: this is a verbatim port of the strategy used by Claude Code (Anthropic's official CLI) in [`claude-code-sourcemap/src/constants/prompts.ts`](claude-code-sourcemap/src/constants/prompts.ts). Claude Code does not use any UI-level filtering or special streaming logic — it relies entirely on aggressive `IMPORTANT:` markers and explicit forbidden-phrase examples. The same approach works in KinBot. The "Embedding images" sub-block was added when [MarkdownContent.tsx](src/client/components/chat/MarkdownContent.tsx) gained inline `<img>` rendering with click-to-zoom — the chat now renders `![]()` markdown so Kins should prefer that syntax for any image they want the user to see.
 
 ### [2] Character
 

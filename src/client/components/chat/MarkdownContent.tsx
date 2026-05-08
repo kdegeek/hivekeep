@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState, type AnchorHTMLAttributes, type HTMLAttributes } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState, type AnchorHTMLAttributes, type HTMLAttributes, type ImgHTMLAttributes } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useTranslation } from 'react-i18next'
@@ -6,6 +6,7 @@ import { Copy, Check, WrapText, Download } from 'lucide-react'
 import { useCopyToClipboard } from '@/client/hooks/useCopyToClipboard'
 import { cn } from '@/client/lib/utils'
 import { HighlightText } from '@/client/components/chat/HighlightText'
+import { ImageLightbox } from '@/client/components/chat/ImageLightbox'
 
 interface MarkdownContentProps {
   content: string
@@ -371,6 +372,71 @@ function MarkdownLink({ children, href, ...props }: AnchorHTMLAttributes<HTMLAnc
   )
 }
 
+/**
+ * Inline image renderer for markdown ![alt](url) syntax.
+ * - Click: opens the existing ImageLightbox dialog
+ * - Hover: copy-URL button overlay
+ * - Load failure: falls back to a plain link
+ */
+function MarkdownImage({ src, alt, title }: ImgHTMLAttributes<HTMLImageElement>) {
+  const [open, setOpen] = useState(false)
+  const [errored, setErrored] = useState(false)
+  const { copy, copied } = useCopyToClipboard()
+
+  if (!src || errored) {
+    return (
+      <a
+        href={src}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={title}
+        className="break-all"
+      >
+        {alt || src || 'image'}
+      </a>
+    )
+  }
+
+  const fileName = alt || (() => {
+    try { return new URL(src).pathname.split('/').filter(Boolean).pop() || 'image' } catch { return 'image' }
+  })()
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    copy(src)
+  }
+
+  return (
+    <>
+      <span className="group relative my-2 inline-block max-w-full align-top">
+        <img
+          src={src}
+          alt={alt ?? ''}
+          title={title}
+          loading="lazy"
+          onClick={() => setOpen(true)}
+          onError={() => setErrored(true)}
+          className="block max-h-80 max-w-full cursor-zoom-in rounded-md border border-border object-contain"
+        />
+        <button
+          type="button"
+          onClick={handleCopy}
+          aria-label="Copy image URL"
+          className="absolute right-1.5 top-1.5 rounded bg-background/80 p-1 opacity-0 backdrop-blur transition-opacity hover:bg-background group-hover:opacity-100"
+        >
+          {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
+        </button>
+      </span>
+      {open && (
+        <ImageLightbox
+          file={{ id: src, name: fileName, url: src, mimeType: 'image/*', size: 0 }}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
+  )
+}
+
 const markdownComponents = {
   pre: PreBlock,
   p: withHighlight('p'),
@@ -381,6 +447,7 @@ const markdownComponents = {
   em: withHighlight('em'),
   del: withHighlight('del'),
   a: MarkdownLink,
+  img: MarkdownImage,
   h1: withHighlight('h1'),
   h2: withHighlight('h2'),
   h3: withHighlight('h3'),
