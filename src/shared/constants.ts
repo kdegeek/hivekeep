@@ -169,7 +169,14 @@ export const TOOL_DOMAIN_MAP: Record<string, ToolDomain> = {
   update_memory: 'memory',
   forget: 'memory',
   list_memories: 'memory',
+  review_memories: 'memory',
   search_history: 'memory',
+  browse_history: 'memory',
+  list_summaries: 'memory',
+  read_summary: 'memory',
+  // Knowledge base (folded under memory until it gets >2 tools)
+  search_knowledge: 'memory',
+  list_knowledge_sources: 'memory',
   // Vault
   get_secret: 'vault',
   redact_message: 'vault',
@@ -187,26 +194,37 @@ export const TOOL_DOMAIN_MAP: Record<string, ToolDomain> = {
   respond_to_task: 'tasks',
   cancel_task: 'tasks',
   list_tasks: 'tasks',
+  list_active_queues: 'tasks',
+  get_task_detail: 'tasks',
   report_to_parent: 'tasks',
   update_task_status: 'tasks',
   request_input: 'tasks',
   prompt_human: 'tasks',
   notify: 'tasks',
+  save_run_learning: 'tasks',
+  delete_run_learning: 'tasks',
   // Inter-Kin
   send_message: 'inter-kin',
   reply: 'inter-kin',
   list_kins: 'inter-kin',
-  // Crons
+  // Crons (recurring scheduled tasks + one-shot wakeups)
   create_cron: 'crons',
   update_cron: 'crons',
   delete_cron: 'crons',
   list_crons: 'crons',
+  get_cron_journal: 'crons',
+  trigger_cron: 'crons',
+  wake_me_in: 'crons',
+  wake_me_every: 'crons',
+  cancel_wakeup: 'crons',
+  list_wakeups: 'crons',
   // Custom
   register_tool: 'custom',
   run_custom_tool: 'custom',
   list_custom_tools: 'custom',
   // Images
   generate_image: 'images',
+  list_image_models: 'images',
   // Shell
   run_shell: 'shell',
   // Filesystem
@@ -214,6 +232,8 @@ export const TOOL_DOMAIN_MAP: Record<string, ToolDomain> = {
   write_file: 'filesystem',
   edit_file: 'filesystem',
   list_directory: 'filesystem',
+  multi_edit: 'filesystem',
+  grep: 'filesystem',
   // File Storage
   store_file: 'file-storage',
   get_stored_file: 'file-storage',
@@ -245,11 +265,15 @@ export const TOOL_DOMAIN_MAP: Record<string, ToolDomain> = {
   delete_channel: 'channels',
   activate_channel: 'channels',
   deactivate_channel: 'channels',
+  attach_file: 'channels',
   // System
   get_platform_logs: 'system',
   get_platform_config: 'system',
   update_platform_config: 'system',
   restart_platform: 'system',
+  get_system_info: 'system',
+  list_providers: 'system',
+  list_models: 'system',
   // Users
   list_users: 'users',
   get_user: 'users',
@@ -265,6 +289,21 @@ export const TOOL_DOMAIN_MAP: Record<string, ToolDomain> = {
   read_mini_app_file: 'mini-apps',
   delete_mini_app_file: 'mini-apps',
   list_mini_app_files: 'mini-apps',
+  edit_mini_app_file: 'mini-apps',
+  multi_edit_mini_app_file: 'mini-apps',
+  get_mini_app_storage: 'mini-apps',
+  set_mini_app_storage: 'mini-apps',
+  delete_mini_app_storage: 'mini-apps',
+  list_mini_app_storage: 'mini-apps',
+  clear_mini_app_storage: 'mini-apps',
+  create_mini_app_snapshot: 'mini-apps',
+  list_mini_app_snapshots: 'mini-apps',
+  rollback_mini_app: 'mini-apps',
+  generate_mini_app_icon: 'mini-apps',
+  get_mini_app_console: 'mini-apps',
+  get_mini_app_templates: 'mini-apps',
+  get_mini_app_docs: 'mini-apps',
+  browse_mini_apps: 'mini-apps',
   // Plugin management
   list_installed_plugins: 'plugins',
   browse_plugin_store: 'plugins',
@@ -274,6 +313,8 @@ export const TOOL_DOMAIN_MAP: Record<string, ToolDomain> = {
   disable_plugin: 'plugins',
   configure_plugin: 'plugins',
   get_plugin_details: 'plugins',
+  check_plugin_updates: 'plugins',
+  update_plugin: 'plugins',
 } as const
 
 // ---------------------------------------------------------------------------
