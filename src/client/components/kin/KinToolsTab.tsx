@@ -199,14 +199,19 @@ export function KinToolsTab({ kinId, toolConfig, onToolConfigChange, isHub }: Ki
               isOptIn={isOptIn}
               onToggleAll={() => toggleDomain(group)}
             >
-              {group.tools.map((tool) => (
-                <ToolRow
-                  key={tool.name}
-                  label={t(`tools.names.${tool.name}`, tool.name)}
-                  enabled={isNativeToolEnabled(tool.name, tool.defaultDisabled)}
-                  onToggle={() => toggleNativeTool(tool.name, tool.defaultDisabled)}
-                />
-              ))}
+              {group.tools.map((tool) => {
+                const friendlyLabel = t(`tools.names.${tool.name}`, tool.name)
+                const showKey = friendlyLabel !== tool.name
+                return (
+                  <ToolRow
+                    key={tool.name}
+                    label={friendlyLabel}
+                    toolKey={showKey ? tool.name : undefined}
+                    enabled={isNativeToolEnabled(tool.name, tool.defaultDisabled)}
+                    onToggle={() => toggleNativeTool(tool.name, tool.defaultDisabled)}
+                  />
+                )
+              })}
             </DomainGroup>
           )
         })}
@@ -427,19 +432,27 @@ function McpServerGroup({
 
 function ToolRow({
   label,
+  toolKey,
   description,
   enabled,
   onToggle,
 }: {
   label: string
+  /** Optional tool identifier (e.g. "browser_open_session") shown muted next to the label */
+  toolKey?: string
   description?: string
   enabled: boolean
   onToggle: () => void
 }) {
   return (
-    <div className="flex items-center justify-between px-3 py-1.5 hover:bg-accent/30 transition-colors">
+    <div className="flex items-center justify-between gap-3 py-1.5 pr-3 pl-12 hover:bg-accent/30 transition-colors">
       <div className="min-w-0 flex-1">
-        <span className="text-sm text-foreground">{label}</span>
+        <span className="flex flex-wrap items-baseline gap-x-2">
+          <span className="text-sm text-foreground">{label}</span>
+          {toolKey && (
+            <span className="font-mono text-[11px] text-muted-foreground/70">{toolKey}</span>
+          )}
+        </span>
         {description && (
           <p className="truncate text-xs text-muted-foreground">{description}</p>
         )}
