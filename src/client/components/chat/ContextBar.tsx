@@ -60,6 +60,18 @@ export function ContextBar({
   const [contextViewerOpen, setContextViewerOpen] = useState(false)
 
   const hasContextData = maxTokens > 0
+  // estimatedTokens is the displayed total — provider-reported when available
+  // (contextSource='api'), otherwise our local BPE estimate. The colored
+  // breakdown blocks below always come from the LOCAL estimator (providers
+  // don't return per-section sizes), so they may not sum to estimatedTokens
+  // when the source is 'api' — the visible gap is the estimator's blind spot.
+  const breakdownSum = contextBreakdown
+    ? contextBreakdown.tools + contextBreakdown.systemPrompt + (contextBreakdown.summary ?? 0)
+      + (contextBreakdown.cronRuns ?? 0) + (contextBreakdown.cronLearnings ?? 0) + contextBreakdown.messages
+    : 0
+  const realValueAvailable = contextSource === 'api' && hasContextData
+  const realValuePercent = realValueAvailable ? Math.min(100, (estimatedTokens / maxTokens) * 100) : 0
+  const breakdownPercent = hasContextData && breakdownSum > 0 ? Math.min(100, (breakdownSum / maxTokens) * 100) : 0
   const contextPercent = hasContextData ? Math.min(100, Math.round((estimatedTokens / maxTokens) * 100)) : 0
   const contextLabel = hasContextData
     ? `${formatTokenCount(estimatedTokens)} / ${formatTokenCount(maxTokens)}`
@@ -124,6 +136,20 @@ export function ContextBar({
                   {contextBreakdown.messages > 0 && (
                     <div className="bg-emerald-500" style={{ width: `${Math.max(0.5, (contextBreakdown.messages / maxTokens) * 100)}%` }} />
                   )}
+                  {/* "Non attribué" segment: gap between estimate sum and the
+                       provider-reported real value. Shown as a hatched gray
+                       fill so the user sees that the bar IS at the real
+                       position but we can't break down the extra portion. */}
+                  {realValueAvailable && realValuePercent > breakdownPercent + 0.5 && (
+                    <div
+                      className="bg-muted-foreground/30"
+                      style={{
+                        width: `${realValuePercent - breakdownPercent}%`,
+                        backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.15) 2px, rgba(255,255,255,0.15) 4px)',
+                      }}
+                      title={t('chat.contextSource.unattributedHint', { defaultValue: 'Provider-reported size beyond what the local estimator can attribute by section.' })}
+                    />
+                  )}
                 </div>
               ) : (
                 <Progress
@@ -138,6 +164,16 @@ export function ContextBar({
                   style={{ left: `${compactingThresholdPercent}%` }}
                 />
               )}
+              {/* Real (provider-reported) value marker: a small vertical line
+                   at the actual context size from the last LLM call. Visually
+                   distinct from the compaction threshold (which is amber). */}
+              {realValueAvailable && (
+                <div
+                  className="absolute -top-px h-[calc(100%+2px)] w-0.5 rounded-sm bg-success shadow-[0_0_4px_var(--color-success)]"
+                  style={{ left: `calc(${realValuePercent}% - 1px)` }}
+                  title={t('chat.contextSource.realMarkerHint', { defaultValue: 'Real context size reported by the provider on the last call.' })}
+                />
+              )}
             </div>
             {!compact && hasCompactingData && (
               <p className="truncate text-[9px] text-muted-foreground">
@@ -150,12 +186,16 @@ export function ContextBar({
             )}
           </div>
         </TooltipTrigger>
-        <TooltipContent side="bottom" hideArrow className="w-64 space-y-3 border border-border bg-popover p-3 text-popover-foreground shadow-md">
+        <TooltipContent side="bottom" hideArrow className="w-72 space-y-3 border border-border bg-popover p-3 text-popover-foreground shadow-md">
           {/* Context window */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-[11px]">
               <span className="font-medium">{t('chat.tooltipContext')}</span>
-              <span className="text-muted-foreground">{contextLabel}</span>
+              <span className="flex items-center gap-1 text-muted-foreground">
+                {realValueAvailable && <span className="rounded bg-success/15 px-1 py-px text-[9px] font-medium text-success">✓ {t('chat.contextSource.real', { defaultValue: 'real' })}</span>}
+                {!realValueAvailable && hasContextData && <span className="rounded bg-muted px-1 py-px text-[9px] font-medium text-muted-foreground/80">~ {t('chat.contextSource.estimate', { defaultValue: 'est.' })}</span>}
+                <span>{contextLabel}</span>
+              </span>
             </div>
             <div className="relative">
               {contextBreakdown && hasContextData ? (
@@ -178,6 +218,15 @@ export function ContextBar({
                   {contextBreakdown.messages > 0 && (
                     <div className="bg-emerald-500" style={{ width: `${Math.max(0.5, (contextBreakdown.messages / maxTokens) * 100)}%` }} />
                   )}
+                  {realValueAvailable && realValuePercent > breakdownPercent + 0.5 && (
+                    <div
+                      className="bg-muted-foreground/30"
+                      style={{
+                        width: `${realValuePercent - breakdownPercent}%`,
+                        backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.15) 2px, rgba(255,255,255,0.15) 4px)',
+                      }}
+                    />
+                  )}
                 </div>
               ) : (
                 <Progress
@@ -199,22 +248,31 @@ export function ContextBar({
                   </TooltipContent>
                 </Tooltip>
               )}
+              {realValueAvailable && (
+                <div
+                  className="absolute -top-px h-[calc(100%+2px)] w-0.5 rounded-sm bg-success shadow-[0_0_4px_var(--color-success)]"
+                  style={{ left: `calc(${realValuePercent}% - 1px)` }}
+                />
+              )}
             </div>
             {contextBreakdown && hasContextData ? (
               <div className="space-y-1 text-[10px]">
+                <div className="text-[9px] uppercase tracking-wide text-muted-foreground/70">
+                  {t('chat.breakdown.estimateLabel', { defaultValue: 'Breakdown (local estimate)' })}
+                </div>
                 <div className="flex items-center justify-between text-muted-foreground">
                   <span className="flex items-center gap-1.5">
                     <span className="inline-block size-2 rounded-sm bg-blue-500" />
                     {t('chat.breakdown.tools', 'Tools')}
                   </span>
-                  <span>{formatTokenCount(contextBreakdown.tools)} ({Math.round((contextBreakdown.tools / contextBreakdown.total) * 100)}%)</span>
+                  <span>{formatTokenCount(contextBreakdown.tools)}</span>
                 </div>
                 <div className="flex items-center justify-between text-muted-foreground">
                   <span className="flex items-center gap-1.5">
                     <span className="inline-block size-2 rounded-sm bg-purple-500" />
                     {t('chat.breakdown.systemPrompt', 'System prompt')}
                   </span>
-                  <span>{formatTokenCount(contextBreakdown.systemPrompt)} ({Math.round((contextBreakdown.systemPrompt / contextBreakdown.total) * 100)}%)</span>
+                  <span>{formatTokenCount(contextBreakdown.systemPrompt)}</span>
                 </div>
                 {(contextBreakdown.summary ?? 0) > 0 && (
                   <div className="flex items-center justify-between text-muted-foreground">
@@ -222,7 +280,7 @@ export function ContextBar({
                       <span className="inline-block size-2 rounded-sm bg-amber-500" />
                       {t('chat.breakdown.summary', 'Summary')}
                     </span>
-                    <span>{formatTokenCount(contextBreakdown.summary!)} ({Math.round((contextBreakdown.summary! / contextBreakdown.total) * 100)}%)</span>
+                    <span>{formatTokenCount(contextBreakdown.summary!)}</span>
                   </div>
                 )}
                 {(contextBreakdown.cronRuns ?? 0) > 0 && (
@@ -231,7 +289,7 @@ export function ContextBar({
                       <span className="inline-block size-2 rounded-sm bg-orange-500" />
                       {t('chat.breakdown.cronRuns', 'Previous runs')}
                     </span>
-                    <span>{formatTokenCount(contextBreakdown.cronRuns!)} ({Math.round((contextBreakdown.cronRuns! / contextBreakdown.total) * 100)}%)</span>
+                    <span>{formatTokenCount(contextBreakdown.cronRuns!)}</span>
                   </div>
                 )}
                 {(contextBreakdown.cronLearnings ?? 0) > 0 && (
@@ -240,7 +298,7 @@ export function ContextBar({
                       <span className="inline-block size-2 rounded-sm bg-teal-500" />
                       {t('chat.breakdown.cronLearnings', 'Learnings')}
                     </span>
-                    <span>{formatTokenCount(contextBreakdown.cronLearnings!)} ({Math.round((contextBreakdown.cronLearnings! / contextBreakdown.total) * 100)}%)</span>
+                    <span>{formatTokenCount(contextBreakdown.cronLearnings!)}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between text-muted-foreground">
@@ -248,11 +306,37 @@ export function ContextBar({
                     <span className="inline-block size-2 rounded-sm bg-emerald-500" />
                     {t('chat.breakdown.messages', 'Messages')}
                   </span>
-                  <span>{formatTokenCount(contextBreakdown.messages)} ({Math.round((contextBreakdown.messages / contextBreakdown.total) * 100)}%)</span>
+                  <span>{formatTokenCount(contextBreakdown.messages)}</span>
                 </div>
+                {realValueAvailable && Math.abs(estimatedTokens - breakdownSum) > Math.max(500, breakdownSum * 0.05) && (
+                  <div className="flex items-center justify-between text-muted-foreground/80">
+                    <span className="flex items-center gap-1.5">
+                      <span
+                        className="inline-block size-2 rounded-sm bg-muted-foreground/30"
+                        style={{
+                          backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 1px, rgba(255,255,255,0.2) 1px, rgba(255,255,255,0.2) 2px)',
+                        }}
+                      />
+                      {t('chat.breakdown.unattributed', { defaultValue: 'Unattributed' })}
+                    </span>
+                    <span>{formatTokenCount(Math.max(0, estimatedTokens - breakdownSum))}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between border-t border-border/40 pt-1 text-foreground">
-                  <span className="font-medium">{t('chat.breakdown.total', 'Total')}</span>
-                  <span>{formatTokenCount(contextBreakdown.total)} / {formatTokenCount(maxTokens)} ({contextPercent}%)</span>
+                  {realValueAvailable ? (
+                    <>
+                      <span className="font-medium flex items-center gap-1">
+                        <span className="rounded bg-success/15 px-1 py-px text-[9px] font-medium text-success">✓</span>
+                        {t('chat.breakdown.totalReal', { defaultValue: 'Real total' })}
+                      </span>
+                      <span>{formatTokenCount(estimatedTokens)} / {formatTokenCount(maxTokens)} ({contextPercent}%)</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-medium">{t('chat.breakdown.total', 'Total')}</span>
+                      <span>{formatTokenCount(contextBreakdown.total)} / {formatTokenCount(maxTokens)} ({contextPercent}%)</span>
+                    </>
+                  )}
                 </div>
                 {pipelineStatus && (pipelineStatus.maskedToolGroups > 0 || pipelineStatus.observationCompactedCount > 0 || pipelineStatus.emergencyTrimmedCount > 0) && (
                   <div className="space-y-0.5 border-t border-border/40 pt-1">

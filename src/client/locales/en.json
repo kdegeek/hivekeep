@@ -572,7 +572,11 @@
     },
     "contextSource": {
       "estimateHint": "Local BPE estimate. The chat banner shows the provider-reported value when available.",
-      "apiHint": "Reported by the provider on the last call (ground truth)."
+      "apiHint": "Reported by the provider on the last call (ground truth).",
+      "real": "real",
+      "estimate": "est.",
+      "realMarkerHint": "Real context size reported by the provider on the last call.",
+      "unattributedHint": "Provider-reported size beyond what the local estimator can attribute by section."
     },
     "cacheChip": {
       "aria": "Cache state from last turn",
@@ -595,7 +599,10 @@
       "cronRuns": "Previous runs",
       "cronLearnings": "Learnings",
       "messages": "Messages",
-      "total": "Total"
+      "total": "Total (estimated)",
+      "totalReal": "Real total",
+      "estimateLabel": "Breakdown (local estimate)",
+      "unattributed": "Unattributed"
     },
     "pipeline": {
       "maskedTools": "{{count}} tool results collapsed (~{{tokens}} saved)",

@@ -82,6 +82,10 @@ interface ContextPreviewData {
   compactingThresholdPercent?: number | null
   messageCount: number
   generatedAt: number
+  /** Provider-reported context size from the last LLM call (ground truth).
+   *  When present, the visualizer shows it alongside the local breakdown
+   *  estimate with a vertical marker and a "non attribué" gap segment. */
+  apiContextTokens?: number
 }
 
 const SUMMARY_HEADER = '## Conversation history summaries'
@@ -238,16 +242,28 @@ export function ContextViewerDialog({ open, onOpenChange, kinId, taskId, session
           {data?.tokenEstimate && data.contextWindow && data.contextWindow > 0 && (
             <div className="mt-3 space-y-1.5">
               <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <span
-                    className="rounded bg-muted px-1 py-px text-[9px] font-medium text-muted-foreground/80"
-                    title={t('chat.contextSource.estimateHint', { defaultValue: 'Local BPE estimate. The chat banner shows the provider-reported value when available.' })}
-                  >
-                    ~
+                {data.apiContextTokens != null && data.contextWindow > 0 ? (
+                  <span className="flex items-center gap-1">
+                    <span
+                      className="rounded bg-success/15 px-1 py-px text-[9px] font-medium text-success"
+                      title={t('chat.contextSource.apiHint', { defaultValue: 'Reported by the provider on the last call (ground truth).' })}
+                    >
+                      ✓ {t('chat.contextSource.real', { defaultValue: 'real' })}
+                    </span>
+                    <span>{formatTokenCount(data.apiContextTokens)} / {formatTokenCount(data.contextWindow)}</span>
                   </span>
-                  <span>{formatTokenCount(data.tokenEstimate.total)} / {formatTokenCount(data.contextWindow)}</span>
-                </span>
-                <span>{Math.round((data.tokenEstimate.total / data.contextWindow) * 100)}%</span>
+                ) : (
+                  <span className="flex items-center gap-1">
+                    <span
+                      className="rounded bg-muted px-1 py-px text-[9px] font-medium text-muted-foreground/80"
+                      title={t('chat.contextSource.estimateHint', { defaultValue: 'Local BPE estimate.' })}
+                    >
+                      ~
+                    </span>
+                    <span>{formatTokenCount(data.tokenEstimate.total)} / {formatTokenCount(data.contextWindow)}</span>
+                  </span>
+                )}
+                <span>{Math.round((((data.apiContextTokens ?? data.tokenEstimate.total) / data.contextWindow)) * 100)}%</span>
               </div>
               <div className="relative flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
                 {data.tokenEstimate.tools > 0 && (
@@ -268,12 +284,32 @@ export function ContextViewerDialog({ open, onOpenChange, kinId, taskId, session
                 {data.tokenEstimate.messages > 0 && (
                   <div className="bg-emerald-500" style={{ width: `${Math.max(0.5, (data.tokenEstimate.messages / data.contextWindow) * 100)}%` }} />
                 )}
+                {/* "Non attribué" segment: gap between estimate sum and the
+                     provider-reported real value. */}
+                {data.apiContextTokens != null && data.apiContextTokens > data.tokenEstimate.total + (data.contextWindow * 0.005) && (
+                  <div
+                    className="bg-muted-foreground/30"
+                    style={{
+                      width: `${((data.apiContextTokens - data.tokenEstimate.total) / data.contextWindow) * 100}%`,
+                      backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.15) 2px, rgba(255,255,255,0.15) 4px)',
+                    }}
+                    title={t('chat.contextSource.unattributedHint', { defaultValue: 'Provider-reported size beyond what the local estimator can attribute by section.' })}
+                  />
+                )}
                 {/* Compacting threshold marker — only for main conversations */}
                 {isMainConversation && data.compactingThresholdPercent != null && (
                   <div
                     className="absolute top-0 h-full w-0.5 bg-red-500/80"
                     style={{ left: `${data.compactingThresholdPercent}%` }}
                     title={t('chat.contextViewer.threshold', { percent: data.compactingThresholdPercent })}
+                  />
+                )}
+                {/* Real value marker line — provider-reported context size */}
+                {data.apiContextTokens != null && data.contextWindow > 0 && (
+                  <div
+                    className="absolute -top-px h-[calc(100%+2px)] w-0.5 rounded-sm bg-success shadow-[0_0_4px_var(--color-success)]"
+                    style={{ left: `calc(${Math.min(100, (data.apiContextTokens / data.contextWindow) * 100)}% - 1px)` }}
+                    title={t('chat.contextSource.realMarkerHint', { defaultValue: 'Real context size reported by the provider on the last call.' })}
                   />
                 )}
               </div>

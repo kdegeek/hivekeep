@@ -572,7 +572,11 @@
     },
     "contextSource": {
       "estimateHint": "Estimation locale (tokenizer BPE). Le bandeau du chat affiche la valeur retournée par le provider quand elle est disponible.",
-      "apiHint": "Valeur retournée par le provider lors du dernier appel (réelle)."
+      "apiHint": "Valeur retournée par le provider lors du dernier appel (réelle).",
+      "real": "réel",
+      "estimate": "est.",
+      "realMarkerHint": "Taille de contexte réelle retournée par le provider lors du dernier appel.",
+      "unattributedHint": "Taille rapportée par le provider qui dépasse ce que l'estimateur local peut attribuer par section."
     },
     "cacheChip": {
       "aria": "État du cache au dernier tour",
@@ -595,7 +599,10 @@
       "cronRuns": "Exécutions précédentes",
       "cronLearnings": "Apprentissages",
       "messages": "Messages",
-      "total": "Total"
+      "total": "Total (estimé)",
+      "totalReal": "Total réel",
+      "estimateLabel": "Décomposition (estimation locale)",
+      "unattributed": "Non attribué"
     },
     "pipeline": {
       "maskedTools": "{{count}} résultats d'outils réduits (~{{tokens}} économisés)",

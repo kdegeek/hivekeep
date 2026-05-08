@@ -492,6 +492,16 @@ kinRoutes.get('/:id/context-preview', async (c) => {
 
   const { buildContextPreview } = await import('@/server/services/context-preview')
   const preview = await buildContextPreview(kin.id)
+
+  // Augment with the cached API-reported context size (if any) so the
+  // visualizer can show ground truth alongside the estimate breakdown.
+  const cached = await getLastContextUsage(kin.id)
+  if (cached?.contextSource === 'api') {
+    return c.json({
+      ...preview,
+      apiContextTokens: cached.contextTokens,
+    })
+  }
   return c.json(preview)
 })
 
