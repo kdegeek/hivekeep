@@ -86,7 +86,7 @@ describe('config', () => {
   describe('default values', () => {
     it('compacting defaults are sensible', () => {
       expect(config.compacting.thresholdPercent).toBe(75)
-      expect(config.compacting.keepPercent).toBe(40)
+      expect(config.compacting.keepPercent).toBe(25)
       expect(config.compacting.maxSummaries).toBe(10)
       expect(config.compacting.maxSummariesPerKin).toBe(50)
     })

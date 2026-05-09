@@ -160,7 +160,14 @@ export const config = {
     /** Trigger compaction when total context tokens exceed this % of the model's context window. */
     thresholdPercent: Number(process.env.COMPACTING_THRESHOLD_PERCENT ?? 75),
     /** Keep the most recent messages fitting within this % of the context window as raw context. */
-    keepPercent: Number(process.env.COMPACTING_KEEP_PERCENT ?? 40),
+    // Lowered from 40 → 25: with 40% on a 1M context, the keep-window was
+    // 400k tokens — and on tool-heavy Kins (kubectl/browser/file ops), that
+    // budget was easily filled by 2-4 huge tool-result messages, leaving
+    // compacting unable to reduce the post-summary total below ~600-900k
+    // even after force-compacting. 25% gives a 250k keep-window which fits
+    // ~1-2 large outputs + many small messages, more representative of
+    // "recent context" than "everything that happened lately".
+    keepPercent: Number(process.env.COMPACTING_KEEP_PERCENT ?? 25),
     /** Max % of context window that summaries may occupy before triggering telescopic merge. */
     summaryBudgetPercent: Number(process.env.COMPACTING_SUMMARY_BUDGET_PERCENT ?? 20),
     /** Max number of active summaries in context before forcing merge. */
