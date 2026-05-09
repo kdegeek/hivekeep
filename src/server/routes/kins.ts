@@ -403,6 +403,10 @@ kinRoutes.get('/:id/context-usage', async (c) => {
       contextWindow: cached.contextWindow,
       contextBreakdown: cached.breakdown ?? null,
       pipelineStatus: cached.pipelineStatus ?? null,
+      // Per-Kin EMA-smoothed factor (api / raw_BPE) applied to contextTokens
+      // and breakdown sections. 1.0 = no calibration yet (first turn). UI
+      // surfaces this as a small "×1.5" chip when significantly != 1.
+      calibrationFactor: cached.calibrationFactor ?? null,
       compactingPercent: compacting.currentPercent,
       compactingThresholdPercent: compacting.thresholdPercent,
       summaryCount: compacting.summaryCount,
@@ -503,16 +507,15 @@ kinRoutes.get('/:id/context-preview', async (c) => {
   const { buildContextPreview } = await import('@/server/services/context-preview')
   const preview = await buildContextPreview(kin.id)
 
-  // Augment with the cached API-reported context size (if any) so the
-  // visualizer can show ground truth alongside the estimate breakdown.
+  // Augment with the cached API-reported context size (ground truth) and the
+  // per-Kin EMA calibration factor that was applied to the section + per-message
+  // estimates inside `preview`. Both let the visualizer explain the numbers.
   const cached = await getLastContextUsage(kin.id)
-  if (cached?.apiContextTokens != null) {
-    return c.json({
-      ...preview,
-      apiContextTokens: cached.apiContextTokens,
-    })
-  }
-  return c.json(preview)
+  return c.json({
+    ...preview,
+    apiContextTokens: cached?.apiContextTokens ?? null,
+    calibrationFactor: cached?.calibrationFactor ?? null,
+  })
 })
 
 // ─── Kin CRUD (parameterized routes) ───────────────────────────────────────

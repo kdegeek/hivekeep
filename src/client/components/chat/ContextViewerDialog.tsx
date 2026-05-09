@@ -88,6 +88,10 @@ interface ContextPreviewData {
    *  When present, the visualizer shows it alongside the local breakdown
    *  estimate with a vertical marker and a "non attribué" gap segment. */
   apiContextTokens?: number
+  /** Per-Kin EMA-smoothed factor (api / raw_BPE) applied to the section + per-message
+   *  estimates above. 1.0 = no calibration yet. UI surfaces it as a small chip
+   *  on the estimate row when meaningfully different from 1. */
+  calibrationFactor?: number | null
 }
 
 const SUMMARY_HEADER = '## Conversation history summaries'
@@ -287,6 +291,20 @@ export function ContextViewerDialog({ open, onOpenChange, kinId, taskId, session
                       ~ {t('chat.contextSource.estimate', { defaultValue: 'est.' })}
                     </span>
                     <span>{t('chat.contextSource.estimateLabel', { defaultValue: 'Local estimate' })}</span>
+                    {/* Calibration chip — visible only when the per-Kin learned
+                        factor meaningfully diverges from 1 (>=10% adjustment).
+                        Tells the user the displayed estimate is auto-corrected
+                        against past API observations, not raw BPE output. */}
+                    {data.calibrationFactor != null && Math.abs(data.calibrationFactor - 1) >= 0.1 && (
+                      <span
+                        className="rounded bg-primary/10 px-1 py-px text-[9px] font-medium text-primary"
+                        title={t('chat.contextSource.calibrationHint', {
+                          defaultValue: 'EMA-smoothed factor learned from past API roundtrips. Multiplied with the raw BPE count so the estimate tracks what the provider actually charges.',
+                        })}
+                      >
+                        ×{data.calibrationFactor.toFixed(2)}
+                      </span>
+                    )}
                   </span>
                   <span className="text-foreground tabular-nums">
                     {formatTokenCount(data.tokenEstimate.total)} / {formatTokenCount(data.contextWindow)} ({Math.round((data.tokenEstimate.total / data.contextWindow) * 100)}%)
