@@ -2291,7 +2291,13 @@ export async function processQuickMessage(kinId: string): Promise<boolean> {
     quickAbortControllers.delete(queueItem?.sessionId ?? '')
 
     const errorMsg = error instanceof Error ? error.message : 'Unknown error'
-    const displayError = friendlyErrorMessage(errorMsg)
+    // Quick sessions are ephemeral and have no compacting pipeline — the
+    // generic friendlyErrorMessage promises "compaction triggered, retry in
+    // a few seconds" which is a lie here. Override with quick-session-
+    // specific wording when the error is a context overflow.
+    const displayError = isContextTooLargeError(errorMsg)
+      ? 'This quick session is too long for the model\'s context window. Close it and start a new one.'
+      : friendlyErrorMessage(errorMsg)
     log.error({ kinId, sessionId: queueItem?.sessionId, error: errorMsg }, 'Quick session engine error')
 
     // Send error as system message in the quick session
