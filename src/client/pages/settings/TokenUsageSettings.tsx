@@ -128,7 +128,12 @@ function DailySparkline({ data, t }: { data: UsageSummaryRow[]; t: (key: string)
   const height = 40
   const barWidth = Math.max(2, width / data.length - 1)
   const gap = 1
-  const maxTotal = Math.max(1, ...data.map((d) => d.inputTokens + d.outputTokens))
+  // Use the billable-input equivalent (provider-aware, accounts for cache
+  // discounts) to match the SummaryCards above. Gross inputTokens dramatically
+  // overstates cost on Anthropic with prompt caching: a day with 500k cache
+  // reads counts as 500k of "input" gross but ~50k billable. The chart was
+  // making heavy-cache days look 5-10x bigger than they actually cost.
+  const maxTotal = Math.max(1, ...data.map((d) => d.billableInputTokens + d.outputTokens))
 
   return (
     <div className="space-y-1.5">
@@ -138,9 +143,9 @@ function DailySparkline({ data, t }: { data: UsageSummaryRow[]; t: (key: string)
       </div>
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="w-full">
         {data.map((d, i) => {
-          const total = d.inputTokens + d.outputTokens
+          const total = d.billableInputTokens + d.outputTokens
           const totalH = (total / maxTotal) * height
-          const inputH = (d.inputTokens / maxTotal) * height
+          const inputH = (d.billableInputTokens / maxTotal) * height
           const outputH = (d.outputTokens / maxTotal) * height
           const x = i * (barWidth + gap)
           return (
