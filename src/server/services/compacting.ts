@@ -829,6 +829,13 @@ async function extractMemories(
       model,
       providerId: extractionProviderId,
       prompt: extractionPrompt,
+      // Output is a compact JSON array — even a chatty extraction shouldn't
+      // need more than a few thousand tokens. Cap to prevent runaway output.
+      maxTokens: 4000,
+      // Hard timeout: extraction is awaited inside runCompacting which holds
+      // the compactingKins lock. A stuck call would block all user messages
+      // for this Kin (same hazard as fa161f30 fixed for the summary call).
+      timeoutMs: 3 * 60 * 1000,
       callSite: 'compacting',
       modelId: effectiveExtractionModel ?? kinModel,
       kinId,
