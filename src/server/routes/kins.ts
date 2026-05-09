@@ -13,6 +13,9 @@ import {
   buildAvatarPrompt,
   ImageGenerationError,
   findLLMProvider,
+  resolveImageTarget,
+  modelSupportsImageInput,
+  getBaseAvatarBytes,
 } from '@/server/services/image-generation'
 import { decrypt } from '@/server/services/encryption'
 import { deleteMemory, createMemory, updateMemory } from '@/server/services/memory'
@@ -340,16 +343,23 @@ kinRoutes.post('/avatar/preview', async (c) => {
   }
 
   try {
-    const prompt = await buildAvatarPrompt({
-      name,
-      role,
-      character: character ?? '',
-      expertise: expertise ?? '',
-    })
+    const target = await resolveImageTarget({ providerId: imageProviderId, modelId: imageModel })
+    const supportsEdit = modelSupportsImageInput(target.providerType, target.modelId)
+
+    const prompt = await buildAvatarPrompt(
+      {
+        name,
+        role,
+        character: character ?? '',
+        expertise: expertise ?? '',
+      },
+      supportsEdit ? 'edit' : 'generate',
+    )
 
     const result = await generateAvatarImage(prompt, {
-      providerId: imageProviderId,
-      modelId: imageModel,
+      providerId: target.providerId,
+      modelId: target.modelId,
+      ...(supportsEdit ? { imageData: await getBaseAvatarBytes() } : {}),
     })
 
     return c.json({
@@ -762,17 +772,7 @@ kinRoutes.post('/:id/avatar/generate', async (c) => {
   const body = await c.req.json()
   const mode = body.mode as string
 
-  const prompt =
-    mode === 'auto'
-      ? await buildAvatarPrompt({
-          name: existing.name,
-          role: existing.role,
-          character: existing.character ?? '',
-          expertise: existing.expertise ?? '',
-        })
-      : body.prompt
-
-  if (mode === 'prompt' && (!prompt || typeof prompt !== 'string')) {
+  if (mode === 'prompt' && (!body.prompt || typeof body.prompt !== 'string')) {
     return c.json(
       { error: { code: 'INVALID_PROMPT', message: 'A prompt is required for prompt mode' } },
       400,
@@ -780,9 +780,33 @@ kinRoutes.post('/:id/avatar/generate', async (c) => {
   }
 
   try {
-    const result = await generateAvatarImage(prompt, {
+    // Resolve the chosen image target so we know whether image-to-image is on the table.
+    // In "auto" mode this drives the LLM prompt style and whether we attach the base
+    // robot reference image. In "prompt" mode the user is in full control: their prompt
+    // is sent verbatim, with no base image and no robot wrapping.
+    const target = await resolveImageTarget({
       providerId: body.imageProviderId,
       modelId: body.imageModel,
+    })
+    const supportsEdit = mode === 'auto' && modelSupportsImageInput(target.providerType, target.modelId)
+
+    const prompt =
+      mode === 'auto'
+        ? await buildAvatarPrompt(
+            {
+              name: existing.name,
+              role: existing.role,
+              character: existing.character ?? '',
+              expertise: existing.expertise ?? '',
+            },
+            supportsEdit ? 'edit' : 'generate',
+          )
+        : body.prompt
+
+    const result = await generateAvatarImage(prompt, {
+      providerId: target.providerId,
+      modelId: target.modelId,
+      ...(supportsEdit ? { imageData: await getBaseAvatarBytes() } : {}),
     })
     return c.json({
       base64: result.base64,

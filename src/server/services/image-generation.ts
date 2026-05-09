@@ -11,6 +11,34 @@ import { decrypt } from '@/server/services/encryption'
 import { getDefaultImageModel, getDefaultImageProviderId } from '@/server/services/app-settings'
 import { listModelsForProvider } from '@/server/providers/index'
 
+const BASE_AVATAR_PATH = join(import.meta.dir, '..', 'assets', 'base-avatar.png')
+
+let cachedBaseAvatar: Uint8Array | null = null
+async function loadBaseAvatar(): Promise<Uint8Array> {
+  if (cachedBaseAvatar) return cachedBaseAvatar
+  const file = Bun.file(BASE_AVATAR_PATH)
+  if (!(await file.exists())) {
+    throw new ImageGenerationError(
+      'BASE_AVATAR_MISSING',
+      `Base avatar asset not found at ${BASE_AVATAR_PATH}`,
+    )
+  }
+  cachedBaseAvatar = new Uint8Array(await file.arrayBuffer())
+  return cachedBaseAvatar
+}
+
+/**
+ * Whether a given (providerType, modelId) pair accepts an image as input.
+ * Mirrors the per-provider classifyModel logic so we can answer this without
+ * re-fetching the provider's model list on every avatar generation.
+ */
+export function modelSupportsImageInput(providerType: string, modelId?: string | null): boolean {
+  if (!modelId) return false
+  if (providerType === 'openai') return modelId.startsWith('gpt-image')
+  if (providerType === 'gemini') return modelId.includes('-image') && !modelId.startsWith('imagen')
+  return false
+}
+
 /** Provider types that use the OpenAI-compatible SDK (createOpenAI) */
 const OPENAI_COMPATIBLE_PROVIDERS = new Set([
   'openrouter', 'deepseek', 'fireworks', 'together', 'groq',
@@ -30,18 +58,19 @@ interface GenerateImageOptions {
   providerId?: string
   modelId?: string
   imageUrl?: string
+  /** Raw image bytes used as input for editing. Takes precedence over imageUrl. */
+  imageData?: Uint8Array
 }
 
 /**
- * Generate an image using a specific or the first available image provider.
- * Supports optional image input for editing/inpainting.
- * Returns base64-encoded image data.
+ * Resolve which image provider + model will be used given the caller's options.
+ * Mirrors the resolution rules used by generateImage:
+ *   explicit option > app_setting default > first available image provider
+ * Throws ImageGenerationError if no usable provider exists.
  */
-export async function generateImage(
-  prompt: string,
-  options?: GenerateImageOptions,
-): Promise<GenerateImageResult> {
-  // Resolve provider: explicit option > app_setting default > first available
+export async function resolveImageTarget(
+  options?: { providerId?: string; modelId?: string },
+): Promise<{ providerId: string; providerType: string; modelId?: string }> {
   let provider
   let effectiveModelId = options?.modelId
   if (options?.providerId) {
@@ -67,9 +96,44 @@ export async function generateImage(
   }
 
   if (!provider) {
-    log.warn('No image provider configured')
     throw new ImageGenerationError('NO_IMAGE_PROVIDER', 'No image provider configured')
   }
+
+  return { providerId: provider.id, providerType: provider.type, modelId: effectiveModelId }
+}
+
+/**
+ * Load the base avatar reference image (small Pixar-style robot) used for
+ * image-to-image avatar generation. Cached after the first read.
+ */
+export async function getBaseAvatarBytes(): Promise<Uint8Array> {
+  return loadBaseAvatar()
+}
+
+/**
+ * Generate an image using a specific or the first available image provider.
+ * Supports optional image input for editing/inpainting.
+ * Returns base64-encoded image data.
+ */
+export async function generateImage(
+  prompt: string,
+  options?: GenerateImageOptions,
+): Promise<GenerateImageResult> {
+  let target
+  try {
+    target = await resolveImageTarget({ providerId: options?.providerId, modelId: options?.modelId })
+  } catch (err) {
+    if (err instanceof ImageGenerationError && err.code === 'NO_IMAGE_PROVIDER') {
+      log.warn('No image provider configured')
+    }
+    throw err
+  }
+
+  const provider = db.select().from(providers).where(eq(providers.id, target.providerId)).get()
+  if (!provider) {
+    throw new ImageGenerationError('PROVIDER_NOT_FOUND', 'Image provider disappeared between resolution and use')
+  }
+  const effectiveModelId = target.modelId
 
   const providerConfig = JSON.parse(await decrypt(provider.configEncrypted)) as {
     apiKey: string
@@ -78,7 +142,9 @@ export async function generateImage(
 
   // Resolve image input if provided
   let imageData: Uint8Array | undefined
-  if (options?.imageUrl) {
+  if (options?.imageData) {
+    imageData = options.imageData
+  } else if (options?.imageUrl) {
     imageData = await resolveImageInput(options.imageUrl)
   }
 
@@ -240,38 +306,81 @@ export async function hasImageCapability(): Promise<boolean> {
   return imageProvider !== null && llmProvider !== null
 }
 
-const AVATAR_STYLE_SYSTEM = `You are an image prompt writer. The user will give you the identity of a character (name, role, personality, expertise). You must write a short image generation prompt (2-3 sentences max) describing a portrait of this character.
+/**
+ * System prompt used when the target image model supports image-to-image editing.
+ * Asks the LLM to produce *transformation instructions* applied to the base robot.
+ */
+const AVATAR_EDIT_SYSTEM = `You are an image prompt writer. The user will give you the identity of a character (name, role, personality, expertise).
+
+You are NOT writing a description from scratch. You are writing instructions to transform a base reference image: a small, friendly Pixar-style 3D robot in a neutral pose, neutral colors, against a plain background. The image model will receive this base image plus your instructions.
+
+Write a short prompt (2-3 sentences) telling the image model how to transform that base robot so it visually represents the character. You should ask it to:
+- Repaint the robot with a color palette that fits the character's domain or personality
+- Add small props, accessories, or markings that hint at the character's expertise (e.g. headphones, monocle, tool belt, miniature instruments)
+- Replace the plain background with a simple scene related to the character's domain
+- Reframe the composition as a head-and-shoulders portrait (head + upper chest only, like a profile picture / avatar bust shot), facing the viewer, the robot's head fills most of the frame
+- Keep the friendly Pixar / 3D-rendered cartoon aesthetic, the proportions, and the cute robot identity intact
+
+Rules:
+- Output ONLY the transformation prompt, nothing else
+- Never include the character's name
+- Never ask for text, letters, words, logos, frames, borders, or UI elements in the image
+- Start with a verb like "Repaint", "Transform", or "Customize this base robot"
+- End the prompt with: "Tight head-and-shoulders portrait framing, no full body. Keep the friendly Pixar 3D robot style. No text, no letters, no words, no UI elements."`
+
+/**
+ * System prompt used when the target image model is text-to-image only.
+ * Best-effort fallback: describe a small robot in the same spirit, from scratch.
+ */
+const AVATAR_GENERATE_SYSTEM = `You are an image prompt writer. The user will give you the identity of a character (name, role, personality, expertise). You must write a short image generation prompt (2-3 sentences) describing a head-and-shoulders portrait of a small, friendly Pixar-style 3D robot avatar that visually represents this character.
 
 Style guidelines:
-- Cinematic CGI portrait, hyperrealistic 3D render, shallow depth of field, dramatic neon/ambient lighting
-- Like a high-end video game cinematic cutscene or a sci-fi/fantasy movie character
-- Face and upper body only, looking at the viewer
-- The character's appearance (hair, eyes, clothing, accessories, setting) should reflect their role and personality
-- Invent specific visual details: hair style and color, eye color, clothing, accessories, background elements
-
-Example output for a tech-savvy assistant:
-"A charming, tech-savvy girl with short silver pixie-cut hair and vibrant blue eyes, wearing a casual yet futuristic outfit. She's focused on a holographic interface while working in a sleek, high-tech workshop. No text, no letters, no words, no UI elements."
+- A small, cute, friendly cartoon robot in Pixar / 3D-animation style — round shapes, large expressive eyes, soft materials
+- The robot's color palette, accessories, props, and background should reflect the character's role and expertise (e.g. lab coat for a doctor, tiny chef hat for a cook, headphones for a musician)
+- Head-and-shoulders portrait framing (head + upper chest only, like a profile picture / avatar bust shot), facing the viewer, robot's head fills most of the frame, no full body
+- Centered composition, soft studio lighting, slight depth of field, plain or simple thematic background
+- Warm, inviting, slightly stylized — not photorealistic
 
 Rules:
 - Output ONLY the image prompt, nothing else
-- Never include the character's name in the prompt
-- Never ask for text, labels, frames, borders, or UI elements in the image
-- End the prompt with: "No text, no letters, no words, no UI elements."`
+- Never include the character's name
+- Never describe the robot's full body or legs — only head and upper torso
+- Never ask for text, letters, words, logos, or UI elements in the image
+- End the prompt with: "Tight head-and-shoulders portrait framing, no full body. Pixar 3D animation style, soft lighting. No text, no letters, no words, no UI elements."`
 
 /**
- * Use an LLM to generate an image prompt from Kin metadata,
- * then use it to generate the avatar image.
+ * No-LLM fallback: produce a serviceable robot prompt straight from kin metadata.
+ * Used when no LLM provider is configured or the configured one isn't supported here.
  */
-export async function buildAvatarPrompt(kin: {
-  name: string
-  role: string
-  character: string
-  expertise: string
-}): Promise<string> {
+function fallbackAvatarPrompt(
+  kin: { role: string; expertise: string },
+  mode: 'edit' | 'generate',
+): string {
+  const domain = (kin.expertise || kin.role || 'a generalist assistant').slice(0, 120)
+  if (mode === 'edit') {
+    return `Repaint this base robot with a color palette that fits ${domain}, add small props or accessories that hint at this domain, and replace the plain background with a simple thematic scene. Keep the friendly Pixar 3D robot style. No text, no letters, no words, no UI elements.`
+  }
+  return `A small, friendly Pixar-style 3D robot avatar themed around ${domain}, with a fitting color palette, small thematic props, and a simple matching background. Pixar 3D animation style, soft lighting. No text, no letters, no words, no UI elements.`
+}
+
+/**
+ * Use an LLM to generate an image prompt from Kin metadata.
+ * The prompt style depends on whether the target image model supports image-to-image:
+ * - 'edit'     → transformation instructions applied to the base robot reference image
+ * - 'generate' → full description of a robot in the same spirit (text-to-image fallback)
+ */
+export async function buildAvatarPrompt(
+  kin: {
+    name: string
+    role: string
+    character: string
+    expertise: string
+  },
+  mode: 'edit' | 'generate' = 'generate',
+): Promise<string> {
   const llmProvider = await findLLMProvider()
   if (!llmProvider) {
-    // Fallback: simple prompt without LLM
-    return `Digital fantasy portrait of a character who is a ${kin.role}. Painterly style, dramatic lighting, face and upper body. No text, no letters, no words, no UI elements.`
+    return fallbackAvatarPrompt(kin, mode)
   }
 
   const providerConfig = JSON.parse(await decrypt(llmProvider.configEncrypted)) as {
@@ -308,7 +417,7 @@ export async function buildAvatarPrompt(kin: {
     const google = createGoogleGenerativeAI({ apiKey: providerConfig.apiKey, baseURL: providerConfig.baseUrl })
     model = google('gemini-2.0-flash')
   } else {
-    return `Digital fantasy portrait of a character who is a ${kin.role}. Painterly style, dramatic lighting, face and upper body. No text, no letters, no words, no UI elements.`
+    return fallbackAvatarPrompt(kin, mode)
   }
 
   const charSnippet = kin.character.slice(0, 300)
@@ -316,7 +425,7 @@ export async function buildAvatarPrompt(kin: {
 
   const avatarResult = await generateText({
     model,
-    system: AVATAR_STYLE_SYSTEM,
+    system: mode === 'edit' ? AVATAR_EDIT_SYSTEM : AVATAR_GENERATE_SYSTEM,
     prompt: `Name: ${kin.name}\nRole: ${kin.role}\nPersonality: ${charSnippet}\nExpertise: ${expertSnippet}`,
     maxOutputTokens: 200,
   })

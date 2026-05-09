@@ -33,6 +33,10 @@ import { sseManager } from '@/server/sse/index'
 import {
   generateAvatarImage,
   buildAvatarPrompt,
+  resolveImageTarget,
+  modelSupportsImageInput,
+  getBaseAvatarBytes,
+  ImageGenerationError,
 } from '@/server/services/image-generation'
 import { getHubKinId, setHubKinId } from '@/server/services/app-settings'
 import { createLogger } from '@/server/logger'
@@ -426,14 +430,37 @@ export async function generateAndSaveAvatar(kinId: string): Promise<string | nul
   const kin = db.select().from(kins).where(eq(kins.id, kinId)).get()
   if (!kin) return null
 
-  const prompt = await buildAvatarPrompt({
-    name: kin.name,
-    role: kin.role,
-    character: kin.character ?? '',
-    expertise: kin.expertise ?? '',
-  })
+  // Resolve the default image target up front so we know whether the model
+  // supports image-to-image — this dictates both the prompt style and whether
+  // we attach the base robot reference image.
+  let target
+  try {
+    target = await resolveImageTarget()
+  } catch (err) {
+    if (err instanceof ImageGenerationError && err.code === 'NO_IMAGE_PROVIDER') {
+      log.warn({ kinId }, 'No image provider configured — skipping avatar generation')
+      return null
+    }
+    throw err
+  }
 
-  const result = await generateAvatarImage(prompt)
+  const supportsEdit = modelSupportsImageInput(target.providerType, target.modelId)
+
+  const prompt = await buildAvatarPrompt(
+    {
+      name: kin.name,
+      role: kin.role,
+      character: kin.character ?? '',
+      expertise: kin.expertise ?? '',
+    },
+    supportsEdit ? 'edit' : 'generate',
+  )
+
+  const result = await generateAvatarImage(prompt, {
+    providerId: target.providerId,
+    modelId: target.modelId,
+    ...(supportsEdit ? { imageData: await getBaseAvatarBytes() } : {}),
+  })
 
   // Determine file extension from media type
   const ext = result.mediaType.includes('png') ? 'png' : 'webp'
