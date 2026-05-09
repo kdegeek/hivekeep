@@ -622,17 +622,47 @@ async function maybeMergeSummaries(kinId: string, contextWindow: number): Promis
     `- Preserve attribution (who said/did what)\n\n` +
     `## Summaries to merge\n\n${summaryTexts}`
 
+  // Same fallback + cap + timeout pattern as runCompacting (a4cd40bf,
+  // 1787d529, fa161f30): when the merge prompt exceeds the compacting
+  // model's window, fall back to the Kin's own model; cap output to the
+  // merged-summary budget; hard-timeout to avoid holding things up.
   const { resolveLLMModel } = await import('@/server/services/kin-engine')
-  const model = await resolveLLMModel(effectiveConfig.model, effectiveConfig.providerId)
+  const kin = await db.select({ model: kins.model, providerId: kins.providerId }).from(kins).where(eq(kins.id, kinId)).get()
+  let mergeModelId = effectiveConfig.model
+  let mergeProviderId = effectiveConfig.providerId
+  const mergePromptTokens = estimateTokens(mergePrompt)
+  const mergeModelWindow = getModelContextWindow(mergeModelId)
+  const usableMergeWindow = mergeModelWindow > 0 ? mergeModelWindow - 2000 : 0
+  if (kin && mergeModelWindow > 0 && mergePromptTokens > usableMergeWindow && mergeModelId !== kin.model) {
+    log.warn(
+      { kinId, configuredModel: mergeModelId, configuredWindow: mergeModelWindow, promptTokens: mergePromptTokens, fallbackModel: kin.model },
+      'Merge prompt exceeds configured model window — falling back to Kin model',
+    )
+    mergeModelId = kin.model
+    mergeProviderId = kin.providerId
+  }
+
+  const model = await resolveLLMModel(mergeModelId, mergeProviderId)
   if (!model) return
+
+  // Cap merged summary at one summary-slot worth of budget (same math as
+  // runCompacting). A merged summary should be MORE compressed than its
+  // sources, not less.
+  const perSummaryBudget = Math.max(
+    1500,
+    Math.floor((effectiveConfig.summaryBudgetPercent / 100) * contextWindow / Math.max(1, effectiveConfig.maxSummaries)),
+  )
+  const mergeMaxTokens = Math.floor(perSummaryBudget * 1.5)
 
   try {
     const result = await safeGenerateText({
       model,
-      providerId: effectiveConfig.providerId,
+      providerId: mergeProviderId,
       prompt: mergePrompt,
+      maxTokens: mergeMaxTokens,
+      timeoutMs: 5 * 60 * 1000,
       callSite: 'compacting',
-      modelId: effectiveConfig.model,
+      modelId: mergeModelId,
       kinId,
     })
 
