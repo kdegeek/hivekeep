@@ -887,6 +887,15 @@ kinRoutes.post('/:id/compacting/run', async (c) => {
     return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Kin not found' } }, 404)
   }
 
+  // Refuse if compacting is already running for this Kin. Without this guard,
+  // a force-compact while a post-turn compacting is in flight would race:
+  // both LLM calls read the same message range and could create overlapping
+  // summaries. Also serializes against the recovery path triggered by the
+  // catch in processNextMessage (see add68ae6).
+  if (compactingKins.has(existing.id)) {
+    return c.json({ error: { code: 'COMPACTING_IN_PROGRESS', message: 'Compacting is already running for this Kin — try again in a few seconds.' } }, 409)
+  }
+
   const { runCompacting } = await import('@/server/services/compacting')
 
   sseManager.sendToKin(existing.id, {
@@ -895,12 +904,18 @@ kinRoutes.post('/:id/compacting/run', async (c) => {
     data: { kinId: existing.id, cycle: 1, estimatedTotal: 1 },
   })
 
+  // Take the lock so processNextMessage skips during the force-compaction,
+  // matching the behavior of the post-turn auto path. Released in the
+  // finally below regardless of success / failure.
+  compactingKins.add(existing.id)
   let result: Awaited<ReturnType<typeof runCompacting>>
   try {
     result = await runCompacting(existing.id)
   } catch (err) {
     // runCompacting already emits compacting:error via SSE and persists the error message
     return c.json({ error: { code: 'COMPACTING_FAILED', message: err instanceof Error ? err.message : 'Compacting failed' } }, 500)
+  } finally {
+    compactingKins.delete(existing.id)
   }
 
   if (!result) {
