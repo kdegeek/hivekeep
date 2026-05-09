@@ -580,7 +580,8 @@
       "realMarkerHint": "Taille de contexte réelle retournée par le provider lors du dernier appel.",
       "unattributedHint": "Taille rapportée par le provider qui dépasse ce que l'estimateur local peut attribuer par section.",
       "dualBarHint": "Le détail par section vient de l'estimation locale (approximation BPE). La barre réelle est ce que le provider a effectivement compté lors du dernier appel.",
-      "dualBarExplanation": "Les deux barres peuvent diverger : l'estimation locale BPE approxime moins bien les tokens sur du contenu JSON / YAML / CLI que le tokenizer du provider. La barre « réel » est ce que le provider a vraiment compté lors du dernier appel — c'est la vérité côté coût."
+      "dualBarExplanation": "L'estimation s'auto-calibre sur les retours API passés de ce Kin (facteur lissé EMA), donc les deux barres convergent à quelques pourcents près. Elles peuvent diverger au tout premier tour (pas encore d'observation) ou juste après un changement majeur de contenu — laisse 2-3 tours pour qu'elles se rejoignent.",
+      "calibrationHint": "Facteur lissé EMA appris des retours API. Multiplié avec le compte BPE brut pour que l'estimation suive ce que le provider facture réellement."
     },
     "cacheChip": {
       "aria": "État du cache au dernier tour",
