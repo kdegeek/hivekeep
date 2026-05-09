@@ -235,7 +235,14 @@ export const config = {
       extractionModel: extraction.model,
       extractionProviderId: extraction.providerId,
       maxRelevantMemories: Number(process.env.MEMORY_MAX_RELEVANT ?? 10),
-      similarityThreshold: Number(process.env.MEMORY_SIMILARITY_THRESHOLD ?? 0.7),
+      // Cosine similarity floor for vector search candidates.
+      // Lowered from 0.7 → 0.5: at 0.7, only memories near-identical to the
+      // query made it past the filter, so the vector arm of hybrid search
+      // returned almost nothing and the FTS5 arm (lexical) had to carry the
+      // whole load. The downstream adaptive-K + reranker already prune
+      // weak matches; the threshold only needs to be a spam filter, not a
+      // relevance gate.
+      similarityThreshold: Number(process.env.MEMORY_SIMILARITY_THRESHOLD ?? 0.5),
       embeddingModel: embedding.model ?? 'text-embedding-3-small',
       embeddingProviderId: embedding.providerId,
       embeddingDimension: Number(process.env.MEMORY_EMBEDDING_DIMENSION ?? 1536),
