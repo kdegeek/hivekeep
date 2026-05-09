@@ -399,6 +399,22 @@ function extractApiErrorMessage(err: unknown): string {
 }
 
 /**
+ * Match the various ways providers report "you sent too many tokens".
+ * Anthropic: "prompt is too long: X tokens > Y maximum"
+ * OpenAI:    "This model's maximum context length is X tokens..." or `code:context_length_exceeded`
+ * Google:    "input token count (X) exceeds the maximum number of tokens allowed (Y)"
+ * Generic:   "context window" appears in many provider messages.
+ *
+ * Used both to friendly-format the error AND to decide whether to fire a
+ * background recovery compacting in the catch block.
+ */
+const CONTEXT_TOO_LARGE_RE = /prompt is too long|context[\s_-]?length[\s_-]?exceed|maximum context length|context window|exceeds the maximum number of tokens|input token count[^.]{0,40}exceed/i
+
+export function isContextTooLargeError(errorMsg: string): boolean {
+  return CONTEXT_TOO_LARGE_RE.test(errorMsg)
+}
+
+/**
  * Convert a raw error message into a user-friendly display message.
  */
 function friendlyErrorMessage(errorMsg: string): string {
@@ -406,8 +422,8 @@ function friendlyErrorMessage(errorMsg: string): string {
   if (lower.includes('rate limit') || errorMsg.includes('429') || lower.includes('too many requests')) {
     return 'Rate limit reached — please wait a moment and try again.'
   }
-  if (lower.includes('context_length_exceeded') || lower.includes('context window') || lower.includes('maximum context length')) {
-    return 'The conversation is too long for this model\'s context window. Try compacting or starting a new topic.'
+  if (isContextTooLargeError(errorMsg)) {
+    return 'The conversation is too long for this model\'s context window. Compaction has been triggered automatically — please retry in a few seconds.'
   }
   return errorMsg
 }
@@ -1769,8 +1785,7 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
     // compacting threshold, but reachable when compacting itself failed in a
     // previous turn), trigger a forced compacting in the background so the
     // user can retry without manual intervention.
-    const isPromptTooLong = /prompt is too long|context length exceeded|maximum context/i.test(errorMsg)
-    if (isPromptTooLong) {
+    if (isContextTooLargeError(errorMsg)) {
       log.warn({ kinId }, 'Main turn failed with prompt-too-long — triggering recovery compacting')
       ;(async () => {
         compactingKins.add(kinId)
