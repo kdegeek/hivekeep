@@ -1764,6 +1764,31 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
 
     log.error({ kinId, error: errorMsg }, 'Kin engine error')
 
+    // Recovery: if the main LLM call failed because the prompt exceeded the
+    // model's context window (a state we should normally avoid via the 75%
+    // compacting threshold, but reachable when compacting itself failed in a
+    // previous turn), trigger a forced compacting in the background so the
+    // user can retry without manual intervention.
+    const isPromptTooLong = /prompt is too long|context length exceeded|maximum context/i.test(errorMsg)
+    if (isPromptTooLong) {
+      log.warn({ kinId }, 'Main turn failed with prompt-too-long — triggering recovery compacting')
+      ;(async () => {
+        compactingKins.add(kinId)
+        try {
+          // Re-fetch the Kin since `kin` was scoped to the try block.
+          const recoveryKin = await db.select({ model: kins.model }).from(kins).where(eq(kins.id, kinId)).get()
+          if (!recoveryKin) return
+          const ctxWindow = getModelContextWindow(recoveryKin.model)
+          const cached = lastContextUsage.get(kinId)
+          await maybeCompact(kinId, cached?.apiContextTokens ?? cached?.contextTokens, ctxWindow)
+        } catch (err) {
+          log.error({ kinId, err }, 'Recovery compacting after prompt-too-long failed')
+        } finally {
+          compactingKins.delete(kinId)
+        }
+      })()
+    }
+
     // Send error as a system message visible in the chat
     const errorMessageId = uuid()
     await db.insert(messages).values({
