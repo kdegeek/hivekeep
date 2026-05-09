@@ -127,6 +127,18 @@ function estimateTokens(text: string): number {
   return countTokensShared(text)
 }
 
+/** Read the per-Kin EMA-smoothed calibration factor written by recordApiContextSize.
+ *  Lazy-import to avoid a circular dep with kin-engine. */
+async function getKinCalibrationFactor(kinId: string): Promise<number> {
+  try {
+    const { getLastContextUsage } = await import('@/server/services/kin-engine')
+    const cached = await getLastContextUsage(kinId)
+    return cached?.calibrationFactor ?? 1
+  } catch {
+    return 1
+  }
+}
+
 /**
  * Safely extract a JSON Schema from a Zod schema (Zod v4 .toJSONSchema()).
  * Falls back to null if the method is unavailable.
@@ -394,7 +406,8 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
   }
   const compactingThresholdPercent = perKinCompacting?.thresholdPercent ?? config.compacting.thresholdPercent
 
-  return formatResult(systemPrompt, toolDefinitions, messagesPreviews, totalMessageCount, getModelContextWindow(kin.model), combinedSummary, summaryPreviews, compactingThresholdPercent)
+  const calibrationFactor = await getKinCalibrationFactor(kinId)
+  return formatResult(systemPrompt, toolDefinitions, messagesPreviews, totalMessageCount, getModelContextWindow(kin.model), combinedSummary, summaryPreviews, compactingThresholdPercent, [], [], calibrationFactor)
 }
 
 /** Extract JSON Schema tool definitions from a tools map */
@@ -435,6 +448,12 @@ function formatResult(
   compactingThresholdPercent: number | null = null,
   cronRuns: CronRunPreview[] = [],
   cronLearnings: CronLearningPreview[] = [],
+  /** Per-Kin EMA-smoothed factor learned from past API roundtrips (api / raw_BPE).
+   *  When > 1 (typical: 1.3-1.6 for Anthropic on tool-heavy contexts), the
+   *  visualizer's section totals + per-message estimates are scaled to match
+   *  what the navbar shows after calibration. Defaults to 1 when no roundtrip
+   *  has been observed yet. */
+  calibrationFactor: number = 1,
 ): ContextPreviewResult {
   let fullPrompt = systemPrompt
   if (toolDefinitions.length > 0) {
@@ -462,7 +481,17 @@ function formatResult(
     messagesTokens += m.tokenEstimate
   }
   const toolsTokens = toolDefinitions.length > 0 ? estimateTokens(JSON.stringify(toolDefinitions)) : 0
-  const total = systemPromptTokens + summaryTokens + cronRunsTokens + cronLearningsTokens + messagesTokens + toolsTokens
+  const rawTotal = systemPromptTokens + summaryTokens + cronRunsTokens + cronLearningsTokens + messagesTokens + toolsTokens
+
+  // Apply calibration uniformly across sections + per-message estimates so
+  // every number summed in this response matches the navbar's calibrated
+  // "estimate" bar. Without this, the visualizer modal shows raw BPE counts
+  // (under-counted by 30-60%) while the navbar shows calibrated values —
+  // confusing the user about which one is "right".
+  const scale = (n: number) => Math.round(n * calibrationFactor)
+  const calibratedMessagesPreviews = calibrationFactor === 1
+    ? messagesPreviews
+    : messagesPreviews.map((m) => ({ ...m, tokenEstimate: scale(m.tokenEstimate) }))
 
   return {
     systemPrompt: fullPrompt,
@@ -472,17 +501,17 @@ function formatResult(
     cronLearnings,
     rawPayload: {
       system: systemPrompt,
-      messages: messagesPreviews,
+      messages: calibratedMessagesPreviews,
       tools: toolDefinitions,
     },
     tokenEstimate: {
-      systemPrompt: systemPromptTokens,
-      summary: summaryTokens,
-      cronRuns: cronRunsTokens,
-      cronLearnings: cronLearningsTokens,
-      messages: messagesTokens,
-      tools: toolsTokens,
-      total,
+      systemPrompt: scale(systemPromptTokens),
+      summary: scale(summaryTokens),
+      cronRuns: scale(cronRunsTokens),
+      cronLearnings: scale(cronLearningsTokens),
+      messages: scale(messagesTokens),
+      tools: scale(toolsTokens),
+      total: scale(rawTotal),
     },
     contextWindow,
     compactingThresholdPercent,
@@ -618,7 +647,10 @@ export async function buildTaskContextPreview(taskId: string): Promise<ContextPr
     : []
 
   const modelId = task.model ?? kinIdentity.model
-  return formatResult(systemPrompt, buildToolDefs(allTools), messagesPreviews, taskMessages.length, getModelContextWindow(modelId), null, [], null, cronRunPreviews, cronLearningPreviews)
+  // Tasks share the parent Kin's calibration factor — same model, same content
+  // profile (tools, files, structured outputs).
+  const calibrationFactor = await getKinCalibrationFactor(parentKin.id)
+  return formatResult(systemPrompt, buildToolDefs(allTools), messagesPreviews, taskMessages.length, getModelContextWindow(modelId), null, [], null, cronRunPreviews, cronLearningPreviews, calibrationFactor)
 }
 
 // ---------------------------------------------------------------------------
@@ -741,5 +773,7 @@ export async function buildQuickSessionContextPreview(kinId: string, sessionId: 
   const customToolDefs = await resolveCustomTools(kinId)
   const allTools = { ...nativeTools, ...mcpTools, ...customToolDefs }
 
-  return formatResult(systemPrompt, buildToolDefs(allTools), messagesPreviews, sessionMessages.length, getModelContextWindow(kin.model))
+  // Quick session shares the Kin's calibration factor — same model, same tools.
+  const calibrationFactor = await getKinCalibrationFactor(kinId)
+  return formatResult(systemPrompt, buildToolDefs(allTools), messagesPreviews, sessionMessages.length, getModelContextWindow(kin.model), null, [], null, [], [], calibrationFactor)
 }
