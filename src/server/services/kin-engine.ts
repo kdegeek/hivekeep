@@ -2706,7 +2706,39 @@ async function buildMessageHistory(kinId: string): Promise<{ messages: ModelMess
   if (trimmedArgsCount > 0) {
     log.debug({ kinId, count: trimmedArgsCount, totalOriginalTokens: trimmedArgsTokens, capTokens: ARGS_CAP_TOKENS }, 'Tool call args above per-field cap trimmed')
   }
-  const maskedHistory = argsCappedHistory
+
+  // Per-message assistant text content cap (third companion to the
+  // tool-result and tool-call-args caps). A single long-form assistant turn
+  // (file dump, exhaustive analysis, generated documentation) can be 30-50k
+  // tokens of plain text — uncapped until now. Trimmed using head + tail
+  // preservation so the LLM still sees the opening framing and the final
+  // conclusion (the parts most often referenced later as "as I said earlier"
+  // / "to summarize"). The middle bulk gets a placeholder with the cut size.
+  // Cache-safe: deterministic per message.
+  const CONTENT_CAP_TOKENS = config.assistantContentSizeCapTokens
+  let trimmedContentCount = 0
+  let trimmedContentTokens = 0
+  const contentCappedHistory = CONTENT_CAP_TOKENS > 0 ? argsCappedHistory.map((msg) => {
+    if (msg.role !== 'assistant' || !Array.isArray(msg.content)) return msg
+    let modified = false
+    const content = (msg.content as Array<{ type: string; text?: string }>).map((part) => {
+      if (part.type !== 'text' || typeof part.text !== 'string') return part
+      const tokens = estimateTokens(part.text)
+      if (tokens <= CONTENT_CAP_TOKENS) return part
+      modified = true
+      trimmedContentCount++
+      trimmedContentTokens += tokens
+      const head = part.text.slice(0, 400).trimEnd()
+      const tail = part.text.slice(-400).trimStart()
+      const placeholder = `${head}\n\n[…assistant content truncated: ~${tokens.toLocaleString()} tokens, ${part.text.length.toLocaleString()} chars cut from middle. Head + tail preserved below…]\n\n${tail}`
+      return { ...part, text: placeholder }
+    })
+    return modified ? { ...msg, content } as ModelMessage : msg
+  }) : argsCappedHistory
+  if (trimmedContentCount > 0) {
+    log.debug({ kinId, count: trimmedContentCount, totalOriginalTokens: trimmedContentTokens, capTokens: CONTENT_CAP_TOKENS }, 'Assistant text content above per-message cap trimmed')
+  }
+  const maskedHistory = contentCappedHistory
   if (maskResult.maskedGroupCount > 0 || maskResult.observationCompactedCount > 0) {
     log.debug({ kinId, maskedGroups: maskResult.maskedGroupCount, observationCompacted: maskResult.observationCompactedCount, tokensSaved: maskResult.estimatedTokensSaved }, 'Context compaction pipeline applied')
   }

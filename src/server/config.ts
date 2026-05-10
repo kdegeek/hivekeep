@@ -250,6 +250,15 @@ export const config = {
    *  ~600 lines of code). Set 0 to disable. */
   toolCallArgsSizeCapTokens: Number(process.env.TOOL_CALL_ARGS_SIZE_CAP_TOKENS ?? 8000),
 
+  /** Per-assistant-message TEXT content size cap when sending old assistant
+   *  messages to the LLM. Third companion to toolResultSizeCapTokens and
+   *  toolCallArgsSizeCapTokens — covers the case where the assistant dumped
+   *  a long-form answer (file content, exhaustive analysis, generated docs).
+   *  Trimming preserves head + tail (~400 chars each), middle bulk replaced
+   *  by a placeholder mentioning the original size. DB content unchanged.
+   *  Default 12000 tokens (~48k chars, ~900 lines of prose). Set 0 to disable. */
+  assistantContentSizeCapTokens: Number(process.env.ASSISTANT_CONTENT_SIZE_CAP_TOKENS ?? 12000),
+
   memory: (() => {
     const extraction = parseModelEnv(process.env.MEMORY_EXTRACTION_MODEL)
     const embedding = parseModelEnv(process.env.MEMORY_EMBEDDING_MODEL || 'text-embedding-3-small')
