@@ -942,7 +942,7 @@ export function KinFormModal({
                               min={20}
                               max={80}
                               step={5}
-                              placeholder={t('kin.compacting.keepPercentPlaceholder', { default: 40 })}
+                              placeholder={t('kin.compacting.keepPercentPlaceholder', { default: 25 })}
                               value={compactingConfig?.keepPercent ?? ''}
                               onChange={(e) => {
                                 const val = e.target.value ? Number(e.target.value) : null
