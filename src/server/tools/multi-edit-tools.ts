@@ -36,7 +36,7 @@ export const multiEditTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Apply multiple text replacements to a single file atomically. All edits succeed or none are applied. Edits are applied sequentially — each edit sees the result of previous ones. Preferred over sequential edit_file calls when making multiple changes to the same file.',
+        'Atomic multi-edit on a single file: all replacements succeed or none apply. Edits run sequentially (each sees the previous result). Use instead of repeated edit_file on the same file.',
       inputSchema: z.object({
         path: z.string().describe('Relative to workspace or absolute'),
         edits: z

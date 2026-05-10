@@ -232,7 +232,7 @@ export const grepTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Search file contents using regex patterns. Supports glob filtering, context lines, and multiple output modes. Preferred over run_shell with grep/rg. Respects .gitignore and skips node_modules, .git, and binary files by default.',
+        'Regex search in file contents (glob filtering, context lines, modes: content/files_with_matches/count). Prefer over run_shell+grep. Respects .gitignore, skips node_modules/.git/binaries.',
       inputSchema: z.object({
         pattern: z.string().describe('Regex pattern to search for'),
         path: z

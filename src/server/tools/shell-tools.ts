@@ -15,7 +15,7 @@ export const runShellTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Execute a shell command (bash -c). Returns stdout, stderr, and exit code. Prefer dedicated tools for file operations: read_file, edit_file, multi_edit, grep, list_directory. Use run_shell for git, builds, tests, package management, and other terminal operations.',
+        'Run a shell command (bash -c). Returns stdout, stderr, exit code. Prefer read_file/edit_file/multi_edit/grep/list_directory for file ops. Use this for git, builds, tests, package management.',
       inputSchema: z.object({
         command: z.string(),
         cwd: z

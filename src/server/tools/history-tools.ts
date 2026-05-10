@@ -19,7 +19,7 @@ export const searchHistoryTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Search your message history for past conversations. Supports keyword search with optional date range and pagination. Returns totalCount so you can paginate through results.',
+        'Keyword search in your message history. Optional date range + pagination. Returns totalCount.',
       inputSchema: z.object({
         query: z.string().describe('Search keywords'),
         startDate: z.string().optional().describe('ISO date string for range start (e.g. "2026-01-15")'),
@@ -109,7 +109,7 @@ export const browseHistoryTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Browse message history for a specific time period. Returns messages in chronological order with pagination. Use totalCount to know how many messages exist in the range.',
+        'Browse message history for a time range. Chronological order with pagination. totalCount = messages in range.',
       inputSchema: z.object({
         startDate: z.string().describe('ISO date string for range start (e.g. "2026-01-15")'),
         endDate: z.string().describe('ISO date string for range end (e.g. "2026-03-20")'),
@@ -181,7 +181,7 @@ export const listSummariesTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'List all conversation summaries — both active (in current context) and archived. Shows date ranges, depth level, and whether each summary is currently in context. Use read_summary to see the full text of any summary.',
+        'List all conversation summaries (active in context + archived). Shows date range, depth, in-context status. Use read_summary for full text.',
       inputSchema: z.object({
         includeArchived: z.boolean().optional().describe('Include archived/merged summaries. Default: false'),
       }),
