@@ -25,6 +25,7 @@ interface ToolDefinition {
   name: string
   description: string
   parameters: Record<string, unknown> | null
+  tokenEstimate?: number
 }
 
 interface MessagePreview {
@@ -694,20 +695,44 @@ export function ContextViewerDialog({ open, onOpenChange, kinId, taskId, session
               >
                 {data.rawPayload.tools.length === 0 ? (
                   <p className="text-xs text-muted-foreground">{t('chat.contextViewer.noTools')}</p>
-                ) : (
-                  <div className="space-y-1">
-                    {data.rawPayload.tools.map((tool) => (
-                      <div key={tool.name} className="text-xs">
-                        <span className="font-medium text-foreground">{tool.name}</span>
-                        {tool.description && (
-                          <span className="ml-1.5 text-muted-foreground">
-                            — {tool.description.length > 100 ? tool.description.slice(0, 100) + '…' : tool.description}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                ) : (() => {
+                  const sortedTools = [...data.rawPayload.tools].sort(
+                    (a, b) => (b.tokenEstimate ?? 0) - (a.tokenEstimate ?? 0),
+                  )
+                  const maxToolTokens = Math.max(1, ...sortedTools.map((t) => t.tokenEstimate ?? 0))
+                  return (
+                    <div className="space-y-1">
+                      {sortedTools.map((tool) => {
+                        const tokens = tool.tokenEstimate ?? 0
+                        const heavy = tokens / maxToolTokens >= 0.6 && tokens >= 200
+                        return (
+                          <div key={tool.name} className="flex items-start gap-2 text-xs">
+                            <span className="font-medium text-foreground shrink-0">{tool.name}</span>
+                            {tool.description && (
+                              <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                                — {tool.description.length > 100 ? tool.description.slice(0, 100) + '…' : tool.description}
+                              </span>
+                            )}
+                            {tokens > 0 && (
+                              <span
+                                className={`shrink-0 rounded px-1 py-px font-mono text-[10px] tabular-nums ${
+                                  heavy
+                                    ? 'bg-warning/15 text-warning'
+                                    : 'bg-muted text-muted-foreground/70'
+                                }`}
+                                title={t('chat.contextViewer.toolTokensHint', {
+                                  defaultValue: 'Estimated tokens for this tool definition (name + description + parameters JSON)',
+                                })}
+                              >
+                                {formatTokenCount(tokens)}
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
               </FadingSection>
             </TabsContent>
 

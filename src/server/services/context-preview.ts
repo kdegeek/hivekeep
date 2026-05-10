@@ -82,6 +82,10 @@ interface ToolDefinition {
   name: string
   description: string
   parameters: Record<string, unknown> | null
+  /** Estimated token cost of this tool's serialized JSON-Schema payload
+   *  (name + description + parameters). Lets the viewer rank the heaviest
+   *  tools and surface candidates for description trimming. */
+  tokenEstimate?: number
 }
 
 interface MessagePreview {
@@ -514,10 +518,14 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
 function buildToolDefs(tools: Record<string, unknown>): ToolDefinition[] {
   return Object.entries(tools).map(([name, t]) => {
     const toolObj = t as { description?: string; inputSchema?: unknown }
+    const description = toolObj.description ?? ''
+    const parameters = safeToJsonSchema(toolObj.inputSchema)
+    const serialized = JSON.stringify({ name, description, parameters })
     return {
       name,
-      description: toolObj.description ?? '',
-      parameters: safeToJsonSchema(toolObj.inputSchema),
+      description,
+      parameters,
+      tokenEstimate: estimateTokens(serialized),
     }
   })
 }
@@ -598,6 +606,13 @@ function formatResult(
         toolCallsTokens: scale(m.toolCallsTokens),
       }))
 
+  const calibratedToolDefinitions = calibrationFactor === 1
+    ? toolDefinitions
+    : toolDefinitions.map((td) => ({
+        ...td,
+        tokenEstimate: td.tokenEstimate != null ? scale(td.tokenEstimate) : undefined,
+      }))
+
   return {
     systemPrompt: fullPrompt,
     compactingSummary,
@@ -607,7 +622,7 @@ function formatResult(
     rawPayload: {
       system: systemPrompt,
       messages: calibratedMessagesPreviews,
-      tools: toolDefinitions,
+      tools: calibratedToolDefinitions,
     },
     tokenEstimate: {
       systemPrompt: scale(systemPromptTokens),
