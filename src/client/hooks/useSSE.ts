@@ -43,7 +43,11 @@ function setStatus(next: SSEConnectionStatus) {
 // hot-reloads don't orphan the SSE connection.
 // ---------------------------------------------------------------------------
 
-const MAX_CONSECUTIVE_FAILURES = 5
+// 2 attempts is enough to ride out a transient blip (server restart, brief
+// network glitch); past that the most likely cause is an expired session,
+// and continuing to retry just floods the server with 401s — especially
+// across multiple stale tabs. resetSSE() rearms after a successful login.
+const MAX_CONSECUTIVE_FAILURES = 2
 const BASE_RECONNECT_MS = 3000
 const MAX_RECONNECT_MS = 60000
 

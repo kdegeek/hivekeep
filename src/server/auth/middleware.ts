@@ -35,7 +35,14 @@ export async function authMiddleware(c: Context, next: Next) {
   })
 
   if (!session) {
-    log.warn({ path, method: c.req.method }, 'Unauthorized request — no valid session')
+    // SSE 401s are noisy by design: stale browser tabs auto-reconnect every
+    // ~3s after session expiry until their circuit breaker trips. Log at debug
+    // so they don't drown legitimate auth warnings.
+    if (path === '/api/sse') {
+      log.debug({ path, method: c.req.method }, 'Unauthorized SSE reconnect — session expired')
+    } else {
+      log.warn({ path, method: c.req.method }, 'Unauthorized request — no valid session')
+    }
     return c.json(
       { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
       401,
