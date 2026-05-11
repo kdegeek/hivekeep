@@ -897,7 +897,7 @@ miniAppRoutes.get('/:id/serve', async (c) => {
       'Content-Security-Policy': MINI_APP_CSP,
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
-      'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+      'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=(), payment=(), clipboard-read=(self), clipboard-write=(self), autoplay=(self)',
     },
   })
 })
