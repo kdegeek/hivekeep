@@ -4,6 +4,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/client/components/ui/
 import { Button } from '@/client/components/ui/button'
 import { Badge } from '@/client/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/client/components/ui/avatar'
+import { Popover, PopoverTrigger, PopoverContent } from '@/client/components/ui/popover'
 import { MessageBubble } from '@/client/components/chat/MessageBubble'
 import { ToolCallsViewer } from '@/client/components/chat/ToolCallsViewer'
 import { TypingIndicator } from '@/client/components/chat/TypingIndicator'
@@ -12,8 +13,11 @@ import { HumanPromptCard } from '@/client/components/chat/HumanPromptCard'
 import { ContextBar } from '@/client/components/chat/ContextBar'
 import { useTaskDetail } from '@/client/hooks/useTaskDetail'
 import { useHumanPrompts } from '@/client/hooks/useHumanPrompts'
+import { useSSE } from '@/client/hooks/useSSE'
+import { useMiniAppPanel } from '@/client/contexts/MiniAppContext'
 import { cn } from '@/client/lib/utils'
 import { ProviderIcon } from '@/client/components/common/ProviderIcon'
+import { formatRelativeTime, formatDurationBetween } from '@/client/lib/time'
 import {
   Dialog,
   DialogContent,
@@ -43,10 +47,19 @@ import {
   Send,
   Pin,
   PinOff,
+  Lightbulb,
+  History,
+  ChevronDown,
 } from 'lucide-react'
 import { useAutoScroll } from '@/client/hooks/useAutoScroll'
 import { api } from '@/client/lib/api'
-import type { TaskStatus, ContextTokenBreakdown } from '@/shared/types'
+import type { TaskStatus, ContextTokenBreakdown, TaskSummary } from '@/shared/types'
+
+interface TasksResponse {
+  tasks: TaskSummary[]
+  total: number
+  hasMore: boolean
+}
 
 interface LLMModel {
   id: string
@@ -96,6 +109,7 @@ export function TaskPanelContent({
     isLoading,
     isStreaming,
     streamingMessage,
+    streamingReasoning,
     cancelTask,
     pauseTask,
     resumeTask,
@@ -103,6 +117,7 @@ export function TaskPanelContent({
     allToolCalls,
     toolCallCount,
     toolCallsByMessage,
+    learningsSaved,
   } = useTaskDetail(taskId)
   const { prompts: pendingPrompts, respond: respondToPrompt, isResponding } = useHumanPrompts(
     task ? task.parentKinId : null,
@@ -133,6 +148,51 @@ export function TaskPanelContent({
   }, [task?.parentKinId, task?.id])
   const [isPromptOpen, setIsPromptOpen] = useState(false)
   const toggleToolCalls = useCallback(() => setIsToolCallsOpen((prev) => !prev), [])
+
+  // Sibling runs of the same cron — for the run selector
+  const { openTask } = useMiniAppPanel()
+  const [siblingRuns, setSiblingRuns] = useState<TaskSummary[]>([])
+  const [isLoadingRuns, setIsLoadingRuns] = useState(false)
+  const [isRunSelectorOpen, setIsRunSelectorOpen] = useState(false)
+  const cronId = task?.cronId ?? null
+  const fetchSiblingRuns = useCallback(async () => {
+    if (!cronId) { setSiblingRuns([]); return }
+    setIsLoadingRuns(true)
+    try {
+      const data = await api.get<TasksResponse>(`/tasks?cronId=${cronId}&limit=50&offset=0`)
+      setSiblingRuns(data.tasks)
+    } catch {
+      setSiblingRuns([])
+    } finally {
+      setIsLoadingRuns(false)
+    }
+  }, [cronId])
+  useEffect(() => { fetchSiblingRuns() }, [fetchSiblingRuns])
+
+  // Keep sibling-run statuses in sync via SSE
+  useSSE({
+    'task:status': (data) => {
+      const tid = data.taskId as string
+      const status = data.status as TaskStatus
+      setSiblingRuns((prev) => prev.map((t) => t.id === tid ? { ...t, status, updatedAt: new Date().toISOString() } : t))
+    },
+    'task:done': (data) => {
+      const tid = data.taskId as string
+      const status = data.status as TaskStatus
+      const title = (data.title as string) ?? null
+      setSiblingRuns((prev) => prev.map((t) => t.id === tid ? { ...t, status, ...(title && { title }), updatedAt: new Date().toISOString() } : t))
+    },
+  })
+
+  const handleSelectRun = useCallback((run: TaskSummary) => {
+    setIsRunSelectorOpen(false)
+    if (run.id === taskId) return
+    openTask({
+      taskId: run.id,
+      kinName: run.sourceKinName ?? run.parentKinName ?? kinName,
+      kinAvatarUrl: run.sourceKinAvatarUrl ?? run.parentKinAvatarUrl ?? kinAvatarUrl,
+    })
+  }, [openTask, taskId, kinName, kinAvatarUrl])
 
   // Filter out messages already represented elsewhere:
   const visibleMessages = useMemo(
@@ -248,6 +308,67 @@ export function TaskPanelContent({
                     <GitBranch className="size-2.5" />
                     {kinName}
                   </span>
+                )}
+                {cronId && (
+                  <Popover open={isRunSelectorOpen} onOpenChange={setIsRunSelectorOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-4 gap-0.5 px-1 text-[9px]"
+                      >
+                        <History className="size-2.5" />
+                        {t('taskDetail.runSelector.trigger', { count: siblingRuns.length || 1 })}
+                        <ChevronDown className="size-2.5 opacity-60" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="w-72 p-0">
+                      <div className="px-3 py-2 border-b border-border">
+                        <p className="text-xs font-medium">{t('taskDetail.runSelector.title')}</p>
+                      </div>
+                      <div className="max-h-72 overflow-y-auto py-1">
+                        {isLoadingRuns ? (
+                          <div className="flex justify-center py-4">
+                            <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                          </div>
+                        ) : siblingRuns.length === 0 ? (
+                          <p className="px-3 py-4 text-center text-[11px] text-muted-foreground">
+                            {t('taskDetail.runSelector.empty')}
+                          </p>
+                        ) : (
+                          siblingRuns.map((run) => {
+                            const runStatusCfg = STATUS_CONFIG[run.status]
+                            const RunStatusIcon = runStatusCfg.icon
+                            const isFinished = run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled'
+                            const duration = isFinished ? formatDurationBetween(run.createdAt, run.updatedAt) : undefined
+                            const isCurrent = run.id === taskId
+                            return (
+                              <button
+                                type="button"
+                                key={run.id}
+                                onClick={() => handleSelectRun(run)}
+                                className={cn(
+                                  'flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors',
+                                  isCurrent ? 'bg-primary/10 text-foreground' : 'hover:bg-accent/50',
+                                )}
+                              >
+                                <RunStatusIcon className={cn('size-3 shrink-0', runStatusCfg.iconClass)} />
+                                <span className="min-w-0 flex-1 truncate">
+                                  {run.title ?? run.description.slice(0, 50)}
+                                </span>
+                                {duration && (
+                                  <span className="text-[9px] text-muted-foreground shrink-0">{duration}</span>
+                                )}
+                                <span className="text-[9px] text-muted-foreground shrink-0">
+                                  {formatRelativeTime(new Date(run.createdAt).getTime(), { suffix: true })}
+                                </span>
+                              </button>
+                            )
+                          })
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 )}
                 <span className="flex items-center gap-0.5">
                   <Layers className="size-2.5" />
@@ -370,6 +491,7 @@ export function TaskPanelContent({
                   timestamp={msg.createdAt ? String(msg.createdAt) : undefined}
                   toolCalls={toolCallsByMessage.get(msg.id)}
                   tokenUsage={msg.tokenUsage}
+                  reasoning={msg.reasoning ?? undefined}
                 />
               ))}
               {streamingMessage && (
@@ -382,6 +504,7 @@ export function TaskPanelContent({
                   senderName={kinName}
                   timestamp={streamingMessage.createdAt ? String(streamingMessage.createdAt) : undefined}
                   toolCalls={toolCallsByMessage.get(streamingMessage.id)}
+                  reasoning={streamingReasoning || undefined}
                 />
               )}
               {pendingPrompts.map((prompt) => (
@@ -420,6 +543,28 @@ export function TaskPanelContent({
               </p>
               <div className="text-xs text-foreground">
                 <MarkdownContent content={task.error} isUser={false} />
+              </div>
+            </div>
+          )}
+
+          {/* Learnings saved during this run */}
+          {learningsSaved.length > 0 && (
+            <div className="mx-3 mt-3 rounded-xl border border-teal-500/30 bg-teal-500/5 p-2.5">
+              <p className="text-[10px] font-medium text-teal-600 dark:text-teal-400 mb-1.5 flex items-center gap-1">
+                <Lightbulb className="size-3" />
+                {t('chat.taskResult.learningsSaved', { count: learningsSaved.length })}
+              </p>
+              <div className="space-y-1">
+                {learningsSaved.map((l) => (
+                  <div key={l.id} className="flex items-start gap-1.5 text-[11px]">
+                    {l.category && (
+                      <span className="shrink-0 rounded bg-teal-500/20 px-1 py-0.5 text-[9px] font-medium text-teal-600 dark:text-teal-400">
+                        {l.category}
+                      </span>
+                    )}
+                    <span className="text-foreground">{l.content}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}

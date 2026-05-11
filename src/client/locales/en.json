@@ -935,7 +935,13 @@
     "inject": "Send",
     "injectPlaceholder": "Send a message to the task...",
     "resumeMessagePlaceholder": "Add context before resuming (optional)...",
-    "concurrencySlots": "Max {{max}} concurrent"
+    "concurrencySlots": "Max {{max}} concurrent",
+    "runSelector": {
+      "trigger": "{{count}} run",
+      "trigger_other": "{{count}} runs",
+      "title": "Cron runs",
+      "empty": "No other runs"
+    }
   },
   "settings": {
     "title": "Settings",

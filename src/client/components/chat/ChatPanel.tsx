@@ -12,7 +12,6 @@ const MiniAppViewer = lazy(() => import('@/client/components/mini-app/MiniAppVie
 import { TaskResultCard } from '@/client/components/chat/TaskResultCard'
 import { CompactingCard } from '@/client/components/chat/CompactingCard'
 import { HumanPromptCard } from '@/client/components/chat/HumanPromptCard'
-const TaskDetailModal = lazy(() => import('@/client/components/sidebar/TaskDetailModal').then(m => ({ default: m.TaskDetailModal })))
 import { Sheet, SheetContent, SheetTitle } from '@/client/components/ui/sheet'
 const QuickChatPanel = lazy(() => import('@/client/components/chat/QuickChatPanel').then(m => ({ default: m.QuickChatPanel })))
 const QuickSessionHistory = lazy(() => import('@/client/components/chat/QuickSessionHistory').then(m => ({ default: m.QuickSessionHistory })))

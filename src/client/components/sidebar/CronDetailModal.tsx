@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, Suspense } from 'react'
-import { lazyWithRetry as lazy } from '@/client/lib/lazy-with-retry'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSSE } from '@/client/hooks/useSSE'
 import { useAuth } from '@/client/hooks/useAuth'
+import { useMiniAppPanel } from '@/client/contexts/MiniAppContext'
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,6 @@ import { Badge } from '@/client/components/ui/badge'
 import { Button } from '@/client/components/ui/button'
 import { Switch } from '@/client/components/ui/switch'
 import { Label } from '@/client/components/ui/label'
-const TaskDetailModal = lazy(() => import('@/client/components/sidebar/TaskDetailModal').then(m => ({ default: m.TaskDetailModal })))
 import { ProviderIcon } from '@/client/components/common/ProviderIcon'
 import {
   ArrowRight,
@@ -97,10 +96,10 @@ export function CronDetailModal({
   const { t, i18n } = useTranslation()
   const { user } = useAuth()
   const serverTimezone = user?.serverTimezone
+  const { openTask } = useMiniAppPanel()
   const [executions, setExecutions] = useState<TaskSummary[]>([])
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const [historyError, setHistoryError] = useState(false)
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [isTogglingActive, setIsTogglingActive] = useState(false)
   const [isApproving, setIsApproving] = useState(false)
   const [isTriggering, setIsTriggering] = useState(false)
@@ -179,11 +178,17 @@ export function CronDetailModal({
     }
   }
 
-  const selectedTask = executions.find((t) => t.id === selectedTaskId) ?? null
+  const handleOpenTask = useCallback((task: TaskSummary) => {
+    openTask({
+      taskId: task.id,
+      kinName: task.sourceKinName ?? task.parentKinName ?? cron.kinName,
+      kinAvatarUrl: task.sourceKinAvatarUrl ?? task.parentKinAvatarUrl ?? cron.kinAvatarUrl,
+    })
+    onOpenChange(false)
+  }, [openTask, onOpenChange, cron.kinName, cron.kinAvatarUrl])
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-h-[85vh] overflow-hidden flex flex-col gap-0 !p-0 sm:max-w-2xl">
           {/* Header */}
           <DialogHeader className="shrink-0 px-6 pt-6 pb-3 border-b border-border">
@@ -366,8 +371,8 @@ export function CronDetailModal({
                           key={task.id}
                           role="button"
                           tabIndex={0}
-                          onClick={() => setSelectedTaskId(task.id)}
-                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedTaskId(task.id) }}
+                          onClick={() => handleOpenTask(task)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleOpenTask(task) }}
                           className="flex items-center gap-3 rounded-lg bg-sidebar-accent/30 px-3 py-2 text-xs hover:bg-sidebar-accent/50 transition-colors cursor-pointer"
                         >
                           <StatusIcon className={cn('size-3.5 shrink-0', statusCfg.iconClass)} />
@@ -446,20 +451,5 @@ export function CronDetailModal({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Task detail modal (opens from execution history) */}
-      {selectedTaskId !== null && (
-        <Suspense fallback={null}>
-          <TaskDetailModal
-            taskId={selectedTaskId}
-            open={true}
-            onOpenChange={(o) => { if (!o) setSelectedTaskId(null) }}
-            kinName={selectedTask?.sourceKinName ?? selectedTask?.parentKinName}
-            kinAvatarUrl={selectedTask?.sourceKinAvatarUrl ?? selectedTask?.parentKinAvatarUrl}
-            llmModels={llmModels}
-          />
-        </Suspense>
-      )}
-    </>
   )
 }

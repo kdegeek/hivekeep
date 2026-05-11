@@ -935,7 +935,13 @@
     "inject": "Envoyer",
     "injectPlaceholder": "Envoyer un message à la tâche...",
     "resumeMessagePlaceholder": "Ajouter du contexte avant de reprendre (optionnel)...",
-    "concurrencySlots": "Max {{max}} concurrent"
+    "concurrencySlots": "Max {{max}} concurrent",
+    "runSelector": {
+      "trigger": "{{count}} run",
+      "trigger_other": "{{count}} runs",
+      "title": "Runs du cron",
+      "empty": "Aucun autre run"
+    }
   },
   "settings": {
     "title": "Paramètres",

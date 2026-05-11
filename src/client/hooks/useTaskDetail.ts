@@ -19,6 +19,7 @@ interface TaskDetail {
   error: string | null
   concurrencyGroup: string | null
   concurrencyMax: number | null
+  cronId: string | null
   createdAt: string
   updatedAt: string
 }
