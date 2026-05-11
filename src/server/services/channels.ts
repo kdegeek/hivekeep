@@ -661,11 +661,38 @@ export async function deliverChannelResponse(
 
   const cfg = JSON.parse(channel.platformConfig) as Record<string, unknown>
 
+  // Identity prefix fallback. When the adapter does NOT switch identity
+  // natively on the external platform, we prepend "[Kin Name] " to the
+  // text content so the user knows which Kin is speaking after a
+  // transfer_channel handoff. Precedence:
+  //   - 'native': adapter pushed name/avatar to the platform itself,
+  //               no prefix needed.
+  //   - 'none':   neither switch nor prefix (caller opted out).
+  //   - 'prefix' or undefined (default): prepend the prefix.
+  // Skip when content is empty (attachments-only messages do not need
+  // an identity hint).
+  let outboundContent = content
+  if (
+    adapter.identitySwitchMode !== 'native' &&
+    adapter.identitySwitchMode !== 'none' &&
+    typeof content === 'string' &&
+    content.trim().length > 0
+  ) {
+    const kinRow = db
+      .select({ name: kins.name })
+      .from(kins)
+      .where(eq(kins.id, channel.kinId))
+      .get()
+    if (kinRow?.name) {
+      outboundContent = `[${kinRow.name}] ${content}`
+    }
+  }
+
   try {
     const locale = resolveChannelLocale(meta.channelId)
     const result = await adapter.sendMessage(meta.channelId, cfg, {
       chatId: meta.platformChatId,
-      content,
+      content: outboundContent,
       replyToMessageId: meta.platformMessageId,
       attachments: attachments?.length ? attachments : undefined,
       locale,

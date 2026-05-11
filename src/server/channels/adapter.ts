@@ -163,6 +163,49 @@ export interface ChannelAdapter {
   ): string | null
 
   /**
+   * Declares how this adapter handles identity switching when a channel is
+   * transferred from one Kin to another (transfer_channel tool):
+   *
+   *   - 'native': the adapter implements onIdentityChange and pushes the
+   *     new Kin's display name (and avatar when supported) to the external
+   *     platform. The core does NOT prefix outbound messages.
+   *   - 'prefix': the adapter cannot switch identity natively. The core
+   *     prepends "[Kin Name] " to every outbound text message so the user
+   *     always knows which Kin is speaking after a handoff.
+   *   - 'none': neither identity change nor prefix. Use only when neither
+   *     makes sense (rare).
+   *
+   * Default when undefined: 'prefix' (safest, always informs the user).
+   *
+   * Precedence: 'native' takes priority (real identity switch beats a
+   * textual hint); 'prefix' is the fallback default; 'none' disables both.
+   */
+  readonly identitySwitchMode?: 'native' | 'prefix' | 'none'
+
+  /**
+   * Optional. Called when the channel binding is transferred to a different
+   * Kin. The adapter should update the bot's display name and avatar on
+   * the external platform.
+   *
+   * Adapters that cannot switch identity natively should NOT implement
+   * this method, and should set identitySwitchMode to 'prefix' or 'none'.
+   *
+   * Errors thrown here are caught and logged at warn level by the caller;
+   * they do not block the transfer (the binding is already mutated by the
+   * time onIdentityChange runs, and the prefix fallback already covers
+   * the user-visible side when native fails).
+   */
+  onIdentityChange?(
+    channelId: string,
+    config: Record<string, unknown>,
+    newIdentity: {
+      kinSlug: string
+      kinName: string
+      avatarUrl?: string
+    },
+  ): Promise<void>
+
+  /**
    * Validate the configuration (e.g., test bot token).
    */
   validateConfig(config: Record<string, unknown>): Promise<{ valid: boolean; error?: string }>
