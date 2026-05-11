@@ -13,7 +13,7 @@ import { getGlobalPrompt, getHubKinId } from '@/server/services/app-settings'
 import { fetchPreviousCronRuns } from '@/server/services/tasks'
 import { fetchCronLearnings } from '@/server/services/cron-learnings'
 import { getActiveChannelsForKin } from '@/server/services/channels'
-import type { KinToolConfig, KinCompactingConfig } from '@/shared/types'
+import type { KinToolConfig, KinCompactingConfig, ContextTokenBreakdown } from '@/shared/types'
 import { getModelContextWindow } from '@/shared/model-context-windows'
 import { config } from '@/server/config'
 import { getCacheMultipliers } from '@/shared/billing'
@@ -549,7 +549,36 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
 
   const calibrationFactor = await getKinCalibrationFactor(kinId)
   const lastTurnCache = buildLastTurnCache(kinId, kin.model, kin.providerId)
-  return formatResult(systemPrompt, toolDefinitions, messagesPreviews, totalMessageCount, getModelContextWindow(kin.model), combinedSummary, summaryPreviews, compactingThresholdPercent, [], [], calibrationFactor, lastTurnCache)
+
+  // Compute section totals against the SAME masked/trimmed messageHistory that
+  // the next API call will see. Without this, the visualizer counts raw
+  // pre-trim DB content while the navbar counts post-trim, and the two bars
+  // can diverge by 200k+ tokens on tool-heavy Kins (large tool results,
+  // file-write args, page_state YAMLs all get masked or capped before being
+  // sent). Then × calibrationFactor compounds the gap, since the EMA is
+  // calibrated against the post-trim count.
+  //
+  // The cost is a second buildMessageHistory pass per dialog open (re-reads
+  // attached files from disk). Acceptable for an explicit user action.
+  const { buildMessageHistory, estimateContextTokens } = await import('@/server/services/kin-engine')
+  let trimmedBreakdown: ContextTokenBreakdown | undefined
+  try {
+    const historyResult = await buildMessageHistory(kinId)
+    const summaryTokensFromMasked = historyResult.compactingSummaries
+      ? historyResult.compactingSummaries.reduce((sum, s) => sum + estimateTokens(s.summary), 0)
+      : 0
+    trimmedBreakdown = estimateContextTokens(
+      systemPrompt,
+      historyResult.messages,
+      Object.keys(allTools).length > 0 ? allTools : undefined,
+      summaryTokensFromMasked,
+    )
+  } catch {
+    // Fall back to the legacy raw sum when the masked-history build fails for
+    // any reason — better an over-count than a missing bar.
+  }
+
+  return formatResult(systemPrompt, toolDefinitions, messagesPreviews, totalMessageCount, getModelContextWindow(kin.model), combinedSummary, summaryPreviews, compactingThresholdPercent, [], [], calibrationFactor, lastTurnCache, trimmedBreakdown)
 }
 
 /** Extract JSON Schema tool definitions from a tools map */
@@ -605,6 +634,13 @@ function formatResult(
    *  has been observed yet. */
   calibrationFactor: number = 1,
   lastTurnCache?: ContextPreviewResult['lastTurnCache'],
+  /** Section breakdown computed against the masked/trimmed messageHistory the
+   *  kin-engine will actually send to the provider on the next turn. When
+   *  provided, used as the source of truth for the visualizer's bars so they
+   *  match the navbar (which is set via setLastContextUsage with the same
+   *  estimator). Without it, the bars sum raw per-message DB content and
+   *  over-count tool-heavy Kins by hundreds of thousands of tokens. */
+  precomputedBreakdown?: ContextTokenBreakdown,
 ): ContextPreviewResult {
   let fullPrompt = systemPrompt
   if (toolDefinitions.length > 0) {
@@ -614,25 +650,37 @@ function formatResult(
     fullPrompt += `\n\n## Available tools (${toolDefinitions.length})\n\n${toolLines}`
   }
 
-  // Estimate tokens from dedicated prompt sections
+  // Estimate tokens from dedicated prompt sections (cron blocks are split out
+  // of the system prompt total so they get their own bar segment).
   const cronRunsTokens = extractSectionTokens(systemPrompt, CRON_RUNS_HEADER)
   const cronLearningsTokens = extractSectionTokens(systemPrompt, CRON_LEARNINGS_HEADER)
 
-  // Estimate tokens per section
-  const summaryTokens = compactingSummary ? estimateTokens(compactingSummary) : 0
-  const rawSystemTokens = estimateTokens(systemPrompt)
-  const systemPromptTokens = Math.max(0, rawSystemTokens - summaryTokens - cronRunsTokens - cronLearningsTokens)
-  // Count message tokens from the per-message tokenEstimate computed at
-  // preview construction time, which covers BOTH content text AND toolCalls
-  // JSON. The previous version only counted content, silently under-counting
-  // context by 10-20× on tool-heavy Kins (kubectl outputs, file reads,
-  // page_state YAMLs all live in toolCalls).
-  let messagesTokens = 0
-  for (const m of messagesPreviews) {
-    messagesTokens += m.tokenEstimate
+  let summaryTokens: number
+  let systemPromptTokens: number
+  let messagesTokens: number
+  let toolsTokens: number
+  let rawTotal: number
+  if (precomputedBreakdown) {
+    // Source of truth: estimateContextTokens against the masked/trimmed
+    // messageHistory that kin-engine will send next turn. Matches the navbar.
+    summaryTokens = precomputedBreakdown.summary ?? 0
+    systemPromptTokens = Math.max(0, precomputedBreakdown.systemPrompt - cronRunsTokens - cronLearningsTokens)
+    messagesTokens = precomputedBreakdown.messages
+    toolsTokens = precomputedBreakdown.tools
+    rawTotal = precomputedBreakdown.total
+  } else {
+    // Legacy fallback: sum raw per-message DB content. Used by task and
+    // quick-session previews where the trimming pipeline doesn't apply.
+    summaryTokens = compactingSummary ? estimateTokens(compactingSummary) : 0
+    const rawSystemTokens = estimateTokens(systemPrompt)
+    systemPromptTokens = Math.max(0, rawSystemTokens - summaryTokens - cronRunsTokens - cronLearningsTokens)
+    messagesTokens = 0
+    for (const m of messagesPreviews) {
+      messagesTokens += m.tokenEstimate
+    }
+    toolsTokens = toolDefinitions.length > 0 ? estimateTokens(JSON.stringify(toolDefinitions)) : 0
+    rawTotal = systemPromptTokens + summaryTokens + cronRunsTokens + cronLearningsTokens + messagesTokens + toolsTokens
   }
-  const toolsTokens = toolDefinitions.length > 0 ? estimateTokens(JSON.stringify(toolDefinitions)) : 0
-  const rawTotal = systemPromptTokens + summaryTokens + cronRunsTokens + cronLearningsTokens + messagesTokens + toolsTokens
 
   // Apply calibration uniformly across sections + per-message estimates so
   // every number summed in this response matches the navbar's calibrated

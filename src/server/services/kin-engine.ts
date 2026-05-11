@@ -582,8 +582,14 @@ function buildToolSchemaPayload(tools: Record<string, unknown>): Array<{ name: s
  * Estimate the total token count of a full LLM request payload.
  * When `summaryTokens` is provided, that amount is split out of the system prompt total
  * and reported as a separate `summary` field.
+ *
+ * Exported so context-preview.ts can compute the visualizer's section totals
+ * from the SAME masked/trimmed messageHistory that this turn's API call will
+ * see — otherwise the dialog over-counts pre-trim content while the navbar
+ * shows post-trim, and the two diverge by hundreds of thousands of tokens on
+ * tool-heavy Kins.
  */
-function estimateContextTokens(
+export function estimateContextTokens(
   systemPrompt: string,
   messageHistory: ModelMessage[],
   tools: Record<string, unknown> | undefined,
@@ -2395,7 +2401,7 @@ export interface ConversationParticipant {
   lastSeenAt: Date
 }
 
-async function buildMessageHistory(kinId: string): Promise<{ messages: ModelMessage[]; compactingSummaries: Array<{ summary: string; firstMessageAt: Date; lastMessageAt: Date; depth: number }> | null; participants: ConversationParticipant[]; visibleMessageCount: number; totalMessageCount: number; hasCompactedHistory: boolean; oldestVisibleMessageAt?: Date; maskedToolGroups: number; observationCompactedCount: number; estimatedTokensSavedByMasking: number; emergencyTrimmedCount: number; trimmedToolResultsCount: number; trimmedToolResultsTokensSaved: number; trimmedToolCallArgsCount: number; trimmedToolCallArgsTokensSaved: number; trimmedAssistantContentCount: number; trimmedAssistantContentTokensSaved: number; trimmedUserContentCount: number; trimmedUserContentTokensSaved: number }> {
+export async function buildMessageHistory(kinId: string): Promise<{ messages: ModelMessage[]; compactingSummaries: Array<{ summary: string; firstMessageAt: Date; lastMessageAt: Date; depth: number }> | null; participants: ConversationParticipant[]; visibleMessageCount: number; totalMessageCount: number; hasCompactedHistory: boolean; oldestVisibleMessageAt?: Date; maskedToolGroups: number; observationCompactedCount: number; estimatedTokensSavedByMasking: number; emergencyTrimmedCount: number; trimmedToolResultsCount: number; trimmedToolResultsTokensSaved: number; trimmedToolCallArgsCount: number; trimmedToolCallArgsTokensSaved: number; trimmedAssistantContentCount: number; trimmedAssistantContentTokensSaved: number; trimmedUserContentCount: number; trimmedUserContentTokensSaved: number }> {
   const history: ModelMessage[] = []
 
   // Fetch all active (in-context) summaries, ordered oldest to newest
