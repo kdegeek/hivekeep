@@ -573,9 +573,15 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
       Object.keys(allTools).length > 0 ? allTools : undefined,
       summaryTokensFromMasked,
     )
-  } catch {
-    // Fall back to the legacy raw sum when the masked-history build fails for
-    // any reason — better an over-count than a missing bar.
+    // Diagnostic: when the breakdown is meaningfully smaller than the
+    // raw per-message sum, the masked-history path is doing its job. When
+    // they match, the visualizer falls back to legacy behavior.
+    const rawSum = messagesPreviews.reduce((s, m) => s + m.tokenEstimate, 0)
+      + estimateTokens(systemPrompt) + (combinedSummary ? estimateTokens(combinedSummary) : 0)
+      + (toolDefinitions.length > 0 ? estimateTokens(JSON.stringify(toolDefinitions)) : 0)
+    console.warn('[context-preview] kin=%s rawDbSum=%d trimmedTotal=%d msgsMasked=%d msgsRaw=%d', kinId, rawSum, trimmedBreakdown.total, trimmedBreakdown.messages, messagesPreviews.reduce((s, m) => s + m.tokenEstimate, 0))
+  } catch (err) {
+    console.error('[context-preview] failed to compute trimmedBreakdown, falling back to raw DB sum:', err)
   }
 
   return formatResult(systemPrompt, toolDefinitions, messagesPreviews, totalMessageCount, getModelContextWindow(kin.model), combinedSummary, summaryPreviews, compactingThresholdPercent, [], [], calibrationFactor, lastTurnCache, trimmedBreakdown)

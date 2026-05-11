@@ -303,6 +303,13 @@ export function setLastContextUsage(
     calibrationFactor,
   }
   lastContextUsage.set(kinId, data)
+  if (breakdownRaw) {
+    console.warn('[setLastContextUsage] kin=%s cal=%s raw{sys=%d msgs=%d tools=%d sum=%d total=%d} scaled{sys=%d msgs=%d tools=%d sum=%d total=%d}',
+      kinId, calibrationFactor.toFixed(3),
+      breakdownRaw.systemPrompt, breakdownRaw.messages, breakdownRaw.tools, breakdownRaw.summary ?? 0, breakdownRaw.total,
+      data.breakdown!.systemPrompt, data.breakdown!.messages, data.breakdown!.tools, data.breakdown!.summary ?? 0, data.breakdown!.total,
+    )
+  }
   setSetting(`context_usage:${kinId}`, JSON.stringify(data)).catch(() => {})
 }
 
