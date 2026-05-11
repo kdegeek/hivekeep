@@ -1,5 +1,7 @@
 import { tool } from 'ai'
 import { z } from 'zod'
+import { eq } from 'drizzle-orm'
+import { v4 as uuid } from 'uuid'
 import {
   listChannels,
   getChannel,
@@ -9,8 +11,14 @@ import {
   deleteChannel,
   activateChannel,
   deactivateChannel,
+  setChannelTransferHint,
+  getChannelOriginMeta,
 } from '@/server/services/channels'
+import { db } from '@/server/db/index'
+import { channels, kins, messages } from '@/server/db/schema'
+import { resolveKinId } from '@/server/services/kin-resolver'
 import { channelAdapters } from '@/server/channels/index'
+import { sseManager } from '@/server/sse/index'
 import { createLogger } from '@/server/logger'
 import type { ToolRegistration } from '@/server/tools/types'
 import type { OutboundAttachment } from '@/server/channels/adapter'
@@ -291,6 +299,186 @@ export const activateChannelTool: ToolRegistration = {
           }
         } catch (err) {
           return { error: err instanceof Error ? err.message : 'Unknown error' }
+        }
+      },
+    }),
+}
+
+/**
+ * transfer_channel — re-bind a channel to a different Kin at runtime.
+ *
+ * Any Kin can call this (no "channel owner" restriction). Effects:
+ *   - channels.kinId is mutated to the target Kin.
+ *   - Two role='system' audit-trail messages are inserted, one per Kin, with
+ *     metadata.systemEvent='channel_transferred_out' / 'channel_transferred_in'.
+ *     buildMessageHistory filters these out of the LLM prompt; the UI renders
+ *     them as a handoff banner.
+ *   - A one-shot channelTransferHint is stashed in the sideband. The next
+ *     inbound on the channel pops it and surfaces the handoff via
+ *     <channel-context> to the new Kin on its first turn.
+ *   - SSE 'channel:transferred' is broadcast so any open UI tab updates the
+ *     sidebar binding badge in real time.
+ *
+ * No turn is triggered on the new Kin at transfer time. The new Kin discovers
+ * the conversation when the user next sends a message.
+ */
+export const transferChannelTool: ToolRegistration = {
+  availability: ['main'],
+  create: (ctx) =>
+    tool({
+      description:
+        'Transfer a channel binding to another Kin. The target Kin will receive the next inbound message on this channel (no immediate turn is triggered). Both Kins get a visible audit-trail row in their conversation. The new Kin also gets a structured note about the handoff (source Kin, optional reason) on its first inbound after the transfer.',
+      inputSchema: z.object({
+        channelId: z.string().describe('Channel to transfer. Optional when called from a channel-driven turn; inferred from the current context (channelOriginId).').optional(),
+        targetKinSlug: z.string().describe('Slug (or UUID) of the Kin to transfer the channel to.'),
+        reason: z.string().max(200).optional().describe('Optional human-readable explanation, shown in the audit trail and surfaced to the new Kin as context.'),
+      }),
+      execute: async ({ channelId, targetKinSlug, reason }) => {
+        // 1. Resolve channelId (explicit > inferred from current channel turn).
+        let resolvedChannelId = channelId
+        if (!resolvedChannelId) {
+          if (ctx.channelOriginId) {
+            const origin = getChannelOriginMeta(ctx.channelOriginId)
+            if (origin) resolvedChannelId = origin.channelId
+          }
+        }
+        if (!resolvedChannelId) {
+          return { error: 'channelId could not be inferred from the current context; please pass it explicitly.' }
+        }
+
+        // 2. Load the channel.
+        const channel = await getChannel(resolvedChannelId)
+        if (!channel) {
+          return { error: `Channel "${resolvedChannelId}" not found.` }
+        }
+
+        // 3. Resolve the target Kin (slug or UUID → UUID, then load the full row).
+        const toKinId = resolveKinId(targetKinSlug)
+        if (!toKinId) {
+          return { error: `Kin "${targetKinSlug}" not found (unknown slug or UUID).` }
+        }
+
+        // 4. No-op if already bound to the target.
+        if (channel.kinId === toKinId) {
+          return { ok: true, noop: true, message: 'Channel is already bound to this Kin.' }
+        }
+
+        // 5. Capture both Kin rows (source for audit + sideband, target for the
+        //    audit trail row and the SSE event). Two separate queries keep the
+        //    mock surface in tests narrow (same dbChain.get pattern used by
+        //    sibling tool tests).
+        const fromKinRow = db
+          .select({ id: kins.id, slug: kins.slug, name: kins.name })
+          .from(kins)
+          .where(eq(kins.id, channel.kinId))
+          .get()
+        if (!fromKinRow) {
+          return { error: `Source Kin "${channel.kinId}" not found; refusing to transfer from a dangling binding.` }
+        }
+        const toKinRow = db
+          .select({ id: kins.id, slug: kins.slug, name: kins.name })
+          .from(kins)
+          .where(eq(kins.id, toKinId))
+          .get()
+        if (!toKinRow) {
+          return { error: `Target Kin "${toKinId}" not found after resolution; refusing to transfer to a dangling binding.` }
+        }
+        const fromKinId = fromKinRow.id
+        const fromKinSlug = fromKinRow.slug ?? fromKinRow.id
+        const fromKinName = fromKinRow.name
+        const toKinSlug = toKinRow.slug ?? toKinRow.id
+        const toKinName = toKinRow.name
+
+        const at = Date.now()
+        const now = new Date(at)
+
+        // 6. Mutate the binding.
+        await db
+          .update(channels)
+          .set({ kinId: toKinId, updatedAt: now })
+          .where(eq(channels.id, channel.id))
+
+        // 7. Insert two audit-trail rows, one in each Kin's history.
+        //    role='system' + sourceType='system' renders as a centered banner
+        //    in the chat UI. metadata.systemEvent discriminates the row type
+        //    for the UI; buildMessageHistory filters both out of the LLM prompt.
+        const outMetaJson = JSON.stringify({
+          systemEvent: 'channel_transferred_out',
+          channelId: channel.id,
+          channelName: channel.name,
+          targetKinId: toKinId,
+          targetKinSlug: toKinSlug,
+          targetKinName: toKinName,
+          reason: reason ?? null,
+          at,
+        })
+        const inMetaJson = JSON.stringify({
+          systemEvent: 'channel_transferred_in',
+          channelId: channel.id,
+          channelName: channel.name,
+          fromKinId,
+          fromKinSlug,
+          fromKinName,
+          reason: reason ?? null,
+          at,
+        })
+        await db.insert(messages).values({
+          id: uuid(),
+          kinId: fromKinId,
+          role: 'system',
+          content: null,
+          sourceType: 'system',
+          sourceId: null,
+          metadata: outMetaJson,
+          createdAt: now,
+        })
+        await db.insert(messages).values({
+          id: uuid(),
+          kinId: toKinId,
+          role: 'system',
+          content: null,
+          sourceType: 'system',
+          sourceId: null,
+          metadata: inMetaJson,
+          createdAt: now,
+        })
+
+        // 8. Stash the one-shot hint for the next inbound.
+        setChannelTransferHint(channel.id, {
+          fromKinId,
+          fromKinSlug,
+          fromKinName,
+          reason,
+          at,
+        })
+
+        // 9. Broadcast SSE so live UI tabs refresh the sidebar binding.
+        sseManager.broadcast({
+          type: 'channel:transferred',
+          data: {
+            channelId: channel.id,
+            channelName: channel.name,
+            fromKinId,
+            fromKinSlug,
+            fromKinName,
+            toKinId,
+            toKinSlug,
+            toKinName,
+            reason: reason ?? null,
+            at,
+          },
+        })
+
+        log.info(
+          { calledByKinId: ctx.kinId, channelId: channel.id, fromKinId, toKinId, reason: reason ?? null },
+          'Channel transferred',
+        )
+
+        return {
+          ok: true,
+          transferredAt: at,
+          previousKinSlug: fromKinSlug,
+          newKinSlug: toKinSlug,
         }
       },
     }),

@@ -36,6 +36,7 @@ export type SSEEventType =
   | 'channel:message-sent'
   | 'channel:user-pending'
   | 'channel:user-approved'
+  | 'channel:transferred'
   | 'notification:new'
   | 'notification:read'
   | 'notification:read-all'

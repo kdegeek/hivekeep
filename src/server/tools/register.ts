@@ -128,6 +128,7 @@ import {
   deleteChannelTool,
   activateChannelTool,
   deactivateChannelTool,
+  transferChannelTool,
 } from '@/server/tools/channel-tools'
 import {
   searchKnowledgeTool,
@@ -357,6 +358,7 @@ export function registerAllTools(): void {
   toolRegistry.register('delete_channel', deleteChannelTool)
   toolRegistry.register('activate_channel', activateChannelTool)
   toolRegistry.register('deactivate_channel', deactivateChannelTool)
+  toolRegistry.register('transfer_channel', transferChannelTool)
   toolRegistry.register('attach_file', attachFileTool)
 
   // Platform / system tools (main only, opt-in required)
