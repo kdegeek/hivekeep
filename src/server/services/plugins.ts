@@ -224,6 +224,33 @@ export function validateManifest(data: unknown): { valid: boolean; errors: strin
     }
   }
 
+  // Validate optional channels metadata (permissive: shape only, no value
+  // checks). See PluginManifest.channels in src/shared/types/plugin.ts.
+  if (m.channels !== undefined) {
+    if (typeof m.channels !== 'object' || m.channels === null || Array.isArray(m.channels)) {
+      errors.push('channels must be an object keyed by platform name')
+    } else {
+      const chans = m.channels as Record<string, unknown>
+      for (const [platform, entry] of Object.entries(chans)) {
+        if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+          errors.push(`channels.${platform} must be an object`)
+          continue
+        }
+        const e = entry as Record<string, unknown>
+        if (e.configSchema !== undefined) {
+          if (typeof e.configSchema !== 'object' || e.configSchema === null || Array.isArray(e.configSchema)) {
+            errors.push(`channels.${platform}.configSchema must be an object`)
+            continue
+          }
+          const cs = e.configSchema as Record<string, unknown>
+          if (!Array.isArray(cs.fields)) {
+            errors.push(`channels.${platform}.configSchema.fields must be an array`)
+          }
+        }
+      }
+    }
+  }
+
   return { valid: errors.length === 0, errors }
 }
 
@@ -767,10 +794,19 @@ class PluginManager {
         }
       }
 
-      // Register channels
+      // Register channels. If the manifest declares
+      // `channels.<platform>.configSchema` for this adapter and the adapter
+      // doesn't already expose one, attach the manifest schema so that
+      // `channelAdapters.listWithMeta()` and the route-level Zod validator
+      // pick it up. Manifest-level declarations are encouraged for plugins
+      // because they remain discoverable without executing plugin code.
       if (exports.channels) {
         for (const [channelName, adapter] of Object.entries(exports.channels)) {
           try {
+            const manifestEntry = plugin.manifest.channels?.[adapter.platform]
+            if (manifestEntry?.configSchema && !adapter.configSchema) {
+              ;(adapter as { configSchema?: typeof manifestEntry.configSchema }).configSchema = manifestEntry.configSchema
+            }
             channelAdapters.registerPlugin(adapter)
             plugin.registeredChannels.push({
               platform: adapter.platform,

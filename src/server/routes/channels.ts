@@ -18,6 +18,10 @@ import {
 } from '@/server/services/channels'
 import type { AppVariables } from '@/server/app'
 import { channelAdapters } from '@/server/channels/index'
+import {
+  buildZodSchemaFromConfigSchema,
+  formatZodIssues,
+} from '@/server/channels/configSchemaValidator'
 import { createLogger } from '@/server/logger'
 
 const log = createLogger('routes:channels')
@@ -93,24 +97,45 @@ channelRoutes.post('/', async (c) => {
     kinId: string
     name: string
     platform: string
-    botToken: string
+    platformConfig?: Record<string, unknown>
     allowedChatIds?: string[]
     autoCreateContacts?: boolean
   }>()
 
-  if (!body.kinId || !body.name || !body.platform || !body.botToken) {
+  if (!body.kinId || !body.name || !body.platform) {
     return c.json(
-      { error: { code: 'VALIDATION_ERROR', message: 'kinId, name, platform, and botToken are required' } },
+      { error: { code: 'VALIDATION_ERROR', message: 'kinId, name, and platform are required' } },
       400,
     )
   }
 
-  if (!channelAdapters.get(body.platform)) {
+  const adapter = channelAdapters.get(body.platform)
+  if (!adapter) {
     const available = channelAdapters.list().join(', ')
     return c.json(
       { error: { code: 'VALIDATION_ERROR', message: `Invalid platform. Registered: ${available}` } },
       400,
     )
+  }
+
+  // Validate platformConfig against the adapter's declarative schema. Adapters
+  // without a configSchema accept any platformConfig (none of the built-ins
+  // are in that state post-#381 but plugins may temporarily ship without one).
+  const platformConfig: Record<string, unknown> = body.platformConfig ?? {}
+  if (adapter.configSchema) {
+    const zodSchema = buildZodSchemaFromConfigSchema(adapter.configSchema)
+    const parsed = zodSchema.safeParse(platformConfig)
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: `Invalid platformConfig: ${formatZodIssues(parsed.error)}`,
+          },
+        },
+        400,
+      )
+    }
   }
 
   // Verify Kin exists
@@ -124,7 +149,7 @@ channelRoutes.post('/', async (c) => {
       kinId: body.kinId,
       name: body.name,
       platform: body.platform,
-      botToken: body.botToken,
+      platformConfig,
       allowedChatIds: body.allowedChatIds,
       autoCreateContacts: body.autoCreateContacts,
       createdBy: 'user',

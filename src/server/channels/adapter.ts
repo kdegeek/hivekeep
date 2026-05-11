@@ -8,6 +8,13 @@ export interface ChannelAdapterMeta {
   iconUrl?: string
 }
 
+// ─── Adapter configuration schema ───────────────────────────────────────────
+
+// Declared in `src/shared/types.ts` so the client and server agree on the
+// shape used by the dynamic form and the server-side Zod validator.
+import type { ChannelConfigField, ChannelConfigSchema } from '@/shared/types'
+export type { ChannelConfigField, ChannelConfigSchema }
+
 // ─── Incoming attachments from an external platform ─────────────────────────
 
 export interface IncomingAttachment {
@@ -83,6 +90,15 @@ export interface ChannelAdapter {
 
   /** Optional metadata for display purposes (name, color, icon) */
   readonly meta?: ChannelAdapterMeta
+
+  /**
+   * Optional declarative configuration schema. When provided, the UI renders
+   * a dynamic form from `fields` and the server validates `platformConfig`
+   * against a Zod schema derived from it. Adapters that don't declare one
+   * keep the legacy behavior (bot-token-only form) for now — migration will
+   * happen adapter by adapter.
+   */
+  readonly configSchema?: ChannelConfigSchema
 
   /**
    * Start receiving messages. Called when a channel becomes active.
