@@ -21,7 +21,7 @@ export async function authMiddleware(c: Context, next: Next) {
   const path = c.req.path
 
   // Skip auth for Better Auth routes, onboarding, and health check
-  if (path.startsWith('/api/auth/') || path.startsWith('/api/onboarding') || path === '/api/health' || path.startsWith('/s/') || path.startsWith('/api/webhooks/incoming/') || path.startsWith('/api/channels/telegram/') || path.startsWith('/api/channels/slack/') || /^\/api\/invitations\/[^/]+\/validate$/.test(path)) {
+  if (path.startsWith('/api/auth/') || path.startsWith('/api/onboarding') || path === '/api/health' || path.startsWith('/s/') || path.startsWith('/api/webhooks/incoming/') || path.startsWith('/api/channels/telegram/') || path.startsWith('/api/channels/slack/') || path.startsWith('/api/channels/whatsapp/') || path.startsWith('/api/channels/signal/') || path.startsWith('/api/channels/plugin/') || /^\/api\/invitations\/[^/]+\/validate$/.test(path)) {
     return next()
   }
 

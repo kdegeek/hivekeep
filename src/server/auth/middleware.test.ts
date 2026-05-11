@@ -82,6 +82,9 @@ describe('authMiddleware', () => {
       '/api/channels/telegram/abc',
       '/api/channels/slack/events',
       '/api/channels/slack/interact',
+      '/api/channels/whatsapp/webhook',
+      '/api/channels/signal/webhook',
+      '/api/channels/plugin/twilio-sms/webhook/9b39016a-b339-474d-a4af-7d282d48b0c0',
     ]
 
     for (const path of skippedPaths) {
