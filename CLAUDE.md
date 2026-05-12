@@ -104,6 +104,7 @@ All API routes return JSON. Errors follow this format:
 - **Crons**: in-process scheduler (croner). Spawn sub-Kins on schedule. Results are informational (no LLM turn on parent). Kin-created crons require user approval.
 - **Event bus + hooks**: foundation for observability and future plugin system.
 - **Providers are pluggable**: one config per provider, multiple capabilities auto-detected (`llm`, `embedding`, `image`).
+- **Tool concurrency**: within a single LLM step, tool calls are partitioned into batches by `tool-executor.ts`. Consecutive tools flagged `concurrencySafe: true` on their `ToolRegistration` fuse into one parallel batch (bounded by `KINBOT_MAX_TOOL_USE_CONCURRENCY`, default 10); every other tool runs alone in its own serial batch. Three optional flags: `readOnly`, `concurrencySafe`, `destructive`. Default is `false` everywhere (conservative: assume write, assume not safe to parallelize). When adding a native tool, only set these flags when the answer is unambiguous — anything stateful, side-effecting, or with ordering dependencies should stay at the default.
 
 ## Git conventions
 

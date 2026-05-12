@@ -203,6 +203,46 @@ return {
 
 Tools are automatically namespaced as `plugin_<name>_<tool>` and are opt-in (disabled by default in conversations).
 
+#### Tool concurrency flags (optional)
+
+KinBot partitions the tool calls within a single LLM step into batches.
+Consecutive `concurrencySafe` tools run in parallel; everything else runs
+serially in its own isolated batch. By default a tool is treated as
+unsafe (serial, isolated), which is conservative but slower when an
+agent issues several lookups at once.
+
+Plugin tools may opt-in via three optional flags on the tool registration:
+
+```javascript
+return {
+  tools: {
+    my_lookup: {
+      description: '...',
+      parameters: { /* ... */ },
+      readOnly: true,         // Reads only, no mutations
+      concurrencySafe: true,  // Safe to run in parallel with other safe tools
+      destructive: false,     // Irreversible operations (delete, send, etc.)
+      execute: async (params) => { /* ... */ }
+    }
+  }
+}
+```
+
+Guidance:
+
+- Set `readOnly: true` for any tool whose only effect is fetching data.
+- Set `concurrencySafe: true` only when the tool can run alongside its
+  siblings in the same step without ordering or contention issues. Pure
+  reads almost always qualify. Writes that touch shared state usually
+  do not.
+- Set `destructive: true` for irreversible operations (delete, send,
+  external publish). This flag is reserved for UX (confirmation
+  prompts) and does not affect batching today.
+- When in doubt, leave the flag unset. Correctness over throughput.
+
+The cap on parallelism is `KINBOT_MAX_TOOL_USE_CONCURRENCY` (env var,
+default 10).
+
 ### Hooks
 
 Intercept KinBot lifecycle events:
