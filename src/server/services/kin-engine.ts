@@ -1736,8 +1736,13 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
       })
     }
 
-    // Save assistant message (partial if aborted) with tool call metadata
-    if (fullContent || toolCallsLog.length > 0 || wasAborted) {
+    // Save assistant message (partial if aborted) with tool call metadata.
+    // Do NOT persist when the row would carry no text AND no tool calls:
+    // Anthropic rejects empty text content blocks ("text content blocks
+    // must be non-empty") on the next turn, which permanently blocks the
+    // conversation until the empty row is removed. The chat:done SSE below
+    // still fires so the UI exits its typing state cleanly.
+    if (fullContent || toolCallsLog.length > 0) {
       await db.insert(messages).values({
         id: assistantMessageId,
         kinId,
@@ -2118,7 +2123,12 @@ export async function processQuickMessage(kinId: string): Promise<boolean> {
             })),
           })
         } else {
-          messageHistory.push({ role: 'assistant', content: msg.content ?? '' })
+          // Skip empty text-only rows: Anthropic rejects empty text content
+          // blocks. See buildMessageHistory for the same defense.
+          const text = msg.content ?? ''
+          if (text) {
+            messageHistory.push({ role: 'assistant', content: text })
+          }
         }
       }
     }
@@ -2344,8 +2354,10 @@ export async function processQuickMessage(kinId: string): Promise<boolean> {
       fullContent = `*(Completed ${toolCallsLog.length} tool call${toolCallsLog.length > 1 ? 's' : ''} but the response was truncated due to the tool step limit of ${config.tools.maxSteps}. You can ask me to continue or summarize.)*`
     }
 
-    // Save assistant message (with sessionId)
-    if (fullContent || toolCallsLog.length > 0 || wasAborted) {
+    // Save assistant message (with sessionId). Skip when there's no text
+    // and no tool calls (typically: user aborted before the model produced
+    // anything). See the main-session insert above for the rationale.
+    if (fullContent || toolCallsLog.length > 0) {
       await db.insert(messages).values({
         id: assistantMessageId,
         kinId,
@@ -2712,7 +2724,13 @@ export async function buildMessageHistory(kinId: string): Promise<{ messages: Mo
         // Simple text-only assistant message (either no tool calls persisted,
         // or every persisted tool call was malformed and dropped by the
         // sanitizer — we keep the text portion so the turn is not lost).
-        history.push({ role: 'assistant', content: msg.content ?? '' })
+        // Skip rows with empty content: Anthropic rejects empty text content
+        // blocks on the next turn. These can exist as legacy rows from before
+        // the abort-path guard was tightened.
+        const text = msg.content ?? ''
+        if (text) {
+          history.push({ role: 'assistant', content: text })
+        }
       }
     }
     // role === 'tool' and 'system' messages from DB are skipped —
