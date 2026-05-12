@@ -16,8 +16,10 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
+import { useNavigate } from 'react-router-dom'
 import { SortableKinCard } from '@/client/components/kin/SortableKinCard'
 import { KinCard } from '@/client/components/kin/KinCard'
+import { useKinChannels } from '@/client/hooks/useKinChannels'
 import {
   SidebarGroup,
   SidebarGroupAction,
@@ -58,6 +60,16 @@ const KIN_SEARCH_THRESHOLD = 5
 export const KinList = memo(function KinList({ kins, llmModels, selectedKinSlug, unavailableKinIds, kinQueueState, unreadCounts, onSelectKin, onCreateKin, onEditKin, onDeleteKin, onSetAsHub, onViewUsage, onReorderKins }: KinListProps) {
   const { t } = useTranslation()
   const [searchQuery, setSearchQuery] = useState('')
+  const navigate = useNavigate()
+  // Bound channels per Kin: live grouped projection of /api/channels,
+  // refreshed on channel:created/updated/deleted/transferred SSE events
+  // so badges migrate to the new Kin row immediately after a transfer.
+  const { byKinId: channelsByKinId } = useKinChannels()
+  const openChannelSettings = useCallback((_channelId: string) => {
+    // For now the channel-settings page is the editing surface; a future
+    // refinement could focus the matching row via a query param.
+    navigate('/settings/channels')
+  }, [navigate])
 
   // Separate hub from regular kins
   const hubKin = useMemo(() => kins.find((k) => k.isHub), [kins])
@@ -169,6 +181,8 @@ export const KinList = memo(function KinList({ kins, llmModels, selectedKinSlug,
                   modelUnavailable={unavailableKinIds.has(hubKin.id)}
                   unreadCount={unreadCounts.get(hubKin.id) ?? 0}
                   shortcutIndex={1}
+                  channels={channelsByKinId.get(hubKin.id)}
+                  onOpenChannel={openChannelSettings}
                   onClick={() => onSelectKin(hubKin.slug)}
                   onEdit={() => onEditKin(hubKin.id)}
                   onDelete={onDeleteKin ? () => onDeleteKin(hubKin.id) : undefined}
@@ -201,6 +215,8 @@ export const KinList = memo(function KinList({ kins, llmModels, selectedKinSlug,
                       modelUnavailable={unavailableKinIds.has(kin.id)}
                       unreadCount={unreadCounts.get(kin.id) ?? 0}
                       shortcutIndex={hubKin ? index + 2 : index + 1}
+                      channels={channelsByKinId.get(kin.id)}
+                      onOpenChannel={openChannelSettings}
                       onClick={() => onSelectKin(kin.slug)}
                       onEdit={() => onEditKin(kin.id)}
                       onDelete={onDeleteKin ? () => onDeleteKin(kin.id) : undefined}

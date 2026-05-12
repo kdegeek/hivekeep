@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/client/components/ui/badge'
 import { cn } from '@/client/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/client/components/ui/tooltip'
+import { PlatformIcon } from '@/client/components/common/PlatformIcon'
+import type { KinChannelBadge } from '@/client/hooks/useKinChannels'
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -36,6 +38,15 @@ export interface KinCardProps extends HTMLAttributes<HTMLDivElement> {
   isHub?: boolean
   unreadCount?: number
   shortcutIndex?: number
+  /**
+   * Active channels currently bound to this Kin (transferable binding,
+   * Issue 3 of 3). Rendered as a row of brand-colored platform icons below
+   * the Kin name. Up to MAX_VISIBLE_BADGES icons are shown explicitly,
+   * the rest are collapsed into a "+N" affordance.
+   */
+  channels?: KinChannelBadge[]
+  /** Click handler for a channel icon (opens the channel settings page). */
+  onOpenChannel?: (channelId: string) => void
   onClick: () => void
   onEdit?: () => void
   onDelete?: () => void
@@ -44,6 +55,8 @@ export interface KinCardProps extends HTMLAttributes<HTMLDivElement> {
   onViewUsage?: () => void
   dragHandleProps?: Record<string, unknown>
 }
+
+const MAX_VISIBLE_BADGES = 5
 
 export const KinCard = forwardRef<HTMLDivElement, KinCardProps>(function KinCard({
   name,
@@ -58,6 +71,8 @@ export const KinCard = forwardRef<HTMLDivElement, KinCardProps>(function KinCard
   isHub = false,
   unreadCount = 0,
   shortcutIndex,
+  channels,
+  onOpenChannel,
   onClick,
   onEdit,
   onDelete,
@@ -172,6 +187,39 @@ export const KinCard = forwardRef<HTMLDivElement, KinCardProps>(function KinCard
         </div>
         {modelDisplayName && (
           <p className="truncate text-[10px] text-muted-foreground/50 mt-0.5">{modelDisplayName}</p>
+        )}
+        {channels && channels.length > 0 && (
+          <div className="flex items-center gap-1 mt-1" aria-label={t('sidebar.kins.boundChannelsLabel', 'Bound channels')}>
+            {channels.slice(0, MAX_VISIBLE_BADGES).map((ch) => (
+              <Tooltip key={ch.id}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onOpenChannel?.(ch.id) }}
+                    className="rounded p-0.5 transition-colors hover:bg-accent/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    aria-label={ch.name}
+                  >
+                    <PlatformIcon platform={ch.platform} variant="color" className="size-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  {ch.name}
+                </TooltipContent>
+              </Tooltip>
+            ))}
+            {channels.length > MAX_VISIBLE_BADGES && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="rounded px-1 py-0.5 text-[10px] font-medium text-muted-foreground/70">
+                    +{channels.length - MAX_VISIBLE_BADGES}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  {channels.slice(MAX_VISIBLE_BADGES).map((c) => c.name).join(', ')}
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
         )}
       </div>
 
