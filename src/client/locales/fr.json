@@ -366,6 +366,8 @@
     },
     "tools": {
       "native": "Outils natifs",
+      "plugins": "Outils de plugins",
+      "pluginGroup": "Plugin : {{name}}",
       "mcp": "Serveurs MCP",
       "allEnabled": "Tous activés",
       "allDisabled": "Tous désactivés",

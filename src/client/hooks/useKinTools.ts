@@ -7,6 +7,11 @@ export interface NativeToolGroup {
   tools: Array<{ name: string; enabled: boolean; defaultDisabled?: boolean }>
 }
 
+export interface PluginToolGroup {
+  pluginName: string
+  tools: Array<{ name: string; enabled: boolean; defaultDisabled?: boolean }>
+}
+
 export interface McpToolGroup {
   serverId: string
   serverName: string
@@ -16,11 +21,13 @@ export interface McpToolGroup {
 
 interface KinToolsResponse {
   nativeTools: NativeToolGroup[]
+  pluginTools?: PluginToolGroup[]
   mcpTools: McpToolGroup[]
 }
 
 export function useKinTools(kinId: string | null) {
   const [nativeTools, setNativeTools] = useState<NativeToolGroup[]>([])
+  const [pluginTools, setPluginTools] = useState<PluginToolGroup[]>([])
   const [mcpTools, setMcpTools] = useState<McpToolGroup[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
@@ -29,8 +36,8 @@ export function useKinTools(kinId: string | null) {
     setIsLoading(true)
     try {
       const data = await api.get<KinToolsResponse>(`/kins/${kinId}/tools`)
-      console.log('[useKinTools] response:', { kinId, nativeCount: data.nativeTools.length, mcpCount: data.mcpTools.length, mcpTools: data.mcpTools })
       setNativeTools(data.nativeTools)
+      setPluginTools(data.pluginTools ?? [])
       setMcpTools(data.mcpTools)
     } catch (err) {
       console.error('[useKinTools] error:', err)
@@ -43,5 +50,5 @@ export function useKinTools(kinId: string | null) {
     fetchTools()
   }, [fetchTools])
 
-  return { nativeTools, mcpTools, isLoading, refetch: fetchTools }
+  return { nativeTools, pluginTools, mcpTools, isLoading, refetch: fetchTools }
 }

@@ -6,9 +6,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/client/co
 import { ToolDomainIcon } from '@/client/components/common/ToolDomainIcon'
 import { ProviderSelector } from '@/client/components/common/ProviderSelector'
 import { Badge } from '@/client/components/ui/badge'
-import { useKinTools, type NativeToolGroup, type McpToolGroup } from '@/client/hooks/useKinTools'
+import { useKinTools, type NativeToolGroup, type McpToolGroup, type PluginToolGroup } from '@/client/hooks/useKinTools'
 import { TOOL_DOMAIN_META, SEARCH_PROVIDER_TYPES } from '@/shared/constants'
-import { ChevronRight, Loader2, Plug } from 'lucide-react'
+import { ChevronRight, Loader2, Plug, Puzzle } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 import type { KinToolConfig, ToolDomain } from '@/shared/types'
 import { useProviders } from '@/client/hooks/useProviders'
@@ -26,7 +26,7 @@ function getEffectiveConfig(config: KinToolConfig | null): KinToolConfig {
 
 export function KinToolsTab({ kinId, toolConfig, onToolConfigChange, isHub }: KinToolsTabProps) {
   const { t } = useTranslation()
-  const { nativeTools, mcpTools, isLoading } = useKinTools(kinId)
+  const { nativeTools, pluginTools, mcpTools, isLoading } = useKinTools(kinId)
   const { providers: searchProviders } = useProviders({ filterTypes: SEARCH_PROVIDER_TYPES, validOnly: true })
 
   const config = getEffectiveConfig(toolConfig)
@@ -103,6 +103,22 @@ export function KinToolsTab({ kinId, toolConfig, onToolConfigChange, isHub }: Ki
         disabledNativeTools: Array.from(disabled),
       })
     }
+  }
+
+  // ─── Plugin tool toggles ────────────────────────────────────────────
+  // Plugin tools are always opt-in (the plugin loader forces
+  // defaultDisabled: true), so individual rows reuse the same
+  // enabledOptInTools allow-list as opt-in native tools. The group
+  // toggle bulk-adds/removes every tool name in the plugin.
+
+  const togglePluginGroup = (group: PluginToolGroup) => {
+    const allEnabled = group.tools.every((t) => isNativeToolEnabled(t.name, true))
+    const optIn = new Set(config.enabledOptInTools ?? [])
+    for (const tool of group.tools) {
+      if (allEnabled) optIn.delete(tool.name)
+      else optIn.add(tool.name)
+    }
+    onToolConfigChange({ ...config, enabledOptInTools: Array.from(optIn) })
   }
 
   // ─── MCP tool toggle ──────────────────────────────────────────────
@@ -216,6 +232,37 @@ export function KinToolsTab({ kinId, toolConfig, onToolConfigChange, isHub }: Ki
           )
         })}
       </div>
+
+      {/* Plugin tools */}
+      {pluginTools.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-foreground">{t('kin.tools.plugins')}</h3>
+
+          {pluginTools.map((group) => {
+            const enabledCount = group.tools.filter((t) => isNativeToolEnabled(t.name, true)).length
+            const allEnabled = enabledCount === group.tools.length
+            return (
+              <PluginGroup
+                key={group.pluginName}
+                pluginName={group.pluginName}
+                enabledCount={enabledCount}
+                totalCount={group.tools.length}
+                allEnabled={allEnabled}
+                onToggleAll={() => togglePluginGroup(group)}
+              >
+                {group.tools.map((tool) => (
+                  <ToolRow
+                    key={tool.name}
+                    label={tool.name}
+                    enabled={isNativeToolEnabled(tool.name, true)}
+                    onToggle={() => toggleNativeTool(tool.name, true)}
+                  />
+                ))}
+              </PluginGroup>
+            )
+          })}
+        </div>
+      )}
 
       {/* Search provider override */}
       {searchProviders.length > 0 && (
@@ -351,6 +398,66 @@ function DomainGroup({
         </div>
 
         {/* Tool list */}
+        <CollapsibleContent>
+          <div className="border-t">
+            {children}
+          </div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
+  )
+}
+
+function PluginGroup({
+  pluginName,
+  enabledCount,
+  totalCount,
+  allEnabled,
+  onToggleAll,
+  children,
+}: {
+  pluginName: string
+  enabledCount: number
+  totalCount: number
+  allEnabled: boolean
+  onToggleAll: () => void
+  children: React.ReactNode
+}) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="rounded-lg border bg-card/50">
+        <div className="flex items-center justify-between px-3 py-2">
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex flex-1 items-center gap-2 text-left"
+            >
+              <ChevronRight className={cn(
+                'size-3.5 text-muted-foreground transition-transform',
+                open && 'rotate-90',
+              )} />
+              <span className="flex size-6 items-center justify-center rounded-md bg-primary/10">
+                <Puzzle className="size-3.5 text-primary" />
+              </span>
+              <span className="text-sm font-medium">{t('kin.tools.pluginGroup', { name: pluginName })}</span>
+              <Badge variant="secondary" size="xs">
+                {t('kin.tools.optIn')}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                {t('kin.tools.countEnabled', { count: enabledCount, total: totalCount })}
+              </span>
+            </button>
+          </CollapsibleTrigger>
+          <Switch
+            size="sm"
+            checked={allEnabled}
+            onCheckedChange={onToggleAll}
+          />
+        </div>
+
         <CollapsibleContent>
           <div className="border-t">
             {children}
