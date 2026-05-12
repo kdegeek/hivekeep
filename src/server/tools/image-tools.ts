@@ -21,6 +21,7 @@ const log = createLogger('tools:image')
 export const listImageModelsTool: ToolRegistration = {
   availability: ['main', 'sub-kin'],
   readOnly: true,
+  concurrencySafe: true,
   create: (_ctx) =>
     tool({
       description:

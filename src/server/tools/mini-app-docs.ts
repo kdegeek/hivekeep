@@ -256,6 +256,7 @@ Animations: .animate-fade-in-up, .animate-scale-in, etc.`,
 export const getMiniAppDocsTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   create: () =>
     tool({
       description:

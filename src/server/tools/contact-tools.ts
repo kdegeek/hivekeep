@@ -23,6 +23,7 @@ const log = createLogger('tools:contacts')
 export const getContactTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   create: (ctx) =>
     tool({
       description:
@@ -63,6 +64,7 @@ export const getContactTool: ToolRegistration = {
 export const searchContactsTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   create: (ctx) =>
     tool({
       description:
@@ -202,6 +204,7 @@ export const updateContactTool: ToolRegistration = {
  */
 export const deleteContactTool: ToolRegistration = {
   availability: ['main'],
+  destructive: true,
   create: (ctx) =>
     tool({
       description:
@@ -252,6 +255,7 @@ export const setContactNoteTool: ToolRegistration = {
 export const findContactByIdentifierTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   create: (ctx) =>
     tool({
       description:

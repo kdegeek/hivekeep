@@ -187,6 +187,7 @@ export const updateWebhookTool: ToolRegistration = {
  */
 export const deleteWebhookTool: ToolRegistration = {
   availability: ['main'],
+  destructive: true,
   create: (ctx) =>
     tool({
       description:
@@ -219,6 +220,7 @@ export const deleteWebhookTool: ToolRegistration = {
 export const listWebhooksTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   create: (ctx) =>
     tool({
       description:

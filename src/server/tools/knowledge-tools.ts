@@ -13,6 +13,7 @@ const log = createLogger('tools:knowledge')
 export const searchKnowledgeTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   create: (ctx) =>
     tool({
       description:
@@ -49,6 +50,7 @@ export const searchKnowledgeTool: ToolRegistration = {
 export const listKnowledgeSourcesTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   create: (ctx) =>
     tool({
       description:

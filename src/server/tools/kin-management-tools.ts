@@ -173,6 +173,7 @@ export const updateKinTool: ToolRegistration = {
 export const deleteKinTool: ToolRegistration = {
   availability: ['main'],
   defaultDisabled: true,
+  destructive: true,
   create: (ctx) =>
     tool({
       description:
@@ -217,6 +218,7 @@ export const deleteKinTool: ToolRegistration = {
 export const getKinDetailsTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   defaultDisabled: true,
   create: (ctx) =>
     tool({

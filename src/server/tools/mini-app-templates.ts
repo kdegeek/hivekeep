@@ -2839,6 +2839,7 @@ export function getTemplateById(id: string): MiniAppTemplate | undefined {
 export const getMiniAppTemplatesTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   create: (_ctx) =>
     tool({
       description:

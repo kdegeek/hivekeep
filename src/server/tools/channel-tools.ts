@@ -28,6 +28,7 @@ const log = createLogger('tools:channel')
 export const listChannelsTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   create: (ctx) =>
     tool({
       description: 'List all messaging channels connected to this Kin.',
@@ -58,6 +59,7 @@ export const listChannelsTool: ToolRegistration = {
 export const listChannelConversationsTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   create: (ctx) =>
     tool({
       description:
@@ -239,6 +241,7 @@ export const updateChannelTool: ToolRegistration = {
 export const deleteChannelTool: ToolRegistration = {
   availability: ['main'],
   defaultDisabled: true,
+  destructive: true,
   create: (ctx) =>
     tool({
       description:

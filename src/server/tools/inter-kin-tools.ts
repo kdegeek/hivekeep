@@ -101,6 +101,7 @@ export const replyTool: ToolRegistration = {
 export const listKinsTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   create: (ctx) =>
     tool({
       description: 'List all available Kins on the platform.',

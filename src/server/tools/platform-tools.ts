@@ -61,6 +61,7 @@ const UPDATABLE_KEYS = new Set([
 export const getPlatformLogsTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   defaultDisabled: true,
   create: (ctx) =>
     tool({
@@ -125,6 +126,7 @@ export const getPlatformLogsTool: ToolRegistration = {
 export const getPlatformConfigTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   create: (ctx) =>
     tool({
       description:
@@ -283,6 +285,7 @@ function loadConfigOptions(): { path: string | null; options: ConfigOption[] } {
 export const listPlatformConfigOptionsTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   create: (ctx) =>
     tool({
       description:
@@ -507,6 +510,7 @@ export const updatePlatformConfigTool: ToolRegistration = {
 export const restartPlatformTool: ToolRegistration = {
   availability: ['main'],
   defaultDisabled: true,
+  destructive: true,
   create: (ctx) =>
     tool({
       description:

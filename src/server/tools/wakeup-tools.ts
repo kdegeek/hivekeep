@@ -179,6 +179,7 @@ export const cancelWakeupTool: ToolRegistration = {
 export const listWakeupsTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   create: (ctx) =>
     tool({
       description: 'List all pending wake-ups.',

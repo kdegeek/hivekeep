@@ -229,6 +229,7 @@ async function execCommand(
 export const grepTool: ToolRegistration = {
   availability: ['main', 'sub-kin'],
   readOnly: true,
+  concurrencySafe: true,
   create: (ctx) =>
     tool({
       description:

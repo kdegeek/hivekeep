@@ -13,6 +13,7 @@ const log = createLogger('tools:search')
 export const webSearchTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   create: (ctx) =>
     tool({
       description:

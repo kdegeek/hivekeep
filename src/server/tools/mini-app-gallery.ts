@@ -11,6 +11,7 @@ const log = createLogger('tools:mini-app-gallery')
 export const browseMiniAppsTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   create: (_ctx) =>
     tool({
       description:

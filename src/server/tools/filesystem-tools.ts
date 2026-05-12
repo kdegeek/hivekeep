@@ -80,6 +80,7 @@ export function resolveAndValidate(inputPath: string, workspace: string): string
 export const readFileTool: ToolRegistration = {
   availability: ['main', 'sub-kin'],
   readOnly: true,
+  concurrencySafe: true,
   create: (ctx) =>
     tool({
       description:
@@ -421,6 +422,7 @@ function listDir(
 export const listDirectoryTool: ToolRegistration = {
   availability: ['main', 'sub-kin'],
   readOnly: true,
+  concurrencySafe: true,
   create: (ctx) =>
     tool({
       description:

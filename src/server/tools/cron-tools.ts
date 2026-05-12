@@ -178,6 +178,7 @@ export const updateCronTool: ToolRegistration = {
  */
 export const deleteCronTool: ToolRegistration = {
   availability: ['main'],
+  destructive: true,
   create: (ctx) =>
     tool({
       description: 'Delete a cron permanently. Cannot be undone.',
@@ -202,6 +203,7 @@ export const deleteCronTool: ToolRegistration = {
 export const listCronsTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   create: (ctx) =>
     tool({
       description: 'List all your scheduled tasks (crons) with their full configuration.',
@@ -236,6 +238,7 @@ export const listCronsTool: ToolRegistration = {
 export const getCronJournalTool: ToolRegistration = {
   availability: ['main'],
   readOnly: true,
+  concurrencySafe: true,
   create: (ctx) =>
     tool({
       description:
