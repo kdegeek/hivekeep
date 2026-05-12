@@ -38,6 +38,7 @@ import { notificationRoutes } from '@/server/routes/notifications'
 import { settingsRoutes } from '@/server/routes/settings'
 import { miniAppRoutes, miniAppSdkRoutes } from '@/server/routes/mini-apps'
 import { pluginRoutes } from '@/server/routes/plugins'
+import { pluginCardRoutes } from '@/server/routes/plugin-cards'
 import { knowledgeRoutes } from '@/server/routes/knowledge'
 import { logRoutes } from '@/server/routes/logs'
 import { usageRoutes } from '@/server/routes/usage'
@@ -182,6 +183,7 @@ app.route('/api/quick-sessions', quickSessionDetailRoutes)
 app.route('/api/mini-apps/sdk', miniAppSdkRoutes)
 app.route('/api/mini-apps', miniAppRoutes)
 app.route('/api/plugins', pluginRoutes)
+app.route('/api/plugin-cards', pluginCardRoutes)
 app.route('/api/logs', logRoutes)
 app.route('/api/usage', usageRoutes)
 app.route('/api/version-check', versionCheckRoutes)
