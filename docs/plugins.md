@@ -486,3 +486,111 @@ export default function(ctx) {
 | `POST` | `/api/plugins/reload` | Reload all plugins |
 | `GET` | `/api/plugins/registry` | Browse the plugin registry |
 | `GET` | `/api/plugins/registry/:name/readme` | Fetch a registry plugin's README |
+
+## Plugin cards
+
+A plugin can emit a rich, live-updating card directly into a Kin's
+conversation. Cards persist as system messages (same storage path as the
+channel-transfer audit rows) and are broadcast over SSE so the UI renders
+them inline without a refetch.
+
+A card is two things:
+
+1. a **layout**, a tree of declarative primitives
+2. a **state** object, whose values are substituted into the layout at
+   render time via `{{key}}` placeholders
+
+The plugin emits both once. Subsequent updates only push a partial
+**state patch**; the layout never changes. The client merges patches
+locally so live progress feels instant.
+
+### Available primitives
+
+| Primitive | Props | Purpose |
+|---|---|---|
+| `header` | `title`, `icon?` (Lucide name), `accent?` | Title row |
+| `stat-row` | `items[]: { label, value, variant? }` | Compact stats grid |
+| `progress` | `value?`, `max?`, `indeterminate?`, `label?` | Progress bar |
+| `collapsible` | `label`, `defaultOpen?`, `content` | Foldable section |
+| `log-stream` | `lines[]`, `autoscroll?`, `maxHeight?` | Monospace log view |
+| `action-row` | `actions[]: { id, label, variant?, input?, confirm? }` | Buttons |
+| `markdown` | `content` | Rendered markdown block |
+| `spinner` | `label?` | Inline loading indicator |
+| `badge` | `text`, `variant?` | Small colored tag |
+| `divider` | `label?` | Section separator |
+
+Variant tokens: `default`, `success`, `warning`, `destructive`,
+`primary`, `muted`. They map onto semantic design tokens so cards look
+correct across all palettes and both light/dark modes.
+
+### Emit and update from a plugin
+
+The plugin context exposes a `cards` namespace bound to the calling
+plugin's name. You never pass `pluginId` explicitly; it is captured
+when the context is created so a plugin cannot emit under another
+plugin's identity.
+
+```typescript
+const { cardInstanceId } = await ctx.cards.emit({
+  kinId,
+  cardType: 'task-run',
+  layout: [
+    { type: 'header', title: 'Backup', icon: 'Database', accent: '{{accent}}' },
+    { type: 'progress', value: '{{percent}}', label: '{{currentStep}}' },
+    { type: 'action-row', actions: '{{actions}}' },
+  ],
+  initialState: {
+    accent: 'primary',
+    percent: 0,
+    currentStep: 'Spawning worker...',
+    actions: [{ id: 'abort', label: 'Abort', variant: 'destructive' }],
+  },
+})
+
+// later, as the work progresses:
+await ctx.cards.update({
+  cardInstanceId,
+  state: { percent: 42, currentStep: 'Copying logs' },
+})
+```
+
+### Interpolation rules
+
+- A string equal to exactly `{{key}}` is replaced by `state[key]` raw,
+  preserving its type. Use this to carry arrays and objects through
+  the layout (e.g. `actions: '{{actions}}'`).
+- A string containing embedded `{{key}}` placeholders is rendered as a
+  template; missing keys interpolate as the empty string.
+- Dot paths are supported (`{{user.name}}`).
+- Arrays and objects in the layout are walked recursively.
+
+### Handling card actions
+
+When a user clicks a button on an `action-row`, the client POSTs to
+`/api/plugin-cards/:cardInstanceId/action` with `{ actionId, input? }`.
+The route looks the card up, identifies the owning plugin, and calls
+its `onCardAction` export:
+
+```typescript
+return {
+  // ...
+  onCardAction: async ({ cardInstanceId, actionId, input, kinId }) => {
+    if (actionId === 'abort') {
+      activeRuns.get(cardInstanceId)?.abort()
+      return { ok: true }
+    }
+    return { ok: false, error: `unknown action: ${actionId}` }
+  },
+}
+```
+
+Return `{ ok: true }` to acknowledge, or `{ ok: false, error }` to
+surface a toast in the UI. Throwing returns HTTP 500 with the error
+message.
+
+### When NOT to use plugin cards
+
+Cards are best for in-flight, evolving state that benefits from a
+single sticky view (long-running jobs, streaming runs, monitored
+processes). For one-off responses use a normal tool result. Cards are
+not currently surfaced in the Tasks panel; that is planned for V2.
