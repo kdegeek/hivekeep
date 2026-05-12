@@ -76,18 +76,39 @@ class ToolRegistry {
     }
   }
 
-  /** Check if a tool is read-only (safe for concurrent execution). */
+  /** Check if a tool is read-only (purely reads, no mutations). */
   isReadOnly(name: string): boolean {
     return this.tools.get(name)?.readOnly === true
   }
 
+  /** Check if a tool is safe to run concurrently with other tools.
+   *  Tools that do not declare this flag are treated as unsafe by default
+   *  and will run in their own isolated serial batch. */
+  isConcurrencySafe(name: string): boolean {
+    return this.tools.get(name)?.concurrencySafe === true
+  }
+
+  /** Check if a tool performs irreversible operations. */
+  isDestructive(name: string): boolean {
+    return this.tools.get(name)?.destructive === true
+  }
+
   /** List all registered tool names with their availability (for API/UI). */
-  list(): Array<{ name: string; availability: ToolAvailability[]; defaultDisabled: boolean; readOnly: boolean }> {
+  list(): Array<{
+    name: string
+    availability: ToolAvailability[]
+    defaultDisabled: boolean
+    readOnly: boolean
+    concurrencySafe: boolean
+    destructive: boolean
+  }> {
     return Array.from(this.tools.entries()).map(([name, reg]) => ({
       name,
       availability: reg.availability,
       defaultDisabled: reg.defaultDisabled ?? false,
       readOnly: reg.readOnly ?? false,
+      concurrencySafe: reg.concurrencySafe ?? false,
+      destructive: reg.destructive ?? false,
     }))
   }
 

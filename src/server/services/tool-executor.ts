@@ -3,10 +3,9 @@ import { toolRegistry } from '@/server/tools/index'
 import { sseManager } from '@/server/sse/index'
 import { config } from '@/server/config'
 import { createLogger } from '@/server/logger'
+import { KINBOT_MAX_TOOL_USE_CONCURRENCY_DEFAULT } from '@/shared/constants'
 
 const log = createLogger('tool-executor')
-
-const DEFAULT_CONCURRENCY_CAP = 5
 
 export interface ToolCall {
   id: string
@@ -46,31 +45,91 @@ export interface ExecuteToolBatchResult {
   wasAborted: boolean
 }
 
+/** A run of tool calls scheduled together. Concurrency-safe batches run
+ *  in parallel up to the configured cap; non-safe batches run serially. */
+interface ToolBatch {
+  isConcurrencySafe: boolean
+  calls: ToolCall[]
+}
+
 /**
- * Execute a batch of tool calls, choosing concurrent or sequential mode.
+ * Partition a step's tool calls into batches based on each tool's
+ * concurrencySafe flag.
  *
- * If ALL tools in the batch are read-only, they run concurrently up to
- * a configurable cap. Otherwise they run sequentially (original behavior).
+ * Algorithm (mirrors Claude Code's partitionToolCalls in
+ * services/tools/toolOrchestration.ts):
  *
- * Results are always returned in the original request order regardless
- * of completion order.
+ *   - Walk the calls in order.
+ *   - If the call's tool is concurrency-safe AND the previous batch is
+ *     also concurrency-safe, fuse it into that batch.
+ *   - Otherwise start a new batch (safe or unsafe).
+ *
+ * Unknown tools or tools that do not declare concurrencySafe stay at the
+ * conservative default and land in their own isolated serial batch.
+ */
+export function partitionToolCalls(calls: ToolCall[]): ToolBatch[] {
+  return calls.reduce<ToolBatch[]>((acc, call) => {
+    const safe = toolRegistry.isConcurrencySafe(call.name)
+    const last = acc[acc.length - 1]
+    if (safe && last?.isConcurrencySafe) {
+      last.calls.push(call)
+    } else {
+      acc.push({ isConcurrencySafe: safe, calls: [call] })
+    }
+    return acc
+  }, [])
+}
+
+/**
+ * Execute a step's tool calls, partitioning them into concurrency-safe
+ * batches and unsafe (isolated, serial) batches.
+ *
+ * Within a concurrency-safe batch, calls run in parallel bounded by
+ * KINBOT_MAX_TOOL_USE_CONCURRENCY. Unsafe batches run their single call
+ * serially. Results are always returned in the original request order.
  */
 export async function executeToolBatch(opts: ExecuteToolBatchOptions): Promise<ExecuteToolBatchResult> {
   const { stepToolCalls, tools, abortController, kinId, assistantMessageId, sseExtra } = opts
   const toolCallsLog: ToolLogEntry[] = []
   const toolResults: ToolResultEntry[] = []
-  const concurrencyCap = config.tools?.concurrencyCap ?? DEFAULT_CONCURRENCY_CAP
+  const concurrencyCap = config.tools?.concurrencyCap ?? KINBOT_MAX_TOOL_USE_CONCURRENCY_DEFAULT
 
-  const allReadOnly = stepToolCalls.every(tc => toolRegistry.isReadOnly(tc.name))
+  const batches = partitionToolCalls(stepToolCalls)
+  const resultMap = new Map<string, unknown>()
 
-  if (allReadOnly && stepToolCalls.length > 1) {
-    log.debug({ kinId, count: stepToolCalls.length, cap: concurrencyCap }, 'Executing read-only tools concurrently')
+  for (const batch of batches) {
+    if (abortController.signal.aborted) break
 
-    const resultMap = new Map<string, unknown>()
+    log.debug(
+      {
+        kinId,
+        batchSize: batch.calls.length,
+        isConcurrencySafe: batch.isConcurrencySafe,
+        toolNames: batch.calls.map(c => c.name),
+        cap: concurrencyCap,
+      },
+      'Executing tool batch',
+    )
 
-    await boundedAll(
-      stepToolCalls.map(tc => async () => {
-        if (abortController.signal.aborted) return
+    if (batch.isConcurrencySafe && batch.calls.length > 1) {
+      await boundedAll(
+        batch.calls.map(tc => async () => {
+          if (abortController.signal.aborted) return
+          const result = await executeSingleTool(tc, tools, abortController)
+          resultMap.set(tc.id, result)
+
+          sseManager.sendToKin(kinId, {
+            type: 'chat:tool-result',
+            kinId,
+            data: { messageId: assistantMessageId, toolCallId: tc.id, toolName: tc.name, result, ...sseExtra },
+          })
+        }),
+        concurrencyCap,
+      )
+    } else {
+      for (const tc of batch.calls) {
+        if (abortController.signal.aborted) break
+
         const result = await executeSingleTool(tc, tools, abortController)
         resultMap.set(tc.id, result)
 
@@ -79,32 +138,25 @@ export async function executeToolBatch(opts: ExecuteToolBatchOptions): Promise<E
           kinId,
           data: { messageId: assistantMessageId, toolCallId: tc.id, toolName: tc.name, result, ...sseExtra },
         })
-      }),
-      concurrencyCap,
-    )
-
-    // Assemble results in original request order
-    for (const tc of stepToolCalls) {
-      const result = resultMap.get(tc.id) ?? { error: 'Tool execution was aborted' }
-      toolCallsLog.push({ id: tc.id, name: tc.name, args: tc.args, result, offset: tc.offset })
-      toolResults.push({ type: 'tool-result', toolCallId: tc.id, toolName: tc.name, output: { type: 'json', value: result as JSONValue } })
+      }
     }
-  } else {
-    // Sequential execution (original behavior)
-    for (const tc of stepToolCalls) {
-      if (abortController.signal.aborted) break
+  }
 
-      const result = await executeSingleTool(tc, tools, abortController)
-
-      toolCallsLog.push({ id: tc.id, name: tc.name, args: tc.args, result, offset: tc.offset })
-      toolResults.push({ type: 'tool-result', toolCallId: tc.id, toolName: tc.name, output: { type: 'json', value: result as JSONValue } })
-
-      sseManager.sendToKin(kinId, {
-        type: 'chat:tool-result',
-        kinId,
-        data: { messageId: assistantMessageId, toolCallId: tc.id, toolName: tc.name, result, ...sseExtra },
-      })
+  // Assemble results in original request order. If aborted, fill missing
+  // entries with an abort placeholder so each assistant tool-call has a
+  // matching tool-result (prevents tool/assistant length mismatches in
+  // the next LLM turn).
+  for (const tc of stepToolCalls) {
+    const stored = resultMap.get(tc.id)
+    if (stored === undefined) {
+      if (!abortController.signal.aborted) continue
+      const placeholder = { error: 'Tool execution was aborted' }
+      toolCallsLog.push({ id: tc.id, name: tc.name, args: tc.args, result: placeholder, offset: tc.offset })
+      toolResults.push({ type: 'tool-result', toolCallId: tc.id, toolName: tc.name, output: { type: 'json', value: placeholder as JSONValue } })
+      continue
     }
+    toolCallsLog.push({ id: tc.id, name: tc.name, args: tc.args, result: stored, offset: tc.offset })
+    toolResults.push({ type: 'tool-result', toolCallId: tc.id, toolName: tc.name, output: { type: 'json', value: stored as JSONValue } })
   }
 
   return { toolResults, toolCallsLog, wasAborted: abortController.signal.aborted }

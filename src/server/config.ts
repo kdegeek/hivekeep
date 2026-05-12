@@ -364,7 +364,15 @@ export const config = {
 
   tools: {
     maxSteps: Number(process.env.TOOLS_MAX_STEPS ?? 0), // 0 = unlimited (capped at 100 internally)
-    concurrencyCap: Number(process.env.TOOLS_CONCURRENCY_CAP ?? 5), // max parallel read-only tool executions
+    // Max parallel concurrency-safe tool calls within a single batch.
+    // KINBOT_MAX_TOOL_USE_CONCURRENCY is the canonical name (aligned with
+    // Claude Code's CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY). TOOLS_CONCURRENCY_CAP
+    // is kept as a fallback for existing deployments.
+    concurrencyCap: Number(
+      process.env.KINBOT_MAX_TOOL_USE_CONCURRENCY
+        ?? process.env.TOOLS_CONCURRENCY_CAP
+        ?? 10,
+    ),
   },
 
   toolOutputs: {

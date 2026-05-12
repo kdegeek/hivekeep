@@ -28,8 +28,22 @@ export interface ToolRegistration {
   availability: ToolAvailability[]
   /** If true, tool is DISABLED by default — requires explicit opt-in via enabledOptInTools */
   defaultDisabled?: boolean
-  /** Whether this tool only reads data and has no side effects.
-   *  Read-only tools may be executed concurrently when a step
-   *  contains only read-only tool calls. Defaults to false. */
+  /** Whether this tool reads state without mutating anything.
+   *  Defaults to false (conservative). Informational and complementary
+   *  to concurrencySafe: a read-only tool that may still hold internal
+   *  state could legitimately set readOnly without concurrencySafe. */
   readOnly?: boolean
+
+  /** Whether this tool is safe to run concurrently with other tools
+   *  in the same step. Default false (conservative). Set true for tools
+   *  whose only side effect is fetching/reading and that do not depend
+   *  on other tools' results within the same step. Most read-only tools
+   *  should also be concurrency-safe; some writes can be too (independent
+   *  log emits, idempotent registrations). */
+  concurrencySafe?: boolean
+
+  /** Whether this tool performs irreversible operations (delete, overwrite,
+   *  send external message). Default false. Reserved for UX (confirmation
+   *  prompts) and protected-tools logic. */
+  destructive?: boolean
 }

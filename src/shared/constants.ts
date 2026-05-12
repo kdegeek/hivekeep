@@ -6,6 +6,11 @@ export const SUPPORTED_LANGUAGES = ['en', 'fr'] as const
 /** Maximum length (in characters) for a user message. Enforced server-side. */
 export const MAX_MESSAGE_LENGTH = 32_000
 
+/** Default maximum number of concurrency-safe tools that can run in parallel
+ *  within a single step batch. Override at runtime with the
+ *  KINBOT_MAX_TOOL_USE_CONCURRENCY env var. */
+export const KINBOT_MAX_TOOL_USE_CONCURRENCY_DEFAULT = 10
+
 // ---------------------------------------------------------------------------
 // Provider constants — all derived from PROVIDER_META (single source of truth)
 // To add a provider: add one entry to src/shared/provider-metadata.ts
