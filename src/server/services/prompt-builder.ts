@@ -510,7 +510,7 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `- If blocked, use request_input() to ask for clarification (max ${config.tasks?.maxRequestInput ?? 3} times).\n` +
       `- Be honest about uncertainty. Do not fabricate facts or details — use tools to verify when unsure.\n\n` +
       `## Tool calling discipline\n\n` +
-      `IMPORTANT: Call tools silently. Do NOT pre-narrate, predict, or describe what a tool will return before it actually returns. After the tool returns, comment on the actual result only.\n\n` +
+      `IMPORTANT: If your next move is a tool call, emit the tool call FIRST with NO preceding sentence describing what you expect to find, what you are about to check, or what the result will be. Any narration before a tool call is interpreted as fabrication of the result and is unacceptable. Speak ONLY AFTER the tool has returned, using ONLY the actual returned content.\n\n` +
       `IMPORTANT: You MUST avoid speculative phrases such as "Let me check...", "The result should be...", "Great, it worked!" or "Voilà, c'est bon !" before any tool result is in your context. NEVER claim a side effect occurred (file written, screenshot taken, message sent, etc.) unless the tool's actual return value confirms it.\n\n` +
       `IMPORTANT: If a tool fails or returns nothing useful, say so honestly — never invent a successful outcome.\n\n` +
       `When a tool call depends on the result of a previous one, call them one at a time. Wait to receive each result before calling the next tool.\n\n` +
@@ -600,7 +600,7 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
     // [1.6] Tool calling discipline (strong rule against pre-narration / hallucinated results)
     stableBlocks.push(
       `## Tool calling discipline\n\n` +
-      `IMPORTANT: Call tools silently. Do NOT pre-narrate, predict, or describe what a tool will return before it actually returns. After the tool returns, comment on the actual result only.\n\n` +
+      `IMPORTANT: If your next move is a tool call, emit the tool call FIRST with NO preceding sentence describing what you expect to find, what you are about to check, or what the result will be. Any narration before a tool call is interpreted as fabrication of the result and is unacceptable. Speak ONLY AFTER the tool has returned, using ONLY the actual returned content.\n\n` +
       `IMPORTANT: You MUST avoid speculative or filler phrases before/around a tool call. NEVER write things like:\n` +
       `- "Let me check...", "I'll grab that for you...", "Just a moment..."\n` +
       `- "The result should be...", "Looking at this, I can see..."\n` +
@@ -1069,7 +1069,7 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
   // end of its system prompt.
   volatileBlocks.push(
     `## Final reminder (most important rule of this turn)\n\n` +
-    `Before any tool call: NO preamble describing what you're about to fetch, check, or do. NO claim of success, fabrication of result content, or speculation before the tool actually returns.\n\n` +
+    `Before any tool call: NO preamble at all. No sentence describing what you're about to fetch, check, or do. No claim of success, no fabrication of result content, no speculation. Emit the tool call FIRST. Any text that precedes a tool call in the same step is interpreted as fabrication of the result and is unacceptable. Speak only AFTER the tool has returned, and only about what the actual returned content says.\n\n` +
     `If the personality or expertise blocks above suggest being "warm", "transparent", or "explanatory", that warmth applies to how you communicate ACTUAL tool results AFTER they arrive — it does NOT authorize narrating, predicting, or imagining results before the tool runs. **Tool calling discipline overrides personality on this point.**\n\n` +
     `When in doubt: call the tool first, then speak.`,
   )
