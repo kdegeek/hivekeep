@@ -428,7 +428,36 @@ Le Kin parent dispose d'outils pour gérer ses sous-Kins :
 | `spawn_kin(kin_id, task_description, mode, model?)` | Instancie un autre Kin avec une mission spécifique. Si `model` est omis, le sous-Kin hérite du modèle du Kin cible |
 | `respond_to_task(task_id, answer)` | Répond a une demande de clarification d'un sous-Kin (`request_input`). La réponse est injectée dans la session du sous-Kin et déclenche la reprise de son traitement |
 | `cancel_task(task_id)` | Annule une tâche en cours |
-| `list_tasks()` | Liste les tâches en cours et leur état |
+| `list_tasks({ status?, parent_kin_slug?, child_kin_slug?, kind?, since?, until?, limit?, offset? })` | Liste paginée des tâches liées au Kin (spawnées ou assignées). Renvoie des résumés légers (id, title, status, kind, slugs, timing, duration_ms). Sans description ni payload de message. Defaults: `limit=20`, `offset=0`. Max `limit=100` |
+| `get_task_detail(task_id)` | Détail complet d'une tâche unique (description, result, error, mode, et historique complet des messages) |
+| `get_task_messages(task_id, { limit?, offset?, order? })` | Vue paginée des messages d'une tâche, avec previews (200 chars), longueur, et compte des tool calls. Defaults: `limit=20`, `offset=0`, `order='desc'`. `offset` négatif (ex `-20`) renvoie les N derniers messages |
+
+### Choisir le bon outil de lecture de tâches
+
+Trois outils, trois cas d'usage :
+
+| Cas | Outil | Pourquoi |
+|---|---|---|
+| Trouver / naviguer parmi les tâches | `list_tasks` | Payload léger par défaut (20 entrées, pas de description ni de result), permet de filtrer par status / kind / slug / fenêtre temporelle |
+| Lire le détail complet d'une tâche connue | `get_task_detail` | Renvoie description, result, error, mode, et l'historique complet des messages. Attention au volume si la tâche est longue |
+| Inspecter l'historique d'une tâche longue page par page | `get_task_messages` | Renvoie des previews de 200 chars + métadonnées (longueur, tool calls). Conçu pour éviter le context spill |
+
+Exemples typiques :
+
+```text
+# Les 20 dernières tâches échouées
+list_tasks({ status: 'failed' })
+
+# Les derniers runs d'un cron, sur les 7 derniers jours
+list_tasks({ kind: 'cron', since: '2026-05-06T00:00:00Z' })
+
+# Toutes les tâches qu'un Kin enfant a exécutées pour moi
+list_tasks({ child_kin_slug: 'researcher-ai', status: 'completed' })
+
+# Drill into a single task without loading its full history
+get_task_messages(task_id, { limit: 10, offset: -10 })  # 10 derniers messages
+get_task_messages(task_id, { limit: 50, order: 'asc' }) # 50 premiers messages
+```
 
 ### Modes de spawning
 
