@@ -10,6 +10,8 @@ const mockTasks = {
   cancelTask: mock(() => Promise.resolve(true)),
   listKinTasks: mock(() => Promise.resolve([] as any[])),
   listSourceKinTasks: mock(() => Promise.resolve([] as any[])),
+  listTasksFiltered: mock(() => Promise.resolve({ tasks: [] as any[], total: 0 })),
+  getTaskMessages: mock(() => Promise.resolve({ taskId: '', taskTitle: null, taskStatus: '', total: 0, messages: [] as any[] })),
   getTask: mock(() => Promise.resolve(null as any)),
   fetchPreviousCronRuns: mock(() => Promise.resolve([] as any[])),
   listAllTasks: mock(() => Promise.resolve([])),
@@ -288,121 +290,93 @@ describe('task-tools', () => {
   // ── listTasksTool ─────────────────────────────────────────────────────────
 
   describe('listTasksTool', () => {
-    itMocked('returns empty list when no tasks', async () => {
-      mockTasks.listKinTasks.mockResolvedValue([])
-      mockTasks.listSourceKinTasks.mockResolvedValue([])
+    itMocked('returns empty list with pagination when no tasks', async () => {
+      mockTasks.listTasksFiltered.mockResolvedValue({ tasks: [], total: 0 })
 
-      const result = await execute(listTasksTool, {})
+      const result = await execute(listTasksTool, { limit: 20, offset: 0 })
 
-      expect(result).toEqual({ tasks: [] })
+      expect(result).toEqual({
+        tasks: [],
+        pagination: { total: 0, offset: 0, limit: 20, hasMore: false },
+      })
     })
 
-    itMocked('returns spawned tasks with correct relationship', async () => {
-      mockTasks.listKinTasks.mockResolvedValue([
-        {
-          id: 'task-1',
-          title: 'Research',
-          description: 'Find papers',
+    itMocked('returns lightweight summaries (no description/result/error)', async () => {
+      mockTasks.listTasksFiltered.mockResolvedValue({
+        tasks: [
+          {
+            id: 'task-1',
+            title: 'Research',
+            status: 'completed',
+            kind: 'spawn_self',
+            parentKinSlug: 'me',
+            childKinSlug: null,
+            depth: 0,
+            createdAt: 1735689600000,
+            updatedAt: 1735776000000,
+            durationMs: 86_400_000,
+          },
+        ],
+        total: 1,
+      })
+
+      const result = await execute(listTasksTool, { limit: 20, offset: 0 })
+
+      expect(result.tasks).toHaveLength(1)
+      expect(result.tasks[0].id).toBe('task-1')
+      expect(result.tasks[0].kind).toBe('spawn_self')
+      expect(result.tasks[0].duration_ms).toBe(86_400_000)
+      // Lightweight payload: no description, result, error, messages
+      expect(result.tasks[0]).not.toHaveProperty('description')
+      expect(result.tasks[0]).not.toHaveProperty('result')
+      expect(result.tasks[0]).not.toHaveProperty('error')
+      expect(result.pagination).toEqual({ total: 1, offset: 0, limit: 20, hasMore: false })
+    })
+
+    itMocked('passes filters through to listTasksFiltered', async () => {
+      mockTasks.listTasksFiltered.mockResolvedValue({ tasks: [], total: 0 })
+
+      await execute(listTasksTool, {
+        status: 'completed',
+        kind: 'spawn_self',
+        limit: 10,
+        offset: 5,
+      })
+
+      expect(mockTasks.listTasksFiltered).toHaveBeenCalledWith(
+        expect.objectContaining({
           status: 'completed',
-          mode: 'await',
-          spawnType: 'self',
-          parentKinId: 'kin-abc',
-          sourceKinId: null,
-          result: 'Found 3 papers',
-          error: null,
-          depth: 0,
-          createdAt: new Date('2026-01-01'),
-          updatedAt: new Date('2026-01-02'),
-        },
-      ])
-      mockTasks.listSourceKinTasks.mockResolvedValue([])
-
-      const result = await execute(listTasksTool, {})
-
-      expect(result.tasks).toHaveLength(1)
-      expect(result.tasks[0].relationship).toBe('spawned_by_me')
-      expect(result.tasks[0].title).toBe('Research')
-      expect(result.tasks[0].result).toBe('Found 3 papers')
+          kind: 'spawn_self',
+          limit: 10,
+          offset: 5,
+          relatedToKinId: 'kin-abc',
+        }),
+      )
     })
 
-    itMocked('deduplicates tasks appearing in both lists', async () => {
-      const sharedTask = {
-        id: 'task-dup',
-        title: 'Shared',
-        description: 'Shared task',
-        status: 'pending',
-        mode: 'await',
-        spawnType: 'self',
-        parentKinId: 'kin-abc',
-        sourceKinId: 'kin-abc',
-        result: null,
-        error: null,
-        depth: 0,
-        createdAt: new Date('2026-01-01'),
-        updatedAt: new Date('2026-01-01'),
-      }
-      mockTasks.listKinTasks.mockResolvedValue([sharedTask])
-      mockTasks.listSourceKinTasks.mockResolvedValue([sharedTask])
-      mockDbChain.all.mockResolvedValue([{ id: 'kin-abc', slug: 'me', name: 'Me' }])
-
-      const result = await execute(listTasksTool, {})
-
-      expect(result.tasks).toHaveLength(1)
-    })
-
-    itMocked('includes assigned tasks with correct relationship', async () => {
-      mockTasks.listKinTasks.mockResolvedValue([])
-      mockTasks.listSourceKinTasks.mockResolvedValue([
-        {
-          id: 'task-assigned',
-          title: 'Assigned to me',
-          description: 'Do this',
-          status: 'pending',
-          mode: 'await',
-          spawnType: 'other',
-          parentKinId: 'kin-other',
-          sourceKinId: 'kin-abc',
-          result: null,
-          error: null,
-          depth: 1,
-          createdAt: new Date('2026-01-01'),
-          updatedAt: new Date('2026-01-01'),
-        },
-      ])
-      mockDbChain.all.mockResolvedValue([{ id: 'kin-other', slug: 'boss-kin', name: 'Boss' }])
-
-      const result = await execute(listTasksTool, {})
-
-      expect(result.tasks).toHaveLength(1)
-      expect(result.tasks[0].relationship).toBe('assigned_to_me')
-      expect(result.tasks[0].parentKinSlug).toBe('boss-kin')
-    })
-
-    itMocked('resolves sourceKinSlug for other-spawn tasks', async () => {
-      mockTasks.listKinTasks.mockResolvedValue([
-        {
-          id: 'task-other',
-          title: 'Delegated',
-          description: 'Delegate',
+    itMocked('computes hasMore correctly', async () => {
+      mockTasks.listTasksFiltered.mockResolvedValue({
+        tasks: Array.from({ length: 10 }, (_, i) => ({
+          id: `t${i}`,
+          title: 't',
           status: 'completed',
-          mode: 'async',
-          spawnType: 'other',
-          parentKinId: 'kin-abc',
-          sourceKinId: 'kin-helper',
-          result: 'Done',
-          error: null,
+          kind: 'spawn_self' as const,
+          parentKinSlug: 'me',
+          childKinSlug: null,
           depth: 0,
-          createdAt: new Date('2026-01-01'),
-          updatedAt: new Date('2026-01-02'),
-        },
-      ])
-      mockTasks.listSourceKinTasks.mockResolvedValue([])
-      mockDbChain.all.mockResolvedValue([{ id: 'kin-helper', slug: 'helper-ai', name: 'Helper' }])
+          createdAt: 100,
+          updatedAt: 200,
+          durationMs: 100,
+        })),
+        total: 25,
+      })
 
-      const result = await execute(listTasksTool, {})
+      const result = await execute(listTasksTool, { limit: 10, offset: 0 })
 
-      expect(result.tasks[0].sourceKinSlug).toBe('helper-ai')
+      expect(result.pagination.hasMore).toBe(true)
+      expect(result.pagination.total).toBe(25)
     })
+
   })
 
   // ── getTaskDetailTool ─────────────────────────────────────────────────────

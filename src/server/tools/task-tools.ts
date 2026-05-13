@@ -5,16 +5,15 @@ import {
   spawnTask,
   respondToTask,
   cancelTask,
-  listKinTasks,
-  listSourceKinTasks,
   getTask,
+  listTasksFiltered,
+  type ListTasksFilters,
 } from '@/server/services/tasks'
 import { resolveKinId } from '@/server/services/kin-resolver'
 import { db } from '@/server/db/index'
-import { kins, messages, tasks } from '@/server/db/schema'
+import { messages, tasks } from '@/server/db/schema'
 import { sql } from 'drizzle-orm'
 import { createLogger } from '@/server/logger'
-import type { KinThinkingConfig } from '@/shared/types'
 import type { ToolRegistration } from '@/server/tools/types'
 
 const log = createLogger('tools:tasks')
@@ -177,8 +176,17 @@ export const cancelTaskTool: ToolRegistration = {
     }),
 }
 
+function parseTimestampInput(value: string | number | undefined): number | undefined {
+  if (value === undefined) return undefined
+  if (typeof value === 'number') return value
+  const parsed = Date.parse(value)
+  if (Number.isFinite(parsed)) return parsed
+  const asNum = Number(value)
+  return Number.isFinite(asNum) ? asNum : undefined
+}
+
 /**
- * list_tasks — list all current tasks and their status.
+ * list_tasks — list tasks related to this Kin with filters and pagination.
  * Available to main agents and sub-kin tasks.
  */
 export const listTasksTool: ToolRegistration = {
@@ -188,70 +196,75 @@ export const listTasksTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'List all tasks you spawned and tasks assigned to you by other Kins.',
-      inputSchema: z.object({}),
-      execute: async () => {
-        const spawnedTasks = await listKinTasks(ctx.kinId)
-        const assignedTasks = await listSourceKinTasks(ctx.kinId)
-
-        // Deduplicate (shouldn't overlap but safety first)
-        const seenIds = new Set(spawnedTasks.map((t) => t.id))
-        const allTasks = [...spawnedTasks, ...assignedTasks.filter((t) => !seenIds.has(t.id))]
-
-        // Resolve related Kin slugs
-        const relatedKinIds = [...new Set([
-          ...allTasks
-            .filter((t) => t.spawnType === 'other' && t.sourceKinId)
-            .map((t) => t.sourceKinId!),
-          ...assignedTasks.map((t) => t.parentKinId),
-        ])]
-        const kinSlugMap = new Map<string, string>()
-        if (relatedKinIds.length > 0) {
-          const relatedKins = await db
-            .select({ id: kins.id, slug: kins.slug, name: kins.name })
-            .from(kins)
-            .where(inArray(kins.id, relatedKinIds))
-            .all()
-          for (const k of relatedKins) {
-            kinSlugMap.set(k.id, k.slug ?? k.name)
-          }
+        'List tasks you spawned or were assigned, with filters and pagination. ' +
+        'Returns lightweight summaries (id, title, status, kind, kin slugs, timing, duration_ms). ' +
+        'Use get_task_detail(id) for full task details, or get_task_messages(id, limit, offset) ' +
+        'for paginated message history. Default limit is 20, max 100.',
+      inputSchema: z.object({
+        status: z
+          .enum(['queued', 'pending', 'in_progress', 'paused', 'awaiting_human_input', 'awaiting_kin_response', 'completed', 'failed', 'cancelled', 'all'])
+          .optional()
+          .describe('Filter by task status. Defaults to no filter (all statuses).'),
+        parent_kin_slug: z
+          .string()
+          .optional()
+          .describe('Filter to tasks spawned by this Kin (parent).'),
+        child_kin_slug: z
+          .string()
+          .optional()
+          .describe('Filter to tasks executed by this Kin (child / source). Useful with spawn_kin.'),
+        kind: z
+          .enum(['spawn_self', 'spawn_kin', 'webhook', 'cron', 'all'])
+          .optional()
+          .describe('Filter by how the task was created.'),
+        since: z
+          .union([z.string(), z.number()])
+          .optional()
+          .describe('Only tasks created at or after this time. Accepts ISO 8601 string or Unix ms.'),
+        until: z
+          .union([z.string(), z.number()])
+          .optional()
+          .describe('Only tasks created at or before this time. Accepts ISO 8601 string or Unix ms.'),
+        limit: z.number().int().min(1).max(100).default(20).describe('Page size (max 100).'),
+        offset: z.number().int().min(0).default(0).describe('Pagination offset.'),
+      }),
+      execute: async (args) => {
+        const filters: ListTasksFilters = {
+          status: args.status,
+          parentKinSlug: args.parent_kin_slug,
+          childKinSlug: args.child_kin_slug,
+          kind: args.kind,
+          since: parseTimestampInput(args.since),
+          until: parseTimestampInput(args.until),
+          limit: args.limit,
+          offset: args.offset,
+          // Scope to tasks where this Kin is either the parent (spawner) or
+          // the source (executor) unless the caller explicitly targets a Kin slug.
+          relatedToKinId: args.parent_kin_slug || args.child_kin_slug ? undefined : ctx.kinId,
         }
 
-        // Compute queue positions per concurrency group for queued tasks
-        const queuePositionMap = new Map<string, number>()
-        const queuedByGroup = new Map<string, typeof allTasks>()
-        for (const t of allTasks) {
-          if (t.status === 'queued' && t.concurrencyGroup) {
-            const group = t.concurrencyGroup
-            if (!queuedByGroup.has(group)) queuedByGroup.set(group, [])
-            queuedByGroup.get(group)!.push(t)
-          }
-        }
-        for (const [, groupTasks] of queuedByGroup) {
-          // Sort by queuedAt ASC (FIFO)
-          groupTasks.sort((a, b) => (a.queuedAt?.getTime() ?? 0) - (b.queuedAt?.getTime() ?? 0))
-          groupTasks.forEach((t, i) => queuePositionMap.set(t.id, i + 1))
-        }
-
+        const { tasks: rows, total } = await listTasksFiltered(filters)
+        const limit = args.limit
+        const offset = args.offset
         return {
-          tasks: allTasks.map((t) => ({
+          tasks: rows.map((t) => ({
             id: t.id,
             title: t.title,
-            description: t.description,
             status: t.status,
-            mode: t.mode,
-            spawnType: t.spawnType,
-            relationship: t.parentKinId === ctx.kinId ? 'spawned_by_me' : 'assigned_to_me',
-            sourceKinSlug: t.sourceKinId ? kinSlugMap.get(t.sourceKinId) ?? null : null,
-            parentKinSlug: t.parentKinId !== ctx.kinId ? kinSlugMap.get(t.parentKinId) ?? null : null,
-            result: t.result,
-            error: t.error,
+            kind: t.kind,
+            parent_kin_slug: t.parentKinSlug,
+            child_kin_slug: t.childKinSlug,
             depth: t.depth,
-            concurrencyGroup: t.concurrencyGroup ?? null,
-            queuePosition: queuePositionMap.get(t.id) ?? null,
-            createdAt: t.createdAt.toISOString(),
-            updatedAt: t.updatedAt.toISOString(),
+            created_at: t.createdAt,
+            updated_at: t.updatedAt,
+            duration_ms: t.durationMs,
           })),
+          pagination: {
+            total,
+            offset,
+            limit,
+            hasMore: offset + rows.length < total,
+          },
         }
       },
     }),
