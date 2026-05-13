@@ -96,6 +96,76 @@ In **wait** mode the tool awaits completion and returns:
     instruction. Submitting starts a new run with `--resume` pointing
     at the previous session id, so the same card keeps streaming.
 
+## Programmatic control
+
+In addition to `claude_code_run`, the plugin exposes four tools that let
+a Kin inspect, drive, and stop sessions without depending on the card
+buttons. All four are tagged `availability: ['main', 'sub-kin']` and
+share the same `defaultDisabled` opt-in as `claude_code_run`.
+
+| Tool | Purpose | Concurrency |
+|---|---|---|
+| `claude_code_run` | Spawn a new session. Returns a `cardInstanceId`. | mutating |
+| `claude_code_list_sessions` | List running and recently completed sessions, optionally filtered by status. | read-only, parallel-safe |
+| `claude_code_get_session` | Fetch the full state of one session (phase, current step, tail of logs, final message, error). | read-only, parallel-safe |
+| `claude_code_send_message` | Continue a completed session with a follow-up prompt (same card, resumed sessionId). | mutating |
+| `claude_code_abort` | Stop a running session, optionally with a reason recorded in the logs. | mutating |
+
+### Example usage from a Kin
+
+Fire-and-forget a session, do other work, poll for progress, abort if
+the run goes off the rails:
+
+```ts
+// 1. Start the session in the background.
+const start = await claude_code_run({
+  prompt: 'Refactor src/server/services/tasks.ts to extract task message previews into a helper.',
+  wait: false,
+})
+const cardInstanceId = start.cardInstanceId
+
+// 2. Continue reasoning, then check in periodically.
+const snapshot = await claude_code_get_session({ cardInstanceId, logTail: 5 })
+if (snapshot.status === 'running' && snapshot.currentStep?.includes('infinite loop')) {
+  await claude_code_abort({ cardInstanceId, reason: 'detected runaway tool loop' })
+}
+
+// 3. After the session has completed, continue the conversation.
+if (snapshot.status === 'completed') {
+  await claude_code_send_message({
+    cardInstanceId,
+    message: 'Also update the unit tests for the new helper.',
+    wait: true,
+  })
+}
+```
+
+`claude_code_list_sessions` is useful for discovering active work after
+a reload of the Kin's context, or for monitoring across multiple
+concurrent runs:
+
+```ts
+const { sessions } = await claude_code_list_sessions({ status: 'running', limit: 10 })
+for (const s of sessions) {
+  console.log(s.cardInstanceId, s.currentStep, s.numTurns)
+}
+```
+
+### V1 limitations of the control surface
+
+- `recentRuns` is kept in process memory, bounded to 50 entries with
+  FIFO eviction. Sessions completed before the last restart, or older
+  than the most recent 50, are not visible to `list_sessions` or
+  `get_session`.
+- There is no DB-persisted session history yet, so `cardInstanceId` is
+  only meaningful within a single process lifetime.
+- `claude_code_send_message` refuses while the target session is still
+  running. Call `claude_code_abort` first or wait for the run to land
+  (poll `claude_code_get_session` for `status: 'completed'`).
+- Abort is best-effort: it triggers the SDK `AbortController`, but the
+  card only flips to `aborted` once the runner unwinds. Poll
+  `get_session` if you need to confirm completion.
+
 ## Troubleshooting
 
 - **`No working directory configured`**: either configure
