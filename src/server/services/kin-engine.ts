@@ -1522,6 +1522,11 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
 
       // Collect tool call intents from this step
       const stepToolCalls: Array<{ id: string; name: string; args: unknown; offset: number }> = []
+      // Per-step text. fullContent keeps accumulating across steps for
+      // persistence, offset math, and UI rendering, but only stepText is
+      // pushed into the assistant history block so the model never sees
+      // its own prior-step narration repeated back to it.
+      let stepText = ''
 
       try {
         for await (const part of result.fullStream) {
@@ -1573,6 +1578,7 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
             case 'text-delta': {
               const isFirstToken = fullContent.length === 0
               fullContent += part.text
+              stepText += part.text
               sseManager.sendToKin(kinId, {
                 type: 'chat:token',
                 kinId,
@@ -1644,7 +1650,7 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
         | { type: 'text'; text: string }
         | { type: 'tool-call'; toolCallId: string; toolName: string; input: unknown }
       > = []
-      if (fullContent) assistantContent.push({ type: 'text', text: fullContent })
+      if (stepText) assistantContent.push({ type: 'text', text: stepText })
       for (const tc of stepToolCalls) {
         assistantContent.push({ type: 'tool-call', toolCallId: tc.id, toolName: tc.name, input: tc.args })
       }
@@ -2207,6 +2213,11 @@ export async function processQuickMessage(kinId: string): Promise<boolean> {
 
       // Collect tool call intents from this step
       const stepToolCalls: Array<{ id: string; name: string; args: unknown; offset: number }> = []
+      // Per-step text. fullContent keeps accumulating across steps for
+      // persistence, offset math, and UI rendering, but only stepText is
+      // pushed into the assistant history block so the model never sees
+      // its own prior-step narration repeated back to it.
+      let stepText = ''
 
       try {
         for await (const part of result.fullStream) {
@@ -2252,6 +2263,7 @@ export async function processQuickMessage(kinId: string): Promise<boolean> {
           switch (part.type) {
             case 'text-delta': {
               fullContent += part.text
+              stepText += part.text
               sseManager.sendToKin(kinId, {
                 type: 'chat:token',
                 kinId,
@@ -2294,7 +2306,7 @@ export async function processQuickMessage(kinId: string): Promise<boolean> {
         | { type: 'text'; text: string }
         | { type: 'tool-call'; toolCallId: string; toolName: string; input: unknown }
       > = []
-      if (fullContent) assistantContent.push({ type: 'text', text: fullContent })
+      if (stepText) assistantContent.push({ type: 'text', text: stepText })
       for (const tc of stepToolCalls) {
         assistantContent.push({ type: 'tool-call', toolCallId: tc.id, toolName: tc.name, input: tc.args })
       }
