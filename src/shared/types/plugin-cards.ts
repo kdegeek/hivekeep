@@ -38,16 +38,61 @@ export interface PluginCardStatItem {
   variant?: PluginCardVariant
 }
 
+export interface PluginCardInfoGridItem {
+  label: string
+  value: string
+  variant?: PluginCardVariant
+  /** When true, long values are clipped with ellipsis and a tooltip shows the full text. */
+  truncate?: boolean
+  /**
+   * Icon next to the value. Either a Lucide icon name (`"Sparkles"`) or a
+   * react-icons identifier in the form `"<collection>/<ComponentName>"`
+   * (`"bs/BsClaude"`, `"si/SiOpenai"`).
+   */
+  icon?: string
+}
+
+export type PluginCardBannerAnimation = 'pulse' | 'shimmer' | 'spin' | 'none'
+
 export type PluginCardPrimitive =
-  | { type: 'header'; title: string; icon?: string; accent?: PluginCardVariant }
+  | {
+      type: 'header'
+      title: string
+      /**
+       * Either a Lucide icon name or a react-icons id of the form
+       * `"<collection>/<ComponentName>"` (e.g. `"bs/BsClaude"`).
+       */
+      icon?: string
+      accent?: PluginCardVariant
+    }
   | { type: 'stat-row'; items: PluginCardStatItem[] }
+  | {
+      type: 'info-grid'
+      columns?: 2 | 3
+      items: PluginCardInfoGridItem[]
+    }
+  | {
+      type: 'status-banner'
+      label: string
+      sublabel?: string
+      variant?: PluginCardVariant
+      /** Lucide name or `"<collection>/<ComponentName>"` for react-icons. */
+      icon?: string
+      animated?: PluginCardBannerAnimation
+    }
   | { type: 'progress'; value?: number; max?: number; indeterminate?: boolean; label?: string }
   | { type: 'collapsible'; label: string; defaultOpen?: boolean; content: PluginCardPrimitive | PluginCardPrimitive[] }
   | { type: 'log-stream'; lines: string[]; autoscroll?: boolean; maxHeight?: number }
   | { type: 'action-row'; actions: PluginCardAction[] }
   | { type: 'markdown'; content: string }
   | { type: 'spinner'; label?: string }
-  | { type: 'badge'; text: string; variant?: PluginCardVariant }
+  | {
+      type: 'badge'
+      text: string
+      variant?: PluginCardVariant
+      /** Lucide name or `"<collection>/<ComponentName>"` for react-icons. */
+      icon?: string
+    }
   | { type: 'divider'; label?: string }
 
 export interface PluginCard {
