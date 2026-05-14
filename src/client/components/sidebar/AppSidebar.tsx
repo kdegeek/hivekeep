@@ -1,10 +1,8 @@
 import { useState, useMemo, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarHeader,
   SidebarSeparator,
   SidebarGroup,
 } from '@/client/components/ui/sidebar'
@@ -70,7 +68,6 @@ export function AppSidebar({
   onReorderKins,
   onOpenSettings,
 }: AppSidebarProps) {
-  const navigate = useNavigate()
   const { t } = useTranslation()
   const taskData = useTasks()
   const activeCount = taskData.activeTasks.length
@@ -143,21 +140,7 @@ export function AppSidebar({
 
   return (
     <Sidebar className="surface-sidebar">
-      {/* Header */}
-      <SidebarHeader className="px-4 py-4">
-        <button
-          type="button"
-          className="flex items-center gap-2.5"
-          onClick={() => navigate('/')}
-        >
-          <img src="/kinbot.svg" alt="" width={28} height={28} className="rounded-lg" />
-          <span className="gradient-primary-text text-xl font-bold tracking-tight">
-            KinBot
-          </span>
-        </button>
-      </SidebarHeader>
-
-      {/* System health indicators */}
+      {/* Brand/logo lives in <AppTopBar /> now. SystemHealthBar takes the top slot. */}
       <SystemHealthBar onOpenSettings={onOpenSettings} />
 
       <SidebarSeparator />

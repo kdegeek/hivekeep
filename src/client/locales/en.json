@@ -2441,6 +2441,10 @@
     "chip": {
       "tooltip": "Active project: {{title}}. Click to view the kanban."
     },
+    "activeKins": {
+      "tooltip": "{{name}} has this project active",
+      "openThread": "Open {{name}}'s thread"
+    },
     "edit": {
       "title": "Edit project",
       "description": "Modify the project details, manage tags, or delete the project entirely.",

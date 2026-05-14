@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from '@/client/components/ui/dialog'
 import {
+  SidebarProvider,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
@@ -247,6 +248,10 @@ export function SettingsModal({ open, onOpenChange, initialSection, initialFilte
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[min(90vh,720px)] max-h-[90vh] flex-col overflow-hidden p-0 sm:max-w-5xl">
+        {/* Local SidebarProvider — required by SidebarMenuButton (uses useSidebar
+            for tooltip/mobile state). SettingsModal is now rendered at App.tsx
+            root, outside of ChatPage's SidebarProvider, so it needs its own. */}
+        <SidebarProvider className="!min-h-0 !h-full flex flex-col">
         {/* Header */}
         <DialogHeader className="shrink-0 border-b px-6 py-4">
           <DialogTitle>{t('settings.title')}</DialogTitle>
@@ -334,6 +339,7 @@ export function SettingsModal({ open, onOpenChange, initialSection, initialFilte
 
         {/* Version + stats footer */}
         <SettingsFooter />
+        </SidebarProvider>
       </DialogContent>
     </Dialog>
   )

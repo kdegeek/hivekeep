@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Kanban, Plus, Pencil } from 'lucide-react'
 import { Button } from '@/client/components/ui/button'
+import { ActiveKinsIndicator } from '@/client/components/project/ActiveKinsIndicator'
 import { cn } from '@/client/lib/utils'
 import type { ProjectSummary } from '@/shared/types'
 
@@ -18,7 +19,7 @@ export function ProjectsSidebar({ projects, selectedId, onSelect, onCreate, onEd
   const sorted = [...projects].sort((a, b) => b.updatedAt - a.updatedAt)
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-border bg-card">
+    <aside className="surface-sidebar flex h-full w-64 shrink-0 flex-col border-r border-sidebar-border text-sidebar-foreground">
       <header className="flex items-center justify-between px-3 py-3">
         <h2 className="text-sm font-semibold">{t('projects.sidebar.title')}</h2>
         <Button size="icon" variant="ghost" onClick={onCreate} title={t('projects.sidebar.create')}>
@@ -41,16 +42,19 @@ export function ProjectsSidebar({ projects, selectedId, onSelect, onCreate, onEd
                   type="button"
                   onClick={() => onSelect(project.id)}
                   className={cn(
-                    'flex w-full flex-col rounded-md px-3 py-2 pr-9 text-left transition-colors',
+                    'flex w-full flex-col gap-1 rounded-md px-3 py-2 pr-9 text-left transition-colors',
                     active
                       ? 'bg-primary/10 text-foreground'
                       : 'hover:bg-muted text-foreground/80 hover:text-foreground',
                   )}
                 >
                   <span className="truncate text-sm font-medium">{project.title}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {project.openTicketCount} / {project.ticketCount}
-                  </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {project.openTicketCount} / {project.ticketCount}
+                    </span>
+                    <ActiveKinsIndicator projectId={project.id} size="size-4" maxVisible={3} />
+                  </div>
                 </button>
                 <Button
                   variant="ghost"

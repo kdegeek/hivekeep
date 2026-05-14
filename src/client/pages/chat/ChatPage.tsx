@@ -8,16 +8,7 @@ import { ChatPanel } from '@/client/components/chat/ChatPanel'
 
 // Lazy-load modals — not needed on initial render
 const KinFormModal = lazy(() => import('@/client/components/kin/KinFormModal').then(m => ({ default: m.KinFormModal })))
-const SettingsModal = lazy(() => import('@/client/pages/settings/SettingsPage').then(m => ({ default: m.SettingsModal })))
-const AccountDialog = lazy(() => import('@/client/pages/account/AccountPage').then(m => ({ default: m.AccountDialog })))
 import { useKins } from '@/client/hooks/useKins'
-import { useAuth } from '@/client/hooks/useAuth'
-import { Separator } from '@/client/components/ui/separator'
-import { ThemeToggle } from '@/client/components/common/ThemeToggle'
-import { PaletteToggle } from '@/client/components/common/PaletteToggle'
-import { UserMenu } from '@/client/components/common/UserMenu'
-import { NotificationBell } from '@/client/components/notifications/NotificationBell'
-import { SSEStatusIndicator } from '@/client/components/common/SSEStatusIndicator'
 import { ConnectionBanner } from '@/client/components/common/ConnectionBanner'
 import { CommandPalette } from '@/client/components/common/CommandPalette'
 import { KeyboardShortcutsDialog } from '@/client/components/common/KeyboardShortcutsDialog'
@@ -32,9 +23,15 @@ import { useUnreadPerKin } from '@/client/hooks/useUnreadPerKin'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/client/components/ui/tooltip'
 import { api } from '@/client/lib/api'
 
-export function ChatPage() {
+interface ChatPageProps {
+  /** Open the global settings modal (mounted at App.tsx root). */
+  onOpenSettings: (section?: string, filters?: { kinId?: string }) => void
+  /** Open the global account dialog (mounted at App.tsx root). */
+  onOpenAccount: () => void
+}
+
+export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
   const { t } = useTranslation()
-  const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const {
@@ -72,16 +69,11 @@ export function ChatPage() {
   const [showCreateHubModal, setShowCreateHubModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingKin, setEditingKin] = useState<Awaited<ReturnType<typeof getKin>> | null>(null)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [settingsInitialSection, setSettingsInitialSection] = useState<string | undefined>()
-  const [settingsFilters, setSettingsFilters] = useState<{ kinId?: string } | undefined>()
-  const [accountOpen, setAccountOpen] = useState(false)
 
-  const handleOpenSettings = useCallback((section?: string, filters?: { kinId?: string }) => {
-    setSettingsInitialSection(section)
-    setSettingsFilters(filters)
-    setSettingsOpen(true)
-  }, [])
+  // Settings + account modals are owned by App.tsx (AuthenticatedShell) and rendered there.
+  // ChatPage calls the props directly to open them. We keep a local alias for backwards
+  // compatibility with the existing onOpenSettings prop chain through children.
+  const handleOpenSettings = onOpenSettings
 
   const handleSelectKin = (slug: string) => {
     const kin = kins.find((k) => k.slug === slug)
@@ -202,8 +194,15 @@ export function ChatPage() {
     return () => document.removeEventListener('keydown', handler)
   }, [kins, navigate, handleOpenSettings])
 
+  // The shadcn SidebarProvider wrapper defaults to `min-h-svh` (full viewport
+  // height). We're now inside an AuthenticatedShell with an AppTopBar above
+  // us, so the available height is `100vh - topbar`. Override the wrapper's
+  // min-h-svh to `h-full min-h-0` so it matches its parent (the page slot below
+  // AppTopBar). Without this, the wrapper overflows the viewport and the kin's
+  // header gets pushed past the bottom.
   return (
-    <SidebarProvider>
+    <div className="h-full overflow-hidden">
+    <SidebarProvider className="!min-h-0 !h-full">
       <AppSidebar
         selectedKinId={selectedKin?.id ?? null}
         kins={kins}
@@ -221,35 +220,15 @@ export function ChatPage() {
         onOpenSettings={handleOpenSettings}
       />
 
-      <SidebarInset>
-        <div className="flex h-svh flex-col">
-          <header className="surface-header sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b px-4">
+      <SidebarInset className="min-h-0">
+        <div className="flex h-full min-h-0 flex-col">
+          {/* Thin local bar — only hosts the SidebarTrigger which depends on
+              SidebarProvider context (scoped to this page). Global actions
+              (brand, SSE, palette, theme, notifications, user menu) live in
+              <AppTopBar /> at App.tsx root. */}
+          <div className="flex h-10 shrink-0 items-center border-b px-2">
             <SidebarTrigger />
-            <Separator orientation="vertical" className="h-5" />
-            <div className="flex flex-1 items-center justify-between">
-              <h2 className="text-sm text-muted-foreground">KinBot</h2>
-              <div className="flex items-center gap-1">
-                <SSEStatusIndicator />
-                <PaletteToggle />
-                <ThemeToggle />
-                {user && <NotificationBell onOpenSettings={handleOpenSettings} />}
-                {user && (
-                  <UserMenu
-                    user={{
-                      firstName: user.firstName,
-                      lastName: user.lastName,
-                      pseudonym: user.pseudonym,
-                      email: user.email,
-                      avatarUrl: user.avatarUrl,
-                    }}
-                    onLogout={logout}
-                    onOpenSettings={() => handleOpenSettings()}
-                    onOpenAccount={() => setAccountOpen(true)}
-                  />
-                )}
-              </div>
-            </div>
-          </header>
+          </div>
 
           {/* Connection lost banner */}
           <ConnectionBanner />
@@ -401,11 +380,7 @@ export function ChatPage() {
           />
         )}
 
-        {/* Account modal */}
-        {accountOpen && <AccountDialog open={accountOpen} onOpenChange={setAccountOpen} />}
-
-        {/* Settings modal */}
-        {settingsOpen && <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} initialSection={settingsInitialSection} initialFilters={settingsFilters} />}
+        {/* Account + Settings modals are now mounted at App.tsx root (AuthenticatedShell) */}
       </Suspense>
 
       {/* Command palette (Cmd+K) */}
@@ -422,5 +397,6 @@ export function ChatPage() {
       {/* Real-time status change notifications */}
       <StatusNotifications />
     </SidebarProvider>
+    </div>
   )
 }

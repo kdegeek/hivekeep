@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Home, Kanban } from 'lucide-react'
+import { Home, FolderKanban } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 
 interface ActivityBarItem {
@@ -13,7 +13,7 @@ interface ActivityBarItem {
 }
 
 const ITEMS: ActivityBarItem[] = [
-  { matchPrefix: '/projects', navigateTo: '/projects', icon: Kanban, labelKey: 'activityBar.projects' },
+  { matchPrefix: '/projects', navigateTo: '/projects', icon: FolderKanban, labelKey: 'activityBar.projects' },
   // Fallback default — "Kins" matches any non-Projects path
   { matchPrefix: '/', navigateTo: '/', icon: Home, labelKey: 'activityBar.kins' },
 ]

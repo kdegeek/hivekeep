@@ -11,19 +11,15 @@ import {
 } from '@/client/components/ui/dialog'
 import { Button } from '@/client/components/ui/button'
 import { Label } from '@/client/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/client/components/ui/select'
+import { KinSelector } from '@/client/components/common/KinSelector'
 import { useTickets } from '@/client/hooks/useTickets'
 import { toast } from 'sonner'
 
-interface KinOption {
+interface KinFromApi {
   id: string
   name: string
+  role?: string
+  avatarUrl: string | null
   activeProjectId: string | null
 }
 
@@ -37,7 +33,7 @@ interface StartTaskDialogProps {
 export function StartTaskDialog({ open, onOpenChange, ticketId, projectId }: StartTaskDialogProps) {
   const { t } = useTranslation()
   const { startTicketTask } = useTickets(projectId)
-  const [kins, setKins] = useState<KinOption[]>([])
+  const [kins, setKins] = useState<KinFromApi[]>([])
   const [selectedKinId, setSelectedKinId] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -45,7 +41,7 @@ export function StartTaskDialog({ open, onOpenChange, ticketId, projectId }: Sta
     if (!open) return
     let cancelled = false
     api
-      .get<{ kins: KinOption[] }>('/kins')
+      .get<{ kins: KinFromApi[] }>('/kins')
       .then((data) => {
         if (cancelled) return
         setKins(data.kins)
@@ -72,6 +68,21 @@ export function StartTaskDialog({ open, onOpenChange, ticketId, projectId }: Sta
     }
   }
 
+  // Sort kins so the project-active one (if any) appears first
+  const sortedKins = [...kins].sort((a, b) => {
+    const aActive = a.activeProjectId === projectId ? 1 : 0
+    const bActive = b.activeProjectId === projectId ? 1 : 0
+    return bActive - aActive
+  })
+
+  // KinSelector expects KinOption[] — our API shape is already compatible (id/name/role/avatarUrl)
+  const kinOptions = sortedKins.map((k) => ({
+    id: k.id,
+    name: k.activeProjectId === projectId ? `${k.name} · ${t('projects.startTask.activeOnProject')}` : k.name,
+    role: k.role,
+    avatarUrl: k.avatarUrl,
+  }))
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -80,27 +91,13 @@ export function StartTaskDialog({ open, onOpenChange, ticketId, projectId }: Sta
           <DialogDescription>{t('projects.startTask.description')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-2 py-2">
-          <Label htmlFor="kin-select">{t('projects.startTask.kinField')}</Label>
-          <Select value={selectedKinId} onValueChange={setSelectedKinId}>
-            <SelectTrigger id="kin-select">
-              <SelectValue placeholder={t('projects.startTask.kinPlaceholder')} />
-            </SelectTrigger>
-            <SelectContent>
-              {kins.map((kin) => {
-                const isActiveOnProject = kin.activeProjectId === projectId
-                return (
-                  <SelectItem key={kin.id} value={kin.id}>
-                    {kin.name}
-                    {isActiveOnProject && (
-                      <span className="ml-2 text-xs text-primary">
-                        ({t('projects.startTask.activeOnProject')})
-                      </span>
-                    )}
-                  </SelectItem>
-                )
-              })}
-            </SelectContent>
-          </Select>
+          <Label>{t('projects.startTask.kinField')}</Label>
+          <KinSelector
+            value={selectedKinId}
+            onValueChange={setSelectedKinId}
+            kins={kinOptions}
+            placeholder={t('projects.startTask.kinPlaceholder')}
+          />
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>

@@ -73,13 +73,21 @@ export async function isBlockedUrl(url: string): Promise<{ blocked: boolean; rea
     return { blocked: true, reason: `Domain "${hostname}" is blocked by configuration` }
   }
 
-  // DNS resolution to catch private IPs behind hostnames
+  // DNS resolution to catch private IPs behind hostnames.
+  // We race the lookup against a short timeout so the SSRF check never blocks
+  // the request path on a stalled resolver (observed in WSL / restricted envs).
   try {
-    const results = await Bun.dns.lookup(hostname, { family: 0 })
-    for (const record of results) {
-      if (isPrivateIp(record.address)) {
-        return { blocked: true, reason: `Domain "${hostname}" resolves to private IP ${record.address}` }
+    const lookupPromise = Bun.dns.lookup(hostname, { family: 0 })
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))
+    const results = await Promise.race([lookupPromise, timeoutPromise])
+    if (results) {
+      for (const record of results) {
+        if (isPrivateIp(record.address)) {
+          return { blocked: true, reason: `Domain "${hostname}" resolves to private IP ${record.address}` }
+        }
       }
+    } else {
+      log.debug({ hostname }, 'DNS lookup timed out during SSRF check, allowing request')
     }
   } catch {
     // DNS resolution failed — allow the request to proceed and let fetch handle it

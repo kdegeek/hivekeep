@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { api } from '@/client/lib/api'
 import { SidePanelProvider } from '@/client/contexts/SidePanelContext'
 import { ActivityBar } from '@/client/components/layout/ActivityBar'
+import { AppTopBar } from '@/client/components/layout/AppTopBar'
+import { TooltipProvider } from '@/client/components/ui/tooltip'
 
 // Lazy-loaded pages for code splitting
 const ChatPage = lazy(() => import('@/client/pages/chat/ChatPage').then(m => ({ default: m.ChatPage })))
@@ -14,6 +16,10 @@ const LoginPage = lazy(() => import('@/client/pages/login/LoginPage').then(m => 
 const OnboardingPage = lazy(() => import('@/client/pages/onboarding/OnboardingPage').then(m => ({ default: m.OnboardingPage })))
 const DesignSystemPage = lazy(() => import('@/client/pages/design-system/DesignSystemPage').then(m => ({ default: m.DesignSystemPage })))
 const InvitePage = lazy(() => import('@/client/pages/invite/InvitePage').then(m => ({ default: m.InvitePage })))
+
+// Global modals rendered at App root so they survive navigation between Kins / Projets.
+const SettingsModal = lazy(() => import('@/client/pages/settings/SettingsPage').then(m => ({ default: m.SettingsModal })))
+const AccountDialog = lazy(() => import('@/client/pages/account/AccountPage').then(m => ({ default: m.AccountDialog })))
 
 const isDev = import.meta.env.DEV
 
@@ -130,34 +136,92 @@ function AppRoot() {
     )
   }
 
-  // Authenticated — main app
-  //
-  // Layout: ActivityBar (48px, left) + main content (flex-1).
-  //
-  // The shadcn Sidebar inside ChatPage uses `position: fixed` (cf.
-  // src/client/components/ui/sidebar.tsx:260), which by default anchors to the
-  // viewport. We apply `transform: translateZ(0)` on the content container so
-  // it becomes a containing block for fixed-positioned descendants — the shadcn
-  // sidebar then anchors to the content area (right of ActivityBar) instead of
-  // the viewport, with no need to modify the shadcn component itself.
+  return <AuthenticatedShell />
+}
+
+// ─── Authenticated shell ────────────────────────────────────────────────────
+//
+// Top-level layout when the user is authenticated. Owns:
+//  - The persistent top bar (visible across Kins / Projets / future modes)
+//  - The activity bar (left, 48px)
+//  - The global SettingsModal and AccountDialog
+//
+// The shadcn Sidebar inside ChatPage uses `position: fixed` (cf.
+// src/client/components/ui/sidebar.tsx:260), which by default anchors to the
+// viewport. We apply `transform: translateZ(0)` on the content container so
+// it becomes a containing block for fixed-positioned descendants — the shadcn
+// sidebar then anchors to the content area (right of ActivityBar) instead of
+// the viewport, with no need to modify the shadcn component itself.
+function AuthenticatedShell() {
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsInitialSection, setSettingsInitialSection] = useState<string | undefined>()
+  const [settingsFilters, setSettingsFilters] = useState<{ kinId?: string } | undefined>()
+  const [accountOpen, setAccountOpen] = useState(false)
+
+  const handleOpenSettings = useCallback((section?: string, filters?: { kinId?: string }) => {
+    setSettingsInitialSection(section)
+    setSettingsFilters(filters)
+    setSettingsOpen(true)
+  }, [])
+
+  const handleOpenAccount = useCallback(() => setAccountOpen(true), [])
+
   return (
+    <TooltipProvider delayDuration={0}>
     <SidePanelProvider>
-      <div className="flex h-screen w-screen overflow-hidden">
-        <ActivityBar />
-        <div
-          className="min-w-0 flex-1"
-          style={{ transform: 'translateZ(0)' }}
-        >
-          <Suspense fallback={<PageFallback />}>
-            <Routes>
-              <Route path="/projects" element={<ProjectsPage />} />
-              <Route path="/projects/:projectId" element={<ProjectsPage />} />
-              <Route path="*" element={<ChatPage />} />
-            </Routes>
-          </Suspense>
+      <div className="flex h-screen w-screen flex-col overflow-hidden">
+        <AppTopBar
+          onOpenSettings={handleOpenSettings}
+          onOpenAccount={handleOpenAccount}
+        />
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <ActivityBar />
+          <div
+            className="min-w-0 flex-1"
+            style={{ transform: 'translateZ(0)' }}
+          >
+            <Suspense fallback={<PageFallback />}>
+              <Routes>
+                <Route
+                  path="/projects"
+                  element={<ProjectsPage />}
+                />
+                <Route
+                  path="/projects/:projectId"
+                  element={<ProjectsPage />}
+                />
+                <Route
+                  path="*"
+                  element={
+                    <ChatPage
+                      onOpenSettings={handleOpenSettings}
+                      onOpenAccount={handleOpenAccount}
+                    />
+                  }
+                />
+              </Routes>
+            </Suspense>
+          </div>
         </div>
+
+        {/* Global modals — rendered once, survive navigation */}
+        <Suspense fallback={null}>
+          <SettingsModal
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+            initialSection={settingsInitialSection}
+            initialFilters={settingsFilters}
+          />
+        </Suspense>
+        <Suspense fallback={null}>
+          <AccountDialog
+            open={accountOpen}
+            onOpenChange={setAccountOpen}
+          />
+        </Suspense>
       </div>
     </SidePanelProvider>
+    </TooltipProvider>
   )
 }
 

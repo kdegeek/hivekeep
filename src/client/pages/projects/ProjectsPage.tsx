@@ -10,6 +10,7 @@ import { ProjectKanban } from '@/client/components/project/ProjectKanban'
 import { CreateProjectModal } from '@/client/components/project/CreateProjectModal'
 import { CreateTicketModal } from '@/client/components/project/CreateTicketModal'
 import { EditProjectModal } from '@/client/components/project/EditProjectModal'
+import { ActiveKinsIndicator } from '@/client/components/project/ActiveKinsIndicator'
 import { getErrorMessage } from '@/client/lib/api'
 import { toast } from 'sonner'
 
@@ -60,7 +61,7 @@ export function ProjectsPage() {
   }
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="surface-base flex h-full overflow-hidden">
       <ProjectsSidebar
         projects={projects}
         selectedId={routeProjectId ?? null}
@@ -88,13 +89,16 @@ export function ProjectsPage() {
 
         {routeProjectId && project && (
           <div className="flex h-full flex-col">
-            <header className="flex flex-col gap-1 border-b border-border px-4 py-3">
-              <h1 className="truncate text-base font-semibold">{project.title}</h1>
-              {project.description && (
-                <p className="line-clamp-2 max-w-3xl text-xs text-muted-foreground">
-                  {project.description}
-                </p>
-              )}
+            <header className="flex items-start gap-3 border-b border-border px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <h1 className="truncate text-base font-semibold">{project.title}</h1>
+                {project.description && (
+                  <p className="line-clamp-2 max-w-3xl text-xs text-muted-foreground">
+                    {project.description}
+                  </p>
+                )}
+              </div>
+              <ActiveKinsIndicator projectId={routeProjectId} size="size-7" maxVisible={5} />
             </header>
             <div className="flex-1 overflow-hidden">
               <ProjectKanban
