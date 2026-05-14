@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSSE } from '@/client/hooks/useSSE'
 import { useAuth } from '@/client/hooks/useAuth'
-import { useMiniAppPanel } from '@/client/contexts/MiniAppContext'
+import { useSidePanel } from '@/client/contexts/SidePanelContext'
 import {
   Dialog,
   DialogContent,
@@ -96,7 +96,7 @@ export function CronDetailModal({
   const { t, i18n } = useTranslation()
   const { user } = useAuth()
   const serverTimezone = user?.serverTimezone
-  const { openTask } = useMiniAppPanel()
+  const { openTask } = useSidePanel()
   const [executions, setExecutions] = useState<TaskSummary[]>([])
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const [historyError, setHistoryError] = useState(false)

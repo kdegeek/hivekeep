@@ -18,6 +18,9 @@ import { vaultRoutes } from '@/server/routes/vault'
 import { contactRoutes } from '@/server/routes/contacts'
 import { taskRoutes } from '@/server/routes/tasks'
 import { cronRoutes } from '@/server/routes/crons'
+import { projectRoutes } from '@/server/routes/projects'
+import { tagRoutes } from '@/server/routes/tags'
+import { ticketRoutes } from '@/server/routes/tickets'
 import { mcpServerRoutes } from '@/server/routes/mcp-servers'
 import { fileRoutes } from '@/server/routes/files'
 import { fileStorageRoutes } from '@/server/routes/file-storage'
@@ -165,6 +168,9 @@ app.route('/api/settings', settingsRoutes)
 app.route('/api/contacts', contactRoutes)
 app.route('/api/tasks', taskRoutes)
 app.route('/api/crons', cronRoutes)
+app.route('/api/projects', projectRoutes)
+app.route('/api/tags', tagRoutes)
+app.route('/api/tickets', ticketRoutes)
 app.route('/api/mcp-servers', mcpServerRoutes)
 app.route('/api/files', fileRoutes)
 app.route('/api/file-storage', fileStorageRoutes)

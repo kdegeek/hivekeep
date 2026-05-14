@@ -15,7 +15,10 @@ import {
   userProfiles,
   queueItems,
   channels,
+  tasks,
+  tickets,
 } from '@/server/db/schema'
+import { buildActiveProjectInfo } from '@/server/services/projects'
 import { guessProviderType } from '@/shared/model-ref'
 import { getContactDisplayName } from '@/shared/contact-display'
 import { decrypt } from '@/server/services/encryption'
@@ -1289,6 +1292,32 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
       }
     }
 
+    // Resolve active project for the [7.8] block.
+    // If the current message is a ticket-linked task_result, override the kin's
+    // persistent active project with the ticket's project for this turn only
+    // (projects.md § 4 — temporary override on task-completed turns).
+    let resolvedActiveProjectId: string | null = kin.activeProjectId ?? null
+    if (queueItem.taskId && queueItem.messageType === 'task_result') {
+      const taskRow = await db
+        .select({ ticketId: tasks.ticketId })
+        .from(tasks)
+        .where(eq(tasks.id, queueItem.taskId))
+        .get()
+      if (taskRow?.ticketId) {
+        const ticketRow = await db
+          .select({ projectId: tickets.projectId })
+          .from(tickets)
+          .where(eq(tickets.id, taskRow.ticketId))
+          .get()
+        if (ticketRow) {
+          resolvedActiveProjectId = ticketRow.projectId
+        }
+      }
+    }
+    const activeProject = resolvedActiveProjectId
+      ? await buildActiveProjectInfo(resolvedActiveProjectId)
+      : null
+
     const systemSegments = buildSystemPrompt({
       kin: { name: kin.name, slug: kin.slug, role: kin.role, character: kin.character, expertise: kin.expertise },
       contacts: contactsWithSlug,
@@ -1314,6 +1343,7 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
         oldestVisibleMessageAt,
       },
       workspacePath: kin.workspacePath,
+      activeProject: activeProject ?? undefined,
     })
     const systemPrompt = joinSystemPrompt(systemSegments)
 
@@ -2127,6 +2157,11 @@ export async function processQuickMessage(kinId: string): Promise<boolean> {
     // Build quick session system prompt (minimal — no contacts, no kin directory, no hidden instructions)
     const globalPrompt = await getGlobalPrompt()
 
+    // Active project applies to quick sessions too — the Kin's state is the same regardless of session type.
+    const quickSessionActiveProject = kin.activeProjectId
+      ? await buildActiveProjectInfo(kin.activeProjectId)
+      : null
+
     const systemSegments = buildSystemPrompt({
       kin: { name: kin.name, slug: kin.slug, role: kin.role, character: kin.character, expertise: kin.expertise },
       contacts: [],
@@ -2138,6 +2173,7 @@ export async function processQuickMessage(kinId: string): Promise<boolean> {
       globalPrompt,
       userLanguage,
       workspacePath: kin.workspacePath,
+      activeProject: quickSessionActiveProject ?? undefined,
     })
 
     // Build quick session message history (only messages from this session, no compacting)

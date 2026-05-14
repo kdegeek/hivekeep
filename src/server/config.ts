@@ -362,6 +362,16 @@ export const config = {
     maxConcurrentExecutions: Number(process.env.CRONS_MAX_CONCURRENT_EXEC ?? 5),
   },
 
+  projects: {
+    /** Hard cap on the active project's description injected into the [7.8] prompt block.
+     *  Beyond this, the first half is kept and a truncation note replaces the rest. */
+    maxDescriptionPromptTokens: Number(process.env.PROJECTS_MAX_DESCRIPTION_PROMPT_TOKENS ?? 8000),
+    /** Max non-`done` tickets injected in the [7.8] prompt block, sorted by updated_at DESC. */
+    maxTicketsInPrompt: Number(process.env.PROJECTS_MAX_TICKETS_IN_PROMPT ?? 50),
+    /** Gap between consecutive ticket positions when inserting at top of a kanban column. */
+    kanbanPositionStep: Number(process.env.PROJECTS_KANBAN_POSITION_STEP ?? 1024),
+  },
+
   tools: {
     maxSteps: Number(process.env.TOOLS_MAX_STEPS ?? 0), // 0 = unlimited (capped at 100 internally)
     // Max parallel concurrency-safe tool calls within a single batch.

@@ -4,9 +4,12 @@ import { useAuth } from '@/client/hooks/useAuth'
 import { useTranslation } from 'react-i18next'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { api } from '@/client/lib/api'
+import { SidePanelProvider } from '@/client/contexts/SidePanelContext'
+import { ActivityBar } from '@/client/components/layout/ActivityBar'
 
 // Lazy-loaded pages for code splitting
 const ChatPage = lazy(() => import('@/client/pages/chat/ChatPage').then(m => ({ default: m.ChatPage })))
+const ProjectsPage = lazy(() => import('@/client/pages/projects/ProjectsPage').then(m => ({ default: m.ProjectsPage })))
 const LoginPage = lazy(() => import('@/client/pages/login/LoginPage').then(m => ({ default: m.LoginPage })))
 const OnboardingPage = lazy(() => import('@/client/pages/onboarding/OnboardingPage').then(m => ({ default: m.OnboardingPage })))
 const DesignSystemPage = lazy(() => import('@/client/pages/design-system/DesignSystemPage').then(m => ({ default: m.DesignSystemPage })))
@@ -128,10 +131,33 @@ function AppRoot() {
   }
 
   // Authenticated — main app
+  //
+  // Layout: ActivityBar (48px, left) + main content (flex-1).
+  //
+  // The shadcn Sidebar inside ChatPage uses `position: fixed` (cf.
+  // src/client/components/ui/sidebar.tsx:260), which by default anchors to the
+  // viewport. We apply `transform: translateZ(0)` on the content container so
+  // it becomes a containing block for fixed-positioned descendants — the shadcn
+  // sidebar then anchors to the content area (right of ActivityBar) instead of
+  // the viewport, with no need to modify the shadcn component itself.
   return (
-    <Suspense fallback={<PageFallback />}>
-      <ChatPage />
-    </Suspense>
+    <SidePanelProvider>
+      <div className="flex h-screen w-screen overflow-hidden">
+        <ActivityBar />
+        <div
+          className="min-w-0 flex-1"
+          style={{ transform: 'translateZ(0)' }}
+        >
+          <Suspense fallback={<PageFallback />}>
+            <Routes>
+              <Route path="/projects" element={<ProjectsPage />} />
+              <Route path="/projects/:projectId" element={<ProjectsPage />} />
+              <Route path="*" element={<ChatPage />} />
+            </Routes>
+          </Suspense>
+        </div>
+      </div>
+    </SidePanelProvider>
   )
 }
 

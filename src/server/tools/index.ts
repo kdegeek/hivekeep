@@ -28,10 +28,10 @@ class ToolRegistry {
     const resolved: Record<string, Tool<any, any>> = {}
 
     for (const [name, reg] of this.tools) {
-      if (reg.availability.includes(target)) {
-        const baseTool = reg.create(ctx)
-        resolved[name] = this.wrapWithHooks(name, baseTool, ctx)
-      }
+      if (!reg.availability.includes(target)) continue
+      if (reg.condition && !reg.condition(ctx)) continue
+      const baseTool = reg.create(ctx)
+      resolved[name] = this.wrapWithHooks(name, baseTool, ctx)
     }
 
     log.debug({ kinId: ctx.kinId, resolvedCount: Object.keys(resolved).length }, 'Tools resolved for Kin')

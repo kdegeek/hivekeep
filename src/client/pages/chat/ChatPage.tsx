@@ -4,7 +4,6 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/client/components/ui/sidebar'
 import { AppSidebar } from '@/client/components/sidebar/AppSidebar'
-import { MiniAppProvider } from '@/client/contexts/MiniAppContext'
 import { ChatPanel } from '@/client/components/chat/ChatPanel'
 
 // Lazy-load modals — not needed on initial render
@@ -204,7 +203,6 @@ export function ChatPage() {
   }, [kins, navigate, handleOpenSettings])
 
   return (
-    <MiniAppProvider>
     <SidebarProvider>
       <AppSidebar
         selectedKinId={selectedKin?.id ?? null}
@@ -424,6 +422,5 @@ export function ChatPage() {
       {/* Real-time status change notifications */}
       <StatusNotifications />
     </SidebarProvider>
-    </MiniAppProvider>
   )
 }

@@ -404,3 +404,15 @@ export const CONTACT_IDENTIFIER_SUGGESTIONS = [
   'twitter', 'instagram', 'linkedin', 'github',
   'slack', 'website',
 ] as const
+
+// ─── Projects ─────────────────────────────────────────────────────────────────
+
+export const TICKET_STATUSES = ['backlog', 'todo', 'in_progress', 'blocked', 'done'] as const
+
+/** Tags applied to every newly created project. Editable by user/Kin afterward. */
+export const DEFAULT_PROJECT_TAGS: ReadonlyArray<{ label: string; color: string }> = [
+  { label: 'bug', color: '#ef4444' },
+  { label: 'feature', color: '#3b82f6' },
+  { label: 'chore', color: '#6b7280' },
+  { label: 'doc', color: '#f59e0b' },
+]

@@ -83,6 +83,7 @@ export const kins = sqliteTable('kins', {
   toolConfig: text('tool_config'), // JSON: KinToolConfig
   compactingConfig: text('compacting_config'), // JSON: KinCompactingConfig
   thinkingConfig: text('thinking_config'), // JSON: KinThinkingConfig
+  activeProjectId: text('active_project_id').references((): AnySQLiteColumn => projects.id, { onDelete: 'set null' }),
   createdBy: text('created_by').references(() => user.id),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
@@ -295,6 +296,7 @@ export const tasks = sqliteTable('tasks', {
   pendingRequestId: text('pending_request_id'),
   channelOriginId: text('channel_origin_id'),
   webhookId: text('webhook_id').references(() => webhooks.id, { onDelete: 'set null' }),
+  ticketId: text('ticket_id').references((): AnySQLiteColumn => tickets.id, { onDelete: 'set null' }),
   allowHumanPrompt: integer('allow_human_prompt', { mode: 'boolean' }).notNull().default(true),
   thinkingConfig: text('thinking_config'), // JSON: KinThinkingConfig — overrides parent Kin if set
   concurrencyGroup: text('concurrency_group'),
@@ -308,6 +310,7 @@ export const tasks = sqliteTable('tasks', {
   index('idx_tasks_cron').on(table.cronId),
   index('idx_tasks_concurrency').on(table.concurrencyGroup, table.status, table.queuedAt),
   index('idx_tasks_webhook').on(table.webhookId),
+  index('idx_tasks_ticket').on(table.ticketId),
 ])
 
 export const crons = sqliteTable('crons', {
@@ -804,4 +807,54 @@ export const kinReadState = sqliteTable('kin_read_state', {
 }, (table) => [
   primaryKey({ columns: [table.userId, table.kinId] }),
   index('idx_kin_read_state_user').on(table.userId),
+])
+
+// ─── Projects ─────────────────────────────────────────────────────────────────
+// Independent entities shared across all users. Any Kin can select any project
+// via kins.active_project_id. See projects.md for the full spec.
+
+export const projects = sqliteTable('projects', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  githubUrl: text('github_url'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+}, (table) => [
+  index('idx_projects_created').on(table.createdAt),
+])
+
+export const projectTags = sqliteTable('project_tags', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  label: text('label').notNull(),
+  color: text('color').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+}, (table) => [
+  uniqueIndex('uniq_project_tags_label').on(table.projectId, table.label),
+  index('idx_project_tags_project').on(table.projectId),
+])
+
+export const tickets = sqliteTable('tickets', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  status: text('status').notNull().default('backlog'), // 'backlog' | 'todo' | 'in_progress' | 'blocked' | 'done'
+  position: integer('position').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+}, (table) => [
+  index('idx_tickets_project_status_position').on(table.projectId, table.status, table.position),
+  index('idx_tickets_project_updated').on(table.projectId, table.updatedAt),
+])
+
+export const ticketTags = sqliteTable('ticket_tags', {
+  ticketId: text('ticket_id').notNull().references(() => tickets.id, { onDelete: 'cascade' }),
+  tagId: text('tag_id').notNull().references(() => projectTags.id, { onDelete: 'cascade' }),
+}, (table) => [
+  primaryKey({ columns: [table.ticketId, table.tagId] }),
+  index('idx_ticket_tags_ticket').on(table.ticketId),
+  index('idx_ticket_tags_tag').on(table.tagId),
 ])

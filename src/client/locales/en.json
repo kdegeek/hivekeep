@@ -2357,5 +2357,105 @@
   },
   "rightPanel": {
     "taskTab": "Task"
+  },
+  "activityBar": {
+    "kins": "Kins",
+    "projects": "Projects"
+  },
+  "projects": {
+    "page": {
+      "title": "Projects",
+      "comingSoon": "Kanban view is coming soon — backend is wired up, frontend in progress."
+    },
+    "sidebar": {
+      "title": "Projects",
+      "create": "New project",
+      "empty": "No projects yet. Create your first project to get started."
+    },
+    "empty": {
+      "title": "No projects",
+      "description": "Create a project from the sidebar to start tracking work."
+    },
+    "kanban": {
+      "newTicket": "New ticket"
+    },
+    "status": {
+      "backlog": "Backlog",
+      "todo": "To do",
+      "in_progress": "In progress",
+      "blocked": "Blocked",
+      "done": "Done"
+    },
+    "create": {
+      "title": "Create a new project",
+      "description": "A default tag palette (bug, feature, chore, doc) will be added automatically. You can customize it later.",
+      "titleField": "Project title",
+      "titlePlaceholder": "e.g. Backend refactor",
+      "descriptionField": "Description",
+      "descriptionPlaceholder": "Context, goals, links, constraints — anything useful for a Kin working on this project.",
+      "descriptionHint": "Markdown supported. This description is injected into the system prompt of any Kin that has this project active.",
+      "githubField": "GitHub URL (optional)"
+    },
+    "ticket": {
+      "create": {
+        "title": "New ticket",
+        "description": "Add a new ticket to this project. Status defaults to Backlog — drag it to another column once you're ready to work on it.",
+        "titleField": "Ticket title",
+        "titlePlaceholder": "e.g. Fix login redirect loop",
+        "descriptionField": "Description",
+        "descriptionPlaceholder": "What needs to be done? Any context useful for whoever picks this up.",
+        "tagsField": "Tags"
+      },
+      "panel": {
+        "heading": "Ticket",
+        "description": "Description",
+        "noDescription": "No description.",
+        "tasksHistory": "Tasks ({{count}})",
+        "startTask": "Start a task",
+        "noTasks": "No tasks have been spawned on this ticket yet.",
+        "notFound": "This ticket was not found — it may have been deleted.",
+        "back": "Back to {{type}}",
+        "editAction": "Edit ticket",
+        "status": "Status",
+        "tags": "Tags",
+        "delete": "Delete ticket",
+        "deleteConfirm": {
+          "title": "Delete this ticket?",
+          "description": "\"{{title}}\" will be permanently deleted. Linked tasks history is preserved.",
+          "confirm": "Delete ticket"
+        }
+      },
+      "edit": {
+        "title": "Edit ticket",
+        "description": "Update the title, description, status, or tags. The kanban will refresh in real time."
+      }
+    },
+    "startTask": {
+      "title": "Start a task",
+      "description": "Spawn a sub-Kin to work on this ticket. Pre-selected Kin is the one with this project active. The task runs in await mode — you'll get a turn on the Kin's thread when it finishes.",
+      "kinField": "Which Kin should run this task?",
+      "kinPlaceholder": "Select a Kin",
+      "activeOnProject": "active here",
+      "start": "Start"
+    },
+    "chip": {
+      "tooltip": "Active project: {{title}}. Click to view the kanban."
+    },
+    "edit": {
+      "title": "Edit project",
+      "description": "Modify the project details, manage tags, or delete the project entirely.",
+      "openEdit": "Edit project",
+      "tagsSection": "Tags",
+      "delete": "Delete project",
+      "deleteConfirm": {
+        "title": "Delete this project?",
+        "description": "\"{{title}}\" and all its tickets, tags, and ticket history will be permanently deleted. Tasks history is preserved (their ticket link is unset).",
+        "confirm": "Delete project"
+      }
+    },
+    "tags": {
+      "empty": "No tags yet — add some below.",
+      "newLabel": "New tag label"
+    }
   }
 }

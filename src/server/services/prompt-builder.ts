@@ -106,6 +106,42 @@ interface PromptParams {
   }
   /** Absolute path to the Kin's workspace directory */
   workspacePath?: string
+  /** Active project context — injected as volatile [7.8] block for main agent.
+   *  For sub-Kins linked to a ticket, use `ticketAssignment` instead. */
+  activeProject?: ActiveProjectPromptInfo
+  /** Ticket assignment context — injected as stable block in sub-Kin prompts
+   *  when `task.ticket_id !== null`. Always derived from the ticket at prompt-build
+   *  time (current state, not frozen at spawn). */
+  ticketAssignment?: TicketAssignmentInfo
+}
+
+export interface ActiveProjectPromptInfo {
+  id: string
+  title: string
+  description: string
+  githubUrl: string | null
+  tags: Array<{ label: string; color: string }>
+  openTickets: Array<{
+    idShort: string
+    title: string
+    status: string
+    tagLabels: string[]
+  }>
+  totalOpenTickets: number
+  /** True if description was truncated to fit `config.projects.maxDescriptionPromptTokens`. */
+  descriptionTruncated: boolean
+}
+
+export interface TicketAssignmentInfo {
+  ticketId: string
+  ticketTitle: string
+  ticketDescription: string
+  ticketStatus: string
+  ticketTags: string[]
+  projectId: string
+  projectTitle: string
+  projectDescription: string
+  projectGithubUrl: string | null
 }
 
 /**
@@ -449,6 +485,86 @@ const LANGUAGE_NAMES: Record<string, string> = {
   en: 'English',
 }
 
+// ─── Project blocks ──────────────────────────────────────────────────────────
+
+function buildActiveProjectBlock(info: ActiveProjectPromptInfo): string {
+  const sections: string[] = []
+
+  sections.push('## Active project')
+  sections.push(
+    'You are currently working on the following project. Use the project tools to inspect tickets, update their status, and start tasks.',
+  )
+
+  let header = `Title: ${info.title}`
+  if (info.githubUrl) header += `\nGitHub: ${info.githubUrl}`
+  sections.push(header)
+
+  const description = info.descriptionTruncated
+    ? `${info.description}\n\n[Description truncated — call get_project() to read the full text]`
+    : info.description
+  if (description.trim().length > 0) {
+    sections.push(`### Description\n\n${description}`)
+  }
+
+  if (info.tags.length > 0) {
+    const tagLines = info.tags.map((t) => `- ${t.label} (${t.color})`).join('\n')
+    sections.push(`### Tags\n\n${tagLines}`)
+  }
+
+  if (info.openTickets.length > 0) {
+    const ticketLines = info.openTickets
+      .map((t) => {
+        const tagPart = t.tagLabels.length > 0 ? ` — ${t.tagLabels.join(', ')}` : ''
+        return `- [${t.status}] [#${t.idShort}] ${t.title}${tagPart}`
+      })
+      .join('\n')
+    let body = ticketLines
+    const remainder = info.totalOpenTickets - info.openTickets.length
+    if (remainder > 0) {
+      body += `\n... and ${remainder} more — call list_tickets() to inspect`
+    }
+    sections.push(`### Open tickets (${info.totalOpenTickets})\n\n${body}`)
+  } else if (info.totalOpenTickets === 0) {
+    sections.push('### Open tickets\n\nNone — the kanban currently has no non-done tickets.')
+  }
+
+  sections.push(
+    '> To switch project, call set_active_project(other_project_id) or set_active_project(null) to deactivate.',
+  )
+
+  return sections.join('\n\n')
+}
+
+function buildTicketAssignmentBlock(info: TicketAssignmentInfo): string {
+  const sections: string[] = []
+  sections.push('## Ticket assignment')
+  sections.push('You are executing a delegated task for a specific ticket.')
+
+  let projectHeader = `Title: ${info.projectTitle}`
+  if (info.projectGithubUrl) projectHeader += `\nGitHub: ${info.projectGithubUrl}`
+  const projectDesc = info.projectDescription.trim().length > 0
+    ? `\n\nDescription:\n${info.projectDescription}`
+    : ''
+  sections.push(`### Project context\n\n${projectHeader}${projectDesc}`)
+
+  const tagsLine = info.ticketTags.length > 0 ? `\nTags: ${info.ticketTags.join(', ')}` : ''
+  const descriptionLine = info.ticketDescription.trim().length > 0
+    ? `\n\nDescription:\n${info.ticketDescription}`
+    : ''
+  sections.push(
+    `### Ticket you are working on\n\n` +
+    `Title: ${info.ticketTitle}\n` +
+    `Status: ${info.ticketStatus}${tagsLine}${descriptionLine}`,
+  )
+
+  sections.push(
+    '> Use update_ticket() to update the ticket as you progress (status, description, tags).\n' +
+    '> Report back to the parent Kin with report_to_parent() / update_task_status() as usual.',
+  )
+
+  return sections.join('\n\n')
+}
+
 /**
  * System prompt assembly result.
  *
@@ -498,6 +614,13 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `KinBot is a self-hosted platform of expert AI agents (Kins) that collaborate to assist users.`,
     )
     stableBlocks.push(`## Your mission\n\n${params.taskDescription}`)
+
+    // Ticket assignment block — only for sub-Kins linked to a ticket.
+    // Stable for the lifetime of this sub-Kin task instance.
+    if (params.ticketAssignment) {
+      stableBlocks.push(buildTicketAssignmentBlock(params.ticketAssignment))
+    }
+
     const isCronTask = params.previousCronRuns !== undefined
     const cronJournalInstruction = isCronTask
       ? `\n- This is a recurring scheduled task. End your final result with a concise summary of what you did and found, so the next run can pick up where you left off.` +
@@ -816,6 +939,11 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `- You can create, update, and delete secrets. Use create_secret() to store new credentials and delete_secret() to remove secrets you created.\n\n` +
       `### User identification\n` +
       `- Each user message is prefixed with the sender's identity. Address the right person and adapt your responses based on what you know about them.\n\n` +
+      `### Project and ticket management\n` +
+      `- The kanban status of a ticket is YOUR responsibility, not automatic. start_ticket_task() does NOT change the ticket's status or position.\n` +
+      `- When you decide to take ownership of a ticket, update its status BEFORE starting work: update_ticket(id, { status: 'in_progress' }). This keeps the kanban honest about what is being worked on.\n` +
+      `- After a task you spawned on a ticket completes, you will receive its result as a new turn. Decide explicitly: update_ticket(status: 'done') if the work is finished, 'blocked' if you need user input or external dependency, 'in_progress' if there is more to do (e.g., you will spawn another task), or back to 'todo' if you abandoned the attempt. Never leave the ticket in a stale state after a task returns.\n` +
+      `- start_ticket_task always runs in await mode — you will get a turn when it finishes. Do not assume async/fire-and-forget for ticket-linked work.\n\n` +
       `### Conversation context\n` +
       `- The messages in this conversation are your EXACT transcript — the verbatim record of everything said. You can read and quote them word for word.\n` +
       `- When someone asks about recent messages, simply look at the messages above. They are not a summary — they are the real messages, exactly as written.\n` +
@@ -1056,6 +1184,11 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `Path: ${params.workspacePath}${treeLine}\n\n` +
       `> Always create files, clone repos, and store data inside your workspace. Never write to the home folder or other system paths.`,
     )
+  }
+
+  // [7.8] Active project — volatile (changes when Kin switches project)
+  if (params.activeProject) {
+    volatileBlocks.push(buildActiveProjectBlock(params.activeProject))
   }
 
   // [8] Date and context — volatile (changes every minute)

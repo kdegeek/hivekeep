@@ -3,7 +3,7 @@ import { eq, and, desc, asc, inArray, like, or, sql, gte, lte, isNull, isNotNull
 import { v4 as uuid } from 'uuid'
 import { db, sqlite } from '@/server/db/index'
 import { createLogger } from '@/server/logger'
-import { tasks, kins, messages } from '@/server/db/schema'
+import { tasks, kins, messages, tickets, projects } from '@/server/db/schema'
 import { enqueueMessage } from '@/server/services/queue'
 import { buildSystemPrompt } from '@/server/services/prompt-builder'
 import {
@@ -285,6 +285,7 @@ interface SpawnParams {
   allowHumanPrompt?: boolean
   channelOriginId?: string
   webhookId?: string
+  ticketId?: string
   thinkingConfig?: KinThinkingConfig
   concurrencyGroup?: string
   concurrencyMax?: number
@@ -324,6 +325,11 @@ export async function spawnTask(params: SpawnParams) {
     }
   }
 
+  // Safety net: ticket-linked tasks must run in await mode (Phase 26 — projects.md § 5)
+  if (params.ticketId && params.mode === 'async') {
+    throw new Error('TICKET_TASK_REQUIRES_AWAIT')
+  }
+
   await db.insert(tasks).values({
     id: taskId,
     parentKinId: params.parentKinId,
@@ -340,6 +346,7 @@ export async function spawnTask(params: SpawnParams) {
     cronId: params.cronId ?? null,
     channelOriginId: params.channelOriginId ?? null,
     webhookId: params.webhookId ?? null,
+    ticketId: params.ticketId ?? null,
     allowHumanPrompt: params.allowHumanPrompt ?? true,
     thinkingConfig: params.thinkingConfig ? JSON.stringify(params.thinkingConfig) : null,
     concurrencyGroup,
@@ -455,6 +462,15 @@ async function executeSubKin(taskId: string, isNudge = false) {
     const { listAvailableKins } = await import('@/server/services/inter-kin')
     const kinDirectory = await listAvailableKins(kinIdentity.id)
 
+    // Ticket assignment context — only when the task is linked to a ticket.
+    // Looked up at prompt-build time so the sub-Kin sees the current ticket state
+    // (not a frozen snapshot from spawn).
+    let ticketAssignment = null
+    if (task.ticketId) {
+      const { buildTicketAssignmentInfo } = await import('@/server/services/tickets')
+      ticketAssignment = await buildTicketAssignmentInfo(task.ticketId)
+    }
+
     const systemSegments = buildSystemPrompt({
       kin: {
         name: kinIdentity.name,
@@ -473,6 +489,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
       globalPrompt,
       userLanguage: 'en',
       workspacePath: kinIdentity.workspacePath,
+      ticketAssignment: ticketAssignment ?? undefined,
     })
 
     // Resolve model — use task's provider if stored, else Kin's provider when using Kin's own model
@@ -504,6 +521,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
       isSubKin: false,
       channelOriginId: task.channelOriginId ?? undefined,
       cronId: task.cronId ?? undefined,
+      ticketId: task.ticketId ?? undefined,
     })
 
     // Filter disabled native tools per Kin config (deny-list)
@@ -1065,6 +1083,18 @@ async function executeSubKin(taskId: string, isNudge = false) {
 
 // ─── Task Resolution ─────────────────────────────────────────────────────────
 
+/** Build the inline reminder appended to ticket-linked task_result messages.
+ *  Returns null if the linked ticket has been deleted (graceful fallback). */
+async function buildTicketLinkedReminder(ticketId: string): Promise<string | null> {
+  const ticketRow = await db.select().from(tickets).where(eq(tickets.id, ticketId)).get()
+  if (!ticketRow) return null
+  const projectRow = await db.select().from(projects).where(eq(projects.id, ticketRow.projectId)).get()
+  if (!projectRow) return null
+
+  const idShort = ticketRow.id.slice(0, 8)
+  return `\n\n---\nLinked ticket: #${idShort} "${ticketRow.title}" (project: ${projectRow.title}, current status: ${ticketRow.status}). Review the result above and update the ticket via update_ticket() if needed — status, description, tags. The kanban does not move automatically.`
+}
+
 export async function resolveTask(
   taskId: string,
   status: 'completed' | 'failed',
@@ -1127,12 +1157,17 @@ export async function resolveTask(
 
   const taskMetadata = JSON.stringify({ resolvedTaskId: taskId })
 
+  // Build optional ticket-linked reminder appended after the result.
+  // The reminder nudges the Kin to update the ticket status via update_ticket()
+  // since ticket statuses are not auto-managed on task lifecycle (projects.md § 5).
+  const ticketReminder = task.ticketId ? (await buildTicketLinkedReminder(task.ticketId)) ?? '' : ''
+
   // If await mode, deposit result (or failure) in parent's queue
   if (task.mode === 'await' && status === 'completed' && result) {
     await enqueueMessage({
       kinId: task.parentKinId,
       messageType: 'task_result',
-      content: `[Task: ${taskLabel}] Result: ${result}`,
+      content: `[Task: ${taskLabel}] Result: ${result}${ticketReminder}`,
       sourceType: 'task',
       sourceId: executingKinId,
       priority: config.queue.taskPriority,
@@ -1143,7 +1178,7 @@ export async function resolveTask(
     await enqueueMessage({
       kinId: task.parentKinId,
       messageType: 'task_result',
-      content: `[Task failed: ${taskLabel}] Error: ${error ?? 'Unknown error'}`,
+      content: `[Task failed: ${taskLabel}] Error: ${error ?? 'Unknown error'}${ticketReminder}`,
       sourceType: 'task',
       sourceId: executingKinId,
       priority: config.queue.taskPriority,

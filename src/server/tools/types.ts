@@ -15,6 +15,8 @@ export interface ToolExecutionContext {
   channelOriginId?: string
   /** Cron ID when executing a cron-triggered task */
   cronId?: string
+  /** Ticket ID when executing a ticket-linked task (Phase 26 — projects.md § 13.1) */
+  ticketId?: string
 }
 
 /** Factory function that creates an AI SDK Tool bound to an execution context */
@@ -46,4 +48,10 @@ export interface ToolRegistration {
    *  send external message). Default false. Reserved for UX (confirmation
    *  prompts) and protected-tools logic. */
   destructive?: boolean
+
+  /** Optional gating predicate evaluated at resolve time, in addition to
+   *  `availability`. Return false to omit the tool from the resolved toolset.
+   *  Useful for tools that should only be exposed conditionally — e.g.
+   *  ticket tools available to sub-Kins only when `ctx.ticketId` is set. */
+  condition?: (ctx: ToolExecutionContext) => boolean
 }

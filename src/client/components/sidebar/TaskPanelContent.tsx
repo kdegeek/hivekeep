@@ -14,7 +14,7 @@ import { ContextBar } from '@/client/components/chat/ContextBar'
 import { useTaskDetail } from '@/client/hooks/useTaskDetail'
 import { useHumanPrompts } from '@/client/hooks/useHumanPrompts'
 import { useSSE } from '@/client/hooks/useSSE'
-import { useMiniAppPanel } from '@/client/contexts/MiniAppContext'
+import { useSidePanel } from '@/client/contexts/SidePanelContext'
 import { cn } from '@/client/lib/utils'
 import { ProviderIcon } from '@/client/components/common/ProviderIcon'
 import { formatRelativeTime, formatDurationBetween } from '@/client/lib/time'
@@ -150,7 +150,7 @@ export function TaskPanelContent({
   const toggleToolCalls = useCallback(() => setIsToolCallsOpen((prev) => !prev), [])
 
   // Sibling runs of the same cron — for the run selector
-  const { openTask } = useMiniAppPanel()
+  const { openTask } = useSidePanel()
   const [siblingRuns, setSiblingRuns] = useState<TaskSummary[]>([])
   const [isLoadingRuns, setIsLoadingRuns] = useState(false)
   const [isRunSelectorOpen, setIsRunSelectorOpen] = useState(false)

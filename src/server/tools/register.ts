@@ -91,6 +91,29 @@ import {
   runCustomToolTool,
   listCustomToolsTool,
 } from '@/server/tools/custom-tool-tools'
+import {
+  listProjectsTool,
+  getProjectTool,
+  createProjectTool,
+  updateProjectTool,
+  deleteProjectTool,
+  updateProjectDescriptionTool,
+  appendProjectDescriptionTool,
+  patchProjectDescriptionTool,
+  setActiveProjectTool,
+  listProjectTagsTool,
+  createTagTool,
+  updateTagTool,
+  deleteTagTool,
+  listTicketsTool,
+  getTicketTool,
+  createTicketTool,
+  updateTicketTool,
+  addTicketTagTool,
+  removeTicketTagTool,
+  deleteTicketTool,
+  startTicketTaskTool,
+} from '@/server/tools/project-tools'
 import { generateImageTool, listImageModelsTool } from '@/server/tools/image-tools'
 import { listProvidersTool, listModelsTool } from '@/server/tools/provider-tools'
 import { runShellTool } from '@/server/tools/shell-tools'
@@ -309,6 +332,30 @@ export function registerAllTools(): void {
   toolRegistry.register('list_crons', listCronsTool)
   toolRegistry.register('get_cron_journal', getCronJournalTool)
   toolRegistry.register('trigger_cron', triggerCronTool)
+
+  // Phase 26: Project & ticket tools
+  // Main agents get the full set ; sub-Kins only get read/update tools when their task has ticket_id set (cf. project-tools.ts).
+  toolRegistry.register('list_projects', listProjectsTool)
+  toolRegistry.register('get_project', getProjectTool)
+  toolRegistry.register('create_project', createProjectTool)
+  toolRegistry.register('update_project', updateProjectTool)
+  toolRegistry.register('delete_project', deleteProjectTool)
+  toolRegistry.register('update_project_description', updateProjectDescriptionTool)
+  toolRegistry.register('append_project_description', appendProjectDescriptionTool)
+  toolRegistry.register('patch_project_description', patchProjectDescriptionTool)
+  toolRegistry.register('set_active_project', setActiveProjectTool)
+  toolRegistry.register('list_project_tags', listProjectTagsTool)
+  toolRegistry.register('create_tag', createTagTool)
+  toolRegistry.register('update_tag', updateTagTool)
+  toolRegistry.register('delete_tag', deleteTagTool)
+  toolRegistry.register('list_tickets', listTicketsTool)
+  toolRegistry.register('get_ticket', getTicketTool)
+  toolRegistry.register('create_ticket', createTicketTool)
+  toolRegistry.register('update_ticket', updateTicketTool)
+  toolRegistry.register('add_ticket_tag', addTicketTagTool)
+  toolRegistry.register('remove_ticket_tag', removeTicketTagTool)
+  toolRegistry.register('delete_ticket', deleteTicketTool)
+  toolRegistry.register('start_ticket_task', startTicketTaskTool)
   // Phase 19: Custom tools (main only)
   toolRegistry.register('register_tool', registerToolTool)
   toolRegistry.register('run_custom_tool', runCustomToolTool)

@@ -8,7 +8,7 @@ import { cn } from '@/client/lib/utils'
 import { formatDurationBetween, formatElapsed } from '@/client/lib/time'
 import { Loader2, CheckCircle2, XCircle, Clock, Ban, UserCheck, MessageSquare, Pause, Search, ListTodo, ListOrdered, ChevronDown } from 'lucide-react'
 import { EmptyState } from '@/client/components/common/EmptyState'
-import { useMiniAppPanel } from '@/client/contexts/MiniAppContext'
+import { useSidePanel } from '@/client/contexts/SidePanelContext'
 import type { TaskStatus, TaskSummary } from '@/shared/types'
 
 interface LLMModel {
@@ -209,7 +209,7 @@ interface TaskListProps {
 
 export const TaskList = memo(function TaskList({ llmModels, taskData }: TaskListProps) {
   const { t } = useTranslation()
-  const { openTask } = useMiniAppPanel()
+  const { openTask } = useSidePanel()
   const {
     activeTasks,
     queuedTasks,

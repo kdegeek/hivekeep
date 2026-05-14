@@ -7,6 +7,7 @@ import { MessageBubble } from '@/client/components/chat/MessageBubble'
 import { MessageInput, type MessageInputHandle } from '@/client/components/chat/MessageInput'
 import { TypingIndicator } from '@/client/components/chat/TypingIndicator'
 import { ConversationHeader } from '@/client/components/chat/ConversationHeader'
+import { ActiveProjectChip } from '@/client/components/project/ActiveProjectChip'
 import { ToolCallsViewer } from '@/client/components/chat/ToolCallsViewer'
 const MiniAppViewer = lazy(() => import('@/client/components/mini-app/MiniAppViewer').then(m => ({ default: m.MiniAppViewer })))
 import { TaskResultCard } from '@/client/components/chat/TaskResultCard'
@@ -35,7 +36,7 @@ import { SearchHighlightProvider } from '@/client/components/chat/SearchHighligh
 import { MentionLookupProvider } from '@/client/components/chat/MentionContext'
 import { useMentionables } from '@/client/hooks/useMentionables'
 import { cn, getUserInitials } from '@/client/lib/utils'
-import { useMiniAppPanel } from '@/client/contexts/MiniAppContext'
+import { useSidePanel } from '@/client/contexts/SidePanelContext'
 import { ArrowDown, ArrowUp, Upload, Pin, PinOff } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/client/lib/api'
@@ -47,6 +48,7 @@ interface KinInfo {
   model: string
   providerId: string | null
   avatarUrl: string | null
+  activeProjectId?: string | null
   thinkingEnabled?: boolean
   thinkingEffort?: KinThinkingEffort | null
 }
@@ -92,7 +94,7 @@ export function ChatPanel({ kin, llmModels, modelUnavailable = false, queueState
   const { toggleReaction } = useReactions(kin.id)
   const [thinkingEnabled, setThinkingEnabled] = useState(kin.thinkingEnabled ?? false)
   const [isToolCallsOpen, setIsToolCallsOpen] = useState(false)
-  const { openTask } = useMiniAppPanel()
+  const { openTask } = useSidePanel()
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null)
   const [showScrollBottom, setShowScrollBottom] = useState(false)
   const [showScrollTop, setShowScrollTop] = useState(false)
@@ -737,6 +739,15 @@ export function ChatPanel({ kin, llmModels, modelUnavailable = false, queueState
             </div>
             <p className="text-sm font-medium">{t('chat.dropFiles')}</p>
           </div>
+        </div>
+      )}
+
+      {/* Active project chip — only rendered when this Kin has an activeProjectId */}
+      {kin.activeProjectId && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card/40 px-4 py-1">
+          <Suspense fallback={null}>
+            <ActiveProjectChip projectId={kin.activeProjectId} />
+          </Suspense>
         </div>
       )}
 

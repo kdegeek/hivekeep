@@ -2357,5 +2357,106 @@
   },
   "rightPanel": {
     "taskTab": "Tâche"
+  },
+  "activityBar": {
+    "kins": "Kins",
+    "projets": "Projets",
+    "projects": "Projets"
+  },
+  "projects": {
+    "page": {
+      "title": "Projets",
+      "comingSoon": "La vue kanban arrive bientôt — le backend est prêt, le frontend en cours."
+    },
+    "sidebar": {
+      "title": "Projets",
+      "create": "Nouveau projet",
+      "empty": "Aucun projet pour le moment. Crée ton premier projet pour démarrer."
+    },
+    "empty": {
+      "title": "Aucun projet",
+      "description": "Crée un projet depuis la sidebar pour commencer à suivre du travail."
+    },
+    "kanban": {
+      "newTicket": "Nouveau ticket"
+    },
+    "status": {
+      "backlog": "Backlog",
+      "todo": "À faire",
+      "in_progress": "En cours",
+      "blocked": "Bloqué",
+      "done": "Terminé"
+    },
+    "create": {
+      "title": "Créer un nouveau projet",
+      "description": "Une palette de tags par défaut (bug, feature, chore, doc) sera ajoutée automatiquement. Tu pourras la personnaliser ensuite.",
+      "titleField": "Titre du projet",
+      "titlePlaceholder": "ex. Refonte backend",
+      "descriptionField": "Description",
+      "descriptionPlaceholder": "Contexte, objectifs, liens, contraintes — tout ce qui sera utile à un Kin travaillant sur ce projet.",
+      "descriptionHint": "Markdown supporté. Cette description est injectée dans le prompt système de tout Kin ayant ce projet actif.",
+      "githubField": "URL GitHub (optionnel)"
+    },
+    "ticket": {
+      "create": {
+        "title": "Nouveau ticket",
+        "description": "Ajoute un nouveau ticket à ce projet. Le statut par défaut est Backlog — déplace-le vers une autre colonne quand tu es prêt à le travailler.",
+        "titleField": "Titre du ticket",
+        "titlePlaceholder": "ex. Corriger la boucle de redirection au login",
+        "descriptionField": "Description",
+        "descriptionPlaceholder": "Qu'est-ce qu'il y a à faire ? Tout contexte utile pour la personne (ou le Kin) qui prendra ce ticket.",
+        "tagsField": "Tags"
+      },
+      "panel": {
+        "heading": "Ticket",
+        "description": "Description",
+        "noDescription": "Pas de description.",
+        "tasksHistory": "Tâches ({{count}})",
+        "startTask": "Démarrer une tâche",
+        "noTasks": "Aucune tâche n'a encore été lancée sur ce ticket.",
+        "notFound": "Ce ticket est introuvable — il a peut-être été supprimé.",
+        "back": "Retour au/à la {{type}}",
+        "editAction": "Modifier le ticket",
+        "status": "Statut",
+        "tags": "Tags",
+        "delete": "Supprimer le ticket",
+        "deleteConfirm": {
+          "title": "Supprimer ce ticket ?",
+          "description": "« {{title}} » sera définitivement supprimé. L'historique des tâches liées est conservé.",
+          "confirm": "Supprimer le ticket"
+        }
+      },
+      "edit": {
+        "title": "Modifier le ticket",
+        "description": "Mets à jour le titre, la description, le statut ou les tags. Le kanban se rafraîchit en temps réel."
+      }
+    },
+    "startTask": {
+      "title": "Démarrer une tâche",
+      "description": "Spawn un sub-Kin pour travailler sur ce ticket. Le Kin présélectionné est celui qui a ce projet actif. La tâche tourne en mode await — tu auras un turn sur le thread du Kin quand elle se termine.",
+      "kinField": "Quel Kin doit exécuter cette tâche ?",
+      "kinPlaceholder": "Sélectionner un Kin",
+      "activeOnProject": "actif ici",
+      "start": "Démarrer"
+    },
+    "chip": {
+      "tooltip": "Projet actif : {{title}}. Clique pour ouvrir le kanban."
+    },
+    "edit": {
+      "title": "Modifier le projet",
+      "description": "Modifie les détails du projet, gère les tags, ou supprime le projet entièrement.",
+      "openEdit": "Modifier le projet",
+      "tagsSection": "Tags",
+      "delete": "Supprimer le projet",
+      "deleteConfirm": {
+        "title": "Supprimer ce projet ?",
+        "description": "« {{title}} » et tous ses tickets, tags et liens d'historique seront définitivement supprimés. L'historique des tâches est conservé (leur lien vers les tickets est désactivé).",
+        "confirm": "Supprimer le projet"
+      }
+    },
+    "tags": {
+      "empty": "Aucun tag pour le moment — ajoutes-en ci-dessous.",
+      "newLabel": "Nouveau label"
+    }
   }
 }

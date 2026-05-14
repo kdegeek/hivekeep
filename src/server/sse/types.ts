@@ -74,6 +74,16 @@ export type SSEEventType =
   | 'version:update-available'
   | 'log:entry'
   | 'card:updated'
+  | 'kin:active-project'
+  | 'project:created'
+  | 'project:updated'
+  | 'project:deleted'
+  | 'project-tag:created'
+  | 'project-tag:updated'
+  | 'project-tag:deleted'
+  | 'ticket:created'
+  | 'ticket:updated'
+  | 'ticket:deleted'
   | 'connected'
 
 export interface SSEEvent {

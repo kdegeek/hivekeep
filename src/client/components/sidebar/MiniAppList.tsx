@@ -6,7 +6,7 @@ import {
 import { Input } from '@/client/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/client/components/ui/avatar'
 import { useMiniApps } from '@/client/hooks/useMiniApps'
-import { useMiniAppPanel } from '@/client/contexts/MiniAppContext'
+import { useSidePanel } from '@/client/contexts/SidePanelContext'
 import { cn } from '@/client/lib/utils'
 import { AppWindow, LayoutGrid, List, Loader2, Search, Trash2 } from 'lucide-react'
 import { EmptyState } from '@/client/components/common/EmptyState'
@@ -177,7 +177,7 @@ function MiniAppTile({
 export const MiniAppList = memo(function MiniAppList() {
   const { t } = useTranslation()
   const { apps, isLoading, deleteApp } = useMiniApps(null, 'all')
-  const { activeAppId, badges, openApp, closePanel } = useMiniAppPanel()
+  const { activeAppId, badges, openApp, closePanel } = useSidePanel()
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() =>
     (localStorage.getItem('kinbot:sidebar-miniapps-view-mode') as 'grid' | 'list') || 'list',

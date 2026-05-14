@@ -27,6 +27,7 @@ The context sent to the LLM is composed of **two parts**:
 │  ├── [6.75] Current speaker profile     │
 │  ├── [7] Language                       │
 │  ├── [7.7] Workspace                   │
+│  ├── [7.8] Active project (if any)     │
 │  ├── [8] Date and current context       │
 │  └── [8.5] Final reminder (tool discipline)│
 ├─────────────────────────────────────────┤
@@ -207,6 +208,21 @@ Internal instructions the Kin must not repeat to the user. They drive automatic 
 - Each user message is prefixed with the sender's identity.
   Address the right person and adapt your responses based on what you know
   about them (via your contacts and memory).
+
+### Project and ticket management (only when an active project is set)
+- The kanban status of a ticket is YOUR responsibility, not automatic.
+  start_ticket_task() does NOT change the ticket's status or position.
+- When you decide to take ownership of a ticket, update its status BEFORE starting
+  work: update_ticket(id, { status: 'in_progress' }). This keeps the kanban
+  honest about what is being worked on.
+- After a task you spawned on a ticket completes, you will receive its result as
+  a new turn. Decide explicitly: update_ticket(status: 'done') if the work is
+  finished, 'blocked' if you need user input or external dependency,
+  'in_progress' if there is more to do (e.g., you will spawn another task),
+  or back to 'todo' if you abandoned the attempt. Never leave the ticket in a
+  stale state after a task returns.
+- start_ticket_task always runs in await mode — you will get a turn when it
+  finishes. Do not assume async/fire-and-forget for ticket-linked work.
 ```
 
 ### [6.75] Current speaker profile
@@ -293,6 +309,44 @@ Contents:
 
 > This block is included for main Kins, sub-Kins (tasks), and quick sessions.
 
+### [7.8] Active project
+
+Injected when the Kin has a non-null `active_project_id` (or when the current turn is a task-completion turn with `projectOverride` set — see `projects.md` § 4). Gives the Kin awareness of the project it is currently working on, alongside its open tickets and tags.
+
+**This block lives in the volatile segment** (alongside [4], [5], [6.75], [7], [7.7], [8]), after the cache breakpoint. Switching `active_project_id` only invalidates the volatile part of the prompt cache — the stable prefix (identity, character, expertise, hidden instructions, kin directory, MCP) stays cached.
+
+```
+## Active project
+
+You are currently working on the following project. Use the project tools
+to inspect tickets, update their status, and start tasks.
+
+Title: {project.title}
+{if project.github_url}GitHub: {project.github_url}{/if}
+
+### Description
+
+{project.description}
+
+### Tags
+
+- {tag.label} ({tag.color})
+- ...
+
+### Open tickets ({non-done count})
+
+- [{status}] [#{ticket.id_short}] {ticket.title}{if tags} — {tag_labels}{/if}
+- ...
+
+> To switch project, call set_active_project(other_project_id) or set_active_project(null) to deactivate.
+```
+
+**Practical cap**: full `project.description` is injected as long as it stays under `config.projects.maxDescriptionPromptTokens` (default: 8000 tokens). Beyond that, the first ~half is injected followed by `[Description truncated — call get_project() to read the full text]`.
+
+**Open tickets cap**: at most `config.projects.maxTicketsInPrompt` (default: 50) non-`done` tickets, sorted by `updated_at DESC`. Beyond that, an `... and N more — call list_tickets() to inspect` line is appended.
+
+> If `active_project_id` is NULL and no `projectOverride` is set, this block is omitted entirely (no "no project active" filler).
+
 ### [8] Date and current context
 
 ```
@@ -349,6 +403,7 @@ Messages from other sources are also prefixed:
 | User | `[{pseudonym}]` |
 | Other Kin | `[Kin: {kin_name}]` (+ type request/inform/reply + request_id if applicable) |
 | Task result | `[Task: {task_description}] Result:` |
+| Task result — ticket-linked | `[Task: {task_description}] Result: {result}\n\n---\nLinked ticket: #{id_short} "{title}" (project: {project_title}, current status: {ticket_status}). Review the result above and update the ticket via update_ticket() if needed — status, description, tags. The kanban does not move automatically.` |
 | Cron result | `[Cron: {cron_name}] Result:` |
 | Response to request_input | `[Parent response]:` |
 
@@ -372,6 +427,7 @@ Available tools depend on the **context**:
 | **Inter-Kins** | `send_message`, `reply`, `list_kins` |
 | **Tasks** | `spawn_self`, `spawn_kin`, `respond_to_task`, `cancel_task`, `list_tasks` |
 | **Crons** | `create_cron`, `update_cron`, `delete_cron`, `list_crons` |
+| **Projects** | `list_projects`, `get_project`, `create_project`, `update_project`, `update_project_description`, `append_project_description`, `patch_project_description`, `delete_project`, `set_active_project`, `create_tag`, `update_tag`, `delete_tag`, `list_tickets`, `get_ticket`, `create_ticket`, `update_ticket`, `add_ticket_tag`, `remove_ticket_tag`, `delete_ticket`, `start_ticket_task` (see `projects.md`) |
 | **Vault** | `get_secret`, `redact_message` |
 | **Custom tools** | `register_tool`, `run_custom_tool`, `list_custom_tools` |
 | **Image** | `generate_image` (if image provider configured) |
@@ -386,9 +442,12 @@ Available tools depend on the **context**:
 | **History** | `search_history` |
 | **Vault** | `get_secret` |
 | **Tasks** | `spawn_self`, `spawn_kin` (if max depth not reached) |
+| **Projects** (only if `task.ticket_id !== null`) | `get_project`, `list_tickets`, `get_ticket`, `update_ticket`, `add_ticket_tag`, `remove_ticket_tag`, `update_project_description`, `append_project_description`, `patch_project_description` |
 | **MCP** | MCP tools inherited from parent Kin |
 
 > Sub-Kins do **not** have access to contacts, crons, custom tools, inter-Kin messaging, or memory write tools. They are focused on their task.
+
+> The **Projects** category for sub-Kins is conditional: only injected when the task is linked to a ticket (`task.ticket_id !== null`). It excludes `delete_project`, `delete_ticket`, `create_project`, `create_ticket`, and `set_active_project` — sub-Kins read and update the assigned ticket and its project, but cannot create/destroy entities or change their context.
 
 ---
 
@@ -401,6 +460,8 @@ You are {parent_kin_name}, a specialized AI agent on KinBot, executing a delegat
 
 ## Your mission
 {task_description}
+
+[OPTIONAL: ## Ticket assignment — only if task.ticket_id !== null]
 
 ## Constraints
 - Focus exclusively on this task.
@@ -424,6 +485,38 @@ You MUST call update_task_status() before you finish. There is no auto-completio
 - Call update_task_status("failed", undefined, reason) if you cannot accomplish the task.
 If you do not call update_task_status(), the task will be marked as failed automatically.
 ```
+
+### Sub-Kin ticket assignment block
+
+When `task.ticket_id !== null`, an additional block is injected in the stable segment of the sub-Kin's prompt, right after `## Your mission`. The ticket and its project are looked up at prompt-build time (always the current version, never a frozen snapshot from spawn time).
+
+```
+## Ticket assignment
+
+You are executing a delegated task for a specific ticket.
+
+### Project context
+
+Title: {project.title}
+{if project.github_url}GitHub: {project.github_url}{/if}
+
+Description:
+{project.description}
+
+### Ticket you are working on
+
+Title: {ticket.title}
+Status: {ticket.status}
+{if tags}Tags: {tag_labels}{/if}
+
+Description:
+{ticket.description}
+
+> Use update_ticket() to update the ticket as you progress (status, description, tags).
+> Report back to the parent Kin with report_to_parent() / update_task_status() as usual.
+```
+
+> If `tickets.project_id` points to a deleted project (cas where the project was nuked while the task was running), this block is replaced by a degraded note: `"## Note: the project this ticket belonged to has been deleted."`. The task continues to run and report normally.
 
 ---
 
@@ -458,8 +551,9 @@ The system prompt is constrained by a **token budget** to leave room for message
 | [6] Hidden instructions | ~300 tokens |
 | [7] Language | ~30 tokens |
 | [7.7] Workspace | ~200-500 tokens |
+| [7.8] Active project (when set) | typical ~500-2000 tokens, hard cap 8000 (`config.projects.maxDescriptionPromptTokens`) |
 | [8] Context | ~30 tokens |
-| **Total system prompt** | **~1500-2000 tokens** |
+| **Total system prompt** | **~1500-2000 tokens (no project), up to ~10000 with a large active project** |
 
 The rest of the context window is split between:
 - The compacted summary [9]

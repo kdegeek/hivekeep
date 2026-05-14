@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { useMiniAppPanel } from '@/client/contexts/MiniAppContext'
+import { useSidePanel } from '@/client/contexts/SidePanelContext'
 import { Button } from '@/client/components/ui/button'
 import {
   AlertDialog,
@@ -18,6 +18,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/client/lib/lazy-with-retry'
 import { api } from '@/client/lib/api'
 const TaskPanelContent = lazy(() => import('@/client/components/sidebar/TaskPanelContent').then(m => ({ default: m.TaskPanelContent })))
+const TicketPanelContent = lazy(() => import('@/client/components/sidebar/TicketPanelContent').then(m => ({ default: m.TicketPanelContent })))
 import { toast } from 'sonner'
 import { useAuth } from '@/client/hooks/useAuth'
 import type { MiniAppSummary } from '@/shared/types'
@@ -47,7 +48,7 @@ export function MiniAppViewer() {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { panelOpen, activeAppId, activeAppVersion, isFullPage, customTitle, openApp, closePanel, toggleFullPage, setFullPage, setCustomTitle, setBadge } = useMiniAppPanel()
+  const { panelOpen, activeAppId, activeAppVersion, isFullPage, customTitle, openApp, closePanel, toggleFullPage, setFullPage, setCustomTitle, setBadge } = useSidePanel()
   const [app, setApp] = useState<MiniAppSummary | null>(null)
   const [iframeKey, setIframeKey] = useState(0)
   const iframeRef = useRef<HTMLIFrameElement>(null)
@@ -627,10 +628,11 @@ export function MiniAppViewer() {
     )
   }
 
-  const { activeTab, activeTask, switchTab, closeTask } = useMiniAppPanel()
+  const { activeTab, activeTask, activeTicket, switchTab, closeTask } = useSidePanel()
   const hasBothTabs = activeAppId !== null && activeTask !== null
   const showMiniApp = activeTab === 'mini-app'
   const showTask = activeTab === 'task'
+  const showTicket = activeTab === 'ticket'
 
   // Side panel mode (default)
   return (
@@ -808,6 +810,14 @@ export function MiniAppViewer() {
               />
             </Suspense>
           </>
+        )}
+
+        {/* Ticket content (Phase 26.7) — full panel takeover, no tab bar yet.
+            Header + close handled internally by TicketPanelContent. */}
+        {showTicket && activeTicket && (
+          <Suspense fallback={<div className="flex items-center justify-center py-8"><Loader2 className="size-4 animate-spin text-muted-foreground" /></div>}>
+            <TicketPanelContent ticketId={activeTicket.ticketId} />
+          </Suspense>
         )}
       </div>
     </div>

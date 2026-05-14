@@ -323,6 +323,24 @@ Utile pour le debugging et la transparence. Accepte des query params optionnels 
 }
 ```
 
+### `PATCH /api/kins/:id/active-project`
+
+Définit le projet actif du Kin. Le contexte du projet sera injecté dans le bloc volatile du prompt système aux tours suivants. Voir `projects.md` § 4.
+
+```typescript
+// Request
+{ projectId: string | null }
+
+// Response 200
+{ activeProjectId: string | null }
+
+// Errors
+// 404 — { error: { code: 'PROJECT_NOT_FOUND', message: '...' } }
+// 404 — { error: { code: 'KIN_NOT_FOUND', message: '...' } }
+```
+
+Un event SSE `kin:active-project` est émis à tous les clients connectés (utile pour synchroniser les chips "Projet actif" dans les autres onglets / vues).
+
 ---
 
 ## Messages / Chat
@@ -478,6 +496,258 @@ Injecte un message dans une tâche en cours d'exécution. Si la tâche est en tr
 // Response 409 — injection échouée
 { error: { code: 'INJECT_FAILED', message: string } }
 ```
+
+---
+
+## Projets
+
+Voir `projects.md` pour la spec complète.
+
+### `GET /api/projects`
+
+```typescript
+// Response 200
+{
+  projects: Array<{
+    id: string
+    title: string
+    githubUrl: string | null
+    ticketCount: number
+    openTicketCount: number      // status !== 'done'
+    createdAt: number
+    updatedAt: number
+    // description omise pour la liste (peut être volumineuse)
+  }>
+}
+```
+
+### `GET /api/projects/:id`
+
+```typescript
+// Response 200
+{
+  project: {
+    id: string
+    title: string
+    description: string
+    githubUrl: string | null
+    tags: Array<{ id: string, label: string, color: string }>
+    ticketCounts: { backlog: number, todo: number, in_progress: number, blocked: number, done: number }
+    createdAt: number
+    updatedAt: number
+  }
+}
+```
+
+### `POST /api/projects`
+
+```typescript
+// Request
+{
+  title: string
+  description?: string
+  githubUrl?: string
+}
+
+// Response 201
+{ project: { ...same as GET /api/projects/:id } }
+```
+
+> Le seed `DEFAULT_PROJECT_TAGS` (bug / feature / chore / doc) est appliqué côté serveur. L'utilisateur peut ensuite modifier librement via les routes tags.
+
+### `PATCH /api/projects/:id`
+
+```typescript
+// Request (tous optionnels)
+{
+  title?: string
+  description?: string     // remplace tout
+  githubUrl?: string | null
+}
+
+// Response 200
+{ project: { ...same shape } }
+```
+
+### `DELETE /api/projects/:id`
+
+Hard delete avec cascade : tous les tickets et tags du projet sont supprimés. Les tasks historiques liées voient leur `ticketId` mis à NULL (historique préservé dans les threads des Kins). Les Kins qui avaient ce projet en `activeProjectId` voient leur valeur mise à NULL.
+
+```typescript
+// Response 200
+{ success: true }
+```
+
+### `GET /api/projects/:projectId/tags`
+
+```typescript
+// Response 200
+{
+  tags: Array<{
+    id: string
+    label: string
+    color: string
+    createdAt: number
+  }>
+}
+```
+
+### `POST /api/projects/:projectId/tags`
+
+```typescript
+// Request
+{ label: string, color: string }
+
+// Response 201
+{ tag: { id, label, color, createdAt } }
+
+// Errors
+// 409 — { error: { code: 'TAG_LABEL_TAKEN', message: 'A tag with this label already exists in this project' } }
+```
+
+### `PATCH /api/tags/:id`
+
+```typescript
+// Request (tous optionnels)
+{ label?: string, color?: string }
+
+// Response 200
+{ tag: { id, label, color } }
+```
+
+### `DELETE /api/tags/:id`
+
+```typescript
+// Response 200
+{ success: true }
+```
+
+---
+
+## Tickets
+
+### `GET /api/projects/:projectId/tickets`
+
+```typescript
+// Query params : ?status={...}&tagId={...}&limit={...}&offset={...}
+
+// Response 200
+{
+  tickets: Array<{
+    id: string
+    projectId: string
+    title: string
+    description: string         // tronquée à 500 chars pour la liste
+    status: 'backlog' | 'todo' | 'in_progress' | 'blocked' | 'done'
+    position: number
+    tags: Array<{ id: string, label: string, color: string }>
+    taskCount: number           // nombre total de tasks liées au ticket
+    runningTaskCount: number    // tasks status in_progress/pending/queued
+    createdAt: number
+    updatedAt: number
+  }>
+  hasMore: boolean
+}
+```
+
+### `GET /api/tickets/:id`
+
+```typescript
+// Response 200
+{
+  ticket: {
+    id: string
+    projectId: string
+    title: string
+    description: string         // complète
+    status: 'backlog' | 'todo' | 'in_progress' | 'blocked' | 'done'
+    position: number
+    tags: Array<{ id: string, label: string, color: string }>
+    tasks: Array<{
+      id: string
+      parentKinId: string
+      parentKinName: string
+      status: string
+      mode: 'await' | 'async'
+      createdAt: number
+      updatedAt: number
+    }>
+    createdAt: number
+    updatedAt: number
+  }
+}
+```
+
+### `POST /api/projects/:projectId/tickets`
+
+```typescript
+// Request
+{
+  title: string
+  description?: string
+  status?: 'backlog' | 'todo' | 'in_progress' | 'blocked' | 'done'
+  tagIds?: string[]
+}
+
+// Response 201
+{ ticket: { ...same shape as GET /api/tickets/:id } }
+```
+
+### `PATCH /api/tickets/:id`
+
+```typescript
+// Request (tous optionnels)
+{
+  title?: string
+  description?: string
+  status?: 'backlog' | 'todo' | 'in_progress' | 'blocked' | 'done'
+  position?: number          // si fourni : place à cette position. Sinon : max+1024 dans la colonne du nouveau status.
+  tagIds?: string[]          // remplace l'ensemble (PUT-like)
+}
+
+// Response 200
+{ ticket: { ...same shape } }
+```
+
+### `DELETE /api/tickets/:id`
+
+```typescript
+// Response 200
+{ success: true }
+```
+
+> Les tasks historiques liées ne sont pas supprimées : leur `ticketId` est mis à NULL pour préserver l'audit trail dans les threads.
+
+### `POST /api/tickets/:id/start-task`
+
+Spawn un sub-Kin pour travailler sur le ticket. Le `kinId` du Kin parent doit être passé explicitement (pas de défaut implicite — cf. `projects.md` § 4). **Toujours en mode `await`** : le mode `async` n'est pas autorisé pour les tasks liées à un ticket (sinon le ticket resterait figé sans turn de cloture, cf. `projects.md` § 5).
+
+```typescript
+// Request
+{
+  kinId: string              // Kin qui spawn la task (= parent_kin_id)
+}
+
+// Response 201
+{
+  task: {
+    id: string
+    parentKinId: string
+    ticketId: string
+    status: string
+    mode: 'await'
+    createdAt: number
+  }
+}
+
+// Errors
+// 404 — { error: { code: 'TICKET_NOT_FOUND', message: '...' } }
+// 404 — { error: { code: 'KIN_NOT_FOUND', message: '...' } }
+```
+
+Effets de bord :
+- **Aucun effet sur le ticket** (status / position / tags inchangés — c'est au Kin ou à l'utilisateur de gérer le statut manuellement)
+- Un event SSE `task:status` est émis pour la nouvelle task
 
 ---
 
@@ -972,6 +1242,26 @@ Connexion SSE **globale** (une seule par client). Le serveur multiplex les évé
 
 // Erreur sur un Kin
 { event: 'kin:error', data: { kinId: string, error: string } }
+
+// Projet actif d'un Kin changé
+{ event: 'kin:active-project', data: { kinId: string, activeProjectId: string | null } }
+
+// Projet créé / modifié / supprimé
+{ event: 'project:created', data: { project: ProjectSummary } }
+{ event: 'project:updated', data: { project: ProjectSummary } }
+{ event: 'project:deleted', data: { projectId: string } }
+
+// Ticket créé / modifié / supprimé
+{ event: 'ticket:created', data: { ticket: TicketSummary } }
+{ event: 'ticket:updated', data: { ticket: TicketSummary } }      // inclut changement de status / position
+{ event: 'ticket:deleted', data: { ticketId: string, projectId: string } }
+
+// Tag CRUD au sein d'un projet
+{ event: 'project-tag:created', data: { tag: { id: string, label: string, color: string }, projectId: string } }
+{ event: 'project-tag:updated', data: { tag: { id: string, label: string, color: string }, projectId: string } }
+{ event: 'project-tag:deleted', data: { tagId: string, projectId: string } }
 ```
 
 > Le SSE est **global** (pas par Kin). Le client filtre côté frontend par `kinId` pour n'afficher que les événements pertinents. Cela permet de mettre a jour la sidebar (badges, statuts) pour tous les Kins simultanément.
+
+> Les événements `task:*` existants restent inchangés. Les clients qui s'intéressent aux tasks liées aux tickets filtrent côté frontend sur `task.ticketId !== null` (le champ est désormais présent dans le payload des tasks).

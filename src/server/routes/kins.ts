@@ -84,6 +84,7 @@ kinRoutes.get('/', async (c) => {
         avatarUrl: kinAvatarUrl(k.id, k.avatarPath, k.updatedAt),
         model: k.model,
         providerId: k.providerId ?? null,
+        activeProjectId: k.activeProjectId ?? null,
         createdAt: k.createdAt,
         isHub: k.id === hubKinId,
         thinkingEnabled: resolveThinkingConfig(k.thinkingConfig).enabled === true,
@@ -714,6 +715,33 @@ kinRoutes.delete('/:id', async (c) => {
   }
 
   return c.json({ success: true })
+})
+
+// PATCH /api/kins/:id/active-project — set or clear the active project for a Kin
+kinRoutes.patch('/:id/active-project', async (c) => {
+  const existing = resolveKinByIdOrSlug(c.req.param('id'))
+  if (!existing) {
+    return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Kin not found' } }, 404)
+  }
+  const body = await c.req.json().catch(() => ({}))
+  // null is an explicit "deactivate" — distinguish from undefined (missing field)
+  if (!('projectId' in body) || (body.projectId !== null && typeof body.projectId !== 'string')) {
+    return c.json({ error: { code: 'INVALID_INPUT', message: 'projectId must be a string or null' } }, 400)
+  }
+  const { setActiveProject } = await import('@/server/services/projects')
+  try {
+    const result = await setActiveProject(existing.id, body.projectId)
+    return c.json({ activeProjectId: result.activeProjectId })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error'
+    if (msg === 'PROJECT_NOT_FOUND') {
+      return c.json({ error: { code: 'PROJECT_NOT_FOUND', message: 'Project not found' } }, 404)
+    }
+    if (msg === 'KIN_NOT_FOUND') {
+      return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Kin not found' } }, 404)
+    }
+    return c.json({ error: { code: 'INTERNAL', message: msg } }, 500)
+  }
 })
 
 // POST /api/kins/:id/mark-read — bump the lastReadAt marker for the current user

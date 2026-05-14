@@ -462,6 +462,137 @@ Permettre aux Kins de créer et gérer leurs propres outils.
 
 ---
 
+## Phase 26 — Projets & tickets
+
+Système de projets avec tickets organisés en kanban. Permet à n'importe quel Kin de la plateforme de travailler sur n'importe quel projet via un état `active_project_id` injecté dans son prompt, et d'exécuter des tickets via le mécanisme de tasks (sub-Kins) existant. Spec complète : `projects.md`.
+
+> **Préalable bloquant** : lift + rename du side panel existant (§ 26.0). Sans ce refactor, l'autre mode (Projets) ne peut pas accéder au panneau de détail task.
+
+### 26.0 — Pré-requis : lift + rename du side panel
+
+Le panneau latéral actuel ([`MiniAppContext`](../src/client/contexts/MiniAppContext.tsx) + [`MiniAppViewer`](../src/client/components/mini-app/MiniAppViewer.tsx)) héberge mini-apps et détail task via un système de tabs. Il vit dans `ChatPage` → `ChatPanel`, donc lié à la page Kins. On le lift au root et on le renomme pour refléter sa généralisation (mini-app + task + future ticket).
+
+**On ne crée pas un système Inspector parallèle** : on réutilise toute la mécanique existante (tabs, streaming SSE de `useTaskDetail`, panel rendering, etc.). Cf. `projects.md` § 11.1.
+
+- [ ] **26.0.1** Renommer le fichier `src/client/contexts/MiniAppContext.tsx` → `src/client/contexts/SidePanelContext.tsx`. Renommer dans le fichier : `MiniAppContext` → `SidePanelContext`, `MiniAppProvider` → `SidePanelProvider`, `useMiniAppPanel` → `useSidePanel`, `MiniAppContextValue` → `SidePanelContextValue`. Garder `TaskPanelInfo` tel quel (déjà bien nommé).
+- [ ] **26.0.2** Mettre à jour tous les imports : `ChatPage.tsx`, `ChatPanel.tsx`, `MiniAppViewer.tsx`, `TaskList.tsx`, `MessageBubble.tsx`, `CronDetailModal.tsx`, `TaskPanelContent.tsx` (et tout autre fichier qui apparaît au grep). Vérifier `bun run build` sans erreur TypeScript.
+- [ ] **26.0.3** Lifter `<SidePanelProvider>` de [`ChatPage.tsx:207`](../src/client/pages/chat/ChatPage.tsx#L207) vers [`App.tsx`](../src/client/App.tsx) (englober `<AppRoot />` ou les routes auth). Le provider doit englober TOUT ce qui est authentifié — login/onboarding/invite peuvent rester hors provider.
+- [ ] **26.0.4** **Lift partiel du Viewer** : `<MiniAppViewer />` reste rendu dans `ChatPanel.tsx`. ProjectsPage (Phase 26.6) le rendra aussi dans son propre layout. Justification : lifter au root nécessite de restructurer le layout shadcn `SidebarInset`/`h-svh` de ChatPage avec un risque de régression supérieur au gain (le polling fallback de `useTaskDetail` à 1Hz couvre les transitions de mode). Aucune action de code requise dans cette sous-tâche — c'est une décision documentée.
+- [ ] **26.0.5** Étendre `ActiveTab` dans `SidePanelContext` pour préparer le type `'ticket'` : `type ActiveTab = 'mini-app' | 'task' | 'ticket'`. Ajouter une signature `openTicket(info: TicketPanelInfo): void` au type, mais juste un stub qui no-op pour l'instant (le rendu et la logique viendront en Phase 26.7).
+- [ ] **26.0.6** Vérifier que les events SSE existants (`task:status`, `task:done`, `chat:token`, `chat:done`, etc.) continuent à mettre à jour le panel task. Le hook `useTaskDetail` reste inchangé, seul son hôte (le panel) change de position dans l'arbre.
+- [ ] **26.0.7** Vérifier que `openApp` reste invocable depuis la page Kins exclusivement (les boutons mini-apps ne sont rendus que dans `ChatPage`). Pas d'effort UX nécessaire — c'est juste une convention que la page ProjectsPage n'a pas de bouton `openApp`.
+- [ ] **26.0.8** Tests manuels : (a) ouvrir une task depuis un thread → side panel apparaît à droite, (b) fermer → disparaît, (c) ouvrir mini-app puis task → tabs fonctionnent, (d) ouvrir task et naviguer (route change vers settings ou autre) → panel survit, (e) vérifier que SSE streaming d'une task en cours met toujours à jour le panel.
+
+**Critère 26.0** : le side panel est invocable et survit aux changements de route. Le renommage est complet (zéro reference à `MiniAppContext`/`useMiniAppPanel` ailleurs que dans le fichier renommé). `bun run build` passe.
+
+### 26.1 — Schéma DB
+
+- [ ] **26.1.1** Ajouter dans `src/server/db/schema.ts` : tables `projects`, `project_tags`, `tickets`, `ticket_tags` conformes à `schema.md`
+- [ ] **26.1.2** Ajouter la colonne `active_project_id` (FK projects, ON DELETE SET NULL) à `kins`
+- [ ] **26.1.3** Ajouter la colonne `ticket_id` (FK tickets, ON DELETE SET NULL) à `tasks`
+- [ ] **26.1.4** Créer les index conformes à `schema.md` (`idx_projects_*`, `idx_project_tags_*`, `idx_tickets_*`, `idx_ticket_tags_*`, `idx_tasks_ticket`)
+- [ ] **26.1.5** Générer la migration Drizzle (`bun run db:generate`) et l'appliquer (`bun run db:migrate`)
+- [ ] **26.1.6** Ajouter `DEFAULT_PROJECT_TAGS` dans `src/shared/constants.ts` : `[{ label: 'bug', color: '#ef4444' }, { label: 'feature', color: '#3b82f6' }, { label: 'chore', color: '#6b7280' }, { label: 'doc', color: '#f59e0b' }]`
+- [ ] **26.1.7** Ajouter types `Project`, `ProjectTag`, `Ticket`, `TicketStatus` dans `src/shared/types.ts`
+- [ ] **26.1.8** Ajouter `projects.maxDescriptionPromptTokens` (8000), `projects.maxTicketsInPrompt` (50), `projects.kanbanPositionStep` (1024) dans `src/server/config.ts` et documenter dans `config.md`
+
+### 26.2 — Services backend
+
+- [ ] **26.2.1** Créer `src/server/services/projects.ts` — CRUD projets, application du seed `DEFAULT_PROJECT_TAGS` à la création, cap d'injection de description
+- [ ] **26.2.2** Créer `src/server/services/project-tags.ts` — CRUD tags (avec contrainte d'unicité `(project_id, label)`)
+- [ ] **26.2.3** Créer `src/server/services/tickets.ts` — CRUD tickets, calcul de `position` (max + 1024 sur changement de status), réordonnancement explicite
+- [ ] **26.2.4** Étendre `src/server/services/tasks.ts` :
+  - `start_ticket_task(ticket_id, kin_id)` qui spawn un sub-Kin avec `ticket_id` set et `mode = 'await'` hardcodé
+  - Validation : refuser explicitement toute tentative de spawn `async` quand `ticket_id !== null` (code d'erreur `TICKET_TASK_REQUIRES_AWAIT`)
+  - Sur task completion : (a) détecter `task.ticket_id !== null`, (b) calculer le `projectOverride` à passer au turn parent, (c) enrichir le contenu du `task_result` enqueué avec le rappel ticket-linked conforme à `prompt-system.md` [10] (préfixe historique + bloc `---` avec ticket info et instruction `update_ticket()`)
+  - Si le projet du ticket a été supprimé entre spawn et completion : pas de `projectOverride`, pas de rappel enrichi — message au format historique uniquement
+  - **Aucun side-effect sur le ticket** au spawn ni à la completion : le Kin gère manuellement le statut via `update_ticket` (cf. `prompt-system.md` bloc [6])
+- [ ] **26.2.5** Étendre `src/server/services/prompt-builder.ts` :
+  - Bloc `[7.8] Active project` injecté dans `volatileBlocks` quand `kins.active_project_id` ou `projectOverride` est résolu
+  - Bloc `## Ticket assignment` injecté dans `stableBlocks` du sub-Kin quand `task.ticket_id !== null`
+  - Cap 8000 tokens sur la description, avec mention `[Description truncated — call get_project()...]`
+  - Cap 50 tickets max dans la liste injectée, avec mention `... and N more`
+- [ ] **26.2.6** Étendre `buildSystemPrompt()` pour accepter `projectOverride?: { projectId: string }` (cas turn task-completed)
+- [ ] **26.2.7** Tests : compacting/cache ne devrait pas exploser quand un projet avec grosse description est actif (vérifier l'invalidation cache limitée au segment volatile)
+
+### 26.3 — Outils natifs Kin
+
+- [ ] **26.3.1** Créer `src/server/tools/project-tools.ts` avec tous les outils listés dans `projects.md` § 3
+- [ ] **26.3.2** Outils projet : `list_projects` (readOnly, concurrencySafe), `get_project` (readOnly, concurrencySafe), `create_project`, `update_project`, `delete_project` (destructive)
+- [ ] **26.3.3** Outils description : `update_project_description`, `append_project_description`, `patch_project_description` (avec erreur si `find` ambigu)
+- [ ] **26.3.4** Outils tags : `create_tag`, `update_tag`, `delete_tag` (destructive)
+- [ ] **26.3.5** Outils tickets : `list_tickets` (readOnly, concurrencySafe), `get_ticket` (readOnly, concurrencySafe), `create_ticket`, `update_ticket`, `add_ticket_tag`, `remove_ticket_tag`, `delete_ticket` (destructive)
+- [ ] **26.3.6** Outil `set_active_project(project_id | null)` qui modifie `kins.active_project_id` du Kin appelant et émet `kin:active-project` en SSE
+- [ ] **26.3.7** Outil `start_ticket_task(ticket_id)` (pas de param `mode` exposé, await hardcodé) qui s'appuie sur le service tasks étendu (§ 26.2.4)
+- [ ] **26.3.8** Enregistrer tous les outils dans `src/server/tools/register.ts` et `src/server/tools/index.ts`
+- [ ] **26.3.9** Implémenter la **conditionnalité sub-Kin** : quand `task.ticket_id !== null`, étendre le toolset du sub-Kin avec le sous-ensemble projet/ticket (sans `delete_*`, `create_project`, `create_ticket`, `set_active_project`), conformément à `prompt-system.md` [12]
+
+### 26.4 — Routes API
+
+- [ ] **26.4.1** Créer `src/server/routes/projects.ts` : `GET /api/projects`, `GET /api/projects/:id`, `POST /api/projects`, `PATCH /api/projects/:id`, `DELETE /api/projects/:id`
+- [ ] **26.4.2** Routes tags : `GET /api/projects/:projectId/tags`, `POST /api/projects/:projectId/tags`, `PATCH /api/tags/:id`, `DELETE /api/tags/:id` (mêmes fichiers ou un fichier dédié `project-tags.ts`)
+- [ ] **26.4.3** Créer `src/server/routes/tickets.ts` : `GET /api/projects/:projectId/tickets`, `GET /api/tickets/:id`, `POST /api/projects/:projectId/tickets`, `PATCH /api/tickets/:id`, `DELETE /api/tickets/:id`, `POST /api/tickets/:id/start-task`
+- [ ] **26.4.4** Ajouter `PATCH /api/kins/:id/active-project` dans `src/server/routes/kins.ts`
+- [ ] **26.4.5** Émettre les events SSE conformes à `api.md` : `kin:active-project`, `project:created/updated/deleted`, `ticket:created/updated/deleted`, `project-tag:created/updated/deleted`
+- [ ] **26.4.6** Étendre les payloads SSE `task:*` pour exposer `ticketId` (utilisé par le frontend pour filtrer les tasks liées aux tickets)
+- [ ] **26.4.7** Vérifier le hard delete avec cascade : suppression projet → tickets / tags supprimés, `kins.active_project_id` mis à NULL, `tasks.ticket_id` mis à NULL
+
+### 26.5 — Activity bar et navigation globale
+
+- [ ] **26.5.1** Créer `src/client/components/layout/ActivityBar.tsx` — bande verticale à l'extrême gauche (~48-56 px), 2 icônes : Kins, Projets
+- [ ] **26.5.2** Créer `src/client/hooks/useActivityBar.ts` — store global de l'onglet actif
+- [ ] **26.5.3** Refactor du layout racine pour intégrer ActivityBar à gauche, sidebar contextuelle au milieu, vue principale, et le side panel global (`<MiniAppViewer />` déjà lifté en § 26.0) à droite — tous au plus haut niveau du layout
+- [ ] **26.5.4** Router : ajouter `/projects` (liste / pas-de-projet-sélectionné) et `/projects/:id` (kanban d'un projet)
+- [ ] **26.5.5** Badges de notification sur les icônes inactives de l'activity bar (compteur d'événements non lus côté Kin ou Projets)
+
+### 26.6 — Page Projets et kanban
+
+- [ ] **26.6.1** Créer `src/client/pages/projects/ProjectsPage.tsx` — layout sidebar projets + vue principale (kanban si un projet est sélectionné)
+- [ ] **26.6.2** Créer `src/client/components/sidebar/ProjectsSidebar.tsx` — liste projets triée par `updated_at DESC`, compteur tickets ouverts, pastille pour les Kins ayant ce projet en actif, bouton "+ Nouveau projet"
+- [ ] **26.6.3** Choisir et installer la lib drag-drop (recommandé : `dnd-kit`)
+- [ ] **26.6.4** Créer `src/client/components/project/ProjectKanban.tsx` — 5 colonnes (Backlog / À faire / En cours / Bloqué / Terminé) avec drag-drop entre colonnes
+- [ ] **26.6.5** Créer `src/client/components/project/TicketColumn.tsx` et `src/client/components/project/TicketCard.tsx`
+- [ ] **26.6.6** Créer `src/client/components/project/CreateProjectModal.tsx`
+- [ ] **26.6.7** Créer `src/client/components/project/CreateTicketModal.tsx`
+- [ ] **26.6.8** Créer `src/client/components/project/TagPicker.tsx` — multi-select avec création inline d'un nouveau tag (label + color picker)
+- [ ] **26.6.9** Créer `src/client/components/project/StartTaskDialog.tsx` — dropdown Kins avec pré-sélection du premier Kin ayant `active_project_id` matchant
+- [ ] **26.6.10** Hooks `useProjects.ts` et `useTickets.ts` avec invalidation par SSE
+- [ ] **26.6.11** Optimistic updates sur drag-drop (rollback en cas d'erreur réseau)
+
+### 26.7 — Side panel tab `'ticket'`
+
+- [ ] **26.7.1** Créer `src/client/components/sidebar/TicketPanelContent.tsx` — symétrique à `TaskPanelContent.tsx`, rendu quand `activeTab === 'ticket'` dans le side panel
+- [ ] **26.7.2** Étendre `MiniAppViewer.tsx` pour router vers `<TicketPanelContent />` quand `activeTab === 'ticket'`
+- [ ] **26.7.3** Implémenter l'API `openTicket(info: { ticketId: string, parent?: { type: 'task' | 'ticket', id: string } })` dans `SidePanelContext` (stub posé en § 26.0.5 à compléter)
+- [ ] **26.7.4** Pattern single-slot avec retour parent : si `info.parent` est posé, le header du panel affiche un bouton `← Retour au {parent.type} #{parent.id}`. Le clic fait `openTask({ ..., parent: undefined })` ou `openTicket({ ..., parent: undefined })` selon le type. Profondeur 1 max.
+- [ ] **26.7.5** Édition inline du ticket dans `TicketPanelContent` (titre, description, tags) avec sauvegarde via PATCH
+- [ ] **26.7.6** Liste des tasks liées au ticket avec badge Kin parent + status + lien `→ Voir thread Kin Alpha` (bascule mode Kins) ou clic carte → `openTask({ taskId, parent: { type: 'ticket', id: ticketId } })`
+- [ ] **26.7.7** Bouton "▶ Démarrer une task" dans le header `TicketPanelContent` qui ouvre `StartTaskDialog`
+
+### 26.8 — Cross-linking entre modes
+
+- [ ] **26.8.1** Chip "Projet actif: ✦ {title}" dans le header du thread Kin (mode Kins) — clic = bascule mode Projets sur ce projet
+- [ ] **26.8.2** Chip "Kins actifs ici: Alpha, Beta" dans le header du kanban — clic = bascule mode Kins sur le Kin sélectionné
+- [ ] **26.8.3** SSE : mise à jour des chips quand `kin:active-project` arrive
+- [ ] **26.8.4** **(Optionnel, peut être différé)** Auto-link `[#abc12]` dans `MarkdownContent.tsx` qui ouvre le side panel sur le ticket correspondant (`openTicket({ ticketId })`)
+
+### 26.9 — i18n
+
+- [ ] **26.9.1** Ajouter le namespace `projects.*` dans `src/client/locales/en.json`
+- [ ] **26.9.2** Ajouter les traductions correspondantes dans `src/client/locales/fr.json`
+- [ ] **26.9.3** Vérifier que toute la nouvelle UI passe par `t(...)` (aucun texte en dur)
+
+**Critère de validation Phase 26** :
+1. Création / suppression d'un projet via UI fonctionne ; le seed de tags par défaut est appliqué
+2. Création / modification / drag-drop d'un ticket dans le kanban fonctionne et émet les events SSE
+3. Un Kin qui appelle `set_active_project(id)` voit son contexte de prompt enrichi au prochain tour ; l'UI synchronise les chips
+4. `start_ticket_task` spawn un sub-Kin dont le prompt système contient le bloc `## Ticket assignment` à jour
+5. À la fin d'une task liée à un ticket, le turn de réaction chez le Kin parent voit le bloc `[7.8] Active project` injecté en `projectOverride` même si le projet actif persistant a changé entre-temps
+6. Suppression d'un projet → confirmation modal → cascade tickets/tags ; les Kins concernés voient `active_project_id` mis à NULL ; les tasks historiques conservent leur ID mais avec `ticket_id` = NULL
+7. Le mode Projets et le mode Kins coexistent avec navigation fluide via l'activity bar et le side panel global ; clic sur une task depuis le kanban ouvre le side panel sans basculer de mode
+
+---
+
 ## Résumé des dépendances entre phases
 
 ```
@@ -496,6 +627,7 @@ Phase 22 (i18n) — peut commencer dès Phase 8
 Phase 23 (Dark mode) — déjà couvert par Phase 0.5 (tokens + toggle), compléter si besoin
 Phase 24 (Polish) — après toutes les phases fonctionnelles
 Phase 25 (Docker) — en parallèle dès Phase 9
+Phase 26 (Projets & tickets) — après Phase 15 (Tasks) ; nécessite lift + rename du side panel (§ 26.0) comme pré-requis bloquant pour tout code projet
 ```
 
 ---

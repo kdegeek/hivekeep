@@ -12,6 +12,7 @@ interface KinSummary {
   avatarUrl: string | null
   model: string
   providerId: string | null
+  activeProjectId: string | null
   createdAt: string
   isHub: boolean
   thinkingEnabled: boolean
@@ -146,6 +147,7 @@ export function useKins() {
         role: data.role as string,
         model: data.model as string,
         providerId: (data.providerId as string | null) ?? null,
+        activeProjectId: (data.activeProjectId as string | null) ?? null,
         avatarUrl: (data.avatarUrl as string | null) ?? null,
         createdAt: data.createdAt as string,
         isHub: false,
@@ -228,6 +230,11 @@ export function useKins() {
       setKins((prev) =>
         prev.map((k) => ({ ...k, isHub: k.id === newHubKinId })),
       )
+    },
+    'kin:active-project': (data) => {
+      const kinId = data.kinId as string
+      const activeProjectId = (data.activeProjectId as string | null) ?? null
+      setKins((prev) => prev.map((k) => (k.id === kinId ? { ...k, activeProjectId } : k)))
     },
   })
 

@@ -638,3 +638,63 @@ export interface UsageSummaryRow {
   billableInputTokens: number
   count: number
 }
+
+// ─── Projects & tickets ────────────────────────────────────────────────────────
+
+export type TicketStatus = 'backlog' | 'todo' | 'in_progress' | 'blocked' | 'done'
+
+export interface ProjectTag {
+  id: string
+  label: string
+  color: string
+}
+
+export interface ProjectSummary {
+  id: string
+  title: string
+  githubUrl: string | null
+  ticketCount: number
+  openTicketCount: number
+  createdAt: number
+  updatedAt: number
+}
+
+export interface Project {
+  id: string
+  title: string
+  description: string
+  githubUrl: string | null
+  tags: ProjectTag[]
+  ticketCounts: Record<TicketStatus, number>
+  createdAt: number
+  updatedAt: number
+}
+
+export interface TicketSummary {
+  id: string
+  projectId: string
+  title: string
+  description: string
+  status: TicketStatus
+  position: number
+  tags: ProjectTag[]
+  taskCount: number
+  runningTaskCount: number
+  createdAt: number
+  updatedAt: number
+}
+
+export interface TicketTaskSummary {
+  id: string
+  parentKinId: string
+  parentKinName: string
+  status: TaskStatus
+  mode: TaskMode
+  createdAt: number
+  updatedAt: number
+}
+
+export interface Ticket extends Omit<TicketSummary, 'description'> {
+  description: string
+  tasks: TicketTaskSummary[]
+}
