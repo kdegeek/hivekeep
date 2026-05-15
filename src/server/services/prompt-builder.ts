@@ -562,12 +562,12 @@ function buildSystemContextBlock(ctx: SystemContext, workspacePath?: string): st
     `- Platform: ${ctx.platform} (${ctx.arch})`,
   ]
   if (workspacePath) {
-    lines.push(`- Workspace: ${workspacePath} (default cwd for run_shell)`)
+    lines.push(`- Workspace: ${workspacePath} (default cwd for run_shell — pass it via the \`cwd\` parameter, not via \`cd ... &&\` prefixes)`)
   }
   lines.push(`- Available CLIs in run_shell: ${runtimesLine}`)
   lines.push('')
   lines.push(
-    '> This list is authoritative — do NOT probe versions, PATH, or available binaries manually. Call `run_shell` directly with the commands above.',
+    '> The list above is the runner\'s own login-shell PATH. `run_shell` already inherits these directories — call the binary directly. **Never** probe with `which`, `command -v`, `find / -name <tool>`, `ls ~/.bun/bin`, or fallback chains like `export PATH=...`; the result will not change. If the tool you need is missing from the list, attempt the command anyway and trust the exit code — do NOT search for it.',
   )
   return lines.join('\n')
 }
