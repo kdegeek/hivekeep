@@ -54,6 +54,11 @@ export const CORE_TOOLS: readonly string[] = [
   // back to the user without going through write_file + a separate channel
   // call).
   'attach_file',
+
+  // Reasoning aid (no-op tool that logs a thought). Cheap, no side effects,
+  // available to every sub-Kin regardless of preset so it can be leaned on
+  // for planning before committing to concrete tool calls.
+  'think',
 ]
 
 const PRESETS: Record<Exclude<SubKinPreset, 'all'>, PresetConfig> = {

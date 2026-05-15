@@ -713,7 +713,8 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `- **Use \`multi_edit\` for >1 change to the same file.** Never chain multiple \`edit_file\` calls on the same path.\n` +
       `- **Fan out independent reads in one step.** \`read_file\`, \`grep\`, \`list_directory\` are parallel-safe — emit several tool calls in the same assistant turn rather than waiting for each result.\n` +
       `- **Broaden before narrowing.** One \`grep\` with regex alternation \`(foo|bar|baz)\` or a wider pattern beats three sequential narrow greps. Refine only if the first pass returns too much.\n` +
-      `- **Never bypass safety.** Do NOT use \`--no-verify\`, \`--no-gpg-sign\`, \`git reset --hard\`, \`git push --force\`, or push directly to protected branches without explicit authorization in your mission. If a hook fails, fix the underlying issue.\n\n` +
+      `- **Never bypass safety.** Do NOT use \`--no-verify\`, \`--no-gpg-sign\`, \`git reset --hard\`, \`git push --force\`, or push directly to protected branches without explicit authorization in your mission. If a hook fails, fix the underlying issue.\n` +
+      `- **Plan with \`think\` when you're about to thrash.** When the next move isn't obvious (failing test, ambiguous results, choosing between refactors), call the \`think\` tool with a paragraph or two of reasoning instead of issuing speculative reads. It has no side effects; it just makes your plan visible to the user and to yourself on the next step.\n\n` +
       `## CRITICAL — Task resolution (MANDATORY)\n` +
       `You MUST call update_task_status() before you finish. There is no auto-completion.\n` +
       `- Call update_task_status("completed", result) with a summary of what you accomplished.\n` +

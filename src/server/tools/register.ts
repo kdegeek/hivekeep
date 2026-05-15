@@ -212,6 +212,7 @@ import {
 } from '@/server/tools/filesystem-tools'
 import { grepTool } from '@/server/tools/grep-tools'
 import { multiEditTool } from '@/server/tools/multi-edit-tools'
+import { thinkTool } from '@/server/tools/think-tool'
 import {
   listInstalledPluginsTool,
   browsePluginStoreTool,
@@ -479,6 +480,9 @@ export function registerAllTools(): void {
   toolRegistry.register('multi_edit', multiEditTool)
   toolRegistry.register('list_directory', listDirectoryTool)
   toolRegistry.register('grep', grepTool)
+
+  // Reasoning aid: free-form thought logger, no side effects.
+  toolRegistry.register('think', thinkTool)
 
   // Knowledge base tools (main only)
   toolRegistry.register('search_knowledge', searchKnowledgeTool)
