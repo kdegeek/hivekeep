@@ -11,6 +11,7 @@ import { CreateProjectModal } from '@/client/components/project/CreateProjectMod
 import { CreateTicketModal } from '@/client/components/project/CreateTicketModal'
 import { EditProjectModal } from '@/client/components/project/EditProjectModal'
 import { ActiveKinsIndicator } from '@/client/components/project/ActiveKinsIndicator'
+import { EmptyState } from '@/client/components/common/EmptyState'
 import { getErrorMessage } from '@/client/lib/api'
 import { toast } from 'sonner'
 
@@ -76,13 +77,15 @@ export function ProjectsPage() {
 
       <main className="flex-1 overflow-hidden">
         {!routeProjectId && projects.length === 0 && !isLoading && (
-          <div className="flex h-full items-center justify-center">
-            <div className="text-center">
-              <Kanban className="mx-auto mb-4 size-12 text-muted-foreground" strokeWidth={1.5} />
-              <h2 className="text-lg font-semibold">{t('projects.empty.title')}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {t('projects.empty.description')}
-              </p>
+          <div className="flex h-full items-center justify-center p-6">
+            <div className="w-full max-w-md">
+              <EmptyState
+                icon={Kanban}
+                title={t('projects.empty.title')}
+                description={t('projects.empty.description')}
+                actionLabel={t('projects.sidebar.create')}
+                onAction={() => setCreateOpen(true)}
+              />
             </div>
           </div>
         )}
