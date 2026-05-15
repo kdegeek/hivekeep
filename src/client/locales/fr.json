@@ -2382,7 +2382,14 @@
       "searchPlaceholder": "Filtrer par titre ou tag…",
       "searchClear": "Effacer la recherche",
       "searchResults_one": "{{count}} résultat",
-      "searchResults_other": "{{count}} résultats"
+      "searchResults_other": "{{count}} résultats",
+      "empty": {
+        "backlog": "Les idées atterrissent ici. Capture-les maintenant, plannifie après.",
+        "todo": "Prêt à démarrer ? Glisse-y les tickets quand tu t'engages.",
+        "in_progress": "Le travail actif s'affiche ici.",
+        "blocked": "Bloqué ? Dépose-le ici pour qu'il reste visible.",
+        "done": "Les tickets terminés s'empilent ici."
+      }
     },
     "status": {
       "backlog": "Backlog",

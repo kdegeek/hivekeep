@@ -2381,7 +2381,14 @@
       "searchPlaceholder": "Filter tickets by title or tag…",
       "searchClear": "Clear search",
       "searchResults_one": "{{count}} match",
-      "searchResults_other": "{{count}} matches"
+      "searchResults_other": "{{count}} matches",
+      "empty": {
+        "backlog": "Ideas land here. Capture them now, plan them later.",
+        "todo": "Ready to start? Drag tickets here when committed.",
+        "in_progress": "Active work shows up here.",
+        "blocked": "Stuck? Drop blocked tickets here so they stay visible.",
+        "done": "Completed tickets pile up here."
+      }
     },
     "status": {
       "backlog": "Backlog",
