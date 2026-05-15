@@ -189,6 +189,11 @@ export function initVirtualTables() {
 
   // Backfill slugs for existing kins that don't have one
   backfillSlugs()
+  // Backfill project slugs + ticket numbers for the project/ticket tables
+  // introduced before migration 0060 (both columns are nullable for legacy
+  // rows; the application layer expects them to be set everywhere).
+  backfillProjectSlugs()
+  backfillTicketNumbers()
 }
 
 /**
@@ -216,4 +221,79 @@ function backfillSlugs() {
   }
 
   log.info({ count: kinsWithoutSlug.length }, 'Backfilled slugs for existing kins')
+}
+
+/**
+ * Backfill `projects.slug` for any project row that pre-dates migration 0060.
+ * Slugs are derived from the title, clamped to the project regex (2-32 chars,
+ * starts with a letter), and de-duplicated with `-2`, `-3` suffixes.
+ */
+function backfillProjectSlugs() {
+  const rows = sqlite.query<{ id: string; title: string }, []>(
+    'SELECT id, title FROM projects WHERE slug IS NULL OR slug = \'\''
+  ).all()
+
+  if (rows.length === 0) return
+
+  const existing = new Set(
+    sqlite.query<{ slug: string }, []>(
+      'SELECT slug FROM projects WHERE slug IS NOT NULL AND slug != \'\''
+    ).all().map((r) => r.slug),
+  )
+
+  // Project slugs are tighter than the kin slug rule (must start with a letter,
+  // 2-32 chars). Normalize defensively: strip leading digits/hyphens, cap length.
+  function normalize(raw: string): string {
+    let s = (raw || '').replace(/^[^a-z]+/, '').replace(/-+$/, '')
+    if (s.length < 2) s = 'project'
+    if (s.length > 32) s = s.substring(0, 32).replace(/-+$/, '')
+    return s
+  }
+
+  for (const row of rows) {
+    const base = normalize(generateSlug(row.title))
+    const slug = ensureUniqueSlug(base, existing)
+    existing.add(slug)
+    sqlite.run('UPDATE projects SET slug = ? WHERE id = ?', [slug, row.id])
+  }
+
+  log.info({ count: rows.length }, 'Backfilled slugs for existing projects')
+}
+
+/**
+ * Backfill `tickets.number` for any ticket row that pre-dates migration 0060.
+ * Numbers are assigned per project in `createdAt ASC` order, starting at 1 and
+ * continuing past whatever max(number) already exists in the column (a previous
+ * partial run, for instance).
+ */
+function backfillTicketNumbers() {
+  // Group projects with at least one un-numbered ticket.
+  const projectsWithGaps = sqlite.query<{ project_id: string }, []>(
+    'SELECT DISTINCT project_id FROM tickets WHERE number IS NULL'
+  ).all()
+
+  if (projectsWithGaps.length === 0) return
+
+  let totalAssigned = 0
+  for (const { project_id: projectId } of projectsWithGaps) {
+    const maxRow = sqlite.query<{ n: number | null }, [string]>(
+      'SELECT MAX(number) as n FROM tickets WHERE project_id = ?'
+    ).get(projectId)
+    let next = (maxRow?.n ?? 0) + 1
+
+    const ticketRows = sqlite.query<{ id: string }, [string]>(
+      'SELECT id FROM tickets WHERE project_id = ? AND number IS NULL ORDER BY created_at ASC, id ASC'
+    ).all(projectId)
+
+    for (const t of ticketRows) {
+      sqlite.run('UPDATE tickets SET number = ? WHERE id = ?', [next, t.id])
+      next++
+      totalAssigned++
+    }
+  }
+
+  log.info(
+    { count: totalAssigned, projects: projectsWithGaps.length },
+    'Backfilled numbers for existing tickets',
+  )
 }

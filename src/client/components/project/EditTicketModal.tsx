@@ -121,7 +121,17 @@ export function EditTicketModal({ open, onOpenChange, ticket, availableTags, onS
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{t('projects.ticket.edit.title')}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              {ticket.number !== null && ticket.number !== undefined && (
+                <span
+                  className="font-mono text-xs font-normal text-muted-foreground"
+                  aria-label={`Ticket #${ticket.number}`}
+                >
+                  #{ticket.number}
+                </span>
+              )}
+              <span>{t('projects.ticket.edit.title')}</span>
+            </DialogTitle>
             <DialogDescription>{t('projects.ticket.edit.description')}</DialogDescription>
           </DialogHeader>
 

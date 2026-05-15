@@ -1,11 +1,16 @@
 import { eq, and, inArray, max, count, desc } from 'drizzle-orm'
 import { v4 as uuid } from 'uuid'
-import { db } from '@/server/db/index'
+import { db, sqlite } from '@/server/db/index'
 import { tickets, ticketTags, projectTags, projects, tasks, kins, user, userProfiles } from '@/server/db/schema'
 import { sseManager } from '@/server/sse/index'
 import { config } from '@/server/config'
 import { TICKET_STATUSES } from '@/shared/constants'
 import { spawnTask } from '@/server/services/tasks'
+import {
+  parseTicketRef,
+  ticketResolutionMessage,
+  type TicketResolutionErrorCode,
+} from '@/server/utils/ticket-ref'
 import type {
   Ticket,
   TicketStatus,
@@ -191,6 +196,7 @@ async function rowToTicketSummary(
   return {
     id: row.id,
     projectId: row.projectId,
+    number: row.number ?? null,
     title: row.title,
     description: row.description,
     status: row.status as TicketStatus,
@@ -203,6 +209,118 @@ async function rowToTicketSummary(
     createdAt: toMillis(row.createdAt),
     updatedAt: toMillis(row.updatedAt),
   }
+}
+
+// ─── Reference resolution (UUID / slug#N / #N) ────────────────────────────────
+
+/** Result of resolving a ticket reference. On success, `ticketId` is the UUID
+ *  callers can pass to any of the existing UUID-keyed service functions. */
+export type ResolveTicketRefResult =
+  | { ok: true; ticketId: string }
+  | { ok: false; code: TicketResolutionErrorCode; message: string }
+
+/** Resolve a free-form ticket reference (UUID, `slug#N`, or bare `#N` / `N`)
+ *  to a ticket UUID using the database.
+ *
+ *  - UUID: direct lookup.
+ *  - `slug#N`: look up the project by slug, then the ticket by (project, number).
+ *  - bare `#N`/`N`: requires an `activeProjectId` argument. Resolved against
+ *    that project's tickets table.
+ *
+ *  All failure modes return a structured `{ code, message }` for tools to
+ *  surface — never throws on a missing project/ticket. */
+export async function resolveTicketRef(
+  raw: string,
+  ctx: { activeProjectId?: string | null } = {},
+): Promise<ResolveTicketRefResult> {
+  const parsed = parseTicketRef(raw)
+  if (parsed.kind === 'invalid') {
+    return {
+      ok: false,
+      code: 'INVALID_TICKET_REF',
+      message: ticketResolutionMessage('INVALID_TICKET_REF', { raw: parsed.raw }),
+    }
+  }
+
+  if (parsed.kind === 'uuid') {
+    const row = db.select({ id: tickets.id }).from(tickets).where(eq(tickets.id, parsed.id)).get()
+    if (!row) {
+      return {
+        ok: false,
+        code: 'TICKET_NOT_FOUND',
+        message: ticketResolutionMessage('TICKET_NOT_FOUND'),
+      }
+    }
+    return { ok: true, ticketId: row.id }
+  }
+
+  if (parsed.kind === 'qualified') {
+    const project = db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.slug, parsed.slug))
+      .get()
+    if (!project) {
+      return {
+        ok: false,
+        code: 'PROJECT_NOT_FOUND',
+        message: ticketResolutionMessage('PROJECT_NOT_FOUND', { slug: parsed.slug }),
+      }
+    }
+    const ticket = db
+      .select({ id: tickets.id })
+      .from(tickets)
+      .where(and(eq(tickets.projectId, project.id), eq(tickets.number, parsed.number)))
+      .get()
+    if (!ticket) {
+      return {
+        ok: false,
+        code: 'TICKET_NOT_FOUND',
+        message: ticketResolutionMessage('TICKET_NOT_FOUND', {
+          slug: parsed.slug,
+          number: parsed.number,
+        }),
+      }
+    }
+    return { ok: true, ticketId: ticket.id }
+  }
+
+  // Bare number: needs an active project context.
+  if (!ctx.activeProjectId) {
+    return {
+      ok: false,
+      code: 'NO_ACTIVE_PROJECT',
+      message: ticketResolutionMessage('NO_ACTIVE_PROJECT'),
+    }
+  }
+  const project = db
+    .select({ id: projects.id, slug: projects.slug })
+    .from(projects)
+    .where(eq(projects.id, ctx.activeProjectId))
+    .get()
+  if (!project) {
+    return {
+      ok: false,
+      code: 'PROJECT_NOT_FOUND',
+      message: ticketResolutionMessage('PROJECT_NOT_FOUND', { slug: '' }),
+    }
+  }
+  const ticket = db
+    .select({ id: tickets.id })
+    .from(tickets)
+    .where(and(eq(tickets.projectId, project.id), eq(tickets.number, parsed.number)))
+    .get()
+  if (!ticket) {
+    return {
+      ok: false,
+      code: 'TICKET_NOT_FOUND',
+      message: ticketResolutionMessage('TICKET_NOT_FOUND', {
+        slug: project.slug ?? undefined,
+        number: parsed.number,
+      }),
+    }
+  }
+  return { ok: true, ticketId: ticket.id }
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -315,6 +433,7 @@ export async function getTicket(ticketId: string): Promise<Ticket | null> {
   return {
     id: row.id,
     projectId: row.projectId,
+    number: row.number ?? null,
     title: row.title,
     description: row.description,
     status: row.status as TicketStatus,
@@ -389,20 +508,35 @@ export async function createTicket(input: CreateTicketInput): Promise<TicketSumm
   const reporterUserId = input.reporter?.type === 'user' ? input.reporter.id : null
   const reporterKinId = input.reporter?.type === 'kin' ? input.reporter.id : null
 
-  db.insert(tickets)
-    .values({
-      id,
-      projectId: input.projectId,
-      title: input.title,
-      description: input.description ?? '',
-      status,
-      position,
-      reporterUserId,
-      reporterKinId,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .run()
+  // Allocate the per-project monotonic number atomically.
+  // SQLite serializes writers so MAX(...)+1 inside a single tx is race-safe;
+  // the unique index (project_id, number) is the ultimate safeguard.
+  let allocatedNumber = 0
+  const txn = sqlite.transaction(() => {
+    const maxRow = sqlite
+      .query<{ n: number | null }, [string]>(
+        'SELECT MAX(number) as n FROM tickets WHERE project_id = ?',
+      )
+      .get(input.projectId)
+    allocatedNumber = (maxRow?.n ?? 0) + 1
+
+    db.insert(tickets)
+      .values({
+        id,
+        projectId: input.projectId,
+        number: allocatedNumber,
+        title: input.title,
+        description: input.description ?? '',
+        status,
+        position,
+        reporterUserId,
+        reporterKinId,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run()
+  })
+  txn()
 
   if (input.tagIds && input.tagIds.length > 0) {
     await setTicketTags(id, input.tagIds)
@@ -413,6 +547,7 @@ export async function createTicket(input: CreateTicketInput): Promise<TicketSumm
   const summary: TicketSummary = {
     id,
     projectId: input.projectId,
+    number: allocatedNumber,
     title: input.title,
     description: input.description ?? '',
     status,
@@ -569,11 +704,13 @@ export async function buildTicketAssignmentInfo(ticketId: string): Promise<Ticke
 
   return {
     ticketId: ticket.id,
+    ticketNumber: ticket.number ?? null,
     ticketTitle: ticket.title,
     ticketDescription: ticket.description,
     ticketStatus: ticket.status,
     ticketTags: tagLabels,
     projectId: project.id,
+    projectSlug: project.slug ?? '',
     projectTitle: project.title,
     projectDescription: project.description,
     projectGithubUrl: project.githubUrl,

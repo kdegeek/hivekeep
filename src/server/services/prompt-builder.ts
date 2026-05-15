@@ -551,6 +551,7 @@ function buildTicketAssignmentBlock(info: TicketAssignmentInfo): string {
   sections.push('You are executing a delegated task for a specific ticket.')
 
   let projectHeader = `Title: ${info.projectTitle}`
+  if (info.projectSlug) projectHeader += `\nSlug: ${info.projectSlug}`
   if (info.projectGithubUrl) projectHeader += `\nGitHub: ${info.projectGithubUrl}`
   const projectDesc = info.projectDescription.trim().length > 0
     ? `\n\nDescription:\n${info.projectDescription}`
@@ -561,9 +562,19 @@ function buildTicketAssignmentBlock(info: TicketAssignmentInfo): string {
   const descriptionLine = info.ticketDescription.trim().length > 0
     ? `\n\nDescription:\n${info.ticketDescription}`
     : ''
+  // Compose a human-readable identifier preferring `slug#N`, falling back to
+  // bare `#N`, falling back to nothing when neither is set yet (legacy rows).
+  const idParts: string[] = []
+  if (info.ticketNumber !== null && info.projectSlug) {
+    idParts.push(`Id: ${info.projectSlug}#${info.ticketNumber}`)
+  } else if (info.ticketNumber !== null) {
+    idParts.push(`Id: #${info.ticketNumber}`)
+  }
+  const idLine = idParts.length > 0 ? `${idParts.join('\n')}\n` : ''
   sections.push(
     `### Ticket you are working on\n\n` +
     `Title: ${info.ticketTitle}\n` +
+    `${idLine}` +
     `Status: ${info.ticketStatus}${tagsLine}${descriptionLine}`,
   )
 

@@ -652,6 +652,9 @@ export interface ProjectTag {
 
 export interface ProjectSummary {
   id: string
+  /** Stable, human-readable identifier used to qualify ticket numbers (e.g.
+   *  `kinbot#42`). Empty string ('') for legacy rows pre-dating the backfill. */
+  slug: string
   title: string
   githubUrl: string | null
   ticketCount: number
@@ -662,6 +665,8 @@ export interface ProjectSummary {
 
 export interface Project {
   id: string
+  /** Human-readable identifier — see ProjectSummary.slug. */
+  slug: string
   title: string
   description: string
   githubUrl: string | null
@@ -687,6 +692,10 @@ export type TicketReporter =
 export interface TicketSummary {
   id: string
   projectId: string
+  /** Per-project monotonic ticket number (`#42`). Null for legacy rows still
+   *  awaiting the startup backfill — never null for tickets created via
+   *  createTicket() once the slug/number feature shipped. */
+  number: number | null
   title: string
   description: string
   status: TicketStatus

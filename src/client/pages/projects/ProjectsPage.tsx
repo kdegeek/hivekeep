@@ -111,7 +111,17 @@ export function ProjectsPage() {
           <div className="flex h-full flex-col">
             <header className="flex items-start gap-3 border-b border-border px-4 py-3">
               <div className="min-w-0 flex-1">
-                <h1 className="truncate text-base font-semibold">{project.title}</h1>
+                <div className="flex items-baseline gap-2">
+                  <h1 className="truncate text-base font-semibold">{project.title}</h1>
+                  {project.slug && (
+                    <span
+                      className="shrink-0 font-mono text-[11px] text-muted-foreground"
+                      title={`Slug: ${project.slug} — use as 'projectSlug#number' to qualify tickets`}
+                    >
+                      {project.slug}
+                    </span>
+                  )}
+                </div>
                 {project.description && (
                   <p className="line-clamp-2 max-w-3xl text-xs text-muted-foreground">
                     {project.description}
