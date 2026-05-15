@@ -2371,7 +2371,9 @@
     "sidebar": {
       "title": "Projets",
       "create": "Nouveau projet",
-      "empty": "Aucun projet pour le moment. Crée ton premier projet pour démarrer."
+      "empty": "Aucun projet pour le moment. Crée ton premier projet pour démarrer.",
+      "emptyTitle": "Aucun projet",
+      "emptyDescription": "Regroupe tes tickets, lance des tâches et suis le travail de tes Kins."
     },
     "empty": {
       "title": "Aucun projet",

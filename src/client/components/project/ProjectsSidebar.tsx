@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Kanban, Plus, Pencil } from 'lucide-react'
 import { Button } from '@/client/components/ui/button'
+import { EmptyState } from '@/client/components/common/EmptyState'
 import { ActiveKinsIndicator } from '@/client/components/project/ActiveKinsIndicator'
 import { cn } from '@/client/lib/utils'
 import type { ProjectSummary } from '@/shared/types'
@@ -28,10 +29,14 @@ export function ProjectsSidebar({ projects, selectedId, onSelect, onCreate, onEd
       </header>
       <div className="flex-1 overflow-y-auto p-2">
         {sorted.length === 0 && (
-          <div className="px-3 py-8 text-center text-sm text-muted-foreground">
-            <Kanban className="mx-auto mb-2 size-8 opacity-50" strokeWidth={1.5} />
-            {t('projects.sidebar.empty')}
-          </div>
+          <EmptyState
+            compact
+            icon={Kanban}
+            title={t('projects.sidebar.emptyTitle')}
+            description={t('projects.sidebar.emptyDescription')}
+            actionLabel={t('projects.sidebar.create')}
+            onAction={onCreate}
+          />
         )}
         <ul className="space-y-1">
           {sorted.map((project) => {

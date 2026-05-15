@@ -2370,7 +2370,9 @@
     "sidebar": {
       "title": "Projects",
       "create": "New project",
-      "empty": "No projects yet. Create your first project to get started."
+      "empty": "No projects yet. Create your first project to get started.",
+      "emptyTitle": "No projects yet",
+      "emptyDescription": "Group tickets, run tasks, and track work across your Kins."
     },
     "empty": {
       "title": "No projects",
