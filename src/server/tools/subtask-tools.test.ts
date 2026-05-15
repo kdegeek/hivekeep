@@ -5,10 +5,29 @@ const mockReportToParent = mock(() => Promise.resolve(true))
 const mockUpdateTaskStatus = mock(() => Promise.resolve(true))
 const mockRequestInput = mock(() => Promise.resolve({ success: true }))
 
+// Mocks via `mock.module` are global to the Bun worker — they leak across
+// test files. Any export consumed transitively by another test's SUT must be
+// present here, otherwise that test fails with "Export named X not found"
+// when the two files share a worker. The non-overridden entries below are
+// no-op stubs whose only purpose is to satisfy import resolution.
 mock.module('@/server/services/tasks', () => ({
   reportToParent: mockReportToParent,
   updateTaskStatus: mockUpdateTaskStatus,
   requestInput: mockRequestInput,
+  spawnTask: async () => ({ taskId: 'stub' }),
+  respondToTask: async () => true,
+  cancelTask: async () => true,
+  listKinTasks: async () => [],
+  listSourceKinTasks: async () => [],
+  listTasksFiltered: async () => ({ tasks: [], total: 0 }),
+  listTasksPaginated: async () => ({ tasks: [], total: 0 }),
+  listAllTasks: async () => [],
+  getTask: async () => null,
+  getTaskMessages: async () => ({ taskId: '', taskTitle: null, taskStatus: '', total: 0, messages: [] }),
+  fetchPreviousCronRuns: async () => [],
+  recoverStaleTasks: () => {},
+  resumeSubKin: async () => {},
+  resolveTask: async () => {},
 }))
 
 mock.module('@/server/logger', () => ({
