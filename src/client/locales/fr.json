@@ -2395,7 +2395,8 @@
         "in_progress": "Le travail actif s'affiche ici.",
         "blocked": "Bloqué ? Dépose-le ici pour qu'il reste visible.",
         "done": "Les tickets terminés s'empilent ici."
-      }
+      },
+      "emptySearchInColumn": "Aucun résultat dans cette colonne."
     },
     "status": {
       "backlog": "Backlog",

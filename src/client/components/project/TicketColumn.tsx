@@ -1,7 +1,7 @@
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useTranslation } from 'react-i18next'
-import { Inbox, ListTodo, Loader2, Ban, CheckCircle2, type LucideIcon } from 'lucide-react'
+import { Inbox, ListTodo, Loader2, Ban, CheckCircle2, SearchX, type LucideIcon } from 'lucide-react'
 import { TicketCard } from './TicketCard'
 import { cn } from '@/client/lib/utils'
 import type { TicketStatus, TicketSummary } from '@/shared/types'
@@ -125,14 +125,32 @@ export function TicketColumn({ status, label, tickets, onTicketClick, highlightQ
         </SortableContext>
         {tickets.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-2 px-4 pt-8 pb-4 text-center">
-            <EmptyIcon
-              className={cn('size-7', accent.emptyIconClass)}
-              strokeWidth={1.5}
-              aria-hidden
-            />
-            <p className="text-xs text-muted-foreground/70 leading-snug">
-              {t(`projects.kanban.empty.${status}`)}
-            </p>
+            {/* When filtering, the column-specific hint ("Ideas land here…") is misleading
+                since the column may actually contain tickets — they're just hidden by the
+                filter. Swap to a search-aware empty state in that case. */}
+            {highlightQuery ? (
+              <>
+                <SearchX
+                  className="size-7 text-muted-foreground/40"
+                  strokeWidth={1.5}
+                  aria-hidden
+                />
+                <p className="text-xs text-muted-foreground/70 leading-snug">
+                  {t('projects.kanban.emptySearchInColumn')}
+                </p>
+              </>
+            ) : (
+              <>
+                <EmptyIcon
+                  className={cn('size-7', accent.emptyIconClass)}
+                  strokeWidth={1.5}
+                  aria-hidden
+                />
+                <p className="text-xs text-muted-foreground/70 leading-snug">
+                  {t(`projects.kanban.empty.${status}`)}
+                </p>
+              </>
+            )}
           </div>
         )}
       </div>

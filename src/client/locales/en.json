@@ -2394,7 +2394,8 @@
         "in_progress": "Active work shows up here.",
         "blocked": "Stuck? Drop blocked tickets here so they stay visible.",
         "done": "Completed tickets pile up here."
-      }
+      },
+      "emptySearchInColumn": "No matches in this column."
     },
     "status": {
       "backlog": "Backlog",
