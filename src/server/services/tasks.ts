@@ -6,6 +6,7 @@ import { createLogger } from '@/server/logger'
 import { tasks, kins, messages, tickets, projects } from '@/server/db/schema'
 import { enqueueMessage } from '@/server/services/queue'
 import { buildSystemPrompt } from '@/server/services/prompt-builder'
+import { getSystemContext } from '@/server/services/system-context'
 import {
   buildSegmentedMessages,
   markLastToolCacheable,
@@ -494,6 +495,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
       userLanguage: 'en',
       workspacePath: kinIdentity.workspacePath,
       ticketAssignment: ticketAssignment ?? undefined,
+      systemContext: getSystemContext(),
     })
 
     // Resolve model — use task's provider if stored, else Kin's provider when using Kin's own model

@@ -15,7 +15,7 @@ export const runShellTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Run a shell command (bash -c). Returns stdout, stderr, exit code. Prefer read_file/edit_file/multi_edit/grep/list_directory for file ops. Use this for git, builds, tests, package management.',
+        'Run a shell command (bash -c). Returns stdout, stderr, exit code. Use for: git, builds, tests, package managers, language tooling. **Never use for: cat, head, tail, sed, awk, grep, find, ls, wc, echo** — those have dedicated tools (`read_file` with offset/limit, `grep`, `list_directory`, `edit_file`, `multi_edit`) that integrate with the project context and cost fewer tokens. Never use `--no-verify`, `git push --force`, or `git reset --hard` without explicit authorization.',
       inputSchema: z.object({
         command: z.string(),
         cwd: z

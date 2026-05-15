@@ -1,5 +1,6 @@
 import { config } from '@/server/config'
 import { generateWorkspaceTree } from '@/server/services/workspace-tree'
+import type { SystemContext } from '@/server/services/system-context'
 
 interface ContactSummary {
   id: string
@@ -113,6 +114,11 @@ interface PromptParams {
    *  when `task.ticket_id !== null`. Always derived from the ticket at prompt-build
    *  time (current state, not frozen at spawn). */
   ticketAssignment?: TicketAssignmentInfo
+  /** Host system context (platform, arch, available CLIs). Injected as a stable
+   *  block in sub-Kin prompts so delegated tasks don't waste tool calls probing
+   *  the environment. Cached at the service level — same value reused across
+   *  every spawn until server restart. */
+  systemContext?: SystemContext
 }
 
 export interface ActiveProjectPromptInfo {
@@ -545,6 +551,27 @@ function buildActiveProjectBlock(info: ActiveProjectPromptInfo): string {
   return sections.join('\n\n')
 }
 
+function buildSystemContextBlock(ctx: SystemContext, workspacePath?: string): string {
+  const runtimesLine =
+    ctx.runtimes.length > 0
+      ? ctx.runtimes.map((r) => `${r.name} (${r.version})`).join(', ')
+      : 'none detected'
+  const lines: string[] = [
+    '## Environment',
+    '',
+    `- Platform: ${ctx.platform} (${ctx.arch})`,
+  ]
+  if (workspacePath) {
+    lines.push(`- Workspace: ${workspacePath} (default cwd for run_shell)`)
+  }
+  lines.push(`- Available CLIs in run_shell: ${runtimesLine}`)
+  lines.push('')
+  lines.push(
+    '> This list is authoritative — do NOT probe versions, PATH, or available binaries manually. Call `run_shell` directly with the commands above.',
+  )
+  return lines.join('\n')
+}
+
 function buildTicketAssignmentBlock(info: TicketAssignmentInfo): string {
   const sections: string[] = []
   sections.push('## Ticket assignment')
@@ -642,6 +669,12 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       stableBlocks.push(buildTicketAssignmentBlock(params.ticketAssignment))
     }
 
+    // Environment block — platform, arch, available CLIs. Stable: the host
+    // doesn't change during a task. Saves the sub-Kin a handful of probe calls.
+    if (params.systemContext) {
+      stableBlocks.push(buildSystemContextBlock(params.systemContext, params.workspacePath))
+    }
+
     const isCronTask = params.previousCronRuns !== undefined
     const cronJournalInstruction = isCronTask
       ? `\n- This is a recurring scheduled task. End your final result with a concise summary of what you did and found, so the next run can pick up where you left off.` +
@@ -664,6 +697,14 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `Use ONLY URLs, IDs, paths, counts, and outcomes that appear in actual tool results in your context.\n\n` +
       `### Embedding images\n\n` +
       `When a tool returns an image URL, embed it using markdown image syntax \`![alt](url)\` so the chat renders it inline. Do not use plain link syntax for images.\n\n` +
+      `## Execution discipline\n\n` +
+      `These rules keep your work efficient. Most wasted tool calls come from violating one of them.\n\n` +
+      `- **Don't re-read what's already in your context.** Before calling \`read_file\` or \`grep\`, scan up: if the file content or match was already shown in this task, reuse it.\n` +
+      `- **Use the dedicated file tools, not shell wrappers.** \`read_file\` (with \`offset\`/\`limit\` for partial reads), \`grep\`, \`list_directory\`, \`edit_file\`, \`multi_edit\` — NEVER \`run_shell\` with cat/head/tail/sed/awk/wc/ls/find/echo. They have dedicated tools that integrate with project context and cost fewer tokens.\n` +
+      `- **Use \`multi_edit\` for >1 change to the same file.** Never chain multiple \`edit_file\` calls on the same path.\n` +
+      `- **Fan out independent reads in one step.** \`read_file\`, \`grep\`, \`list_directory\` are parallel-safe — emit several tool calls in the same assistant turn rather than waiting for each result.\n` +
+      `- **Broaden before narrowing.** One \`grep\` with regex alternation \`(foo|bar|baz)\` or a wider pattern beats three sequential narrow greps. Refine only if the first pass returns too much.\n` +
+      `- **Never bypass safety.** Do NOT use \`--no-verify\`, \`--no-gpg-sign\`, \`git reset --hard\`, \`git push --force\`, or push directly to protected branches without explicit authorization in your mission. If a hook fails, fix the underlying issue.\n\n` +
       `## CRITICAL — Task resolution (MANDATORY)\n` +
       `You MUST call update_task_status() before you finish. There is no auto-completion.\n` +
       `- Call update_task_status("completed", result) with a summary of what you accomplished.\n` +
@@ -1217,17 +1258,31 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
     buildContextBlock(),
   )
 
-  // [8.5] Final reminder — recency-positioned restatement of the tool calling
-  // discipline (block [1.6]). Recency bias makes this the most reliable place
-  // for a critical rule that conflicts with personality/expertise blocks.
-  // Modeled on Claude Code's pattern of repeating "fewer than 4 lines" near the
-  // end of its system prompt.
-  volatileBlocks.push(
-    `## Final reminder (most important rule of this turn)\n\n` +
-    `Before any tool call: NO preamble describing what you're about to fetch, check, or do. NO claim of success, fabrication of result content, or speculation before the tool actually returns.\n\n` +
-    `If the personality or expertise blocks above suggest being "warm", "transparent", or "explanatory", that warmth applies to how you communicate ACTUAL tool results AFTER they arrive — it does NOT authorize narrating, predicting, or imagining results before the tool runs. **Tool calling discipline overrides personality on this point.**\n\n` +
-    `When in doubt: call the tool first, then speak.`,
-  )
+  // [8.5] Final reminder — recency-positioned restatement of the critical
+  // rules. Recency bias makes this the most reliable place for guidance that
+  // conflicts with surrounding blocks (personality for main Kins, exploration
+  // habits for sub-Kins). Modeled on Claude Code's pattern of repeating the
+  // most important rules near the end of its system prompt.
+  if (params.isSubKin) {
+    // Sub-Kins: focus on execution efficiency. The bulk of wasted tool calls
+    // in delegated tasks come from re-reading files, using shell wrappers
+    // around dedicated tools, and serializing independent reads.
+    volatileBlocks.push(
+      `## Final reminder (this turn)\n\n` +
+      `- Don't re-read files already shown in this task — scan your context first.\n` +
+      `- Use \`read_file\`/\`grep\`/\`list_directory\`/\`multi_edit\`, never \`run_shell\` with cat/head/sed/awk/find/wc.\n` +
+      `- Fan out independent reads in one step (parallel tool calls).\n` +
+      `- Before any tool call: no pre-narration, no fabricated results.\n` +
+      `- Never bypass safety (\`--no-verify\`, force-push, hard reset) without explicit authorization.`,
+    )
+  } else {
+    volatileBlocks.push(
+      `## Final reminder (most important rule of this turn)\n\n` +
+      `Before any tool call: NO preamble describing what you're about to fetch, check, or do. NO claim of success, fabrication of result content, or speculation before the tool actually returns.\n\n` +
+      `If the personality or expertise blocks above suggest being "warm", "transparent", or "explanatory", that warmth applies to how you communicate ACTUAL tool results AFTER they arrive — it does NOT authorize narrating, predicting, or imagining results before the tool runs. **Tool calling discipline overrides personality on this point.**\n\n` +
+      `When in doubt: call the tool first, then speak.`,
+    )
+  }
 
   return {
     stable: stableBlocks.join('\n\n'),

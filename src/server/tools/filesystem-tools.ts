@@ -84,7 +84,7 @@ export const readFileTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Read a text file or extract text from a PDF. Use offset/limit for large files. For searching content across files, use grep instead.',
+        'Read a text file or extract text from a PDF. **Use this instead of run_shell with cat/head/tail/sed.** For partial reads of large files, set `offset` (1-indexed start line) and `limit`. For searching content across files, use `grep` instead. **Parallel-safe**: multiple read_file calls in one assistant turn run concurrently.',
       inputSchema: z.object({
         path: z.string().describe('Relative to workspace or absolute'),
         offset: z.number().int().min(1).optional().describe('Start line (1-indexed)'),
@@ -426,7 +426,7 @@ export const listDirectoryTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'List directory contents. Skips node_modules, .git, etc. by default. For searching file contents, use grep instead.',
+        'List directory contents. Skips node_modules, .git, etc. by default. **Use this instead of run_shell with ls/find.** For searching file contents, use `grep` instead. **Parallel-safe**: multiple list_directory calls in one assistant turn run concurrently.',
       inputSchema: z.object({
         path: z.string().optional().describe('Defaults to workspace root'),
         recursive: z.boolean().optional().describe('Default: false'),
