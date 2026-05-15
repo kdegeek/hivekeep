@@ -271,6 +271,12 @@ function validateResponse(
       }
       return null
 
+    case 'text':
+      if (typeof response !== 'string' || response.trim().length === 0) {
+        return 'Text response must be a non-empty string'
+      }
+      return null
+
     default:
       return 'Unknown prompt type'
   }
@@ -299,6 +305,8 @@ function formatResponseForLLM(
       const labels = (response as string[]).map((v) => optionLabelMap.get(v) ?? v)
       return labels.join(', ')
     }
+    case 'text':
+      return (response as string).trim()
     default:
       return JSON.stringify(response)
   }

@@ -267,7 +267,7 @@ export interface WebhookFilterTestResult {
 
 // ─── Human Prompt types ──────────────────────────────────────────────────────
 
-export type HumanPromptType = 'confirm' | 'select' | 'multi_select'
+export type HumanPromptType = 'confirm' | 'select' | 'multi_select' | 'text'
 
 export type HumanPromptStatus = 'pending' | 'answered' | 'expired' | 'cancelled'
 

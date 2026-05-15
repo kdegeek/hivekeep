@@ -570,6 +570,13 @@ async function executeSubKin(taskId: string, isNudge = false) {
       cronId: task.cronId ?? undefined,
     })
 
+    // On ticket sub-Kins the parent Kin has nothing actionable to do with
+    // intermediate progress reports — the user reads the ticket UI instead.
+    // Remove `report_to_parent` so the sub-Kin doesn't waste calls on it.
+    if (task.ticketId) {
+      delete subKinTools['report_to_parent']
+    }
+
     // MCP + custom tools for the spawned Kin
     const mcpTools = await resolveMCPTools(kinIdentity.id, kinToolConfig)
     const customToolDefs = await resolveCustomTools(kinIdentity.id)
@@ -1756,13 +1763,30 @@ export async function requestInput(taskId: string, question: string) {
     }
   }
 
-  // Increment counter
   await db
     .update(tasks)
     .set({ requestInputCount: task.requestInputCount + 1, updatedAt: new Date() })
     .where(eq(tasks.id, taskId))
 
-  // Deposit question in parent's queue
+  // Ticket sub-Kins ask the user directly: route through the human-prompt
+  // pipeline so the task is suspended with `awaiting_human_input`, a
+  // notification is created, and the answer resumes the sub-Kin. Without this
+  // routing the question would be silently enqueued into the parent Kin's
+  // queue, which has no visible effect on the ticket and frustrated users.
+  if (task.ticketId) {
+    const { createHumanPrompt } = await import('@/server/services/human-prompts')
+    await createHumanPrompt({
+      kinId: task.parentKinId,
+      taskId,
+      promptType: 'text',
+      question,
+      options: [],
+    })
+    return { success: true }
+  }
+
+  // Non-ticket sub-Kins ask their parent Kin: deposit the question in the
+  // parent's queue, where it's processed as a normal task_input message.
   await enqueueMessage({
     kinId: task.parentKinId,
     messageType: 'task_input',

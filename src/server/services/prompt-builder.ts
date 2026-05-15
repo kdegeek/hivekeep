@@ -680,12 +680,21 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       ? `\n- This is a recurring scheduled task. End your final result with a concise summary of what you did and found, so the next run can pick up where you left off.` +
         `\n- When you encounter errors, unexpected behavior, or discover a useful approach, use save_run_learning() to record it for future runs. Use delete_run_learning() to remove stale or incorrect learnings.`
       : ''
+    const onTicketTask = Boolean(params.ticketAssignment)
+    const constraintsLines: string[] = [
+      `## Constraints`,
+      `- Focus exclusively on this task.`,
+    ]
+    if (!onTicketTask) {
+      constraintsLines.push(`- Use report_to_parent() to send intermediate progress updates if useful.`)
+      constraintsLines.push(`- If you need a free-form answer from your parent Kin, call request_input() (max ${config.tasks?.maxRequestInput ?? 3} times). For structured choices, use prompt_human() instead — it routes through the human prompt UI.`)
+    } else {
+      constraintsLines.push(`- Communicate via the ticket. Use update_ticket() to update status/description/tags; use prompt_human() to ask the user a question (the task is suspended with a yellow "awaiting input" badge on the ticket until they answer). For structured choices use prompt_human's confirm/select/multi_select; for free-form answers use prompt_type="text" — or call request_input() which routes through the same human-prompt flow on ticket tasks.`)
+      constraintsLines.push(`- Do NOT report intermediate progress to a parent Kin — there is none on ticket tasks. Your audience is the user reading the ticket.`)
+    }
+    constraintsLines.push(`- Be honest about uncertainty. Do not fabricate facts or details — use tools to verify when unsure.`)
     stableBlocks.push(
-      `## Constraints\n` +
-      `- Focus exclusively on this task.\n` +
-      `- Use report_to_parent() to send intermediate progress updates if useful.\n` +
-      `- If blocked, use request_input() to ask for clarification (max ${config.tasks?.maxRequestInput ?? 3} times).\n` +
-      `- Be honest about uncertainty. Do not fabricate facts or details — use tools to verify when unsure.\n\n` +
+      constraintsLines.join('\n') + `\n\n` +
       `## Tool calling discipline\n\n` +
       `IMPORTANT: Call tools silently. Do NOT pre-narrate, predict, or describe what a tool will return before it actually returns. After the tool returns, comment on the actual result only.\n\n` +
       `IMPORTANT: You MUST avoid speculative phrases such as "Let me check...", "The result should be...", "Great, it worked!" or "Voilà, c'est bon !" before any tool result is in your context. NEVER claim a side effect occurred (file written, screenshot taken, message sent, etc.) unless the tool's actual return value confirms it.\n\n` +

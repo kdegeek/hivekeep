@@ -40,6 +40,12 @@ function validateResponse(
       }
       return null
 
+    case 'text':
+      if (typeof response !== 'string' || response.trim().length === 0) {
+        return 'Text response must be a non-empty string'
+      }
+      return null
+
     default:
       return 'Unknown prompt type'
   }
@@ -66,6 +72,8 @@ function formatResponseForLLM(
       const labels = (response as string[]).map((v) => optionLabelMap.get(v) ?? v)
       return labels.join(', ')
     }
+    case 'text':
+      return (response as string).trim()
     default:
       return JSON.stringify(response)
   }
@@ -177,6 +185,25 @@ describe('validateResponse', () => {
     })
   })
 
+  describe('text', () => {
+    it('accepts a non-empty string regardless of options', () => {
+      expect(validateResponse('text', 'hello', [])).toBeNull()
+      expect(validateResponse('text', 'a longer answer with spaces', [])).toBeNull()
+    })
+
+    it('rejects empty or whitespace-only strings', () => {
+      expect(validateResponse('text', '', [])).not.toBeNull()
+      expect(validateResponse('text', '   ', [])).not.toBeNull()
+      expect(validateResponse('text', '\n\t ', [])).not.toBeNull()
+    })
+
+    it('rejects non-string types', () => {
+      expect(validateResponse('text', 42, [])).not.toBeNull()
+      expect(validateResponse('text', null, [])).not.toBeNull()
+      expect(validateResponse('text', ['hi'], [])).not.toBeNull()
+    })
+  })
+
   describe('unknown prompt type', () => {
     it('returns error for unknown types', () => {
       expect(validateResponse('freetext', 'hello', [])).toBe('Unknown prompt type')
@@ -241,6 +268,17 @@ describe('formatResponseForLLM', () => {
 
     it('falls back to raw value for unknown options', () => {
       expect(formatResponseForLLM('multi_select', 'Q?', ['email', 'unknown'], multiSelectOptions)).toBe('Email, unknown')
+    })
+  })
+
+  describe('text', () => {
+    it('returns the trimmed string', () => {
+      expect(formatResponseForLLM('text', 'Anything?', 'just typing here', [])).toBe('just typing here')
+    })
+
+    it('trims surrounding whitespace', () => {
+      expect(formatResponseForLLM('text', 'Anything?', '  with spaces  ', [])).toBe('with spaces')
+      expect(formatResponseForLLM('text', 'Anything?', '\n line break\n', [])).toBe('line break')
     })
   })
 

@@ -28,10 +28,10 @@ export const promptHumanTool: ToolRegistration = {
     let promptCalledThisTurn = false
     return tool({
       description:
-        'Prompt the user with a structured question (confirm/select/multi_select). Not available in cron tasks.',
+        'Prompt the user with a question and wait for their reply. Choose the prompt_type that fits: `confirm` (yes/no), `select` (one of N), `multi_select` (any of N), or `text` (free-form answer). On a ticket task this is the canonical way to ask the user something — the task is suspended with a yellow "awaiting input" badge on the ticket until they answer. Not available in cron tasks.',
       inputSchema: z.object({
         prompt_type: z
-          .enum(['confirm', 'select', 'multi_select']),
+          .enum(['confirm', 'select', 'multi_select', 'text']),
         question: z
           .string()
           .max(500),
@@ -41,8 +41,9 @@ export const promptHumanTool: ToolRegistration = {
           .optional(),
         options: z
           .array(optionSchema)
-          .min(2)
-          .max(10),
+          .max(10)
+          .optional()
+          .describe('Required for confirm/select/multi_select (min 2). Omit for text.'),
       }),
       execute: async ({ prompt_type, question, description, options }) => {
         log.debug({ kinId: ctx.kinId, taskId: ctx.taskId, promptType: prompt_type }, 'prompt_human invoked')
@@ -69,13 +70,20 @@ export const promptHumanTool: ToolRegistration = {
           }
         }
 
+        const needsOptions = prompt_type !== 'text'
+        if (needsOptions && (!options || options.length < 2)) {
+          return {
+            error: `prompt_type "${prompt_type}" requires at least 2 options. For free-form answers use prompt_type "text" (no options).`,
+          }
+        }
+
         const { promptId } = await createHumanPrompt({
           kinId: ctx.kinId,
           taskId: ctx.taskId,
           promptType: prompt_type,
           question,
           description,
-          options,
+          options: options ?? [],
         })
 
         return {
