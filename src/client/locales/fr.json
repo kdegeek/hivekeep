@@ -1873,7 +1873,8 @@
       "users": "Utilisateurs",
       "database": "Base de données",
       "mini-apps": "Mini-Apps",
-      "plugins": "Plugins"
+      "plugins": "Plugins",
+      "projects": "Projets"
     },
     "names": {
       "web_search": "Recherche web",
@@ -2102,7 +2103,30 @@
       "list_directory": "Lister un dossier",
       "grep": "Rechercher (grep)",
       "search_knowledge": "Rechercher dans les connaissances",
-      "list_knowledge_sources": "Lister les sources de connaissances"
+      "list_knowledge_sources": "Lister les sources de connaissances",
+      "get_task_messages": "Messages d'une tâche",
+      "transfer_channel": "Transférer un canal",
+      "list_projects": "Lister les projets",
+      "get_project": "Récupérer un projet",
+      "create_project": "Créer un projet",
+      "update_project": "Modifier un projet",
+      "delete_project": "Supprimer un projet",
+      "update_project_description": "Mettre à jour la description du projet",
+      "append_project_description": "Ajouter à la description du projet",
+      "patch_project_description": "Patcher la description du projet",
+      "set_active_project": "Définir le projet actif",
+      "list_project_tags": "Lister les tags du projet",
+      "create_tag": "Créer un tag",
+      "update_tag": "Modifier un tag",
+      "delete_tag": "Supprimer un tag",
+      "list_tickets": "Lister les tickets",
+      "get_ticket": "Récupérer un ticket",
+      "create_ticket": "Créer un ticket",
+      "update_ticket": "Modifier un ticket",
+      "add_ticket_tag": "Ajouter un tag au ticket",
+      "remove_ticket_tag": "Retirer un tag du ticket",
+      "delete_ticket": "Supprimer un ticket",
+      "start_ticket_task": "Démarrer une tâche sur un ticket"
     },
     "renderers": {
       "rawJson": "JSON brut",

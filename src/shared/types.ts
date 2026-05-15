@@ -528,6 +528,7 @@ export type ToolDomain =
   | 'database'
   | 'mini-apps'
   | 'plugins'
+  | 'projects'
 
 // ─── Context token breakdown ──────────────────────────────────────────────
 

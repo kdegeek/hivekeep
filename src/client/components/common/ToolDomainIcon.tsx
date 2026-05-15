@@ -20,6 +20,7 @@ import {
   Database,
   AppWindow,
   FileCode,
+  Kanban,
 } from 'lucide-react'
 import type { LucideProps } from 'lucide-react'
 import type { ToolDomain } from '@/shared/types'
@@ -48,6 +49,7 @@ const DOMAIN_ICONS: Record<ToolDomain, React.FC<LucideProps>> = {
   database: Database,
   'mini-apps': AppWindow,
   plugins: Puzzle,
+  projects: Kanban,
 }
 
 interface ToolDomainIconProps extends LucideProps {

@@ -134,6 +134,7 @@ export const TOOL_DOMAIN_META: Record<ToolDomain, ToolDomainMeta> = {
   database:        { icon: 'Database',    bg: 'bg-destructive/20', text: 'text-destructive',      border: 'border-destructive/20',       labelKey: 'tools.domains.database' },
   'mini-apps':     { icon: 'AppWindow',  bg: 'bg-chart-3/40',    text: 'text-chart-3',          border: 'border-chart-3/40',           labelKey: 'tools.domains.mini-apps' },
   plugins:         { icon: 'Puzzle',      bg: 'bg-chart-4/40',   text: 'text-chart-4',          border: 'border-chart-4/40',           labelKey: 'tools.domains.plugins' },
+  projects:        { icon: 'Kanban',      bg: 'bg-chart-2/40',   text: 'text-chart-2',          border: 'border-chart-2/40',           labelKey: 'tools.domains.projects' },
 } as const
 
 /** Map tool names to their UI domain category */
@@ -205,6 +206,7 @@ export const TOOL_DOMAIN_MAP: Record<string, ToolDomain> = {
   list_tasks: 'tasks',
   list_active_queues: 'tasks',
   get_task_detail: 'tasks',
+  get_task_messages: 'tasks',
   report_to_parent: 'tasks',
   update_task_status: 'tasks',
   request_input: 'tasks',
@@ -274,6 +276,7 @@ export const TOOL_DOMAIN_MAP: Record<string, ToolDomain> = {
   delete_channel: 'channels',
   activate_channel: 'channels',
   deactivate_channel: 'channels',
+  transfer_channel: 'channels',
   attach_file: 'channels',
   // System
   get_platform_logs: 'system',
@@ -325,6 +328,28 @@ export const TOOL_DOMAIN_MAP: Record<string, ToolDomain> = {
   get_plugin_details: 'plugins',
   check_plugin_updates: 'plugins',
   update_plugin: 'plugins',
+  // Projects (phase 26 — projects, tags, tickets, ticket tasks)
+  list_projects: 'projects',
+  get_project: 'projects',
+  create_project: 'projects',
+  update_project: 'projects',
+  delete_project: 'projects',
+  update_project_description: 'projects',
+  append_project_description: 'projects',
+  patch_project_description: 'projects',
+  set_active_project: 'projects',
+  list_project_tags: 'projects',
+  create_tag: 'projects',
+  update_tag: 'projects',
+  delete_tag: 'projects',
+  list_tickets: 'projects',
+  get_ticket: 'projects',
+  create_ticket: 'projects',
+  update_ticket: 'projects',
+  add_ticket_tag: 'projects',
+  remove_ticket_tag: 'projects',
+  delete_ticket: 'projects',
+  start_ticket_task: 'projects',
 } as const
 
 // ---------------------------------------------------------------------------
