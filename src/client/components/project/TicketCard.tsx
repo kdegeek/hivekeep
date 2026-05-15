@@ -134,6 +134,15 @@ export function TicketCard({ ticket, onClick, isOverlay = false, highlightQuery,
       {...listeners}
     >
       <div className="flex items-start gap-1.5">
+        {ticket.number !== null && ticket.number !== undefined && (
+          <span
+            className="mt-0.5 shrink-0 font-mono text-[11px] leading-none text-muted-foreground/90"
+            aria-label={`Ticket #${ticket.number}`}
+            title={`Ticket #${ticket.number}`}
+          >
+            #{ticket.number}
+          </span>
+        )}
         {descriptionPreview ? (
           <Tooltip>
             <TooltipTrigger asChild>

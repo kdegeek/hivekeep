@@ -80,9 +80,19 @@ export function ProjectsSidebar({ projects, selectedId, onSelect, onCreate, onEd
                     {project.title}
                   </span>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-muted-foreground">
-                      {project.openTicketCount} / {project.ticketCount}
-                    </span>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      {project.slug && (
+                        <span
+                          className="truncate font-mono text-[11px] text-muted-foreground/80"
+                          title={`Slug: ${project.slug}`}
+                        >
+                          {project.slug}
+                        </span>
+                      )}
+                      <span>
+                        {project.openTicketCount} / {project.ticketCount}
+                      </span>
+                    </div>
                     <ActiveKinsIndicator projectId={project.id} size="size-4" maxVisible={3} />
                   </div>
                 </div>

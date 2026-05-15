@@ -26,8 +26,23 @@ import {
   addTicketTag,
   removeTicketTag,
   startTicketTask,
+  resolveTicketRef,
 } from '@/server/services/tickets'
+import { db } from '@/server/db/index'
+import { kins } from '@/server/db/schema'
+import { eq } from 'drizzle-orm'
 import { TICKET_STATUSES } from '@/shared/constants'
+
+/** Look up the active project for the calling Kin — used to resolve bare
+ *  ticket references like `#42`. Returns null when no active project is set. */
+function getActiveProjectIdFor(kinId: string): string | null {
+  const row = db
+    .select({ activeProjectId: kins.activeProjectId })
+    .from(kins)
+    .where(eq(kins.id, kinId))
+    .get()
+  return row?.activeProjectId ?? null
+}
 
 const log = createLogger('tools:project')
 
@@ -111,14 +126,20 @@ export const getTicketTool: ToolRegistration = {
   readOnly: true,
   concurrencySafe: true,
   condition: mainOrTicketBoundCondition,
-  create: () =>
+  create: (ctx) =>
     tool({
-      description: 'Retrieve a ticket with full description, tags, and linked tasks history.',
+      description:
+        'Retrieve a ticket with full description, tags, and linked tasks history. ' +
+        'Accepts a UUID, a qualified id like "kinbot#42", or a bare "#42" (resolved against the active project).',
       inputSchema: z.object({
         ticket_id: z.string(),
       }),
       execute: async ({ ticket_id }) => {
-        const ticket = await getTicket(ticket_id)
+        const resolved = await resolveTicketRef(ticket_id, {
+          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+        })
+        if (!resolved.ok) return { error: resolved.code, message: resolved.message }
+        const ticket = await getTicket(resolved.ticketId)
         if (!ticket) return { error: 'TICKET_NOT_FOUND' }
         return { ticket }
       },
@@ -372,9 +393,12 @@ export const createTicketTool: ToolRegistration = {
 export const updateTicketTool: ToolRegistration = {
   availability: ['main'],
   condition: mainOrTicketBoundCondition,
-  create: () =>
+  create: (ctx) =>
     tool({
-      description: 'Modify a ticket — title, description, status, position, or tags (PUT-like for tag_ids: pass the full set). Status change without explicit position moves the card to the top of the target column.',
+      description:
+        'Modify a ticket — title, description, status, position, or tags (PUT-like for tag_ids: pass the full set). ' +
+        'Status change without explicit position moves the card to the top of the target column. ' +
+        'Accepts a UUID, a qualified id like "kinbot#42", or a bare "#42" (resolved against the active project).',
       inputSchema: z.object({
         ticket_id: z.string(),
         title: z.string().optional(),
@@ -384,8 +408,12 @@ export const updateTicketTool: ToolRegistration = {
         tag_ids: z.array(z.string()).optional(),
       }),
       execute: async ({ ticket_id, title, description, status, position, tag_ids }) => {
+        const resolved = await resolveTicketRef(ticket_id, {
+          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+        })
+        if (!resolved.ok) return { error: resolved.code, message: resolved.message }
         try {
-          const ticket = await updateTicket(ticket_id, {
+          const ticket = await updateTicket(resolved.ticketId, {
             title,
             description,
             status,
@@ -404,15 +432,21 @@ export const updateTicketTool: ToolRegistration = {
 export const addTicketTagTool: ToolRegistration = {
   availability: ['main'],
   condition: mainOrTicketBoundCondition,
-  create: () =>
+  create: (ctx) =>
     tool({
-      description: 'Attach a tag to a ticket. Idempotent. The tag must belong to the ticket\'s project.',
+      description:
+        'Attach a tag to a ticket. Idempotent. The tag must belong to the ticket\'s project. ' +
+        'Accepts a UUID, a qualified id like "kinbot#42", or a bare "#42".',
       inputSchema: z.object({
         ticket_id: z.string(),
         tag_id: z.string(),
       }),
       execute: async ({ ticket_id, tag_id }) => {
-        const ok = await addTicketTag(ticket_id, tag_id)
+        const resolved = await resolveTicketRef(ticket_id, {
+          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+        })
+        if (!resolved.ok) return { error: resolved.code, message: resolved.message }
+        const ok = await addTicketTag(resolved.ticketId, tag_id)
         if (!ok) return { error: 'TICKET_OR_TAG_NOT_FOUND_OR_CROSS_PROJECT' }
         return { success: true }
       },
@@ -422,15 +456,20 @@ export const addTicketTagTool: ToolRegistration = {
 export const removeTicketTagTool: ToolRegistration = {
   availability: ['main'],
   condition: mainOrTicketBoundCondition,
-  create: () =>
+  create: (ctx) =>
     tool({
-      description: 'Detach a tag from a ticket.',
+      description:
+        'Detach a tag from a ticket. Accepts a UUID, a qualified id like "kinbot#42", or a bare "#42".',
       inputSchema: z.object({
         ticket_id: z.string(),
         tag_id: z.string(),
       }),
       execute: async ({ ticket_id, tag_id }) => {
-        const ok = await removeTicketTag(ticket_id, tag_id)
+        const resolved = await resolveTicketRef(ticket_id, {
+          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+        })
+        if (!resolved.ok) return { error: resolved.code, message: resolved.message }
+        const ok = await removeTicketTag(resolved.ticketId, tag_id)
         if (!ok) return { error: 'TICKET_TAG_LINK_NOT_FOUND' }
         return { success: true }
       },
@@ -441,16 +480,22 @@ export const deleteTicketTool: ToolRegistration = {
   availability: ['main'],
   destructive: true,
   condition: mainOnlyCondition,
-  create: () =>
+  create: (ctx) =>
     tool({
-      description: 'Permanently delete a ticket. Linked tasks history is preserved (ticket_id set to NULL).',
+      description:
+        'Permanently delete a ticket. Linked tasks history is preserved (ticket_id set to NULL). ' +
+        'Accepts a UUID, a qualified id like "kinbot#42", or a bare "#42".',
       inputSchema: z.object({
         ticket_id: z.string(),
       }),
       execute: async ({ ticket_id }) => {
-        const deleted = await deleteTicket(ticket_id)
+        const resolved = await resolveTicketRef(ticket_id, {
+          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+        })
+        if (!resolved.ok) return { error: resolved.code, message: resolved.message }
+        const deleted = await deleteTicket(resolved.ticketId)
         if (!deleted) return { error: 'TICKET_NOT_FOUND' }
-        return { success: true, ticketId: ticket_id }
+        return { success: true, ticketId: resolved.ticketId }
       },
     }),
 }
@@ -462,13 +507,20 @@ export const startTicketTaskTool: ToolRegistration = {
   condition: mainOnlyCondition,
   create: (ctx) =>
     tool({
-      description: 'Spawn a sub-Kin to work on a ticket. Always runs in await mode — you will get a turn when it finishes. NO side-effect on the ticket status: update it manually via update_ticket() before/after.',
+      description:
+        'Spawn a sub-Kin to work on a ticket. Always runs in await mode — you will get a turn when it finishes. ' +
+        'NO side-effect on the ticket status: update it manually via update_ticket() before/after. ' +
+        'Accepts a UUID, a qualified id like "kinbot#42", or a bare "#42".',
       inputSchema: z.object({
         ticket_id: z.string(),
       }),
       execute: async ({ ticket_id }) => {
+        const resolved = await resolveTicketRef(ticket_id, {
+          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+        })
+        if (!resolved.ok) return { error: resolved.code, message: resolved.message }
         try {
-          const result = await startTicketTask(ticket_id, ctx.kinId)
+          const result = await startTicketTask(resolved.ticketId, ctx.kinId)
           return result
         } catch (err) {
           return { error: err instanceof Error ? err.message : 'Unknown error' }
