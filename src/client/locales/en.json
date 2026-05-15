@@ -2386,6 +2386,8 @@
       "searchResults_other": "{{count}} matches",
       "progress": "{{done}} of {{total}} done",
       "progressEmpty": "No tickets yet",
+      "columnRunning_one": "{{count}} ticket with an active task",
+      "columnRunning_other": "{{count}} tickets with active tasks",
       "empty": {
         "backlog": "Ideas land here. Capture them now, plan them later.",
         "todo": "Ready to start? Drag tickets here when committed.",

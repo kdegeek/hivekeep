@@ -75,6 +75,12 @@ export function TicketColumn({ status, label, tickets, onTicketClick, highlightQ
 
   const accent = STATUS_ACCENT[status]
   const EmptyIcon = accent.emptyIcon
+  // Activity at-a-glance: how many tickets in this column have a task in flight.
+  // Surfaced in the header so users can spot busy columns without scanning cards.
+  const runningCount = tickets.reduce(
+    (acc, ticket) => acc + (ticket.runningKins.length > 0 ? 1 : 0),
+    0,
+  )
 
   return (
     <div className="flex h-full w-72 shrink-0 flex-col">
@@ -83,7 +89,18 @@ export function TicketColumn({ status, label, tickets, onTicketClick, highlightQ
           <span className={cn('size-2 rounded-full', accent.dot)} aria-hidden />
           {label}
         </h2>
-        <span className={cn('text-xs tabular-nums', accent.badge)}>{tickets.length}</span>
+        <div className="flex items-center gap-1.5">
+          {runningCount > 0 && (
+            <span
+              className="inline-flex items-center gap-0.5 text-[10px] font-medium text-primary tabular-nums"
+              title={t('projects.kanban.columnRunning', { count: runningCount })}
+            >
+              <Loader2 className="size-3 animate-spin" />
+              {runningCount}
+            </span>
+          )}
+          <span className={cn('text-xs tabular-nums', accent.badge)}>{tickets.length}</span>
+        </div>
       </header>
       <div
         ref={setNodeRef}

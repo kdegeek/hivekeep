@@ -2387,6 +2387,8 @@
       "searchResults_other": "{{count}} résultats",
       "progress": "{{done}} sur {{total}} terminés",
       "progressEmpty": "Aucun ticket pour le moment",
+      "columnRunning_one": "{{count}} ticket avec une tâche en cours",
+      "columnRunning_other": "{{count}} tickets avec des tâches en cours",
       "empty": {
         "backlog": "Les idées atterrissent ici. Capture-les maintenant, plannifie après.",
         "todo": "Prêt à démarrer ? Glisse-y les tickets quand tu t'engages.",
