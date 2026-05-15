@@ -658,6 +658,11 @@
       "kins": "Kin",
       "noResults": "Keine Ergebnisse"
     },
+    "ticketMention": {
+      "loading": "Tickets werden durchsucht...",
+      "noResults": "Keine passenden Tickets",
+      "scope": "Projekt: {{slug}}"
+    },
     "emptyState": {
       "greeting": "Chatte mit {{name}}",
       "defaultRole": "Dein KI-Assistent, bereit zu helfen.",

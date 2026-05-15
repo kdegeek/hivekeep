@@ -659,6 +659,11 @@
       "kins": "Kin",
       "noResults": "Sin resultados"
     },
+    "ticketMention": {
+      "loading": "Buscando tickets...",
+      "noResults": "Sin tickets coincidentes",
+      "scope": "Proyecto: {{slug}}"
+    },
     "emptyState": {
       "greeting": "Chatea con {{name}}",
       "defaultRole": "Tu asistente de IA, listo para ayudar.",

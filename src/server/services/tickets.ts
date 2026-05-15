@@ -1,4 +1,4 @@
-import { eq, and, inArray, max, count, desc } from 'drizzle-orm'
+import { eq, and, inArray, max, count, desc, like, or, sql } from 'drizzle-orm'
 import { v4 as uuid } from 'uuid'
 import { db, sqlite } from '@/server/db/index'
 import { tickets, ticketTags, projectTags, projects, tasks, kins, user, userProfiles } from '@/server/db/schema'
@@ -529,6 +529,167 @@ export async function resolveMentions(
   }
 
   return out
+}
+
+// ─── Ticket search (autocomplete) ─────────────────────────────────────────────
+
+/** A single hit returned by the autocomplete search endpoint. Lean shape:
+ *  enough to render the popover row (number / title / status / primary tag)
+ *  and to compute the insertion (`#N` vs `slug#N`) on the client. */
+export interface TicketSearchHit {
+  id: string
+  number: number
+  title: string
+  status: TicketStatus
+  projectId: string
+  projectSlug: string
+  projectName: string
+  /** Primary tag (first one by id) to show next to the title — null if none. */
+  primaryTag: ProjectTag | null
+  updatedAt: number
+  createdAt: number
+}
+
+/** Max number of hits returned per request. The UI caps the visible list at 10
+ *  with internal scroll, but we return up to 20 so a quick scroll reveals more
+ *  without a refetch. */
+export const TICKET_SEARCH_MAX_RESULTS = 20
+
+export interface SearchTicketsInput {
+  /** Free-form query: matches against title (LIKE) and ticket number. Empty
+   *  string returns the most recently updated tickets in the project. */
+  query: string
+  /** Project to scope the search to. Required. */
+  projectId: string
+  /** Whether to include `done` tickets. Default: true. The UI may apply its
+   *  own visual de-emphasis. */
+  includeDone?: boolean
+  /** Pagination cap. Defaults to TICKET_SEARCH_MAX_RESULTS. */
+  limit?: number
+  /** Pagination offset. Defaults to 0. */
+  offset?: number
+}
+
+/** Escape `%` and `_` so user input cannot accidentally turn into wildcards. */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (m) => `\\${m}`)
+}
+
+/**
+ * Search tickets in a project for autocomplete usage.
+ *
+ *   - Numeric queries: match by ticket number (exact or prefix) first.
+ *   - Text queries: case-insensitive substring on title.
+ *   - Default sort: `updatedAt DESC` so recently-active tickets come first;
+ *     done tickets are pushed to the bottom by an explicit status order.
+ *
+ * Returns the lean `TicketSearchHit` shape — no task counts, no running Kins,
+ * no reporter — to keep the response cheap on the chat hot-path.
+ */
+export async function searchTickets(input: SearchTicketsInput): Promise<TicketSearchHit[]> {
+  const limit = Math.min(Math.max(1, input.limit ?? TICKET_SEARCH_MAX_RESULTS), TICKET_SEARCH_MAX_RESULTS)
+  const offset = Math.max(0, input.offset ?? 0)
+  const includeDone = input.includeDone ?? true
+
+  // Verify the project exists and grab its slug + name in one shot.
+  const project = db
+    .select({ id: projects.id, slug: projects.slug, name: projects.title })
+    .from(projects)
+    .where(eq(projects.id, input.projectId))
+    .get()
+  if (!project) return []
+
+  const where = [eq(tickets.projectId, input.projectId)]
+  if (!includeDone) {
+    where.push(sql`${tickets.status} != 'done'`)
+  }
+
+  const rawQuery = (input.query ?? '').trim()
+  // Strip a leading `#` so `#42` is treated the same as `42`. The popover may
+  // already have peeled it off but we don't rely on that.
+  const normalized = rawQuery.replace(/^#/, '')
+  const numericMatch = /^(\d{1,10})$/.exec(normalized)
+
+  if (numericMatch) {
+    // Numeric query: prefix-match the per-project number, fall back to title
+    // containing the digits (rare but useful, e.g. \"v42\" in a title).
+    const num = Number(numericMatch[1])
+    const numStr = String(num)
+    where.push(
+      or(
+        // Exact + prefix match on the number — drizzle has no LIKE on integers
+        // so we cast via sql template.
+        sql`CAST(${tickets.number} AS TEXT) LIKE ${numStr + '%'}`,
+        like(tickets.title, `%${escapeLike(normalized)}%`),
+      )!,
+    )
+  } else if (normalized.length > 0) {
+    // Plain text query: LIKE on title. SQLite's default LIKE is case-insensitive
+    // for ASCII which is enough for our use case.
+    where.push(like(tickets.title, `%${escapeLike(normalized)}%`))
+  }
+
+  const rows = db
+    .select({
+      id: tickets.id,
+      number: tickets.number,
+      title: tickets.title,
+      status: tickets.status,
+      projectId: tickets.projectId,
+      updatedAt: tickets.updatedAt,
+      createdAt: tickets.createdAt,
+    })
+    .from(tickets)
+    .where(and(...where))
+    .orderBy(
+      // Push `done` to the bottom regardless of recency.
+      sql`CASE WHEN ${tickets.status} = 'done' THEN 1 ELSE 0 END`,
+      desc(tickets.updatedAt),
+      desc(tickets.createdAt),
+    )
+    .limit(limit)
+    .offset(offset)
+    .all()
+
+  // Filter out tickets that never got a number assigned (pre-slug-feature rows
+  // that haven't been backfilled). They cannot be referenced as `#N` anyway.
+  const numbered = rows.filter((r) => r.number !== null) as Array<typeof rows[number] & { number: number }>
+
+  if (numbered.length === 0) return []
+
+  // Fetch the primary tag per ticket in a single query.
+  const ids = numbered.map((r) => r.id)
+  const tagRows = db
+    .select({
+      ticketId: ticketTags.ticketId,
+      tagId: projectTags.id,
+      label: projectTags.label,
+      color: projectTags.color,
+    })
+    .from(ticketTags)
+    .innerJoin(projectTags, eq(ticketTags.tagId, projectTags.id))
+    .where(inArray(ticketTags.ticketId, ids))
+    .orderBy(projectTags.label)
+    .all()
+  const primaryByTicket = new Map<string, ProjectTag>()
+  for (const row of tagRows) {
+    if (!primaryByTicket.has(row.ticketId)) {
+      primaryByTicket.set(row.ticketId, { id: row.tagId, label: row.label, color: row.color })
+    }
+  }
+
+  return numbered.map((row) => ({
+    id: row.id,
+    number: row.number,
+    title: row.title,
+    status: row.status as TicketStatus,
+    projectId: row.projectId,
+    projectSlug: project.slug ?? '',
+    projectName: project.name,
+    primaryTag: primaryByTicket.get(row.id) ?? null,
+    updatedAt: toMillis(row.updatedAt),
+    createdAt: toMillis(row.createdAt),
+  }))
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────

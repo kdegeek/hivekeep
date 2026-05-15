@@ -826,6 +826,11 @@
       "kins": "Kin",
       "noResults": "No results"
     },
+    "ticketMention": {
+      "loading": "Searching tickets...",
+      "noResults": "No matching tickets",
+      "scope": "Project: {{slug}}"
+    },
     "emptyState": {
       "greeting": "Chat with {{name}}",
       "defaultRole": "Your AI assistant, ready to help.",

@@ -35,6 +35,7 @@ import { TimeGapIndicator } from '@/client/components/chat/TimeGapIndicator'
 import { SearchHighlightProvider } from '@/client/components/chat/SearchHighlightContext'
 import { MentionLookupProvider } from '@/client/components/chat/MentionContext'
 import { useMentionables } from '@/client/hooks/useMentionables'
+import { useProject } from '@/client/hooks/useProjects'
 import { cn, getUserInitials } from '@/client/lib/utils'
 import { useSidePanel } from '@/client/contexts/SidePanelContext'
 import { ArrowDown, ArrowUp, Upload, Pin, PinOff } from 'lucide-react'
@@ -91,6 +92,10 @@ export function ChatPanel({ kin, llmModels, modelUnavailable = false, queueState
   const [showQuickHistory, setShowQuickHistory] = useState(false)
   const { exportAsMarkdown, exportAsJSON } = useExportConversation(messages, kin.name)
   const { users: mentionableUsers, kins: mentionableKins } = useMentionables()
+  // Active project (if any) drives the `#ticket` autocomplete: it gives us
+  // the projectId to scope search to + the slug so the popover knows when a
+  // hit can use the short form (`#42`) vs. the qualified form (`slug#42`).
+  const { project: activeProject } = useProject(kin.activeProjectId ?? null)
   const { toggleReaction } = useReactions(kin.id)
   const [thinkingEnabled, setThinkingEnabled] = useState(kin.thinkingEnabled ?? false)
   const [isToolCallsOpen, setIsToolCallsOpen] = useState(false)
@@ -1073,6 +1078,8 @@ export function ChatPanel({ kin, llmModels, modelUnavailable = false, queueState
         kinId={kin.id}
         mentionableUsers={mentionableUsers}
         mentionableKins={mentionableKins}
+        activeProjectId={kin.activeProjectId ?? null}
+        activeProjectSlug={activeProject?.slug ?? null}
       />
 
       {/* Task detail modal — kept as fallback for legacy references */}

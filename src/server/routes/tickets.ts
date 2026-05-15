@@ -6,8 +6,13 @@ import {
   startTicketTask,
   startTicketEnrichment,
   resolveMentions,
+  searchTickets,
   RESOLVE_MENTIONS_MAX_REFS,
+  TICKET_SEARCH_MAX_RESULTS,
 } from '@/server/services/tickets'
+import { db } from '@/server/db/index'
+import { projects } from '@/server/db/schema'
+import { eq } from 'drizzle-orm'
 import type { AppVariables } from '@/server/app'
 import { createLogger } from '@/server/logger'
 import { TICKET_STATUSES } from '@/shared/constants'
@@ -73,6 +78,53 @@ ticketRoutes.post('/resolve-mentions', async (c) => {
   const activeProjectId = typeof body.activeProjectId === 'string' ? body.activeProjectId : null
   const resolutions = await resolveMentions(refs, { activeProjectId })
   return c.json({ resolutions })
+})
+
+/**
+ * Autocomplete search endpoint for the composer's `#` mention popover.
+ *
+ *   - `q`            — free-form query (number prefix and/or title substring)
+ *   - `projectId`    — UUID of the project to scope the search to
+ *   - `projectSlug`  — alternative to projectId; convenient when the client
+ *                      has the slug from a `slug#` prefix typed by the user
+ *   - `includeDone`  — `0`/`false` to exclude done tickets (default include)
+ *   - `limit`        — capped at TICKET_SEARCH_MAX_RESULTS (20)
+ *   - `offset`       — pagination
+ *
+ * Returns `{ hits: TicketSearchHit[] }`. Empty array on missing/unknown project.
+ */
+ticketRoutes.get('/search', async (c) => {
+  const q = c.req.query('q') ?? ''
+  let projectId = c.req.query('projectId') ?? ''
+
+  // Resolve projectSlug → projectId if the caller passed a slug instead.
+  if (!projectId) {
+    const slug = c.req.query('projectSlug') ?? ''
+    if (slug) {
+      const row = db.select({ id: projects.id }).from(projects).where(eq(projects.slug, slug)).get()
+      if (row) projectId = row.id
+    }
+  }
+
+  if (!projectId) {
+    return c.json({ hits: [] })
+  }
+
+  const includeDoneRaw = c.req.query('includeDone')
+  const includeDone = !(includeDoneRaw === '0' || includeDoneRaw === 'false')
+
+  const rawLimit = Number(c.req.query('limit') ?? TICKET_SEARCH_MAX_RESULTS)
+  const limit = Number.isFinite(rawLimit) ? rawLimit : TICKET_SEARCH_MAX_RESULTS
+  const rawOffset = Number(c.req.query('offset') ?? 0)
+  const offset = Number.isFinite(rawOffset) ? rawOffset : 0
+
+  try {
+    const hits = await searchTickets({ query: q, projectId, includeDone, limit, offset })
+    return c.json({ hits })
+  } catch (err) {
+    log.warn({ err }, 'searchTickets failed')
+    return c.json({ error: { code: 'INTERNAL', message: 'Search failed' } }, 500)
+  }
 })
 
 ticketRoutes.get('/:id', async (c) => {
