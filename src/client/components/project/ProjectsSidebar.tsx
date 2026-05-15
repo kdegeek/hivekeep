@@ -51,11 +51,21 @@ export function ProjectsSidebar({ projects, selectedId, onSelect, onCreate, onEd
                     className="absolute inset-y-1.5 left-0 w-1 rounded-r-full bg-primary"
                   />
                 )}
-                <button
-                  type="button"
+                {/* role="button" instead of a real <button> so the nested
+                    Kin-avatar buttons in <ActiveKinsIndicator> are valid HTML.
+                    HTML forbids button-in-button and React warns about it. */}
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onSelect(project.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onSelect(project.id)
+                    }
+                  }}
                   className={cn(
-                    'flex w-full flex-col gap-1 rounded-md px-3 py-2 pr-9 text-left transition-colors',
+                    'flex w-full cursor-pointer flex-col gap-1 rounded-md px-3 py-2 pr-9 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     active
                       ? 'bg-primary/10 text-foreground'
                       : 'hover:bg-muted text-foreground/80 hover:text-foreground',
@@ -75,7 +85,7 @@ export function ProjectsSidebar({ projects, selectedId, onSelect, onCreate, onEd
                     </span>
                     <ActiveKinsIndicator projectId={project.id} size="size-4" maxVisible={3} />
                   </div>
-                </button>
+                </div>
                 <Button
                   variant="ghost"
                   size="icon"
