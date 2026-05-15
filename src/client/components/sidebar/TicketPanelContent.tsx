@@ -4,10 +4,10 @@ import { useTicket, useTickets } from '@/client/hooks/useTickets'
 import { useProject } from '@/client/hooks/useProjects'
 import { Button } from '@/client/components/ui/button'
 import { Badge } from '@/client/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/client/components/ui/avatar'
 import { Play, ListChecks, Loader2, X, ChevronLeft, Pencil } from 'lucide-react'
 import { EmptyState } from '@/client/components/common/EmptyState'
 import { MarkdownContent } from '@/client/components/chat/MarkdownContent'
+import { TaskTimelineItem } from '@/client/components/common/TaskTimelineItem'
 import { useSidePanel } from '@/client/contexts/SidePanelContext'
 import { formatRelativeTime } from '@/client/lib/time'
 import { StartTaskDialog } from '@/client/components/project/StartTaskDialog'
@@ -15,7 +15,6 @@ import { EditTicketModal } from '@/client/components/project/EditTicketModal'
 import { TicketReporterBadge } from '@/client/components/project/TicketReporterBadge'
 import { getErrorMessage } from '@/client/lib/api'
 import { toast } from 'sonner'
-import { cn } from '@/client/lib/utils'
 import type { TicketTaskSummary } from '@/shared/types'
 
 interface TicketPanelContentProps {
@@ -28,15 +27,6 @@ const STATUS_LABEL_KEYS: Record<string, string> = {
   in_progress: 'projects.status.in_progress',
   blocked: 'projects.status.blocked',
   done: 'projects.status.done',
-}
-
-const TASK_STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  completed: 'default',
-  failed: 'destructive',
-  cancelled: 'outline',
-  pending: 'secondary',
-  in_progress: 'secondary',
-  queued: 'secondary',
 }
 
 export function TicketPanelContent({ ticketId }: TicketPanelContentProps) {
@@ -198,35 +188,17 @@ export function TicketPanelContent({ ticketId }: TicketPanelContentProps) {
               onAction={() => setStartTaskOpen(true)}
             />
           ) : (
-            <ul className="space-y-2">
-              {ticket.tasks.map((task) => (
+            <ul className="space-y-0">
+              {ticket.tasks.map((task, i) => (
                 <li key={task.id}>
-                  <button
-                    type="button"
+                  <TaskTimelineItem
+                    status={task.status}
+                    primary={task.parentKinName}
+                    secondary={t(`projects.taskStatus.${task.status}`, { defaultValue: task.status })}
+                    time={formatRelativeTime(task.createdAt)}
+                    isLast={i === ticket.tasks.length - 1}
                     onClick={() => handleTaskClick(task)}
-                    className={cn(
-                      'flex w-full items-center gap-2 rounded-md border border-border p-2 text-left transition-colors hover:bg-muted',
-                    )}
-                  >
-                    <Avatar className="size-6">
-                      <AvatarFallback className="text-[10px]">
-                        {task.parentKinName.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-medium">{task.parentKinName}</div>
-                      <div className="text-[10px] text-muted-foreground">
-                        {formatRelativeTime(task.createdAt)}
-                      </div>
-                    </div>
-                    <Badge
-                      variant={TASK_STATUS_VARIANT[task.status] ?? 'secondary'}
-                      className="shrink-0 text-[10px]"
-                    >
-                      {task.status === 'in_progress' && <Loader2 className="mr-1 size-2.5 animate-spin" />}
-                      {task.status}
-                    </Badge>
-                  </button>
+                  />
                 </li>
               ))}
             </ul>

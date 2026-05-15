@@ -2429,6 +2429,17 @@
       "blocked": "Bloqué",
       "done": "Terminé"
     },
+    "taskStatus": {
+      "queued": "En file",
+      "pending": "En attente",
+      "in_progress": "En cours",
+      "paused": "En pause",
+      "awaiting_human_input": "Attend ta réponse",
+      "awaiting_kin_response": "Attend un Kin",
+      "completed": "Terminé",
+      "failed": "Échec",
+      "cancelled": "Annulé"
+    },
     "create": {
       "title": "Créer un nouveau projet",
       "description": "Une palette de tags par défaut (bug, feature, chore, doc) sera ajoutée automatiquement. Tu pourras la personnaliser ensuite.",

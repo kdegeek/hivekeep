@@ -2428,6 +2428,17 @@
       "blocked": "Blocked",
       "done": "Done"
     },
+    "taskStatus": {
+      "queued": "Queued",
+      "pending": "Pending",
+      "in_progress": "Running",
+      "paused": "Paused",
+      "awaiting_human_input": "Waiting for you",
+      "awaiting_kin_response": "Waiting for Kin",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
     "create": {
       "title": "Create a new project",
       "description": "A default tag palette (bug, feature, chore, doc) will be added automatically. You can customize it later.",

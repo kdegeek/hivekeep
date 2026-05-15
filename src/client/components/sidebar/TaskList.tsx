@@ -6,10 +6,11 @@ import {
 import { Input } from '@/client/components/ui/input'
 import { cn } from '@/client/lib/utils'
 import { formatDurationBetween, formatElapsed } from '@/client/lib/time'
-import { Loader2, CheckCircle2, XCircle, Clock, Ban, UserCheck, MessageSquare, Pause, Search, ListTodo, ListOrdered, ChevronDown } from 'lucide-react'
+import { Loader2, Search, ListTodo, ChevronDown } from 'lucide-react'
 import { EmptyState } from '@/client/components/common/EmptyState'
+import { TaskTimelineItem } from '@/client/components/common/TaskTimelineItem'
 import { useSidePanel } from '@/client/contexts/SidePanelContext'
-import type { TaskStatus, TaskSummary } from '@/shared/types'
+import type { TaskSummary } from '@/shared/types'
 
 interface LLMModel {
   id: string
@@ -18,68 +19,6 @@ interface LLMModel {
   providerName: string
   providerType: string
   capability: string
-}
-
-const STATUS_CONFIG: Record<TaskStatus, {
-  icon: typeof Clock
-  iconClass: string
-  dotClass: string
-  ringClass: string
-}> = {
-  queued: {
-    icon: ListOrdered,
-    iconClass: 'text-orange-500',
-    dotClass: 'bg-orange-500/30',
-    ringClass: 'ring-orange-500/15',
-  },
-  pending: {
-    icon: Clock,
-    iconClass: 'text-muted-foreground',
-    dotClass: 'bg-muted-foreground/50',
-    ringClass: 'ring-muted-foreground/20',
-  },
-  in_progress: {
-    icon: Loader2,
-    iconClass: 'text-primary animate-spin',
-    dotClass: 'bg-primary',
-    ringClass: 'ring-primary/30',
-  },
-  paused: {
-    icon: Pause,
-    iconClass: 'text-amber-500',
-    dotClass: 'bg-amber-500/50',
-    ringClass: 'ring-amber-500/20',
-  },
-  awaiting_human_input: {
-    icon: UserCheck,
-    iconClass: 'text-warning animate-pulse',
-    dotClass: 'bg-warning animate-pulse',
-    ringClass: 'ring-warning/30',
-  },
-  awaiting_kin_response: {
-    icon: MessageSquare,
-    iconClass: 'text-info animate-pulse',
-    dotClass: 'bg-info animate-pulse',
-    ringClass: 'ring-info/30',
-  },
-  completed: {
-    icon: CheckCircle2,
-    iconClass: 'text-success',
-    dotClass: 'bg-success',
-    ringClass: 'ring-success/20',
-  },
-  failed: {
-    icon: XCircle,
-    iconClass: 'text-destructive',
-    dotClass: 'bg-destructive',
-    ringClass: 'ring-destructive/20',
-  },
-  cancelled: {
-    icon: Ban,
-    iconClass: 'text-muted-foreground',
-    dotClass: 'bg-muted-foreground/40',
-    ringClass: 'ring-muted-foreground/10',
-  },
 }
 
 /** Group tasks by day, returning [label, tasks][] */
@@ -120,11 +59,7 @@ function formatTime(isoDate: string): string {
 }
 
 function TimelineTaskCard({ task, onClick, isLast, queuePosition }: { task: TaskSummary; onClick: () => void; isLast: boolean; queuePosition?: number }) {
-  const { t } = useTranslation()
-  const config = STATUS_CONFIG[task.status]
-  const Icon = config.icon
   const kinName = task.sourceKinName ?? task.parentKinName
-  const isCancelled = task.status === 'cancelled'
   const isQueued = task.status === 'queued'
   const isActive = task.status === 'in_progress' || task.status === 'paused' || task.status === 'awaiting_human_input' || task.status === 'awaiting_kin_response' || task.status === 'pending'
   const isFinished = task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled'
@@ -132,61 +67,22 @@ function TimelineTaskCard({ task, onClick, isLast, queuePosition }: { task: Task
     ? formatDurationBetween(task.createdAt, task.updatedAt)
     : formatElapsed(task.createdAt)
 
+  const primary = task.title ?? (task.description.length > 55
+    ? task.description.slice(0, 55) + '…'
+    : task.description)
+  const secondary = isQueued && task.concurrencyGroup ? task.concurrencyGroup : kinName
+  const time = isQueued || isActive ? duration : formatTime(task.createdAt)
+
   return (
-    <div className="relative flex gap-3 group">
-      {/* Timeline rail */}
-      <div className="flex flex-col items-center shrink-0 w-4">
-        {/* Dot */}
-        <div className={cn(
-          'relative z-10 mt-2.5 size-2.5 rounded-full ring-2',
-          config.dotClass,
-          config.ringClass,
-          isActive && 'size-3',
-        )} />
-        {/* Vertical line */}
-        {!isLast && (
-          <div className="flex-1 w-px bg-border/60 mt-1" />
-        )}
-      </div>
-
-      {/* Card */}
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={onClick}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick() }}
-        className={cn(
-          'flex-1 min-w-0 rounded-lg px-2.5 py-2 mb-1 text-xs transition-colors cursor-pointer',
-          'hover:bg-sidebar-accent/40',
-          isActive && 'bg-sidebar-accent/30',
-          isQueued && 'opacity-70',
-          isCancelled && 'opacity-50',
-        )}
-      >
-        {/* Title */}
-        <p className="truncate font-medium text-foreground text-[11px] leading-tight">
-          {isQueued && queuePosition != null && (
-            <span className="text-muted-foreground mr-1">#{queuePosition}</span>
-          )}
-          {task.title ?? (task.description.length > 55
-            ? task.description.slice(0, 55) + '…'
-            : task.description)}
-        </p>
-
-        {/* Meta row */}
-        <div className="flex items-center gap-1.5 mt-1">
-          <Icon className={cn('size-3 shrink-0', config.iconClass)} />
-          <span className="text-[10px] text-muted-foreground truncate">
-            {isQueued && task.concurrencyGroup
-              ? task.concurrencyGroup
-              : kinName}
-          </span>
-          <span className="text-[10px] text-muted-foreground ml-auto shrink-0 tabular-nums">
-            {isQueued ? duration : isActive ? duration : formatTime(task.createdAt)}
-          </span>
-        </div>
-      </div>
-    </div>
+    <TaskTimelineItem
+      status={task.status}
+      primary={primary}
+      secondary={secondary}
+      time={time}
+      isLast={isLast}
+      prefix={isQueued && queuePosition != null ? `#${queuePosition}` : undefined}
+      onClick={onClick}
+    />
   )
 }
 
