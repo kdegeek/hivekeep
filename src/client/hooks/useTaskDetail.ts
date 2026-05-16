@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { api } from '@/client/lib/api'
 import { useSSE } from '@/client/hooks/useSSE'
-import { TOOL_DOMAIN_MAP } from '@/shared/constants'
+import { getToolDomain as lookupToolDomain } from '@/client/lib/tool-domain-lookup'
 import type { TaskStatus, ToolCallEntry, ToolDomain, MessageTokenUsage, KinThinkingEffort, TaskTodo } from '@/shared/types'
 import type { ToolCallViewItem, ToolCallStatus } from '@/client/hooks/useToolCalls'
 
@@ -56,7 +56,7 @@ interface TaskDetailResponse {
 const STREAMING_BATCH_MS = 50
 
 function getToolDomain(toolName: string): ToolDomain {
-  return TOOL_DOMAIN_MAP[toolName] ?? 'mcp'
+  return lookupToolDomain(toolName)
 }
 
 function deriveStatus(entry: ToolCallEntry): ToolCallStatus {

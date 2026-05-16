@@ -1,22 +1,39 @@
 import type { Tool } from 'ai'
 import type { ToolRegistration, ToolExecutionContext, ToolAvailability } from '@/server/tools/types'
+import type { ToolDomain } from '@/shared/types'
 import { hookRegistry } from '@/server/hooks/index'
 import { createLogger } from '@/server/logger'
 
 const log = createLogger('tools')
 
-class ToolRegistry {
-  private tools = new Map<string, ToolRegistration>()
+interface RegistryEntry {
+  registration: ToolRegistration
+  domain: ToolDomain
+}
 
-  register(name: string, registration: ToolRegistration): void {
-    this.tools.set(name, registration)
-    log.debug({ toolName: name }, 'Tool registered')
+class ToolRegistry {
+  private tools = new Map<string, RegistryEntry>()
+
+  /** Register a tool. The `domain` argument is the single source of truth
+   *  for which UI category the tool belongs to — used by the Kin tools
+   *  settings tab and the live tool-call renderer. TypeScript enforces it
+   *  here so no tool can be registered without a category. */
+  register(name: string, registration: ToolRegistration, domain: ToolDomain): void {
+    this.tools.set(name, { registration, domain })
+    log.debug({ toolName: name, domain }, 'Tool registered')
   }
 
   unregister(name: string): boolean {
     const deleted = this.tools.delete(name)
     if (deleted) log.debug({ toolName: name }, 'Tool unregistered')
     return deleted
+  }
+
+  /** Look up the domain for a given tool name. Returns `null` when the
+   *  tool is not registered (e.g. an MCP / plugin tool — those are handled
+   *  separately by the caller). */
+  getDomain(name: string): ToolDomain | null {
+    return this.tools.get(name)?.domain ?? null
   }
 
   /**
@@ -27,7 +44,8 @@ class ToolRegistry {
     const target: ToolAvailability = ctx.isSubKin ? 'sub-kin' : 'main'
     const resolved: Record<string, Tool<any, any>> = {}
 
-    for (const [name, reg] of this.tools) {
+    for (const [name, entry] of this.tools) {
+      const reg = entry.registration
       if (!reg.availability.includes(target)) continue
       if (reg.condition && !reg.condition(ctx)) continue
       const baseTool = reg.create(ctx)
@@ -78,37 +96,39 @@ class ToolRegistry {
 
   /** Check if a tool is read-only (purely reads, no mutations). */
   isReadOnly(name: string): boolean {
-    return this.tools.get(name)?.readOnly === true
+    return this.tools.get(name)?.registration.readOnly === true
   }
 
   /** Check if a tool is safe to run concurrently with other tools.
    *  Tools that do not declare this flag are treated as unsafe by default
    *  and will run in their own isolated serial batch. */
   isConcurrencySafe(name: string): boolean {
-    return this.tools.get(name)?.concurrencySafe === true
+    return this.tools.get(name)?.registration.concurrencySafe === true
   }
 
   /** Check if a tool performs irreversible operations. */
   isDestructive(name: string): boolean {
-    return this.tools.get(name)?.destructive === true
+    return this.tools.get(name)?.registration.destructive === true
   }
 
-  /** List all registered tool names with their availability (for API/UI). */
+  /** List all registered tool names with their availability + domain (for API/UI). */
   list(): Array<{
     name: string
+    domain: ToolDomain
     availability: ToolAvailability[]
     defaultDisabled: boolean
     readOnly: boolean
     concurrencySafe: boolean
     destructive: boolean
   }> {
-    return Array.from(this.tools.entries()).map(([name, reg]) => ({
+    return Array.from(this.tools.entries()).map(([name, entry]) => ({
       name,
-      availability: reg.availability,
-      defaultDisabled: reg.defaultDisabled ?? false,
-      readOnly: reg.readOnly ?? false,
-      concurrencySafe: reg.concurrencySafe ?? false,
-      destructive: reg.destructive ?? false,
+      domain: entry.domain,
+      availability: entry.registration.availability,
+      defaultDisabled: entry.registration.defaultDisabled ?? false,
+      readOnly: entry.registration.readOnly ?? false,
+      concurrencySafe: entry.registration.concurrencySafe ?? false,
+      destructive: entry.registration.destructive ?? false,
     }))
   }
 

@@ -9,7 +9,6 @@ import {
   VAULT_BUILTIN_TYPES,
   VAULT_TYPE_META,
   TOOL_DOMAIN_META,
-  TOOL_DOMAIN_MAP,
   PROVIDER_TYPES,
   MEMORY_SCOPES,
   MAX_MESSAGE_LENGTH,
@@ -241,7 +240,13 @@ describe('VAULT_TYPE_META', () => {
   })
 })
 
-// ─── TOOL_DOMAIN_META & TOOL_DOMAIN_MAP consistency ─────────────────────────
+// ─── TOOL_DOMAIN_META ───────────────────────────────────────────────────────
+// Tool name → domain is no longer a static map; it lives in the registry
+// (each toolRegistry.register call carries the domain, see
+// src/server/tools/register.ts). Server-side consumers read it from
+// `toolRegistry.list()`; the client fetches a snapshot at boot via
+// /api/tools/domains. Only TOOL_DOMAIN_META — the visual metadata per
+// domain — is still a static constant.
 
 describe('TOOL_DOMAIN_META', () => {
   it('every domain has icon, bg, text, border, and labelKey', () => {
@@ -258,40 +263,6 @@ describe('TOOL_DOMAIN_META', () => {
     const labelKeys = Object.values(TOOL_DOMAIN_META).map(m => m.labelKey)
     const unique = new Set(labelKeys)
     expect(unique.size).toBe(labelKeys.length)
-  })
-})
-
-describe('TOOL_DOMAIN_MAP', () => {
-  it('all mapped domains exist in TOOL_DOMAIN_META', () => {
-    const validDomains = new Set(Object.keys(TOOL_DOMAIN_META))
-    for (const [toolName, domain] of Object.entries(TOOL_DOMAIN_MAP)) {
-      expect(validDomains.has(domain)).toBe(true)
-    }
-  })
-
-  it('has no duplicate tool names', () => {
-    // Object.keys are unique by definition, but let's verify the entries are consistent
-    const keys = Object.keys(TOOL_DOMAIN_MAP)
-    const unique = new Set(keys)
-    expect(unique.size).toBe(keys.length)
-  })
-
-  it('maps known tools to expected domains', () => {
-    expect(TOOL_DOMAIN_MAP['web_search']).toBe('search')
-    expect(TOOL_DOMAIN_MAP['recall']).toBe('memory')
-    expect(TOOL_DOMAIN_MAP['memorize']).toBe('memory')
-    expect(TOOL_DOMAIN_MAP['get_secret']).toBe('vault')
-    expect(TOOL_DOMAIN_MAP['create_cron']).toBe('crons')
-    expect(TOOL_DOMAIN_MAP['generate_image']).toBe('images')
-    expect(TOOL_DOMAIN_MAP['run_shell']).toBe('shell')
-    expect(TOOL_DOMAIN_MAP['execute_sql']).toBe('database')
-    expect(TOOL_DOMAIN_MAP['browse_url']).toBe('browse')
-    expect(TOOL_DOMAIN_MAP['send_message']).toBe('inter-kin')
-  })
-
-  it('has a reasonable number of mapped tools', () => {
-    const count = Object.keys(TOOL_DOMAIN_MAP).length
-    expect(count).toBeGreaterThan(30) // There are many tools mapped
   })
 })
 

@@ -3,21 +3,17 @@ import type { KinToolConfig, ToolDomain } from '@/shared/types'
 /**
  * Pure bucketing helper for the Kin Tools route.
  *
- * Takes the flat list of registered tools (core + plugin), the per-plugin
- * tool-name grouping, the static core domain map, and the Kin's tool
- * config, and returns the per-bucket structure the UI consumes.
- *
- * Native tools are grouped by ToolDomain (static map). Plugin tools are
+ * Takes the flat list of registered tools (each tagged with the domain
+ * declared at registration time), the per-plugin tool-name grouping, and
+ * the Kin's tool config, and returns the per-bucket structure the UI
+ * consumes. Native tools are grouped by ToolDomain; plugin tools are
  * grouped per plugin, sourced from `pluginGroups` directly so plugin
- * names and tool names round-trip safely without parsing the
- * `plugin_<name>_<tool>` concatenation.
- *
- * Extracted so the route stays a thin Hono handler and the transformation
- * is trivially unit-testable in isolation (no DB, no auth middleware).
+ * names and tool names round-trip safely.
  */
 
 export interface ToolEntry {
   name: string
+  domain: ToolDomain
   defaultDisabled: boolean
 }
 
@@ -44,8 +40,6 @@ export interface BuildKinToolBucketsInput {
   pluginGroups: Array<{ pluginName: string; toolNames: string[] }>
   /** The Kin's persisted tool config; null when nothing has been saved yet. */
   toolConfig: KinToolConfig | null
-  /** Static name -> domain map for core tools. */
-  toolDomainMap: Record<string, ToolDomain>
 }
 
 export interface BuildKinToolBucketsResult {
@@ -61,19 +55,19 @@ function isEnabled(tool: ToolEntry, toolConfig: KinToolConfig | null): boolean {
 }
 
 export function buildKinToolBuckets(input: BuildKinToolBucketsInput): BuildKinToolBucketsResult {
-  const { registered, pluginGroups, toolConfig, toolDomainMap } = input
+  const { registered, pluginGroups, toolConfig } = input
 
   const pluginToolNameSet = new Set(pluginGroups.flatMap((g) => g.toolNames))
   const registeredByName = new Map(registered.map((t) => [t.name, t]))
 
-  // Native bucket: anything in TOOL_DOMAIN_MAP that is NOT a plugin tool.
+  // Native bucket: every registered non-plugin tool grouped by its domain.
+  // The domain is part of the registration (single source of truth) so a
+  // new tool can't accidentally be invisible in the UI.
   const domainGroupsMap = new Map<ToolDomain, ToolListItem[]>()
   for (const t of registered) {
     if (pluginToolNameSet.has(t.name)) continue
-    const domain = toolDomainMap[t.name]
-    if (!domain) continue
-    if (!domainGroupsMap.has(domain)) domainGroupsMap.set(domain, [])
-    domainGroupsMap.get(domain)!.push({
+    if (!domainGroupsMap.has(t.domain)) domainGroupsMap.set(t.domain, [])
+    domainGroupsMap.get(t.domain)!.push({
       name: t.name,
       enabled: isEnabled(t, toolConfig),
       defaultDisabled: t.defaultDisabled,

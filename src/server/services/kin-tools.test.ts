@@ -1,12 +1,5 @@
 import { describe, test, expect } from 'bun:test'
 import { buildKinToolBuckets } from './kin-tools'
-import type { ToolDomain } from '@/shared/types'
-
-const domainMap: Record<string, ToolDomain> = {
-  search_web: 'search',
-  read_file: 'filesystem',
-  write_file: 'filesystem',
-}
 
 describe('buildKinToolBuckets', () => {
   test('returns empty buckets when nothing is registered', () => {
@@ -14,22 +7,20 @@ describe('buildKinToolBuckets', () => {
       registered: [],
       pluginGroups: [],
       toolConfig: null,
-      toolDomainMap: domainMap,
     })
     expect(result.nativeTools).toEqual([])
     expect(result.pluginTools).toEqual([])
   })
 
-  test('groups native tools by their static domain', () => {
+  test('groups native tools by the domain declared at registration', () => {
     const result = buildKinToolBuckets({
       registered: [
-        { name: 'search_web', defaultDisabled: false },
-        { name: 'read_file', defaultDisabled: false },
-        { name: 'write_file', defaultDisabled: false },
+        { name: 'search_web', domain: 'search', defaultDisabled: false },
+        { name: 'read_file', domain: 'filesystem', defaultDisabled: false },
+        { name: 'write_file', domain: 'filesystem', defaultDisabled: false },
       ],
       pluginGroups: [],
       toolConfig: null,
-      toolDomainMap: domainMap,
     })
     const byDomain = new Map(result.nativeTools.map((g) => [g.domain, g]))
     expect(byDomain.get('search')!.tools.map((t) => t.name)).toEqual(['search_web'])
@@ -37,29 +28,18 @@ describe('buildKinToolBuckets', () => {
     expect(result.pluginTools).toEqual([])
   })
 
-  test('skips registered tools that have no domain mapping (native side)', () => {
-    const result = buildKinToolBuckets({
-      registered: [{ name: 'unknown_tool', defaultDisabled: false }],
-      pluginGroups: [],
-      toolConfig: null,
-      toolDomainMap: domainMap,
-    })
-    expect(result.nativeTools).toEqual([])
-  })
-
   test('extracts plugin tools into their own group keyed by plugin name', () => {
     const result = buildKinToolBuckets({
       registered: [
-        { name: 'search_web', defaultDisabled: false },
-        { name: 'plugin_claude-code_claude_code_run', defaultDisabled: true },
-        { name: 'plugin_twilio-sms_send_sms', defaultDisabled: true },
+        { name: 'search_web', domain: 'search', defaultDisabled: false },
+        { name: 'plugin_claude-code_claude_code_run', domain: 'plugins', defaultDisabled: true },
+        { name: 'plugin_twilio-sms_send_sms', domain: 'plugins', defaultDisabled: true },
       ],
       pluginGroups: [
         { pluginName: 'claude-code', toolNames: ['plugin_claude-code_claude_code_run'] },
         { pluginName: 'twilio-sms', toolNames: ['plugin_twilio-sms_send_sms'] },
       ],
       toolConfig: null,
-      toolDomainMap: domainMap,
     })
 
     // Plugin tools do not leak into native groups, even though they are
@@ -79,8 +59,8 @@ describe('buildKinToolBuckets', () => {
   test('plugin tools are opt-in: enabled only when listed in enabledOptInTools', () => {
     const result = buildKinToolBuckets({
       registered: [
-        { name: 'plugin_claude-code_claude_code_run', defaultDisabled: true },
-        { name: 'plugin_claude-code_other_tool', defaultDisabled: true },
+        { name: 'plugin_claude-code_claude_code_run', domain: 'plugins', defaultDisabled: true },
+        { name: 'plugin_claude-code_other_tool', domain: 'plugins', defaultDisabled: true },
       ],
       pluginGroups: [
         { pluginName: 'claude-code', toolNames: ['plugin_claude-code_claude_code_run', 'plugin_claude-code_other_tool'] },
@@ -90,7 +70,6 @@ describe('buildKinToolBuckets', () => {
         mcpAccess: {},
         enabledOptInTools: ['plugin_claude-code_claude_code_run'],
       },
-      toolDomainMap: domainMap,
     })
     const tools = result.pluginTools[0]!.tools
     expect(tools.find((t) => t.name === 'plugin_claude-code_claude_code_run')!.enabled).toBe(true)
@@ -102,7 +81,6 @@ describe('buildKinToolBuckets', () => {
       registered: [], // registry has been cleared (plugin disabled, unload, etc.)
       pluginGroups: [{ pluginName: 'claude-code', toolNames: ['plugin_claude-code_claude_code_run'] }],
       toolConfig: null,
-      toolDomainMap: domainMap,
     })
     expect(result.pluginTools).toEqual([])
   })
@@ -110,8 +88,8 @@ describe('buildKinToolBuckets', () => {
   test('honors disabledNativeTools for non-opt-in tools', () => {
     const result = buildKinToolBuckets({
       registered: [
-        { name: 'search_web', defaultDisabled: false },
-        { name: 'read_file', defaultDisabled: false },
+        { name: 'search_web', domain: 'search', defaultDisabled: false },
+        { name: 'read_file', domain: 'filesystem', defaultDisabled: false },
       ],
       pluginGroups: [],
       toolConfig: {
@@ -119,7 +97,6 @@ describe('buildKinToolBuckets', () => {
         mcpAccess: {},
         enabledOptInTools: [],
       },
-      toolDomainMap: domainMap,
     })
     const all = result.nativeTools.flatMap((g) => g.tools)
     expect(all.find((t) => t.name === 'search_web')!.enabled).toBe(true)

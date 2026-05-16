@@ -64,6 +64,13 @@ function AppRoot() {
     checkOnboarding()
   }, [checkOnboarding])
 
+  // Warm the registry's name→domain map once. The lib falls back to 'mcp'
+  // while this is in-flight; first paint may briefly show generic badges
+  // for new tools, then re-render with the right colour.
+  useEffect(() => {
+    void import('@/client/lib/tool-domain-lookup').then((m) => m.loadToolDomainMap())
+  }, [])
+
   // Loading state
   if (authLoading || isCheckingOnboarding) {
     return (

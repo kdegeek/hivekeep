@@ -35,7 +35,7 @@ import { UnsavedChangesDialog } from '@/client/components/common/UnsavedChangesD
 import { useUnsavedChanges } from '@/client/hooks/useUnsavedChanges'
 import { cn } from '@/client/lib/utils'
 import { api, getErrorMessage } from '@/client/lib/api'
-import { TOOL_DOMAIN_MAP } from '@/shared/constants'
+import { getToolDomainMap } from '@/client/lib/tool-domain-lookup'
 import type { KinToolConfig, KinCompactingConfig, KinThinkingConfig } from '@/shared/types'
 import type { GeneratedKinConfig } from '@/client/hooks/useKins'
 
@@ -124,11 +124,12 @@ function buildToolConfigFromDomains(
   disableToolDomains: string[],
   enableOptInToolDomains: string[],
 ): KinToolConfig {
-  const disabledNativeTools = Object.entries(TOOL_DOMAIN_MAP)
+  const map = getToolDomainMap()
+  const disabledNativeTools = Object.entries(map)
     .filter(([, domain]) => disableToolDomains.includes(domain))
     .map(([toolName]) => toolName)
 
-  const enabledOptInTools = Object.entries(TOOL_DOMAIN_MAP)
+  const enabledOptInTools = Object.entries(map)
     .filter(([, domain]) => enableOptInToolDomains.includes(domain))
     .map(([toolName]) => toolName)
 
@@ -436,7 +437,7 @@ export function KinFormModal({
         if (avatarFile) await onUploadAvatar(created.id, avatarFile)
         // Hub with "grant all tools": override AI config to enable everything
         const effectiveToolConfig = (hubMode && hubGrantAllTools)
-          ? { disabledNativeTools: [], mcpAccess: {}, enabledOptInTools: Object.keys(TOOL_DOMAIN_MAP) }
+          ? { disabledNativeTools: [], mcpAccess: {}, enabledOptInTools: Object.keys(getToolDomainMap()) }
           : toolConfig
         // If tool config was set by wizard, update it after creation
         if (effectiveToolConfig && onUpdateKin) {

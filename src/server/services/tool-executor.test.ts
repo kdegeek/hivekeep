@@ -22,11 +22,11 @@ const call = (name: string, id: string): ToolCall => ({ id, name, args: {}, offs
 
 describe('partitionToolCalls', () => {
   beforeAll(() => {
-    toolRegistry.register(NAMES.read1, fakeTool({ readOnly: true, concurrencySafe: true }))
-    toolRegistry.register(NAMES.read2, fakeTool({ readOnly: true, concurrencySafe: true }))
-    toolRegistry.register(NAMES.read3, fakeTool({ readOnly: true, concurrencySafe: true }))
-    toolRegistry.register(NAMES.write, fakeTool({})) // conservative default: write/unsafe
-    toolRegistry.register(NAMES.ambiguous, fakeTool({ readOnly: true })) // readOnly but not concurrencySafe
+    toolRegistry.register(NAMES.read1, fakeTool({ readOnly: true, concurrencySafe: true }), 'system')
+    toolRegistry.register(NAMES.read2, fakeTool({ readOnly: true, concurrencySafe: true }), 'system')
+    toolRegistry.register(NAMES.read3, fakeTool({ readOnly: true, concurrencySafe: true }), 'system')
+    toolRegistry.register(NAMES.write, fakeTool({}), 'system') // conservative default: write/unsafe
+    toolRegistry.register(NAMES.ambiguous, fakeTool({ readOnly: true }), 'system') // readOnly but not concurrencySafe
   })
 
   afterAll(() => {

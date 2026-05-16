@@ -23,7 +23,7 @@ import { getMCPToolsForConfig } from '@/server/services/mcp'
 import { toolRegistry } from '@/server/tools/index'
 import { pluginManager } from '@/server/services/plugins'
 import { buildKinToolBuckets } from '@/server/services/kin-tools'
-import { TOOL_DOMAIN_MAP, TOOL_DOMAIN_META } from '@/shared/constants'
+import { TOOL_DOMAIN_META } from '@/shared/constants'
 import type { KinToolConfig, KinThinkingConfig, ToolDomain, MemoryCategory, MemoryScope } from '@/shared/types'
 import { sseManager } from '@/server/sse/index'
 import { resolveKinByIdOrSlug } from '@/server/services/kin-resolver'
@@ -887,14 +887,13 @@ kinRoutes.get('/:id/tools', async (c) => {
     : null
 
   // Split the flat registry into native and per-plugin buckets via the
-  // shared helper. The route used to filter on TOOL_DOMAIN_MAP only, which
-  // silently dropped any tool registered by a plugin (prefix
-  // plugin_<name>_<tool>) since the static map cannot know those names.
+  // shared helper. Each registered tool carries its domain directly (set
+  // at registration time in tools/register.ts) — single source of truth,
+  // a new tool can't slip through into "invisible in the UI" anymore.
   const { nativeTools, pluginTools } = buildKinToolBuckets({
     registered: toolRegistry.list(),
     pluginGroups: pluginManager.listToolsByPlugin(),
     toolConfig,
-    toolDomainMap: TOOL_DOMAIN_MAP,
   })
 
   // MCP tools with enabled state

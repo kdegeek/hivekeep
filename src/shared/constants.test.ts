@@ -15,7 +15,6 @@ import {
   NOTIFICATION_TYPES,
   PALETTE_IDS,
   TOOL_DOMAIN_META,
-  TOOL_DOMAIN_MAP,
   CONTACT_IDENTIFIER_SUGGESTIONS,
   SUPPORTED_LANGUAGES,
 } from '@/shared/constants'
@@ -237,32 +236,9 @@ describe('TOOL_DOMAIN_META', () => {
   })
 })
 
-// ─── TOOL_DOMAIN_MAP ─────────────────────────────────────────────────────────
-
-describe('TOOL_DOMAIN_MAP', () => {
-  it('every mapped domain exists in TOOL_DOMAIN_META', () => {
-    const validDomains = Object.keys(TOOL_DOMAIN_META)
-    for (const [tool, domain] of Object.entries(TOOL_DOMAIN_MAP)) {
-      expect(validDomains).toContain(domain)
-    }
-  })
-
-  it('maps known tools correctly', () => {
-    expect(TOOL_DOMAIN_MAP['web_search']).toBe('search')
-    expect(TOOL_DOMAIN_MAP['recall']).toBe('memory')
-    expect(TOOL_DOMAIN_MAP['memorize']).toBe('memory')
-    expect(TOOL_DOMAIN_MAP['spawn_self']).toBe('tasks')
-    expect(TOOL_DOMAIN_MAP['generate_image']).toBe('images')
-    expect(TOOL_DOMAIN_MAP['run_shell']).toBe('shell')
-    expect(TOOL_DOMAIN_MAP['execute_sql']).toBe('database')
-  })
-
-  it('has no empty string domains', () => {
-    for (const [tool, domain] of Object.entries(TOOL_DOMAIN_MAP)) {
-      expect(domain.length).toBeGreaterThan(0)
-    }
-  })
-})
+// TOOL_DOMAIN_MAP was removed in favour of the registry (single source of
+// truth — each toolRegistry.register call carries the domain). Visual
+// metadata for each domain still lives in TOOL_DOMAIN_META above.
 
 // ─── CONTACT_IDENTIFIER_SUGGESTIONS ──────────────────────────────────────────
 

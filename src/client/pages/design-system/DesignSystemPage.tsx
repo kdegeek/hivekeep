@@ -69,7 +69,7 @@ import {
 } from 'lucide-react'
 
 import { cn } from '@/client/lib/utils'
-import { TOOL_DOMAIN_META, TOOL_DOMAIN_MAP } from '@/shared/constants'
+import { TOOL_DOMAIN_META } from '@/shared/constants'
 import type { ToolDomain } from '@/shared/types'
 import { ToolDomainIcon } from '@/client/components/common/ToolDomainIcon'
 import { ToolDomainBadge } from '@/client/components/common/ToolDomainBadge'

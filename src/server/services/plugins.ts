@@ -777,12 +777,15 @@ class PluginManager {
             return aiTool
           }
 
-          // Plugin tools are always opt-in (defaultDisabled)
+          // Plugin tools are always opt-in (defaultDisabled). Domain is
+          // 'plugins' but in practice the bucket builder routes them
+          // through the plugin-tools section regardless — the domain is a
+          // safety net for code that hits the registry directly.
           toolRegistry.register(prefixedName, {
             ...toolReg,
             create: wrappedCreate,
             defaultDisabled: true,
-          })
+          }, 'plugins')
           plugin.registeredTools.push(prefixedName)
         }
       }
@@ -1277,7 +1280,8 @@ class PluginManager {
    * Tools registered by each loaded plugin, grouped by plugin name. Returns
    * one entry per plugin that currently has at least one registered tool.
    * Used by the Kin Tools route to render plugin tools as their own UI
-   * groups (the static TOOL_DOMAIN_MAP only knows core tools).
+   * groups (the bucket builder splits plugin tools off from native ones
+   * regardless of their registry domain).
    *
    * The grouping is sourced from `LoadedPlugin.registeredTools` directly,
    * so plugin names containing hyphens and tool names containing

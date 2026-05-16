@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useSSE } from '@/client/hooks/useSSE'
 import type { ChatMessage } from '@/client/hooks/useChat'
 import type { ToolCallEntry, ToolDomain } from '@/shared/types'
-import { TOOL_DOMAIN_MAP } from '@/shared/constants'
+import { getToolDomain as lookupToolDomain } from '@/client/lib/tool-domain-lookup'
 
 export type ToolCallStatus = 'pending' | 'success' | 'error'
 
@@ -20,7 +20,7 @@ export interface ToolCallViewItem {
 }
 
 function getToolDomain(toolName: string): ToolDomain {
-  return TOOL_DOMAIN_MAP[toolName] ?? 'mcp'
+  return lookupToolDomain(toolName)
 }
 
 function deriveStatus(entry: ToolCallEntry): ToolCallStatus {
