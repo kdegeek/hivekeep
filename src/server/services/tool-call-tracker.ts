@@ -25,6 +25,10 @@ export type TrackedKind = 'read_file' | 'grep'
 interface PerTaskCounts {
   // signature → number of previous calls (0 the first time, >=1 on repeats).
   counts: Map<string, number>
+  // Set of file paths the task has already read via read_file. Used by the
+  // edit/multi-edit "read-before-edit" guard (ported from opencode) to
+  // prevent hallucinated edits on files the sub-Kin hasn't actually seen.
+  readPaths: Set<string>
 }
 
 const byTask = new Map<string, PerTaskCounts>()
@@ -32,7 +36,7 @@ const byTask = new Map<string, PerTaskCounts>()
 function bucket(taskId: string): PerTaskCounts {
   let entry = byTask.get(taskId)
   if (!entry) {
-    entry = { counts: new Map() }
+    entry = { counts: new Map(), readPaths: new Set() }
     byTask.set(taskId, entry)
   }
   return entry
@@ -56,6 +60,27 @@ export function noteCall(
   const prev = entry.counts.get(signature) ?? 0
   entry.counts.set(signature, prev + 1)
   return { previousCallCount: prev }
+}
+
+/**
+ * Record that `read_file` succeeded on a given path inside a task. The
+ * read-before-edit guard uses this to decide whether edit_file / multi_edit
+ * can proceed. Idempotent: re-recording the same path is harmless.
+ */
+export function recordReadPath(taskId: string | undefined, path: string): void {
+  if (!taskId) return
+  bucket(taskId).readPaths.add(path)
+}
+
+/**
+ * Did this task ever successfully read `path` via read_file? Used by the
+ * read-before-edit guard. Returns true when there's no task context (main
+ * Kin) so the guard becomes a sub-Kin-only safeguard — main Kin runs in a
+ * conversation with the user, who's already in the loop.
+ */
+export function hasReadPath(taskId: string | undefined, path: string): boolean {
+  if (!taskId) return true
+  return bucket(taskId).readPaths.has(path)
 }
 
 /** Drop all state for a finished task. Called from the task resolver. */

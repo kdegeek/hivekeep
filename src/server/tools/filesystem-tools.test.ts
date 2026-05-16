@@ -343,6 +343,38 @@ describe('filesystem-tools', () => {
       const readResult = await readExec({ path: p('persist.txt') })
       expect(readResult.content).toBe('alpha BETA gamma')
     })
+
+    // Read-before-edit guard. Built on top of the per-task tool-call tracker,
+    // only fires when ctx.taskId is set (sub-Kin context). Main-Kin context
+    // bypasses the guard, which is what the rest of this file exercises.
+    describe('read-before-edit guard (sub-Kin only)', () => {
+      const subKinCtx: ToolExecutionContext = {
+        kinId: KIN_ID,
+        isSubKin: true,
+        taskId: 'task-readguard-1',
+      }
+      const subKinEdit = (editFileTool.create(subKinCtx) as any).execute as (p: any) => Promise<any>
+      const subKinRead = (readFileTool.create(subKinCtx) as any).execute as (p: any) => Promise<any>
+
+      beforeEach(async () => {
+        const { _resetTracker } = await import('@/server/services/tool-call-tracker')
+        _resetTracker()
+      })
+
+      it('refuses an edit on a file the task has not read', async () => {
+        writeFileSync(p('untouched.txt'), 'hello')
+        const result = await subKinEdit({ path: p('untouched.txt'), oldText: 'hello', newText: 'world' })
+        expect(result.success).toBe(false)
+        expect(result.error).toContain('have not read this file')
+      })
+
+      it('allows the edit after a prior read_file in the same task', async () => {
+        writeFileSync(p('ready.txt'), 'hello')
+        await subKinRead({ path: p('ready.txt') })
+        const result = await subKinEdit({ path: p('ready.txt'), oldText: 'hello', newText: 'world' })
+        expect(result.success).toBe(true)
+      })
+    })
   })
 
   // ── list_directory ───────────────────────────────────────

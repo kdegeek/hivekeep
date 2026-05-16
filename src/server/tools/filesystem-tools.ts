@@ -5,7 +5,7 @@ import { existsSync, statSync, readdirSync } from 'fs'
 import { readFile, writeFile, mkdir } from 'fs/promises'
 import { config } from '@/server/config'
 import { createLogger } from '@/server/logger'
-import { noteCall, readFileSignature } from '@/server/services/tool-call-tracker'
+import { noteCall, readFileSignature, recordReadPath, hasReadPath } from '@/server/services/tool-call-tracker'
 import type { ToolRegistration } from '@/server/tools/types'
 
 const log = createLogger('filesystem-tools')
@@ -126,6 +126,7 @@ export const readFileTool: ToolRegistration = {
                 log.info({ kinId: ctx.kinId, path: filePath, totalLines, startLine, endLine, pages: pdf.numpages }, 'PDF text extracted')
 
                 const dup = noteCall(ctx.taskId, 'read_file', readFileSignature({ path: filePath, offset, limit }))
+                recordReadPath(ctx.taskId, filePath)
                 return {
                   success: true,
                   content,
@@ -172,6 +173,7 @@ export const readFileTool: ToolRegistration = {
           log.info({ kinId: ctx.kinId, path: filePath, totalLines, startLine, endLine }, 'File read')
 
           const dup = noteCall(ctx.taskId, 'read_file', readFileSignature({ path: filePath, offset, limit }))
+          recordReadPath(ctx.taskId, filePath)
           return {
             success: true,
             path: filePath,
@@ -270,7 +272,7 @@ export const editFileTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Edit a file by replacing exact text. By default oldText must match exactly once; set replaceAll=true to replace all occurrences. For multiple different edits to the same file, use multi_edit instead.',
+        'Edit a file by replacing exact text. **You must `read_file` this path at least once earlier in the task** — edits without a prior read are refused (prevents hallucinated edits). By default oldText must match exactly once; set replaceAll=true to replace all occurrences. For multiple different edits to the same file, use multi_edit instead.',
       inputSchema: z.object({
         path: z.string().describe('Relative to workspace or absolute'),
         oldText: z.string().describe('Must match exactly including whitespace'),
@@ -283,6 +285,15 @@ export const editFileTool: ToolRegistration = {
       execute: async ({ path: filePath, oldText, newText, replaceAll }) => {
         const workspace = resolve(config.workspace.baseDir, ctx.kinId)
         const absPath = resolveAndValidate(filePath, workspace)
+
+        if (!hasReadPath(ctx.taskId, filePath)) {
+          return {
+            success: false,
+            applied: false,
+            error: `Refusing to edit \`${filePath}\` — you have not read this file in this task yet. Call read_file first, then retry the edit. This guard prevents hallucinated edits based on assumed content.`,
+            path: filePath,
+          }
+        }
 
         try {
           if (!existsSync(absPath)) {

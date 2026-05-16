@@ -6,6 +6,7 @@ import { readFile, writeFile } from 'fs/promises'
 import { config } from '@/server/config'
 import { createLogger } from '@/server/logger'
 import { resolveAndValidate } from '@/server/tools/filesystem-tools'
+import { hasReadPath } from '@/server/services/tool-call-tracker'
 import type { ToolRegistration } from '@/server/tools/types'
 
 const log = createLogger('multi-edit-tools')
@@ -36,7 +37,7 @@ export const multiEditTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Atomic multi-edit on a single file: all replacements succeed or none apply. Edits run sequentially (each sees the previous result). Use instead of repeated edit_file on the same file.',
+        'Atomic multi-edit on a single file: all replacements succeed or none apply. Edits run sequentially (each sees the previous result). Use instead of repeated edit_file on the same file. **You must `read_file` this path at least once earlier in the task** — edits without a prior read are refused (prevents hallucinated edits).',
       inputSchema: z.object({
         path: z.string().describe('Relative to workspace or absolute'),
         edits: z
@@ -53,6 +54,14 @@ export const multiEditTool: ToolRegistration = {
       execute: async ({ path: filePath, edits }) => {
         const workspace = resolve(config.workspace.baseDir, ctx.kinId)
         const absPath = resolveAndValidate(filePath, workspace)
+
+        if (!hasReadPath(ctx.taskId, filePath)) {
+          return {
+            success: false,
+            error: `Refusing to multi-edit \`${filePath}\` — you have not read this file in this task yet. Call read_file first, then retry the edits. This guard prevents hallucinated edits based on assumed content.`,
+            path: filePath,
+          }
+        }
 
         try {
           if (!existsSync(absPath)) {

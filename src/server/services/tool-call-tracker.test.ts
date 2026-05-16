@@ -9,6 +9,8 @@ const {
   forgetTask,
   readFileSignature,
   grepSignature,
+  recordReadPath,
+  hasReadPath,
   _resetTracker,
   _peek,
 } = await import('./tool-call-tracker')
@@ -93,5 +95,55 @@ describe('forgetTask', () => {
     noteCall('task-2', 'read_file', sig)
     forgetTask('task-1')
     expect(_peek('task-2')?.size).toBe(1)
+  })
+
+  it('clears recorded read paths too', () => {
+    recordReadPath('task-1', 'src/foo.ts')
+    expect(hasReadPath('task-1', 'src/foo.ts')).toBe(true)
+    forgetTask('task-1')
+    expect(hasReadPath('task-1', 'src/foo.ts')).toBe(false)
+  })
+})
+
+describe('read-before-edit tracking (recordReadPath / hasReadPath)', () => {
+  it('returns false when the task has not read the path', () => {
+    expect(hasReadPath('task-1', 'src/foo.ts')).toBe(false)
+  })
+
+  it('returns true after recordReadPath', () => {
+    recordReadPath('task-1', 'src/foo.ts')
+    expect(hasReadPath('task-1', 'src/foo.ts')).toBe(true)
+  })
+
+  it('is idempotent — recording twice is a no-op', () => {
+    recordReadPath('task-1', 'src/foo.ts')
+    recordReadPath('task-1', 'src/foo.ts')
+    expect(_peek('task-1')).toBeDefined()
+    // No assertion on exact size — the readPaths Set is internal — but the
+    // double-call must not throw or behave differently.
+    expect(hasReadPath('task-1', 'src/foo.ts')).toBe(true)
+  })
+
+  it('is per-task isolated', () => {
+    recordReadPath('task-1', 'src/foo.ts')
+    expect(hasReadPath('task-2', 'src/foo.ts')).toBe(false)
+  })
+
+  it("returns true when taskId is undefined (main Kin bypasses the guard)", () => {
+    // Main-Kin context has the user in the loop; the read-before-edit
+    // guard is a sub-Kin safeguard only.
+    expect(hasReadPath(undefined, 'anything.ts')).toBe(true)
+  })
+
+  it('recordReadPath with no taskId is a no-op (no bucket created)', () => {
+    recordReadPath(undefined, 'whatever.ts')
+    expect(_peek('whatever.ts')).toBeUndefined()
+  })
+
+  it('distinguishes paths exactly (no normalisation)', () => {
+    recordReadPath('task-1', 'src/foo.ts')
+    expect(hasReadPath('task-1', 'src/foo.ts')).toBe(true)
+    expect(hasReadPath('task-1', './src/foo.ts')).toBe(false)
+    expect(hasReadPath('task-1', '/abs/src/foo.ts')).toBe(false)
   })
 })
