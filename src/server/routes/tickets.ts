@@ -16,6 +16,15 @@ import {
   updateTicketComment,
   deleteTicketComment,
 } from '@/server/services/ticket-comments'
+import {
+  listAttachments,
+  getAttachment,
+  getAttachmentRaw,
+  createAttachment,
+  updateAttachment,
+  deleteAttachment,
+} from '@/server/services/ticket-attachments'
+import { stat } from 'fs/promises'
 import { db } from '@/server/db/index'
 import { projects } from '@/server/db/schema'
 import { eq } from 'drizzle-orm'
@@ -310,6 +319,147 @@ ticketRoutes.delete('/:id/comments/:commentId', async (c) => {
     log.warn({ err }, 'deleteTicketComment failed')
     return c.json({ error: { code: 'INTERNAL', message: msg } }, 500)
   }
+})
+
+// ─── Attachments ──────────────────────────────────────────────────────────────
+
+ticketRoutes.get('/:id/attachments', async (c) => {
+  const ticketId = c.req.param('id')
+  const ticket = await getTicket(ticketId)
+  if (!ticket) {
+    return c.json({ error: { code: 'TICKET_NOT_FOUND', message: 'Ticket not found' } }, 404)
+  }
+  const attachments = await listAttachments(ticketId)
+  return c.json({ attachments })
+})
+
+ticketRoutes.post('/:id/attachments', async (c) => {
+  const ticketId = c.req.param('id')
+  const ticket = await getTicket(ticketId)
+  if (!ticket) {
+    return c.json({ error: { code: 'TICKET_NOT_FOUND', message: 'Ticket not found' } }, 404)
+  }
+  const sessionUser = c.get('user') as { id: string } | undefined
+  if (!sessionUser) {
+    return c.json({ error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401)
+  }
+
+  let formData: FormData
+  try {
+    formData = await c.req.formData()
+  } catch {
+    return c.json({ error: { code: 'INVALID_BODY', message: 'Multipart body expected' } }, 400)
+  }
+
+  const files = formData.getAll('files').filter((f): f is File => f instanceof File)
+  const single = formData.get('file')
+  if (single instanceof File) files.push(single)
+  if (files.length === 0) {
+    return c.json({ error: { code: 'INVALID_FILE', message: 'At least one file is required' } }, 400)
+  }
+
+  const description = typeof formData.get('description') === 'string'
+    ? (formData.get('description') as string)
+    : null
+
+  const created = []
+  for (const file of files) {
+    try {
+      const buffer = Buffer.from(await file.arrayBuffer())
+      const attachment = await createAttachment({
+        ticketId,
+        originalName: file.name,
+        buffer,
+        mimeType: file.type || 'application/octet-stream',
+        description,
+        uploader: { type: 'user', id: sessionUser.id },
+      })
+      created.push(attachment)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Upload failed'
+      const code = msg.startsWith('FILE_TOO_LARGE')
+        ? 'FILE_TOO_LARGE'
+        : msg === 'FILE_EMPTY'
+          ? 'FILE_EMPTY'
+          : 'UPLOAD_ERROR'
+      return c.json({ error: { code, message: msg } }, 400)
+    }
+  }
+
+  return c.json({ attachments: created }, 201)
+})
+
+ticketRoutes.get('/:id/attachments/:attachmentId', async (c) => {
+  const attachmentId = c.req.param('attachmentId')
+  const attachment = await getAttachment(attachmentId)
+  if (!attachment || attachment.ticketId !== c.req.param('id')) {
+    return c.json({ error: { code: 'ATTACHMENT_NOT_FOUND', message: 'Attachment not found' } }, 404)
+  }
+  return c.json({ attachment })
+})
+
+ticketRoutes.get('/:id/attachments/:attachmentId/raw', async (c) => {
+  const attachmentId = c.req.param('attachmentId')
+  const ticketId = c.req.param('id')
+  const meta = await getAttachment(attachmentId)
+  if (!meta || meta.ticketId !== ticketId) {
+    return c.json({ error: { code: 'ATTACHMENT_NOT_FOUND', message: 'Attachment not found' } }, 404)
+  }
+  const raw = await getAttachmentRaw(attachmentId)
+  if (!raw) {
+    return c.json({ error: { code: 'ATTACHMENT_NOT_FOUND', message: 'File missing on disk' } }, 404)
+  }
+  const file = Bun.file(raw.filePath)
+  let size = raw.size
+  try {
+    const s = await stat(raw.filePath)
+    size = s.size
+  } catch {
+    // keep DB-recorded size
+  }
+  const disposition = raw.forceDownload || c.req.query('download') === '1' ? 'attachment' : 'inline'
+  // Encode filename to handle non-ASCII characters in headers.
+  const encodedName = encodeURIComponent(raw.originalName)
+  return new Response(file.stream(), {
+    headers: {
+      'Content-Type': raw.mimeType || 'application/octet-stream',
+      'Content-Length': String(size),
+      'Content-Disposition': `${disposition}; filename*=UTF-8''${encodedName}`,
+      'Cache-Control': 'private, max-age=0, must-revalidate',
+    },
+  })
+})
+
+ticketRoutes.patch('/:id/attachments/:attachmentId', async (c) => {
+  const attachmentId = c.req.param('attachmentId')
+  const ticketId = c.req.param('id')
+  const existing = await getAttachment(attachmentId)
+  if (!existing || existing.ticketId !== ticketId) {
+    return c.json({ error: { code: 'ATTACHMENT_NOT_FOUND', message: 'Attachment not found' } }, 404)
+  }
+  const body = await c.req.json().catch(() => ({})) as { name?: string; description?: string | null }
+  const updated = await updateAttachment(attachmentId, {
+    name: typeof body.name === 'string' ? body.name : undefined,
+    description: body.description === null || typeof body.description === 'string' ? body.description : undefined,
+  })
+  if (!updated) {
+    return c.json({ error: { code: 'ATTACHMENT_NOT_FOUND', message: 'Attachment not found' } }, 404)
+  }
+  return c.json({ attachment: updated })
+})
+
+ticketRoutes.delete('/:id/attachments/:attachmentId', async (c) => {
+  const attachmentId = c.req.param('attachmentId')
+  const ticketId = c.req.param('id')
+  const existing = await getAttachment(attachmentId)
+  if (!existing || existing.ticketId !== ticketId) {
+    return c.json({ error: { code: 'ATTACHMENT_NOT_FOUND', message: 'Attachment not found' } }, 404)
+  }
+  const ok = await deleteAttachment(attachmentId)
+  if (!ok) {
+    return c.json({ error: { code: 'ATTACHMENT_NOT_FOUND', message: 'Attachment not found' } }, 404)
+  }
+  return c.json({ success: true })
 })
 
 ticketRoutes.post('/:id/enrich', async (c) => {

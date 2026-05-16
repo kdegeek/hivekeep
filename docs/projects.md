@@ -73,6 +73,10 @@ All ticket-scoped tools resolve their `ticket_id` argument through the resolver:
 - `add_ticket_tag(ticket_id, tag_id)`
 - `remove_ticket_tag(ticket_id, tag_id)`
 - `start_ticket_task(ticket_id)`
+- `list_ticket_attachments(ticket_id)` / `read_ticket_attachment(ticket_id, attachment_id)`
+- `add_ticket_attachment(ticket_id, source, name?, description?)`
+- `update_ticket_attachment(ticket_id, attachment_id, { name?, description? })`
+- `delete_ticket_attachment(ticket_id, attachment_id)`
 
 `create_ticket(...)` is unchanged: it takes a `project_id` and returns the
 freshly-allocated `number` on the ticket payload.
@@ -86,6 +90,34 @@ present, bare references like `#42` resolve against it.
 - The project header shows the `slug` next to the title
 - The sidebar shows the slug as a subtitle next to the ticket counter
 - The edit dialog shows `#N` next to the dialog title
+
+## Attachments
+
+Tickets accept arbitrary file attachments (PDF, CSV, images, archives, source
+code, etc.). They are first-class on the ticket: a deletion cascades to the
+files, and Kins working on the ticket can list/read/add/rename/delete them.
+
+- **DB**: `ticket_attachments` table with a `ticket_id` FK cascading on delete
+- **Disk**: files live under `${UPLOAD_DIR}/tickets/<projectId>/<ticketId>/<id>.<ext>`
+- **Service**: `src/server/services/ticket-attachments.ts` handles CRUD plus
+  on-disk cleanup (`purgeAttachmentsForTicket` is invoked by `deleteTicket`)
+- **REST**:
+  - `GET    /api/tickets/:id/attachments` — list
+  - `POST   /api/tickets/:id/attachments` — multipart upload (1..N `files`)
+  - `GET    /api/tickets/:id/attachments/:attachmentId` — metadata
+  - `GET    /api/tickets/:id/attachments/:attachmentId/raw` — stream bytes
+    (inline by default; `?download=1` forces `Content-Disposition: attachment`,
+    same for executable extensions `.exe`/`.bat`/`.sh`/...)
+  - `PATCH  /api/tickets/:id/attachments/:attachmentId` — rename / description
+  - `DELETE /api/tickets/:id/attachments/:attachmentId`
+- **SSE**: every mutation emits a `ticket:updated` event so the kanban and
+  side-panel refresh `attachmentCount` in real time.
+- **Size cap**: `TICKET_ATTACHMENT_MAX_SIZE` (MB), defaulting to
+  `UPLOAD_MAX_FILE_SIZE` (50 MB). Empty files are rejected.
+- **Kin access**: `read_ticket_attachment` decodes text-like content inline
+  (capped at ~200 KB by default; `max_bytes` to raise/lower). For binaries,
+  the tool returns the absolute `stored_path` so the Kin can run `read_file`
+  on it directly or open it externally (e.g. PDF extraction tools).
 
 ## Prompt block injection
 

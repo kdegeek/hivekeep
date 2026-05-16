@@ -2536,6 +2536,25 @@
           "description": "The comment will be permanently removed. This cannot be undone.",
           "confirm": "Delete comment"
         }
+      },
+      "attachments": {
+        "title": "Attachments",
+        "empty": "No files attached yet.",
+        "dropHint": "Drag and drop files here, or",
+        "addFile": "Add file",
+        "preview": "Preview",
+        "download": "Download",
+        "rename": "Rename",
+        "delete": "Delete",
+        "noPreview": "No preview available. Download the file to open it.",
+        "renameTitle": "Rename attachment",
+        "renameDescription": "Choose a new filename. The file content is not modified.",
+        "renamePlaceholder": "New filename",
+        "deleteConfirm": {
+          "title": "Delete this attachment?",
+          "description": "\"{{name}}\" will be permanently removed from disk and from this ticket.",
+          "confirm": "Delete attachment"
+        }
       }
     },
     "startTask": {
@@ -2571,6 +2590,10 @@
       "awaitingInput_other": "{{count}} need you",
       "taskCount_one": "{{count}} task",
       "taskCount_other": "{{count}} tasks",
+      "attachments_one": "{{count}} file",
+      "attachments_other": "{{count}} files",
+      "attachmentsTooltip_one": "{{count}} attachment on this ticket",
+      "attachmentsTooltip_other": "{{count}} attachments on this ticket",
       "kinRunning": "{{name}} is working on this",
       "createdAt": "Created {{date}}",
       "updatedAt": "Updated {{date}}"

@@ -3,7 +3,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { Badge } from '@/client/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/client/components/ui/avatar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/client/components/ui/tooltip'
-import { Loader2, ListChecks, Clock, UserCheck } from 'lucide-react'
+import { Loader2, ListChecks, Clock, UserCheck, Paperclip } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 import { useTranslation } from 'react-i18next'
 import { formatRelativeTime } from '@/client/lib/time'
@@ -85,6 +85,7 @@ export function TicketCard({ ticket, onClick, isOverlay = false, highlightQuery,
   const hasRunning = runningKins.length > 0
   const awaitingInput = ticket.awaitingHumanInputCount ?? 0
   const hasAwaitingInput = awaitingInput > 0
+  const attachmentCount = ticket.attachmentCount ?? 0
   const visibleRunning = runningKins.slice(0, 3)
   const overflowRunning = runningKins.length - visibleRunning.length
   const normalizedQuery = (highlightQuery ?? '').trim().toLowerCase()
@@ -243,10 +244,32 @@ export function TicketCard({ ticket, onClick, isOverlay = false, highlightQuery,
               </span>
             </span>
           ) : ticket.taskCount > 0 ? (
-            <span className="inline-flex items-center gap-1 text-muted-foreground">
-              <ListChecks className="size-3" />
-              {t('projects.ticketCard.taskCount', { count: ticket.taskCount })}
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+              <span className="inline-flex items-center gap-1">
+                <ListChecks className="size-3" />
+                {t('projects.ticketCard.taskCount', { count: ticket.taskCount })}
+              </span>
+              {attachmentCount > 0 && (
+                <span className="inline-flex items-center gap-0.5">
+                  <Paperclip className="size-3" />
+                  {attachmentCount}
+                </span>
+              )}
             </span>
+          ) : attachmentCount > 0 ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                  <Paperclip className="size-3" />
+                  {t('projects.ticketCard.attachments', { count: attachmentCount })}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <span className="text-xs">
+                  {t('projects.ticketCard.attachmentsTooltip', { count: attachmentCount })}
+                </span>
+              </TooltipContent>
+            </Tooltip>
           ) : (
             <span />
           )}

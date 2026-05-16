@@ -893,3 +893,30 @@ export const ticketComments = sqliteTable('ticket_comments', {
 }, (table) => [
   index('idx_ticket_comments_ticket_created').on(table.ticketId, table.createdAt),
 ])
+
+/**
+ * Files attached to a ticket. Stored on disk under
+ * `${UPLOAD_DIR}/tickets/<projectId>/<ticketId>/<id>.<ext>` and rows here
+ * carry the metadata + back-reference. The disk file is removed by the
+ * service when the row is deleted; ticket deletion cascades via the FK so
+ * the service's cleanup hook runs on `deleteTicket`.
+ *
+ * Distinct from the `files` table (chat message attachments, channel media)
+ * and the `file_storage` table (public share-link storage with access tokens).
+ */
+export const ticketAttachments = sqliteTable('ticket_attachments', {
+  id: text('id').primaryKey(),
+  ticketId: text('ticket_id').notNull().references(() => tickets.id, { onDelete: 'cascade' }),
+  originalName: text('original_name').notNull(),
+  storedPath: text('stored_path').notNull(),
+  mimeType: text('mime_type').notNull(),
+  size: integer('size').notNull(),
+  description: text('description'),
+  uploadedByUserId: text('uploaded_by_user_id').references(() => user.id, { onDelete: 'set null' }),
+  uploadedByKinId: text('uploaded_by_kin_id').references(() => kins.id, { onDelete: 'set null' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+}, (table) => [
+  index('idx_ticket_attachments_ticket').on(table.ticketId),
+  index('idx_ticket_attachments_ticket_created').on(table.ticketId, table.createdAt),
+])

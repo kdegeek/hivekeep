@@ -150,8 +150,9 @@ Toutes les valeurs configurables de la plateforme, regroupées par domaine. Ces 
 
 | Clé | Env var | Default | Description |
 |---|---|---|---|
-| `upload.dir` | `UPLOAD_DIR` | `{dataDir}/uploads` | Répertoire de stockage des fichiers |
-| `upload.maxFileSizeMb` | `UPLOAD_MAX_FILE_SIZE` | `50` | Taille max d'un fichier uploadé (Mo) |
+| `upload.dir` | `UPLOAD_DIR` | `{dataDir}/uploads` | Répertoire de stockage des fichiers (chat, attachments tickets) |
+| `upload.maxFileSizeMb` | `UPLOAD_MAX_FILE_SIZE` | `50` | Taille max d'un fichier uploadé (Mo). Sert aussi de défaut pour les attachments tickets |
+| — | `TICKET_ATTACHMENT_MAX_SIZE` | `UPLOAD_MAX_FILE_SIZE` | Override spécifique aux attachments tickets, en Mo. Les fichiers sont stockés sous `{upload.dir}/tickets/<projectId>/<ticketId>/<id>.<ext>` et supprimés en cascade quand le ticket est détruit |
 
 ---
 

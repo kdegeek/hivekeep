@@ -2537,6 +2537,25 @@
           "description": "Le commentaire sera supprimé définitivement. Cette action est irréversible.",
           "confirm": "Supprimer le commentaire"
         }
+      },
+      "attachments": {
+        "title": "Pièces jointes",
+        "empty": "Aucun fichier attaché pour l'instant.",
+        "dropHint": "Glisse-dépose des fichiers ici, ou",
+        "addFile": "Ajouter un fichier",
+        "preview": "Aperçu",
+        "download": "Télécharger",
+        "rename": "Renommer",
+        "delete": "Supprimer",
+        "noPreview": "Aucun aperçu disponible. Télécharge le fichier pour l'ouvrir.",
+        "renameTitle": "Renommer la pièce jointe",
+        "renameDescription": "Choisis un nouveau nom de fichier. Le contenu n'est pas modifié.",
+        "renamePlaceholder": "Nouveau nom",
+        "deleteConfirm": {
+          "title": "Supprimer cette pièce jointe ?",
+          "description": "« {{name}} » sera supprimée définitivement du disque et du ticket.",
+          "confirm": "Supprimer"
+        }
       }
     },
     "startTask": {
@@ -2572,6 +2591,10 @@
       "awaitingInput_other": "{{count}} attendent une réponse",
       "taskCount_one": "{{count}} tâche",
       "taskCount_other": "{{count}} tâches",
+      "attachments_one": "{{count}} fichier",
+      "attachments_other": "{{count}} fichiers",
+      "attachmentsTooltip_one": "{{count}} pièce jointe sur ce ticket",
+      "attachmentsTooltip_other": "{{count}} pièces jointes sur ce ticket",
       "kinRunning": "{{name}} travaille dessus",
       "createdAt": "Créé le {{date}}",
       "updatedAt": "Modifié le {{date}}"

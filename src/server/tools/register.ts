@@ -118,6 +118,13 @@ import {
   listTicketCommentsTool,
   deleteTicketCommentTool,
 } from '@/server/tools/project-tools'
+import {
+  listTicketAttachmentsTool,
+  readTicketAttachmentTool,
+  addTicketAttachmentTool,
+  updateTicketAttachmentTool,
+  deleteTicketAttachmentTool,
+} from '@/server/tools/ticket-attachment-tools'
 import { generateImageTool, listImageModelsTool } from '@/server/tools/image-tools'
 import { listProvidersTool, listModelsTool } from '@/server/tools/provider-tools'
 import { runShellTool } from '@/server/tools/shell-tools'
@@ -366,6 +373,11 @@ export function registerAllTools(): void {
   toolRegistry.register('add_ticket_comment', addTicketCommentTool, 'projects')
   toolRegistry.register('list_ticket_comments', listTicketCommentsTool, 'projects')
   toolRegistry.register('delete_ticket_comment', deleteTicketCommentTool, 'projects')
+  toolRegistry.register('list_ticket_attachments', listTicketAttachmentsTool, 'projects')
+  toolRegistry.register('read_ticket_attachment', readTicketAttachmentTool, 'projects')
+  toolRegistry.register('add_ticket_attachment', addTicketAttachmentTool, 'projects')
+  toolRegistry.register('update_ticket_attachment', updateTicketAttachmentTool, 'projects')
+  toolRegistry.register('delete_ticket_attachment', deleteTicketAttachmentTool, 'projects')
   // Phase 19: Custom tools (main only)
   toolRegistry.register('register_tool', registerToolTool, 'custom')
   toolRegistry.register('run_custom_tool', runCustomToolTool, 'custom')

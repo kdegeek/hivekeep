@@ -19,6 +19,7 @@ import { EditTicketModal } from '@/client/components/project/EditTicketModal'
 import { TicketReporterBadge } from '@/client/components/project/TicketReporterBadge'
 import { TicketCommentsList } from '@/client/components/project/TicketCommentsList'
 import { TicketCommentForm } from '@/client/components/project/TicketCommentForm'
+import { TicketAttachmentsSection } from '@/client/components/project/TicketAttachmentsSection'
 import { getErrorMessage } from '@/client/lib/api'
 import { toast } from 'sonner'
 import type { TicketTaskSummary } from '@/shared/types'
@@ -223,6 +224,9 @@ export function TicketPanelContent({ ticketId }: TicketPanelContentProps) {
             </p>
           )}
         </section>
+
+        {/* Attachments */}
+        <TicketAttachmentsSection ticketId={ticket.id} />
 
         {/* Comments — newest first, top 3 collapsed */}
         <section className="mb-4">

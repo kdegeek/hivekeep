@@ -723,6 +723,9 @@ export interface TicketSummary {
   runningKins: RunningKinOnTicket[]
   /** Who created this ticket. Null for legacy rows. */
   reporter: TicketReporter | null
+  /** Number of attachments on this ticket. Refreshes via SSE
+   *  `ticket:updated` after each attachment mutation. */
+  attachmentCount: number
   createdAt: number
   updatedAt: number
 }
@@ -770,6 +773,33 @@ export interface TicketComment {
   author: TicketCommentAuthor
   content: string
   metadata: TicketCommentMetadata | null
+  createdAt: number
+  updatedAt: number
+}
+
+// ─── Ticket attachments ─────────────────────────────────────────────────────
+
+/** Who uploaded a ticket attachment. Mirrors TicketReporter but only carries the
+ *  shape needed by the UI (no slug). */
+export type TicketAttachmentUploader =
+  | { type: 'user'; id: string; name: string; avatarUrl: string | null }
+  | { type: 'kin'; id: string; name: string; avatarUrl: string | null }
+  | null
+
+/** A single file attached to a ticket. The `url` field points at the
+ *  ticket-attachment raw stream and is safe to embed in `<img>` / `<iframe>`.
+ *  `storedPath` is the absolute on-disk path; only exposed to Kin tools, never
+ *  to the UI (server stripes it before serializing for REST). */
+export interface TicketAttachment {
+  id: string
+  ticketId: string
+  name: string
+  mimeType: string
+  size: number
+  description: string | null
+  uploadedBy: TicketAttachmentUploader
+  /** Endpoint to fetch the raw bytes (relative to the API origin). */
+  url: string
   createdAt: number
   updatedAt: number
 }
