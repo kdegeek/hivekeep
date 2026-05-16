@@ -779,6 +779,15 @@ export async function buildTaskContextPreview(taskId: string): Promise<ContextPr
     ? fetchCronLearnings(task.cronId)
     : undefined
 
+  // Ticket assignment context — mirror executeSubKin so the visualizer shows
+  // the same `## Ticket assignment` block the sub-Kin actually receives
+  // (project context, ticket description, tags, and chronological comments).
+  let ticketAssignment = null
+  if (task.ticketId) {
+    const { buildTicketAssignmentInfo } = await import('@/server/services/tickets')
+    ticketAssignment = await buildTicketAssignmentInfo(task.ticketId)
+  }
+
   const systemPrompt = joinSystemPrompt(buildSystemPrompt({
     kin: { name: kinIdentity.name, slug: kinIdentity.slug, role: kinIdentity.role, character: kinIdentity.character, expertise: kinIdentity.expertise },
     contacts: [],
@@ -791,6 +800,7 @@ export async function buildTaskContextPreview(taskId: string): Promise<ContextPr
     globalPrompt,
     userLanguage: 'en',
     workspacePath: kinIdentity.workspacePath,
+    ticketAssignment: ticketAssignment ?? undefined,
   }))
 
   // Messages: only this task's messages
