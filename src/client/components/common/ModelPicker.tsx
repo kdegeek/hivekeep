@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { Check, ChevronsUpDown, Ban } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 import { Button } from '@/client/components/ui/button'
 import {
@@ -36,6 +36,9 @@ interface ModelPickerProps {
   className?: string
   /** Show a "None" option at the top to clear the selection */
   allowClear?: boolean
+  /** Label for the clear option. Defaults to `placeholder` if provided,
+   *  else to a generic translated fallback. */
+  clearLabel?: string
 }
 
 /** Build the composite value used for matching: `providerId:modelId` */
@@ -52,10 +55,12 @@ export function ModelPicker({
   disabled = false,
   className,
   allowClear = false,
+  clearLabel,
 }: ModelPickerProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [providerFilter, setProviderFilter] = useState<string | null>(null)
+  const resolvedClearLabel = clearLabel ?? placeholder ?? t('modelPicker.clear')
 
   const getItemValue = (m: ModelPickerModel) => `${m.providerId}:${m.id}`
 
@@ -183,7 +188,10 @@ export function ModelPicker({
                       !value ? 'opacity-100' : 'opacity-0',
                     )}
                   />
-                  <span className="text-muted-foreground">—</span>
+                  <Ban className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="text-muted-foreground italic">
+                    {resolvedClearLabel}
+                  </span>
                 </CommandItem>
               </CommandGroup>
             )}

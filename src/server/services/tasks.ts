@@ -478,6 +478,41 @@ export async function spawnTask(params: SpawnParams) {
     }),
   )
 
+  // Project-level defaults: if the task is ticket-bound and no explicit task
+  // override is set, inherit the project's defaults (model + thinking).
+  // Frozen at spawn so the task keeps the same config across all re-entries
+  // (same motivation as the ticket assignment snapshot above — keep Anthropic
+  // prompt cache warm).
+  // Priority chain (per field): params > project > kin (kin fallback happens
+  // at execution time when the task column stays null).
+  let effectiveModel = params.model ?? null
+  let effectiveProviderId = params.providerId ?? null
+  let effectiveThinkingConfig: KinThinkingConfig | null = params.thinkingConfig ?? null
+  if ((!effectiveModel || !effectiveThinkingConfig) && params.ticketId) {
+    const projectRow = db
+      .select({
+        model: projects.model,
+        providerId: projects.providerId,
+        thinkingConfig: projects.thinkingConfig,
+      })
+      .from(tickets)
+      .innerJoin(projects, eq(projects.id, tickets.projectId))
+      .where(eq(tickets.id, params.ticketId))
+      .get()
+    if (!effectiveModel && projectRow?.model) {
+      effectiveModel = projectRow.model
+      effectiveProviderId = projectRow.providerId
+    }
+    if (!effectiveThinkingConfig && projectRow?.thinkingConfig) {
+      try {
+        effectiveThinkingConfig = JSON.parse(projectRow.thinkingConfig) as KinThinkingConfig
+      } catch {
+        // Malformed JSON on the project row — ignore and fall back to the Kin.
+        effectiveThinkingConfig = null
+      }
+    }
+  }
+
   await db.insert(tasks).values({
     id: taskId,
     parentKinId: params.parentKinId,
@@ -485,8 +520,8 @@ export async function spawnTask(params: SpawnParams) {
     spawnType: params.spawnType,
     kind: params.kind ?? 'execute',
     mode: params.mode,
-    model: params.model ?? null,
-    providerId: params.providerId ?? null,
+    model: effectiveModel,
+    providerId: effectiveProviderId,
     title: params.title ?? null,
     description: params.description,
     status: initialStatus,
@@ -499,7 +534,7 @@ export async function spawnTask(params: SpawnParams) {
     ticketAssignmentSnapshot,
     promptContextSnapshot,
     allowHumanPrompt: params.allowHumanPrompt ?? true,
-    thinkingConfig: params.thinkingConfig ? JSON.stringify(params.thinkingConfig) : null,
+    thinkingConfig: effectiveThinkingConfig ? JSON.stringify(effectiveThinkingConfig) : null,
     toolPreset: params.toolPreset ?? null,
     runPrompt: params.runPrompt ?? null,
     concurrencyGroup,

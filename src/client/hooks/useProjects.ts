@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api } from '@/client/lib/api'
 import { useSSE } from '@/client/hooks/useSSE'
-import type { Project, ProjectSummary, ProjectTag } from '@/shared/types'
+import type { Project, ProjectSummary, ProjectTag, KinThinkingConfig } from '@/shared/types'
 
 interface CreateProjectInput {
   title: string
@@ -13,6 +13,9 @@ interface UpdateProjectInput {
   title?: string
   description?: string
   githubUrl?: string | null
+  model?: string | null
+  providerId?: string | null
+  thinkingConfig?: KinThinkingConfig | null
 }
 
 export function useProjects() {

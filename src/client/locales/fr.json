@@ -1836,7 +1836,8 @@
     "placeholder": "Sélectionnez un modèle",
     "search": "Rechercher un modèle...",
     "noResults": "Aucun modèle trouvé",
-    "all": "Tous"
+    "all": "Tous",
+    "clear": "Aucun modèle — utiliser le défaut"
   },
   "account": {
     "title": "Mon compte",
@@ -2622,6 +2623,12 @@
       "description": "Modifie les détails du projet, gère les tags, ou supprime le projet entièrement.",
       "openEdit": "Modifier le projet",
       "tagsSection": "Tags",
+      "modelField": "Modèle par défaut",
+      "modelPlaceholder": "Utiliser le modèle propre à chaque Kin",
+      "modelHint": "Utilisé par les sub-Kins lancés sur les tickets de ce projet — remplace le modèle propre à chaque Kin. Un modèle choisi explicitement au lancement d'une task reste prioritaire. Laisser vide pour retomber sur le modèle du Kin.",
+      "thinkingField": "Effort de raisonnement par défaut",
+      "thinkingInherit": "Utiliser le réglage propre à chaque Kin",
+      "thinkingHint": "Appliqué aux sub-Kins lancés sur les tickets de ce projet — remplace la config de thinking propre à chaque Kin. Une valeur choisie explicitement au lancement d'une task reste prioritaire.",
       "delete": "Supprimer le projet",
       "deleteConfirm": {
         "title": "Supprimer ce projet ?",

@@ -854,6 +854,16 @@ export const projects = sqliteTable('projects', {
   title: text('title').notNull(),
   description: text('description').notNull().default(''),
   githubUrl: text('github_url'),
+  /** Optional default model for sub-Kin tasks spawned on tickets of this
+   *  project. Frozen into `tasks.model` at spawn time when no explicit task
+   *  override is provided. Falls back to the parent Kin's own model. */
+  model: text('model'),
+  providerId: text('provider_id'),
+  /** Optional default thinking/reasoning config for sub-Kin tasks spawned on
+   *  tickets of this project. JSON: KinThinkingConfig. Same freeze-at-spawn
+   *  pattern as `model`: copied into `tasks.thinking_config` if no explicit
+   *  task override is given. Falls back to the parent Kin's own config. */
+  thinkingConfig: text('thinking_config'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 }, (table) => [

@@ -6,7 +6,7 @@ import { sseManager } from '@/server/sse/index'
 import { config } from '@/server/config'
 import { DEFAULT_PROJECT_TAGS, TICKET_STATUSES, PROJECT_SLUG_REGEX } from '@/shared/constants'
 import { generateSlug, ensureUniqueSlug } from '@/server/utils/slug'
-import type { Project, ProjectSummary, ProjectTag, TicketStatus } from '@/shared/types'
+import type { Project, ProjectSummary, ProjectTag, TicketStatus, KinThinkingConfig } from '@/shared/types'
 import type { ActiveProjectPromptInfo } from '@/server/services/prompt-builder'
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -104,12 +104,24 @@ export async function getProject(projectId: string): Promise<Project | null> {
     fetchTicketCounts(projectId),
   ])
 
+  let thinkingConfig: KinThinkingConfig | null = null
+  if (row.thinkingConfig) {
+    try {
+      thinkingConfig = JSON.parse(row.thinkingConfig) as KinThinkingConfig
+    } catch {
+      thinkingConfig = null
+    }
+  }
+
   return {
     id: row.id,
     slug: row.slug ?? '',
     title: row.title,
     description: row.description,
     githubUrl: row.githubUrl,
+    model: row.model,
+    providerId: row.providerId,
+    thinkingConfig,
     tags,
     ticketCounts,
     createdAt: toMillis(row.createdAt),
@@ -208,6 +220,13 @@ export interface UpdateProjectInput {
   /** New slug. Editable only while the project has zero tickets (avoids
    *  breaking any external reference like `kinbot#42`). */
   slug?: string
+  /** Default model for sub-Kin tasks of this project. Pass null to clear
+   *  (fall back to each Kin's own model). Must be paired with providerId. */
+  model?: string | null
+  providerId?: string | null
+  /** Default thinking config for sub-Kin tasks of this project. Pass null
+   *  to clear (fall back to each Kin's own config). */
+  thinkingConfig?: KinThinkingConfig | null
 }
 
 export async function updateProject(
@@ -222,6 +241,11 @@ export async function updateProject(
   if (input.title !== undefined) update.title = input.title
   if (input.description !== undefined) update.description = input.description
   if (input.githubUrl !== undefined) update.githubUrl = input.githubUrl
+  if (input.model !== undefined) update.model = input.model
+  if (input.providerId !== undefined) update.providerId = input.providerId
+  if (input.thinkingConfig !== undefined) {
+    update.thinkingConfig = input.thinkingConfig === null ? null : JSON.stringify(input.thinkingConfig)
+  }
 
   if (input.slug !== undefined) {
     const candidate = input.slug.trim().toLowerCase()

@@ -17,7 +17,7 @@ import {
 import type { AppVariables } from '@/server/app'
 import { createLogger } from '@/server/logger'
 import { TICKET_STATUSES } from '@/shared/constants'
-import type { TicketStatus } from '@/shared/types'
+import type { TicketStatus, KinThinkingConfig, KinThinkingEffort } from '@/shared/types'
 
 const log = createLogger('routes:projects')
 
@@ -51,14 +51,42 @@ projectRoutes.post('/', async (c) => {
   return c.json({ project }, 201)
 })
 
+const VALID_EFFORTS: readonly KinThinkingEffort[] = ['low', 'medium', 'high', 'max']
+
 projectRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id')
   const body = await c.req.json().catch(() => ({}))
-  const update: { title?: string; description?: string; githubUrl?: string | null } = {}
+  const update: {
+    title?: string
+    description?: string
+    githubUrl?: string | null
+    model?: string | null
+    providerId?: string | null
+    thinkingConfig?: KinThinkingConfig | null
+  } = {}
   if (typeof body.title === 'string') update.title = body.title
   if (typeof body.description === 'string') update.description = body.description
   if (body.githubUrl === null) update.githubUrl = null
   else if (typeof body.githubUrl === 'string') update.githubUrl = body.githubUrl
+  // Model + providerId are tightly coupled: clearing one clears both.
+  if (body.model === null || body.providerId === null) {
+    update.model = null
+    update.providerId = null
+  } else if (typeof body.model === 'string' && typeof body.providerId === 'string') {
+    update.model = body.model
+    update.providerId = body.providerId
+  }
+  // thinkingConfig: null clears (inherit from Kin); object validates shape.
+  if (body.thinkingConfig === null) {
+    update.thinkingConfig = null
+  } else if (body.thinkingConfig && typeof body.thinkingConfig === 'object') {
+    const cfg = body.thinkingConfig as Record<string, unknown>
+    const enabled = cfg.enabled === true
+    const effort = typeof cfg.effort === 'string' && (VALID_EFFORTS as readonly string[]).includes(cfg.effort)
+      ? (cfg.effort as KinThinkingEffort)
+      : null
+    update.thinkingConfig = { enabled, ...(effort !== null ? { effort } : {}) }
+  }
   const project = await updateProject(id, update)
   if (!project) {
     return c.json({ error: { code: 'PROJECT_NOT_FOUND', message: 'Project not found' } }, 404)

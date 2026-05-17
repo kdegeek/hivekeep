@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `thinking_config` text;

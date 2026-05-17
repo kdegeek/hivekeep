@@ -1836,7 +1836,8 @@
     "placeholder": "Select a model",
     "search": "Search models...",
     "noResults": "No models found",
-    "all": "All"
+    "all": "All",
+    "clear": "No model — use default"
   },
   "account": {
     "title": "My account",
@@ -2621,6 +2622,12 @@
       "description": "Modify the project details, manage tags, or delete the project entirely.",
       "openEdit": "Edit project",
       "tagsSection": "Tags",
+      "modelField": "Default model",
+      "modelPlaceholder": "Use each Kin's own model",
+      "modelHint": "Used by sub-Kin tasks running on tickets of this project — overrides each Kin's own model. A model picked explicitly when spawning a task still wins. Leave empty to fall back to the Kin's model.",
+      "thinkingField": "Default reasoning effort",
+      "thinkingInherit": "Use each Kin's own setting",
+      "thinkingHint": "Applied to sub-Kin tasks running on tickets of this project — overrides each Kin's own thinking config. A value chosen explicitly at task spawn still wins.",
       "delete": "Delete project",
       "deleteConfirm": {
         "title": "Delete this project?",

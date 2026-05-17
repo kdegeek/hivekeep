@@ -706,6 +706,15 @@ export interface Project {
   title: string
   description: string
   githubUrl: string | null
+  /** Optional default model for sub-Kin tasks spawned on tickets of this
+   *  project. Frozen into the task at spawn time; falls back to the Kin's
+   *  own model when null. An explicit model passed at spawn still wins. */
+  model: string | null
+  providerId: string | null
+  /** Optional default thinking/reasoning config for sub-Kin tasks spawned on
+   *  tickets of this project. Same freeze-at-spawn semantics as `model`.
+   *  Null means "inherit from each Kin". */
+  thinkingConfig: KinThinkingConfig | null
   tags: ProjectTag[]
   ticketCounts: Record<TicketStatus, number>
   createdAt: number
