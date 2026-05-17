@@ -45,6 +45,8 @@ const CANDIDATE_PATHS = [
   join(REAL_HOME, '.codex', 'auth.json'),
 ]
 
+const MODELS_CACHE_PATH = join(REAL_HOME, '.codex', 'models_cache.json')
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -60,17 +62,68 @@ interface CodexAuthFile {
 }
 
 // ---------------------------------------------------------------------------
-// Hardcoded models (the Codex backend has no /models endpoint)
+// Model discovery
 // ---------------------------------------------------------------------------
-const CODEX_MODELS: ProviderModel[] = [
-  { id: 'gpt-5.3-codex', name: 'GPT-5.3 Codex', capability: 'llm' },
-  { id: 'gpt-5.2-codex', name: 'GPT-5.2 Codex', capability: 'llm' },
-  { id: 'gpt-5.1-codex-max', name: 'GPT-5.1 Codex Max', capability: 'llm' },
-  { id: 'gpt-5.1-codex', name: 'GPT-5.1 Codex', capability: 'llm' },
-  { id: 'gpt-5.1-codex-mini', name: 'GPT-5.1 Codex Mini', capability: 'llm' },
-  { id: 'gpt-5-codex', name: 'GPT-5 Codex', capability: 'llm' },
-  { id: 'gpt-5-codex-mini', name: 'GPT-5 Codex Mini', capability: 'llm' },
+// The Codex CLI maintains ~/.codex/models_cache.json — an etag-versioned snapshot
+// of the catalog served by the Codex backend. We reuse it instead of hardcoding,
+// so kinbot stays in sync with whatever models the Codex backend currently exposes
+// (and avoids picking up deprecated slugs that return 400 Bad Request).
+//
+// The cache is refreshed by the Codex CLI itself on launch. We only read it.
+//
+// Fallback list is kept intentionally minimal — used only when the cache file
+// is missing (Codex CLI never run) so the provider still has *something* to offer.
+const FALLBACK_CODEX_MODELS: ProviderModel[] = [
+  { id: 'gpt-5.4', name: 'gpt-5.4', capability: 'llm' },
+  { id: 'gpt-5.4-mini', name: 'GPT-5.4-Mini', capability: 'llm' },
 ]
+
+interface CodexModelCacheEntry {
+  slug: string
+  display_name?: string
+  visibility?: 'list' | 'hide' | string
+  supported_in_api?: boolean
+  priority?: number
+  // Presence of `upgrade` means this slug has been deprecated in favor of another model.
+  upgrade?: unknown
+}
+
+interface CodexModelsCacheFile {
+  models?: CodexModelCacheEntry[]
+}
+
+function readCodexModelsFromCache(): ProviderModel[] | null {
+  try {
+    if (!existsSync(MODELS_CACHE_PATH)) return null
+    const raw = readFileSync(MODELS_CACHE_PATH, 'utf8')
+    const parsed = JSON.parse(raw) as CodexModelsCacheFile
+    if (!parsed.models || !Array.isArray(parsed.models)) return null
+
+    const filtered = parsed.models.filter(
+      (m) =>
+        typeof m.slug === 'string' &&
+        m.slug.length > 0 &&
+        m.supported_in_api === true &&
+        m.visibility === 'list' &&
+        m.upgrade == null,
+    )
+
+    filtered.sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
+
+    return filtered.map((m) => ({
+      id: m.slug,
+      name: m.display_name && m.display_name.length > 0 ? m.display_name : m.slug,
+      capability: 'llm' as const,
+    }))
+  } catch (err) {
+    log.warn({ err }, 'Failed to read Codex models cache, falling back to defaults')
+    return null
+  }
+}
+
+function getCodexModels(): ProviderModel[] {
+  return readCodexModelsFromCache() ?? FALLBACK_CODEX_MODELS
+}
 
 // ---------------------------------------------------------------------------
 // Credentials path resolution
@@ -211,6 +264,10 @@ export const openaiCodexProvider: ProviderDefinition = {
       const credsPath = resolveCredsPath(config.apiKey || undefined)
       const { accessToken, accountId } = await ensureFreshToken(credsPath)
 
+      // Pick the highest-priority non-deprecated model from the cache so the test
+      // request never gets a 400 Bad Request for a sunset slug.
+      const testModel = getCodexModels()[0]?.id ?? FALLBACK_CODEX_MODELS[0]!.id
+
       // Make a minimal streaming request to verify credentials work
       const response = await fetch(`${CODEX_BASE_URL}/responses`, {
         method: 'POST',
@@ -220,7 +277,7 @@ export const openaiCodexProvider: ProviderDefinition = {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-5.3-codex',
+          model: testModel,
           instructions: 'Reply with exactly one word.',
           input: [{ role: 'user', content: 'Say hi' }],
           store: false,
@@ -252,7 +309,8 @@ export const openaiCodexProvider: ProviderDefinition = {
   },
 
   async listModels(_config: ProviderConfig) {
-    // The Codex backend has no /models endpoint — return hardcoded list
-    return CODEX_MODELS
+    // Read from ~/.codex/models_cache.json (maintained by the Codex CLI).
+    // Falls back to a minimal hardcoded list if the cache file is unavailable.
+    return getCodexModels()
   },
 }
