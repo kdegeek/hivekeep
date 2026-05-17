@@ -7,6 +7,8 @@ import { db, initVirtualTables } from '@/server/db/index'
 import { startQueueWorker } from '@/server/services/kin-engine'
 import { registerAllTools } from '@/server/tools/register'
 import { registerBuiltinLLMProviders } from '@/server/llm/llm/register'
+import { registerBuiltinEmbeddingProviders } from '@/server/llm/embedding/register'
+import { registerBuiltinImageProviders } from '@/server/llm/image/register'
 import { initCronScheduler } from '@/server/services/crons'
 import { recoverPendingWakeups } from '@/server/services/wakeup-scheduler'
 import { Cron } from 'croner'
@@ -60,9 +62,11 @@ await backfillProviderSlugs()
 log.info('Registering native tools...')
 registerAllTools()
 
-// Register built-in LLM providers
+// Register built-in LLM / embedding / image providers
 log.info('Registering built-in LLM providers...')
 registerBuiltinLLMProviders()
+registerBuiltinEmbeddingProviders()
+registerBuiltinImageProviders()
 
 // Scan and load plugins
 log.info('Scanning for plugins...')

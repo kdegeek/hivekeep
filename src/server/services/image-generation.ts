@@ -1,4 +1,3 @@
-import OpenAI, { toFile } from 'openai'
 import { eq } from 'drizzle-orm'
 import { join } from 'path'
 import { db } from '@/server/db/index'
@@ -7,6 +6,8 @@ import { providers } from '@/server/db/schema'
 import { decrypt } from '@/server/services/encryption'
 import { getDefaultImageModel, getDefaultImageProviderId } from '@/server/services/app-settings'
 import { listModelsForProvider } from '@/server/providers/index'
+import { getImageProvider } from '@/server/llm/image/registry'
+import type { ProviderConfig } from '@/server/llm/core/types'
 
 const BASE_AVATAR_PATH = join(import.meta.dir, '..', 'assets', 'base-avatar.png')
 
@@ -26,10 +27,19 @@ async function loadBaseAvatar(): Promise<Uint8Array> {
 
 /**
  * Whether a given (providerType, modelId) pair accepts an image as input.
+ *
+ * Today only the gpt-image-* and dall-e-2 families on OpenAI support image
+ * input. dall-e-3 is text-to-image only. When a new image provider lands
+ * (Replicate, Stability, etc.), extend this without touching the rest of
+ * kinbot — the provider itself owns the supportsImageInput flag on each
+ * ImageModel; this helper is only the "before-roundtrip" peek used by the
+ * UI to disable the upload button.
  */
 export function modelSupportsImageInput(providerType: string, modelId?: string | null): boolean {
   if (!modelId) return false
-  if (providerType === 'openai') return modelId.startsWith('gpt-image')
+  if (providerType === 'openai') {
+    return modelId.startsWith('gpt-image') || modelId === 'dall-e-2'
+  }
   return false
 }
 
@@ -158,22 +168,41 @@ export async function generateImage(
     imageData = await resolveImageInput(options.imageUrl)
   }
 
-  if (provider.type === 'openai') {
-    const result = await generateWithOpenAI(providerConfig, prompt, effectiveModelId, imageData)
-    recordUsage({
-      callSite: 'image-gen',
-      callType: 'generate-image',
-      providerType: 'openai',
-      providerId: provider.id,
-      modelId: effectiveModelId,
-    })
-    return result
+  const imageProvider = getImageProvider(provider.type)
+  if (!imageProvider) {
+    throw new ImageGenerationError(
+      'UNSUPPORTED_PROVIDER',
+      `Provider type ${provider.type} does not support image generation`,
+    )
   }
 
-  throw new ImageGenerationError(
-    'UNSUPPORTED_PROVIDER',
-    `Provider type ${provider.type} does not support image generation`,
+  const result = await imageProvider.generate(
+    { id: effectiveModelId, name: effectiveModelId, supportsImageInput: modelSupportsImageInput(provider.type, effectiveModelId) },
+    {
+      prompt,
+      ...(imageData ? { imageInput: { data: imageData, mediaType: 'image/png' } } : {}),
+    },
+    providerConfig as ProviderConfig,
   )
+
+  recordUsage({
+    callSite: 'image-gen',
+    callType: 'generate-image',
+    providerType: provider.type,
+    providerId: provider.id,
+    modelId: effectiveModelId,
+  })
+
+  return {
+    base64: uint8ToBase64(result.data),
+    mediaType: result.mediaType,
+  }
+}
+
+function uint8ToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!)
+  return globalThis.btoa(binary)
 }
 
 /**
@@ -219,44 +248,6 @@ async function resolveImageInput(imageUrl: string): Promise<Uint8Array> {
   }
 
   throw new ImageGenerationError('INVALID_IMAGE_URL', `Invalid image URL: ${imageUrl}. Must be an internal /api/ path or an external https:// URL.`)
-}
-
-async function generateWithOpenAI(
-  config: { apiKey: string },
-  prompt: string,
-  modelId: string,
-  imageData?: Uint8Array,
-): Promise<GenerateImageResult> {
-  const openai = new OpenAI({ apiKey: config.apiKey })
-
-  let response
-  if (imageData) {
-    // Image edit / inpainting — supported by gpt-image-* models.
-    const file = await toFile(imageData, 'input.png', { type: 'image/png' })
-    response = await openai.images.edit({
-      model: modelId,
-      image: file,
-      prompt,
-      size: '1024x1024',
-    })
-  } else {
-    // dall-e-3 needs response_format=b64_json to return base64;
-    // gpt-image-* returns b64_json by default. Send both flags safely.
-    const isDallE = modelId.startsWith('dall-e')
-    response = await openai.images.generate({
-      model: modelId,
-      prompt,
-      size: '1024x1024',
-      ...(isDallE ? { response_format: 'b64_json' as const } : {}),
-    })
-  }
-
-  const item = response.data?.[0]
-  const base64 = item?.b64_json
-  if (!base64) {
-    throw new ImageGenerationError('NO_IMAGE_DATA', 'OpenAI image API returned no image data')
-  }
-  return { base64, mediaType: 'image/png' }
 }
 
 async function findImageProvider() {
