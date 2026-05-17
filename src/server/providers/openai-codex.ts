@@ -74,8 +74,8 @@ interface CodexAuthFile {
 // Fallback list is kept intentionally minimal — used only when the cache file
 // is missing (Codex CLI never run) so the provider still has *something* to offer.
 const FALLBACK_CODEX_MODELS: ProviderModel[] = [
-  { id: 'gpt-5.4', name: 'gpt-5.4', capability: 'llm' },
-  { id: 'gpt-5.4-mini', name: 'GPT-5.4-Mini', capability: 'llm' },
+  { id: 'gpt-5.4', name: 'gpt-5.4', capability: 'llm', contextWindow: 272_000 },
+  { id: 'gpt-5.4-mini', name: 'GPT-5.4-Mini', capability: 'llm', contextWindow: 272_000 },
 ]
 
 interface CodexModelCacheEntry {
@@ -84,6 +84,7 @@ interface CodexModelCacheEntry {
   visibility?: 'list' | 'hide' | string
   supported_in_api?: boolean
   priority?: number
+  context_window?: number
   // Presence of `upgrade` means this slug has been deprecated in favor of another model.
   upgrade?: unknown
 }
@@ -114,6 +115,9 @@ function readCodexModelsFromCache(): ProviderModel[] | null {
       id: m.slug,
       name: m.display_name && m.display_name.length > 0 ? m.display_name : m.slug,
       capability: 'llm' as const,
+      ...(typeof m.context_window === 'number' && m.context_window > 0
+        ? { contextWindow: m.context_window }
+        : {}),
     }))
   } catch (err) {
     log.warn({ err }, 'Failed to read Codex models cache, falling back to defaults')
