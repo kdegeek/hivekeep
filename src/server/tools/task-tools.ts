@@ -55,6 +55,13 @@ export const spawnSelfTool: ToolRegistration = {
       }),
       execute: async ({ title, task_description, mode, model, provider_id, allow_human_prompt, concurrency_group, concurrency_max, thinking, tool_preset }) => {
         log.debug({ kinId: ctx.kinId, mode, spawnType: 'self', preset: tool_preset }, 'Task spawn requested (spawn_self)')
+        if (model && !provider_id) {
+          throw new Error(
+            'When overriding the parent Kin\'s model, you must pass provider_id too. ' +
+              'Use list_models to find the right (model, providerId) pair — the same model name can be served by several providers ' +
+              '(e.g. an OpenAI API key and a Codex CLI subscription), and kinbot cannot guess which one you mean.',
+          )
+        }
         const { taskId, queued } = await spawnTask({
           parentKinId: ctx.kinId,
           title,
@@ -112,6 +119,14 @@ export const spawnKinTool: ToolRegistration = {
           .describe('Override the auto-picked sub-Kin tool surface. Omit to default (ticket → "code", else full). See spawn_self for preset descriptions.'),
       }),
       execute: async ({ kin_slug, title, task_description, mode, model, provider_id, allow_human_prompt, concurrency_group, concurrency_max, thinking, tool_preset }) => {
+        if (model && !provider_id) {
+          return {
+            error:
+              'When overriding the spawned Kin\'s model, you must pass provider_id too. ' +
+              'Use list_models to find the right (model, providerId) pair — the same model name can be served by several providers ' +
+              '(e.g. an OpenAI API key and a Codex CLI subscription), and kinbot cannot guess which one you mean.',
+          }
+        }
         const kinId = resolveKinId(kin_slug)
         if (!kinId) {
           return { error: `Kin not found for slug "${kin_slug}"` }

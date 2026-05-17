@@ -176,7 +176,7 @@ describe('task-tools', () => {
       })
     })
 
-    itMocked('passes optional model parameter', async () => {
+    itMocked('passes optional model parameter (with required provider_id)', async () => {
       mockTasks.spawnTask.mockResolvedValue({ taskId: 'task-789' })
 
       await execute(spawnSelfTool, {
@@ -184,11 +184,21 @@ describe('task-tools', () => {
         task_description: 'Do something',
         mode: 'async',
         model: 'gpt-4o',
+        provider_id: 'prov-uuid-1',
       })
 
       expect(mockTasks.spawnTask).toHaveBeenCalledWith(
-        expect.objectContaining({ model: 'gpt-4o', mode: 'async' }),
+        expect.objectContaining({ model: 'gpt-4o', providerId: 'prov-uuid-1', mode: 'async' }),
       )
+    })
+
+    itMocked('throws when model is set without provider_id', async () => {
+      await expect(execute(spawnSelfTool, {
+        title: 'Task',
+        task_description: 'Do something',
+        mode: 'async',
+        model: 'gpt-4o',
+      })).rejects.toThrow(/provider_id/)
     })
 
     itMocked('passes allow_human_prompt parameter', async () => {
@@ -255,11 +265,23 @@ describe('task-tools', () => {
         task_description: 'Help me',
         mode: 'await',
         model: 'claude-sonnet',
+        provider_id: 'prov-uuid-2',
       })
 
       expect(mockTasks.spawnTask).toHaveBeenCalledWith(
-        expect.objectContaining({ model: 'claude-sonnet' }),
+        expect.objectContaining({ model: 'claude-sonnet', providerId: 'prov-uuid-2' }),
       )
+    })
+
+    itMocked('returns error when model is set without provider_id', async () => {
+      const result = await execute(spawnKinTool, {
+        kin_slug: 'helper',
+        title: 'Help',
+        task_description: 'Help me',
+        mode: 'await',
+        model: 'claude-sonnet',
+      })
+      expect((result as { error?: string }).error).toMatch(/provider_id/)
     })
   })
 

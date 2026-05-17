@@ -87,9 +87,16 @@ export async function resolveLLM(opts: ResolveOptions): Promise<ResolvedLLM> {
     return { provider: llm, model, config, providerRow: row }
   }
 
-  // Auto-resolve: scan valid LLM providers
+  // Auto-resolve: scan valid LLM providers. Order matters when the same
+  // model name is served by several providers (e.g. an OpenAI API key AND
+  // an OpenAI Codex CLI subscription both expose `gpt-5`) — without an
+  // explicit `providerId`, the user almost certainly wants the
+  // fixed-cost subscription rather than pay-per-token. Sort accordingly:
+  // subscription-style providers first, then API-key providers, then
+  // plugins, then anything else.
   const allRows = db.select().from(providers).all()
-  for (const row of allRows) {
+  const sorted = [...allRows].sort((a, b) => providerPriority(a.type) - providerPriority(b.type))
+  for (const row of sorted) {
     if (!row.isValid) continue
     const llm = getLLMProvider(row.type)
     if (!llm) continue
@@ -105,6 +112,25 @@ export async function resolveLLM(opts: ResolveOptions): Promise<ResolvedLLM> {
     `Model "${modelId}" not available on any configured provider. ` +
       `Use list_models to discover valid (model, provider) pairs.`,
   )
+}
+
+/**
+ * Sort key for auto-detection: lower wins. Subscription providers go first
+ * so the user's fixed-cost plan is preferred over pay-per-token when both
+ * could serve the requested model. The exact values are arbitrary; only
+ * the order matters.
+ */
+function providerPriority(type: string): number {
+  switch (type) {
+    case 'anthropic-oauth':
+    case 'openai-codex':
+      return 0
+    case 'anthropic':
+    case 'openai':
+      return 1
+    default:
+      return 2
+  }
 }
 
 /**
