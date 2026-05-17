@@ -1,5 +1,4 @@
-import { embed } from 'ai'
-import { createOpenAI } from '@ai-sdk/openai'
+import OpenAI from 'openai'
 import { db } from '@/server/db/index'
 import { createLogger } from '@/server/logger'
 import { providers } from '@/server/db/schema'
@@ -22,7 +21,6 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
   const providerConfig = JSON.parse(await decrypt(provider.configEncrypted)) as {
     apiKey: string
-    baseUrl?: string
   }
 
   const embeddingModelId = (await getEmbeddingModel()) ?? config.memory.embeddingModel
@@ -31,10 +29,14 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     throw new Error(`Provider type ${provider.type} does not support embeddings`)
   }
 
-  const openai = createOpenAI({ apiKey: providerConfig.apiKey, baseURL: providerConfig.baseUrl })
-  const model = openai.embedding(embeddingModelId)
+  const openai = new OpenAI({ apiKey: providerConfig.apiKey })
+  const result = await openai.embeddings.create({
+    model: embeddingModelId,
+    input: text,
+  })
 
-  const result = await embed({ model, value: text })
+  const vector = result.data[0]?.embedding
+  if (!vector) throw new Error('OpenAI embeddings API returned no vector')
 
   recordUsage({
     callSite: 'embedding',
@@ -42,10 +44,10 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     providerType: provider.type,
     providerId: provider.id,
     modelId: embeddingModelId,
-    embeddingTokens: result.usage?.tokens,
+    embeddingTokens: result.usage?.prompt_tokens,
   })
 
-  return result.embedding
+  return vector
 }
 
 async function findEmbeddingProvider() {

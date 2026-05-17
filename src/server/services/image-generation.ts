@@ -1,5 +1,4 @@
-import { generateImage as aiGenerateImage } from 'ai'
-import { createOpenAI } from '@ai-sdk/openai'
+import OpenAI, { toFile } from 'openai'
 import { eq } from 'drizzle-orm'
 import { join } from 'path'
 import { db } from '@/server/db/index'
@@ -222,29 +221,42 @@ async function resolveImageInput(imageUrl: string): Promise<Uint8Array> {
   throw new ImageGenerationError('INVALID_IMAGE_URL', `Invalid image URL: ${imageUrl}. Must be an internal /api/ path or an external https:// URL.`)
 }
 
-type ImagePrompt = string | { images: Uint8Array[]; text?: string }
-
-function buildPrompt(textPrompt: string, imageData?: Uint8Array): ImagePrompt {
-  if (!imageData) return textPrompt
-  return { images: [imageData], text: textPrompt }
-}
-
 async function generateWithOpenAI(
-  config: { apiKey: string; baseUrl?: string },
+  config: { apiKey: string },
   prompt: string,
   modelId: string,
   imageData?: Uint8Array,
 ): Promise<GenerateImageResult> {
-  const openai = createOpenAI({ apiKey: config.apiKey, baseURL: config.baseUrl })
-  const { image } = await aiGenerateImage({
-    model: openai.image(modelId),
-    prompt: buildPrompt(prompt, imageData),
-    size: '1024x1024' as `${number}x${number}`,
-  })
-  return {
-    base64: image.base64,
-    mediaType: image.mediaType ?? 'image/png',
+  const openai = new OpenAI({ apiKey: config.apiKey })
+
+  let response
+  if (imageData) {
+    // Image edit / inpainting — supported by gpt-image-* models.
+    const file = await toFile(imageData, 'input.png', { type: 'image/png' })
+    response = await openai.images.edit({
+      model: modelId,
+      image: file,
+      prompt,
+      size: '1024x1024',
+    })
+  } else {
+    // dall-e-3 needs response_format=b64_json to return base64;
+    // gpt-image-* returns b64_json by default. Send both flags safely.
+    const isDallE = modelId.startsWith('dall-e')
+    response = await openai.images.generate({
+      model: modelId,
+      prompt,
+      size: '1024x1024',
+      ...(isDallE ? { response_format: 'b64_json' as const } : {}),
+    })
   }
+
+  const item = response.data?.[0]
+  const base64 = item?.b64_json
+  if (!base64) {
+    throw new ImageGenerationError('NO_IMAGE_DATA', 'OpenAI image API returned no image data')
+  }
+  return { base64, mediaType: 'image/png' }
 }
 
 async function findImageProvider() {
