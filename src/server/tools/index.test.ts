@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test'
-import type { Tool } from 'ai'
+import type { Tool } from '@/server/tools/tool-helper'
 import { z } from 'zod'
 import type { ToolRegistration, ToolExecutionContext } from '@/server/tools/types'
 

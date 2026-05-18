@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { z } from 'zod'
-import { tool } from 'ai'
+import { tool } from '@/server/tools/tool-helper'
 import {
   vercelToolsToKinbot,
   markLastKinbotToolCacheable,

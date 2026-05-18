@@ -1,4 +1,4 @@
-import { tool } from 'ai'
+import { tool } from '@/server/tools/tool-helper'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { db } from '@/server/db/index'

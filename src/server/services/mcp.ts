@@ -1,6 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
-import { tool as aiTool } from 'ai'
+import { tool as aiTool } from '@/server/tools/tool-helper'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { readdirSync, existsSync } from 'fs'
@@ -9,7 +9,7 @@ import { join } from 'path'
 import { db } from '@/server/db/index'
 import { createLogger } from '@/server/logger'
 import { mcpServers, kinMcpServers } from '@/server/db/schema'
-import type { Tool } from 'ai'
+import type { Tool } from '@/server/tools/tool-helper'
 import type { KinToolConfig } from '@/shared/types'
 
 const log = createLogger('mcp')

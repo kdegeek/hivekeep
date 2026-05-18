@@ -1,4 +1,4 @@
-import { tool } from 'ai'
+import { tool } from '@/server/tools/tool-helper'
 import { z } from 'zod'
 import { resolve } from 'path'
 import { config } from '@/server/config'

@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync, readdirSync, statSync, unlinkSync } from 'fs'
 import { join } from 'path'
 import { createHash } from 'crypto'
-import type { Tool } from 'ai'
+import type { Tool } from '@/server/tools/tool-helper'
 import { config } from '@/server/config'
 import { createLogger } from '@/server/logger'
 

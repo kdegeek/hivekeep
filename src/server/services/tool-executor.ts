@@ -1,4 +1,4 @@
-import type { Tool, JSONValue } from 'ai'
+import type { Tool, JSONValue } from '@/server/tools/tool-helper'
 import { toolRegistry } from '@/server/tools/index'
 import { sseManager } from '@/server/sse/index'
 import { config } from '@/server/config'

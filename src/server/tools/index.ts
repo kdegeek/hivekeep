@@ -1,4 +1,4 @@
-import type { Tool } from 'ai'
+import type { Tool } from '@/server/tools/tool-helper'
 import type { ToolRegistration, ToolExecutionContext, ToolAvailability } from '@/server/tools/types'
 import type { ToolDomain } from '@/shared/types'
 import { hookRegistry } from '@/server/hooks/index'

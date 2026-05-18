@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { tool } from 'ai'
+import { tool } from '@/server/tools/tool-helper'
 import type { ToolRegistration } from '@/server/tools/types'
 
 // ─── Template definitions ───────────────────────────────────────────────────

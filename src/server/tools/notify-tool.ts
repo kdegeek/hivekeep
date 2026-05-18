@@ -1,4 +1,4 @@
-import { tool } from 'ai'
+import { tool } from '@/server/tools/tool-helper'
 import { z } from 'zod'
 import { createNotification } from '@/server/services/notifications'
 import type { ToolRegistration } from './types'

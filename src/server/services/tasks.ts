@@ -1,4 +1,5 @@
-import { streamText, type Tool, type ModelMessage } from 'ai'
+import type { ModelMessage } from 'ai'
+import type { Tool } from '@/server/tools/tool-helper'
 import { eq, and, desc, asc, inArray, like, or, sql, gte, lte, isNull, isNotNull } from 'drizzle-orm'
 import { v4 as uuid } from 'uuid'
 import { db, sqlite } from '@/server/db/index'

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { tool } from 'ai'
+import { tool } from '@/server/tools/tool-helper'
 import type { ToolRegistration } from '@/server/tools/types'
 
 const DOCS_BASE_URL = 'https://marlburrow.github.io/kinbot/docs'

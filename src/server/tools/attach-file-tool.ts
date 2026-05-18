@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { tool } from 'ai'
+import { tool } from '@/server/tools/tool-helper'
 import { createLogger } from '@/server/logger'
 import type { ToolRegistration } from '@/server/tools/types'
 import type { OutboundAttachment } from '@/server/channels/adapter'

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'bun:test'
 import { toolRegistry } from '@/server/tools/index'
 import { partitionToolCalls, type ToolCall } from '@/server/services/tool-executor'
 import type { ToolRegistration } from '@/server/tools/types'
-import type { Tool } from 'ai'
+import type { Tool } from '@/server/tools/tool-helper'
 
 const fakeTool = (overrides: Partial<ToolRegistration> = {}): ToolRegistration => ({
   availability: ['main', 'sub-kin'],

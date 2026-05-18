@@ -1,6 +1,6 @@
 import os from 'os'
 import { execSync } from 'child_process'
-import { tool } from 'ai'
+import { tool } from '@/server/tools/tool-helper'
 import { z } from 'zod'
 import type { ToolRegistration } from '@/server/tools/types'
 

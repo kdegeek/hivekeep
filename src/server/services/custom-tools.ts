@@ -5,9 +5,9 @@ import { db } from '@/server/db/index'
 import { createLogger } from '@/server/logger'
 import { customTools } from '@/server/db/schema'
 import { config } from '@/server/config'
-import { tool as aiTool } from 'ai'
+import { tool as aiTool } from '@/server/tools/tool-helper'
 import { z } from 'zod'
-import type { Tool } from 'ai'
+import type { Tool } from '@/server/tools/tool-helper'
 
 const log = createLogger('custom-tools')
 

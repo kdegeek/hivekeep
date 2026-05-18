@@ -16,8 +16,9 @@
  * are pure data — no behavior is moved here.
  */
 
-import { asSchema, type ModelMessage } from 'ai'
-import type { Tool } from '@ai-sdk/provider-utils'
+import type { ModelMessage } from 'ai'
+import { asSchema } from '@/server/tools/tool-helper'
+import type { Tool } from '@/server/tools/tool-helper'
 import type {
   KinbotMessage,
   KinbotMessageBlock,

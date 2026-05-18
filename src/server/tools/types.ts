@@ -1,4 +1,4 @@
-import type { Tool } from 'ai'
+import type { Tool } from '@/server/tools/tool-helper'
 
 /** Execution context: main Kin agent or sub-Kin (task) */
 export type ToolAvailability = 'main' | 'sub-kin'
