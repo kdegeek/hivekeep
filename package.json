@@ -27,6 +27,10 @@
   "workspaces": [
     "packages/*"
   ],
+  "overrides": {
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.43.0"
+  },
   "scripts": {
     "dev": "concurrently -n client,server -c blue,green \"bun run dev:client\" \"bun run dev:server\"",
     "dev:client": "vite",
