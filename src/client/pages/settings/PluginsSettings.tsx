@@ -482,7 +482,6 @@ export function PluginsSettings() {
                   <Switch
                     checked={plugin.enabled}
                     onCheckedChange={(checked) => handleToggle(plugin.name, checked)}
-                    disabled={!!plugin.error && !plugin.enabled}
                   />
                 </div>
               </div>

@@ -484,27 +484,41 @@ export function validatePluginExports(
     }
   }
 
-  // Validate providers
+  // Validate providers — must be an array of native LLMProvider /
+  // EmbeddingProvider / ImageProvider instances. The plugin loader
+  // detects each provider's family at registration time by inspecting
+  // which method it carries (chat / embed / generate).
   if (ex.providers !== undefined) {
-    if (typeof ex.providers !== 'object' || ex.providers === null || Array.isArray(ex.providers)) {
-      errors.push('"providers" must be a Record<string, PluginProviderRegistration>')
+    if (!Array.isArray(ex.providers)) {
+      errors.push('"providers" must be an array of LLMProvider | EmbeddingProvider | ImageProvider')
     } else {
-      for (const [provName, provReg] of Object.entries(ex.providers as Record<string, unknown>)) {
-        if (!provReg || typeof provReg !== 'object') {
-          warnings.push(`providers.${provName}: must be an object`)
-          continue
+      ex.providers.forEach((p, i) => {
+        if (!p || typeof p !== 'object') {
+          warnings.push(`providers[${i}]: must be an object implementing a native provider interface`)
+          return
         }
-        const reg = provReg as Record<string, unknown>
-        if (!reg.definition || typeof reg.definition !== 'object') {
-          warnings.push(`providers.${provName}: missing "definition" object`)
+        const prov = p as Record<string, unknown>
+        if (typeof prov.type !== 'string' || !prov.type) {
+          warnings.push(`providers[${i}]: missing "type" string`)
         }
-        if (typeof reg.displayName !== 'string') {
-          warnings.push(`providers.${provName}: missing "displayName" string`)
+        if (typeof prov.displayName !== 'string' || !prov.displayName) {
+          warnings.push(`providers[${i}]: missing "displayName" string`)
         }
-        if (!Array.isArray(reg.capabilities)) {
-          warnings.push(`providers.${provName}: missing "capabilities" array`)
+        if (typeof prov.authenticate !== 'function') {
+          warnings.push(`providers[${i}] (${String(prov.type)}): missing authenticate() method`)
         }
-      }
+        if (typeof prov.listModels !== 'function') {
+          warnings.push(`providers[${i}] (${String(prov.type)}): missing listModels() method`)
+        }
+        const hasChat = typeof prov.chat === 'function'
+        const hasEmbed = typeof prov.embed === 'function'
+        const hasGenerate = typeof prov.generate === 'function'
+        if (!hasChat && !hasEmbed && !hasGenerate) {
+          warnings.push(
+            `providers[${i}] (${String(prov.type)}): must implement one of chat() (LLM), embed() (Embedding), or generate() (Image)`,
+          )
+        }
+      })
     }
   }
 

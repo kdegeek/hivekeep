@@ -40,67 +40,104 @@ import type {
   ProviderConfig,
   SystemPrompt,
 } from '@kinbot-developer/sdk'
-import { Replicate, ReplicateApiError } from './replicateApi'
+import { Replicate, ReplicateApiError, type ReplicateCollectionModel } from './replicateApi'
 
 interface ReplicateConfig {
   apiToken?: string
 }
 
-// ─── Curated model catalogues ───────────────────────────────────────────────
+// ─── Collection slugs Replicate curates publicly ────────────────────────────
+//
+// The plugin sources its model catalogue from Replicate's own curated
+// collections (https://replicate.com/explore) — *not* a hardcoded list in
+// this file. Replicate adds and removes models from these collections as
+// the community evolves; the plugin's `listModels()` simply mirrors that.
+const LLM_COLLECTION_SLUG = 'language-models'
+const IMAGE_COLLECTION_SLUG = 'text-to-image'
+const EMBEDDING_COLLECTION_SLUG = 'embedding-models'
 
-const LLM_MODELS: LLMModel[] = [
-  {
-    id: 'meta/meta-llama-3-8b-instruct',
-    name: 'Llama 3 8B Instruct',
-    contextWindow: 8192,
-    maxOutput: 4096,
-  },
-  {
-    id: 'meta/meta-llama-3-70b-instruct',
-    name: 'Llama 3 70B Instruct',
-    contextWindow: 8192,
-    maxOutput: 4096,
-  },
-  {
-    id: 'mistralai/mixtral-8x7b-instruct-v0.1',
-    name: 'Mixtral 8x7B Instruct',
-    contextWindow: 32768,
-    maxOutput: 4096,
-  },
-  {
-    id: 'mistralai/mistral-7b-instruct-v0.2',
-    name: 'Mistral 7B Instruct v0.2',
-    contextWindow: 32768,
-    maxOutput: 4096,
-  },
-]
+/**
+ * Pretty-print a Replicate model name. Replicate uses
+ * `<owner>/<slug-with-dashes>` for IDs; the display name we surface to
+ * KinBot uses the slug with dashes replaced by spaces, prefixed with the
+ * description's first sentence when available.
+ */
+function displayNameOf(m: ReplicateCollectionModel): string {
+  const base = m.name.replace(/-/g, ' ')
+  // Capitalize each word for nicer UI display
+  const capitalized = base
+    .split(' ')
+    .map((w) => (w.length > 0 ? w[0]!.toUpperCase() + w.slice(1) : w))
+    .join(' ')
+  return `${capitalized} (${m.owner})`
+}
 
-const IMAGE_MODELS: ImageModel[] = [
-  {
-    id: 'black-forest-labs/flux-schnell',
-    name: 'Flux Schnell (fast text-to-image)',
-    supportedSizes: ['1024x1024', '1024x768', '768x1024'],
-  },
-  {
-    id: 'black-forest-labs/flux-dev',
-    name: 'Flux Dev (higher quality, slower)',
-    supportedSizes: ['1024x1024', '1024x768', '768x1024'],
-  },
-  {
-    id: 'stability-ai/stable-diffusion-3.5-medium',
-    name: 'Stable Diffusion 3.5 Medium',
-    supportedSizes: ['1024x1024', '1024x768', '768x1024'],
-  },
-]
+/**
+ * Extract input parameter metadata from the model's OpenAPI schema, when
+ * present. Many Replicate LLMs declare `max_tokens` / `max_new_tokens`
+ * with a maximum that doubles as the model's effective output cap; some
+ * declare `system_prompt` (signaling chat-instruct support).
+ *
+ * Best-effort: shape is loosely typed because every model's schema is
+ * different. Returning undefined for unknowns is the design choice — the
+ * SDK's LLMModel.contextWindow / maxOutput are both optional.
+ */
+function readSchemaInts(
+  schema: Record<string, unknown> | undefined,
+  fields: string[],
+): Record<string, number | undefined> {
+  const out: Record<string, number | undefined> = {}
+  const props = (schema?.components as { schemas?: { Input?: { properties?: Record<string, { maximum?: number; default?: number }> } } })
+    ?.schemas?.Input?.properties
+  if (!props) return out
+  for (const f of fields) {
+    const prop = props[f]
+    if (prop?.maximum != null) out[f] = prop.maximum
+    else if (prop?.default != null && typeof prop.default === 'number') out[f] = prop.default
+  }
+  return out
+}
 
-const EMBEDDING_MODELS: EmbeddingModel[] = [
-  {
-    id: 'replicate/all-mpnet-base-v2',
-    name: 'all-mpnet-base-v2 (768d)',
-    dimensions: 768,
-    maxInputTokens: 384,
-  },
-]
+function llmModelFrom(m: ReplicateCollectionModel): LLMModel {
+  const schemaInts = readSchemaInts(m.latest_version?.openapi_schema, [
+    'max_tokens',
+    'max_new_tokens',
+    'max_length',
+  ])
+  const maxOutput =
+    schemaInts.max_new_tokens ?? schemaInts.max_tokens ?? schemaInts.max_length
+  return {
+    id: `${m.owner}/${m.name}`,
+    name: displayNameOf(m),
+    // contextWindow is left undefined — Replicate doesn't expose it
+    // uniformly across community models. The SDK allows undefined.
+    ...(typeof maxOutput === 'number' ? { maxOutput } : {}),
+  }
+}
+
+function imageModelFrom(m: ReplicateCollectionModel): ImageModel {
+  // Heuristic: detect models that accept an `image` input (= image-to-image
+  // / inpainting). The Input schema lists every input property.
+  const inputProps = (m.latest_version?.openapi_schema as {
+    components?: { schemas?: { Input?: { properties?: Record<string, unknown> } } }
+  })?.components?.schemas?.Input?.properties ?? {}
+  const supportsImageInput =
+    'image' in inputProps || 'image_url' in inputProps || 'init_image' in inputProps
+  return {
+    id: `${m.owner}/${m.name}`,
+    name: displayNameOf(m),
+    ...(supportsImageInput ? { supportsImageInput: true } : {}),
+  }
+}
+
+function embeddingModelFrom(m: ReplicateCollectionModel): EmbeddingModel {
+  // dimensions and maxInputTokens are both optional on EmbeddingModel —
+  // we leave them undefined when the schema doesn't expose them.
+  return {
+    id: `${m.owner}/${m.name}`,
+    name: displayNameOf(m),
+  }
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -190,8 +227,12 @@ class ReplicateLLMProvider implements LLMProvider {
     }
   }
 
-  async listModels(_config: ProviderConfig) {
-    return LLM_MODELS
+  async listModels(config: ProviderConfig): Promise<LLMModel[]> {
+    const token = requireToken(config)
+    const collection = await new Replicate(this.fetch, token).collection(
+      LLM_COLLECTION_SLUG,
+    )
+    return collection.models.map(llmModelFrom)
   }
 
   async *chat(
@@ -254,8 +295,12 @@ class ReplicateImageProvider implements ImageProvider {
     return new ReplicateLLMProvider(this.fetch).authenticate(config)
   }
 
-  async listModels(_config: ProviderConfig) {
-    return IMAGE_MODELS
+  async listModels(config: ProviderConfig): Promise<ImageModel[]> {
+    const token = requireToken(config)
+    const collection = await new Replicate(this.fetch, token).collection(
+      IMAGE_COLLECTION_SLUG,
+    )
+    return collection.models.map(imageModelFrom)
   }
 
   async generate(
@@ -320,8 +365,20 @@ class ReplicateEmbeddingProvider implements EmbeddingProvider {
     return new ReplicateLLMProvider(this.fetch).authenticate(config)
   }
 
-  async listModels(_config: ProviderConfig) {
-    return EMBEDDING_MODELS
+  async listModels(config: ProviderConfig): Promise<EmbeddingModel[]> {
+    const token = requireToken(config)
+    try {
+      const collection = await new Replicate(this.fetch, token).collection(
+        EMBEDDING_COLLECTION_SLUG,
+      )
+      return collection.models.map(embeddingModelFrom)
+    } catch (err) {
+      // Replicate sometimes 404s on this slug if the collection is empty
+      // or renamed. Return [] so the UI surfaces "no models" rather than
+      // crashing on the provider page.
+      if (err instanceof ReplicateApiError && err.status === 404) return []
+      throw err
+    }
   }
 
   async embed(

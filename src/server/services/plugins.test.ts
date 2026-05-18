@@ -474,25 +474,50 @@ describe('validatePluginExports', () => {
     expect(warnings.some(w => w.includes('baz'))).toBe(true)
   })
 
-  test('warns about provider missing definition', () => {
-    const { warnings } = validatePluginExports({
-      providers: { my_llm: { displayName: 'Test', capabilities: ['llm'] } },
+  test('errors when providers is not an array', () => {
+    const { valid, errors } = validatePluginExports({
+      providers: { my_llm: { displayName: 'Test' } },
     }, 'test')
-    expect(warnings.some(w => w.includes('definition'))).toBe(true)
+    expect(valid).toBe(false)
+    expect(errors.some(e => e.includes('must be an array'))).toBe(true)
+  })
+
+  test('warns about provider missing type', () => {
+    const { warnings } = validatePluginExports({
+      providers: [{ displayName: 'Test', chat: () => {}, authenticate: () => {}, listModels: () => {} }],
+    }, 'test')
+    expect(warnings.some(w => w.includes('type'))).toBe(true)
   })
 
   test('warns about provider missing displayName', () => {
     const { warnings } = validatePluginExports({
-      providers: { my_llm: { definition: {}, capabilities: ['llm'] } },
+      providers: [{ type: 'my-llm', chat: () => {}, authenticate: () => {}, listModels: () => {} }],
     }, 'test')
     expect(warnings.some(w => w.includes('displayName'))).toBe(true)
   })
 
-  test('warns about provider missing capabilities', () => {
+  test('warns about provider that implements no family method (chat/embed/generate)', () => {
     const { warnings } = validatePluginExports({
-      providers: { my_llm: { definition: {}, displayName: 'Test' } },
+      providers: [{ type: 'my-x', displayName: 'X', authenticate: () => {}, listModels: () => {} }],
     }, 'test')
-    expect(warnings.some(w => w.includes('capabilities'))).toBe(true)
+    expect(warnings.some(w => w.includes('chat()') && w.includes('embed()') && w.includes('generate()'))).toBe(true)
+  })
+
+  test('accepts a well-formed native LLMProvider', () => {
+    const { valid, errors, warnings } = validatePluginExports({
+      providers: [
+        {
+          type: 'mistral',
+          displayName: 'Mistral',
+          authenticate: async () => ({ valid: true }),
+          listModels: async () => [],
+          chat: async function* () {},
+        },
+      ],
+    }, 'test')
+    expect(valid).toBe(true)
+    expect(errors).toHaveLength(0)
+    expect(warnings).toHaveLength(0)
   })
 
   test('warns about channel missing platform', () => {

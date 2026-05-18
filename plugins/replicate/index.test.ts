@@ -115,13 +115,66 @@ describe('replicate plugin — exports', () => {
 })
 
 describe('replicate plugin — LLM provider', () => {
-  it('lists the curated LLM catalogue', async () => {
+  it('fetches the language-models collection and maps each entry', async () => {
+    const { ctx, calls, pushResponse } = makeCtx()
+    const llm = pickProvider(replicatePlugin(ctx), isLLM)
+
+    pushResponse(200, {
+      name: 'Language models',
+      slug: 'language-models',
+      models: [
+        {
+          owner: 'meta',
+          name: 'meta-llama-3-8b-instruct',
+          description: 'Llama 3 8B instruction-tuned',
+          latest_version: {
+            id: 'v1',
+            openapi_schema: {
+              components: {
+                schemas: {
+                  Input: {
+                    properties: {
+                      prompt: { type: 'string' },
+                      max_new_tokens: { type: 'integer', default: 512, maximum: 4096 },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        { owner: 'mistralai', name: 'mixtral-8x7b-instruct-v0.1', latest_version: null },
+      ],
+    })
+
+    const models = await llm.listModels({ apiToken: 'r8_test' })
+
+    expect(calls[0]!.url).toBe('https://api.replicate.com/v1/collections/language-models')
+    expect(models).toHaveLength(2)
+    expect(models.map((m) => m.id)).toEqual([
+      'meta/meta-llama-3-8b-instruct',
+      'mistralai/mixtral-8x7b-instruct-v0.1',
+    ])
+    // maxOutput pulled from the OpenAPI schema's max_new_tokens.maximum
+    expect(models[0]?.maxOutput).toBe(4096)
+    // contextWindow stays undefined — Replicate doesn't expose it uniformly
+    expect(models[0]?.contextWindow).toBeUndefined()
+    // The second model has no schema → maxOutput undefined
+    expect(models[1]?.maxOutput).toBeUndefined()
+  })
+
+  it('lists nothing when the collection has no models (returns []) ', async () => {
+    const { ctx, pushResponse } = makeCtx()
+    const llm = pickProvider(replicatePlugin(ctx), isLLM)
+    pushResponse(200, { name: 'Empty', slug: 'language-models', models: [] })
+    const models = await llm.listModels({ apiToken: 'r8_test' })
+    expect(models).toEqual([])
+  })
+
+  it('listModels requires the API token', async () => {
     const { ctx } = makeCtx()
     const llm = pickProvider(replicatePlugin(ctx), isLLM)
-    const models = await llm.listModels(ctx.config as never)
-    expect(models.length).toBeGreaterThan(0)
-    expect(models.find((m) => m.id === 'meta/meta-llama-3-8b-instruct')).toBeDefined()
-    expect(models.find((m) => m.id === 'mistralai/mixtral-8x7b-instruct-v0.1')).toBeDefined()
+    await expect(llm.listModels({})).rejects.toThrow(/not configured/)
   })
 
   it('streams a single text-delta followed by a finish chunk', async () => {
@@ -247,16 +300,87 @@ describe('replicate plugin — Image provider', () => {
     expect(calls[1]!.url).toBe('https://replicate.delivery/abc/image.png')
   })
 
-  it('listModels surfaces Flux + SD 3.5', async () => {
-    const { ctx } = makeCtx()
+  it('fetches the text-to-image collection and detects image-input support', async () => {
+    const { ctx, calls, pushResponse } = makeCtx()
     const image = pickProvider(replicatePlugin(ctx), isImage)
+
+    pushResponse(200, {
+      name: 'Text to image',
+      slug: 'text-to-image',
+      models: [
+        {
+          owner: 'black-forest-labs',
+          name: 'flux-schnell',
+          latest_version: {
+            id: 'v1',
+            openapi_schema: {
+              components: {
+                schemas: { Input: { properties: { prompt: { type: 'string' } } } },
+              },
+            },
+          },
+        },
+        {
+          // Inpainting model — its Input properties include `image`,
+          // which the plugin detects to set supportsImageInput.
+          owner: 'stability-ai',
+          name: 'sdxl-inpainting',
+          latest_version: {
+            id: 'v1',
+            openapi_schema: {
+              components: {
+                schemas: {
+                  Input: {
+                    properties: { prompt: { type: 'string' }, image: { type: 'string' } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+    })
+
     const models = await image.listModels({ apiToken: 'r8_test' })
-    expect(models.map((m) => m.id)).toContain('black-forest-labs/flux-schnell')
-    expect(models.map((m) => m.id)).toContain('stability-ai/stable-diffusion-3.5-medium')
+    expect(calls[0]!.url).toBe('https://api.replicate.com/v1/collections/text-to-image')
+    expect(models).toHaveLength(2)
+    expect(models[0]?.id).toBe('black-forest-labs/flux-schnell')
+    expect(models[0]?.supportsImageInput).toBeUndefined()
+    expect(models[1]?.id).toBe('stability-ai/sdxl-inpainting')
+    expect(models[1]?.supportsImageInput).toBe(true)
   })
 })
 
 describe('replicate plugin — Embedding provider', () => {
+  it('fetches the embedding-models collection and leaves dimensions/maxInputTokens undefined', async () => {
+    const { ctx, calls, pushResponse } = makeCtx()
+    const embed = pickProvider(replicatePlugin(ctx), isEmbed)
+
+    pushResponse(200, {
+      name: 'Embedding models',
+      slug: 'embedding-models',
+      models: [
+        { owner: 'replicate', name: 'all-mpnet-base-v2', latest_version: null },
+      ],
+    })
+
+    const models = await embed.listModels({ apiToken: 'r8_test' })
+    expect(calls[0]!.url).toBe('https://api.replicate.com/v1/collections/embedding-models')
+    expect(models).toHaveLength(1)
+    expect(models[0]?.id).toBe('replicate/all-mpnet-base-v2')
+    // We don't fake numbers when the API doesn't give them.
+    expect(models[0]?.dimensions).toBeUndefined()
+    expect(models[0]?.maxInputTokens).toBeUndefined()
+  })
+
+  it('returns an empty list when the embedding-models collection 404s', async () => {
+    const { ctx, pushResponse } = makeCtx()
+    const embed = pickProvider(replicatePlugin(ctx), isEmbed)
+    pushResponse(404, { detail: 'not found' })
+    const models = await embed.listModels({ apiToken: 'r8_test' })
+    expect(models).toEqual([])
+  })
+
   it('returns a vector from a single text embed call', async () => {
     const { ctx, pushResponse } = makeCtx()
     const embed = pickProvider(replicatePlugin(ctx), isEmbed)

@@ -1,12 +1,6 @@
 # 🦜 Replicate plugin for KinBot
 
-Brings [Replicate](https://replicate.com)-hosted models to KinBot via a single API token. One plugin contributes **all three native provider families**:
-
-| Family | Models |
-|---|---|
-| **LLM** | `meta/meta-llama-3-8b-instruct`, `meta/meta-llama-3-70b-instruct`, `mistralai/mixtral-8x7b-instruct-v0.1`, `mistralai/mistral-7b-instruct-v0.2` |
-| **Image** | `black-forest-labs/flux-schnell`, `black-forest-labs/flux-dev`, `stability-ai/stable-diffusion-3.5-medium` |
-| **Embedding** | `replicate/all-mpnet-base-v2` |
+Brings [Replicate](https://replicate.com)-hosted models to KinBot via a single API token. One plugin contributes **all three native provider families** — LLM, Image, and Embedding. The catalogue is sourced from Replicate's own curated collections (`language-models`, `text-to-image`, `embedding-models`), **not** a hardcoded list in this plugin — when Replicate adds or retires a model, KinBot sees the change on the next `listModels()` call.
 
 ## Setup
 
@@ -19,7 +13,7 @@ Brings [Replicate](https://replicate.com)-hosted models to KinBot via a single A
 This plugin doubles as a real-world reference for [`@kinbot-developer/sdk`](https://www.npmjs.com/package/@kinbot-developer/sdk):
 
 - **Three native providers in one plugin.** Same SDK contract as Anthropic / OpenAI built-ins — `LLMProvider`, `ImageProvider`, `EmbeddingProvider` from `@kinbot-developer/sdk`.
-- **Curated `listModels()`.** Replicate hosts tens of thousands of models — the plugin ships a hand-picked list rather than dumping everything.
+- **`listModels()` reads Replicate's collections.** No hardcoded model IDs in the plugin; the catalogue stays in sync with what Replicate curates upstream. Per-model metadata (max output tokens, image-input support) is read from each model's OpenAPI schema when available, left undefined otherwise.
 - **`ctx.http.fetch` everywhere.** No raw `globalThis.fetch`. The manifest's `http:api.replicate.com` and `http:replicate.delivery` permissions are enforced + audited by KinBot.
 - **No KinBot-internal imports.** The whole module graph imports from `@kinbot-developer/sdk` only — exactly what a third-party plugin published on npm would look like.
 

@@ -61,6 +61,39 @@ export class ReplicateApiError extends Error {
   }
 }
 
+// ─── Collection shapes (Replicate's curated model catalogues) ───────────────
+
+export interface ReplicateCollectionModel {
+  url: string
+  owner: string
+  name: string
+  description?: string
+  visibility?: string
+  github_url?: string | null
+  paper_url?: string | null
+  license_url?: string | null
+  run_count?: number
+  cover_image_url?: string | null
+  default_example?: unknown
+  latest_version?: {
+    id: string
+    created_at?: string
+    /** OpenAPI schema describing the model's input/output. The plugin
+     *  uses this to discover input properties like `max_tokens` /
+     *  `max_new_tokens` when surfacing model metadata to KinBot. */
+    openapi_schema?: Record<string, unknown>
+  } | null
+}
+
+export interface ReplicateCollection {
+  name: string
+  slug: string
+  description?: string
+  models: ReplicateCollectionModel[]
+}
+
+// ─── Client ─────────────────────────────────────────────────────────────────
+
 export class Replicate {
   constructor(
     private readonly fetch: Fetch,
@@ -96,6 +129,18 @@ export class Replicate {
   async account(): Promise<{ username?: string; type?: string }> {
     const res = await this.request('GET', '/account')
     return res.json() as Promise<{ username?: string; type?: string }>
+  }
+
+  /**
+   * Fetch a curated Replicate model collection by its slug
+   * (e.g. `language-models`, `text-to-image`, `embedding-models`).
+   * The plugin uses these as the source for `listModels()` so the
+   * catalogue stays in sync with what Replicate curates — no hardcoded
+   * model IDs in the plugin.
+   */
+  async collection(slug: string): Promise<ReplicateCollection> {
+    const res = await this.request('GET', `/collections/${slug}`)
+    return res.json() as Promise<ReplicateCollection>
   }
 
   /**

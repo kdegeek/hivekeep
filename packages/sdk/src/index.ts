@@ -551,7 +551,11 @@ export type ThinkingEffort = 'low' | 'medium' | 'high' | 'max'
 export interface LLMModel {
   id: string
   name: string
-  contextWindow: number
+  /** Maximum input/context tokens the model accepts. Optional because
+   *  some upstream APIs (e.g. Replicate's model catalogue) don't expose
+   *  this for every model. Internal callers fall back to provider
+   *  defaults or treat undefined as "unknown". */
+  contextWindow?: number
   maxOutput?: number
   /** Hard limit on the number of tools the provider accepts per request.
    *  Undefined = no known limit. */
@@ -710,10 +714,13 @@ export interface LLMProvider extends ProviderUIHints {
 export interface EmbeddingModel {
   id: string
   name: string
-  /** Output vector dimension. */
-  dimensions: number
-  /** Maximum input tokens per single embed call. */
-  maxInputTokens: number
+  /** Output vector dimension. Optional — some catalogues (Replicate's
+   *  community models, etc.) don't expose this; KinBot infers it from
+   *  the first embed call when needed. */
+  dimensions?: number
+  /** Maximum input tokens per single embed call. Optional for the
+   *  same reason as `dimensions`. */
+  maxInputTokens?: number
   /** Token pricing in USD per million tokens. */
   pricing?: {
     input: number
