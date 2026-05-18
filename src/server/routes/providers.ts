@@ -32,7 +32,6 @@ providerRoutes.get('/', async (c) => {
       slug: p.slug,
       name: p.name,
       type: p.type,
-      family: p.family,
       capabilities: JSON.parse(p.capabilities),
       isValid: p.isValid,
       lastError: p.lastError ?? null,
@@ -114,20 +113,19 @@ providerRoutes.get('/types', async (c) => {
 
 // POST /api/providers — create a new provider
 //
-// One row per family. When the provider type advertises multiple
-// capabilities (e.g. OpenAI = llm + embedding + image) we create N rows
-// sharing the same encrypted config; each is named/slugged with its
-// family suffix so the user can enable/disable/rename them independently
-// without touching the other families.
+// One row per provider account. The row's `capabilities` JSON array
+// declares every family it serves (llm / embedding / image). For a
+// multi-capability type (OpenAI, Replicate) the user can opt into a
+// subset via the `families` body field — the row's capabilities = the
+// intersection of "what the type supports" and "what the user enabled".
 providerRoutes.post('/', async (c) => {
   const body = await c.req.json()
   const { name, type, config: providerConfig, families: requestedFamilies } = body as {
     name: string
     type: string
     config: { apiKey: string; baseUrl?: string }
-    /** Subset of the type's supported families to actually enable. When
-     *  omitted or empty, every family the type advertises is created
-     *  (backward compatible). */
+    /** Subset of the type's supported families to enable on this row.
+     *  When omitted or empty, every family the type advertises is enabled. */
     families?: string[]
   }
 
@@ -135,81 +133,46 @@ providerRoutes.post('/', async (c) => {
   const testResult = await testProviderConnection(type, providerConfig)
 
   const allCaps = getCapabilitiesForType(type)
-
-  const configEncrypted = await encrypt(JSON.stringify(providerConfig))
-
-  // Family preference: llm first (so its slug stays the base name when
-  // the user adds an "OpenAI" provider), then embedding, then image.
   const FAMILY_ORDER = ['llm', 'embedding', 'image'] as const
-  type Family = (typeof FAMILY_ORDER)[number]
-  const FAMILY_LABEL: Record<Family, string> = { llm: 'LLM', embedding: 'Embedding', image: 'Image' }
-  const allFamilies = FAMILY_ORDER.filter((f) => (allCaps as readonly string[]).includes(f)) as Family[]
-  const familiesToCreate = requestedFamilies && requestedFamilies.length > 0
+  const allFamilies = FAMILY_ORDER.filter((f) => (allCaps as readonly string[]).includes(f))
+  const capabilities = requestedFamilies && requestedFamilies.length > 0
     ? allFamilies.filter((f) => requestedFamilies.includes(f))
     : allFamilies
 
-  if (familiesToCreate.length === 0) {
+  if (capabilities.length === 0) {
     return c.json(
-      { error: { code: 'NO_FAMILIES', message: 'No valid families to create — at least one of the requested families must be supported by the provider type.' } },
+      { error: { code: 'NO_FAMILIES', message: 'No valid families to enable — at least one of the requested families must be supported by the provider type.' } },
       400,
     )
   }
 
-  const createdRows: Array<{ id: string; slug: string; name: string; family: Family; capabilities: string[] }> = []
-  const baseSlug = generateProviderSlug(name)
+  const configEncrypted = await encrypt(JSON.stringify(providerConfig))
+  const id = uuid()
+  const slug = generateProviderSlug(name)
 
-  for (let i = 0; i < familiesToCreate.length; i++) {
-    const family = familiesToCreate[i]!
-    const id = uuid()
-    // Single-family providers (anthropic, codex, …) keep the base slug/name.
-    // Multi-family ones get a "(LLM)" / "(Embedding)" / "(Image)" suffix.
-    const rowName = familiesToCreate.length === 1 ? name : `${name} (${FAMILY_LABEL[family]})`
-    const rowSlug = familiesToCreate.length === 1
-      ? baseSlug
-      : generateProviderSlug(`${baseSlug}-${family}`)
-    const capabilities = [family]
+  await db.insert(providers).values({
+    id,
+    slug,
+    name,
+    type,
+    configEncrypted,
+    capabilities: JSON.stringify(capabilities),
+    isValid: testResult.valid,
+    lastError: testResult.valid ? null : (testResult.error ?? null),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
 
-    await db.insert(providers).values({
-      id,
-      slug: rowSlug,
-      name: rowName,
-      type,
-      family,
-      configEncrypted,
-      capabilities: JSON.stringify(capabilities),
-      isValid: testResult.valid,
-      lastError: testResult.valid ? null : (testResult.error ?? null),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    })
+  log.info({ providerId: id, slug, name, type, capabilities, isValid: testResult.valid }, 'Provider created')
 
-    createdRows.push({ id, slug: rowSlug, name: rowName, family, capabilities })
-
-    log.info({ providerId: id, slug: rowSlug, name: rowName, type, family, capabilities, isValid: testResult.valid }, 'Provider created')
-
-    sseManager.broadcast({
-      type: 'provider:created',
-      data: { providerId: id, slug: rowSlug, name: rowName, providerType: type, capabilities, isValid: testResult.valid },
-    })
-  }
+  sseManager.broadcast({
+    type: 'provider:created',
+    data: { providerId: id, slug, name, providerType: type, capabilities, isValid: testResult.valid },
+  })
 
   return c.json(
     {
-      // Primary row (LLM if present, else first created) — kept for the
-      // existing AddProviderDialog flow which expects a single response.
-      provider: createdRows[0]
-        ? { id: createdRows[0].id, slug: createdRows[0].slug, name: createdRows[0].name, type, capabilities: createdRows[0].capabilities, isValid: testResult.valid }
-        : { id: null, slug: null, name, type, capabilities: [], isValid: false },
-      // All rows created in this call so a future UI can show "X rows created" feedback.
-      providers: createdRows.map((r) => ({
-        id: r.id,
-        slug: r.slug,
-        name: r.name,
-        type,
-        family: r.family,
-        capabilities: r.capabilities,
-        isValid: testResult.valid,
-      })),
+      provider: { id, slug, name, type, capabilities, isValid: testResult.valid },
     },
     201,
   )
@@ -233,12 +196,11 @@ providerRoutes.patch('/:id', async (c) => {
     const mergedConfig = { ...existingConfig, ...body.config }
     updates.configEncrypted = await encrypt(JSON.stringify(mergedConfig))
 
-    // Re-test connection
-    const testResult = await testProviderConnection(
-      existing.type,
-      mergedConfig,
-      existing.family as 'llm' | 'embedding' | 'image',
-    )
+    // Re-test connection. Authenticate is family-invariant (same creds
+    // regardless of which family is queried) so we omit the family hint
+    // here — the dispatcher's legacy fallback returns whichever family
+    // the type is registered in.
+    const testResult = await testProviderConnection(existing.type, mergedConfig)
     updates.isValid = testResult.valid
     updates.lastError = testResult.valid ? null : (testResult.error ?? null)
     if (testResult.valid) {
@@ -366,11 +328,9 @@ providerRoutes.post('/:id/test', async (c) => {
   }
 
   const providerConfig = JSON.parse(await decrypt(existing.configEncrypted))
-  const result = await testProviderConnection(
-    existing.type,
-    providerConfig,
-    existing.family as 'llm' | 'embedding' | 'image',
-  )
+  // Authenticate is family-invariant (same creds across families) — no
+  // hint needed; the dispatcher hits whichever family is registered.
+  const result = await testProviderConnection(existing.type, providerConfig)
 
   // Update validity status, error, and capabilities
   const updates: Record<string, unknown> = {
@@ -427,25 +387,24 @@ providerRoutes.get('/models', async (c) => {
 
     try {
       const providerConfig = JSON.parse(await decrypt(p.configEncrypted))
-      // p.family pins the dispatch — without it, a row whose type is
-      // also registered in multiple families (e.g. openai = llm + emb +
-      // image) would silently return the LLM models for every row.
-      const providerModels = await listModelsForProvider(
-        p.type,
-        providerConfig,
-        p.family as 'llm' | 'embedding' | 'image',
-      )
-
-      for (const model of providerModels) {
-        models.push({
-          id: model.id,
-          name: model.name,
-          providerId: p.id,
-          providerName: p.name,
-          providerType: p.type,
-          capability: model.capability,
-          ...(model.capability === 'image' && { supportsImageInput: model.supportsImageInput ?? false }),
-        })
+      const rowCaps = JSON.parse(p.capabilities) as string[]
+      // One row can serve multiple families now (e.g. OpenAI = llm +
+      // embedding + image). Dispatch listModels once per family the row
+      // declared, then concatenate.
+      for (const family of rowCaps) {
+        if (family !== 'llm' && family !== 'embedding' && family !== 'image') continue
+        const providerModels = await listModelsForProvider(p.type, providerConfig, family)
+        for (const model of providerModels) {
+          models.push({
+            id: model.id,
+            name: model.name,
+            providerId: p.id,
+            providerName: p.name,
+            providerType: p.type,
+            capability: model.capability,
+            ...(model.capability === 'image' && { supportsImageInput: model.supportsImageInput ?? false }),
+          })
+        }
       }
     } catch (err) {
       log.error({ providerId: p.id, name: p.name, type: p.type, err }, 'Failed to list models for provider')

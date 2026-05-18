@@ -80,23 +80,31 @@ export const listModelsTool: ToolRegistration = {
           if (!p.isValid) continue
           try {
             const providerConfig = JSON.parse(await decrypt(p.configEncrypted))
-            const providerModels = await listModelsForProvider(
-              p.type,
-              providerConfig,
-              p.family as 'llm' | 'embedding' | 'image',
-            )
-
-            for (const model of providerModels) {
-              if (capability && model.capability !== capability) continue
-              models.push({
-                id: model.id,
-                name: model.name,
-                providerId: p.id,
-                providerSlug: p.slug,
-                providerName: p.name,
-                providerType: p.type,
-                capability: model.capability,
-              })
+            const caps = JSON.parse(p.capabilities) as string[]
+            // If the tool caller asked for a specific capability, only
+            // hit that family's registry; otherwise iterate every
+            // family this row declared.
+            const families = capability
+              ? caps.includes(capability) ? [capability] : []
+              : caps.filter((f) => f === 'llm' || f === 'embedding' || f === 'image')
+            for (const family of families) {
+              const providerModels = await listModelsForProvider(
+                p.type,
+                providerConfig,
+                family as 'llm' | 'embedding' | 'image',
+              )
+              for (const model of providerModels) {
+                if (capability && model.capability !== capability) continue
+                models.push({
+                  id: model.id,
+                  name: model.name,
+                  providerId: p.id,
+                  providerSlug: p.slug,
+                  providerName: p.name,
+                  providerType: p.type,
+                  capability: model.capability,
+                })
+              }
             }
           } catch (err) {
             log.error({ providerId: p.id, err }, 'Failed to list models for provider')

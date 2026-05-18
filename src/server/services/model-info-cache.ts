@@ -105,7 +105,13 @@ export async function refreshAllProviderModels(): Promise<void> {
       .map(async (p) => {
         try {
           const cfg = JSON.parse(await decrypt(p.configEncrypted))
-          await listModelsForProvider(p.type, cfg, p.family as 'llm' | 'embedding' | 'image')
+          const caps = JSON.parse(p.capabilities) as string[]
+          // Hit listModels once per family the row serves so the cache
+          // is populated for every model surface (not just LLM).
+          for (const family of caps) {
+            if (family !== 'llm' && family !== 'embedding' && family !== 'image') continue
+            await listModelsForProvider(p.type, cfg, family)
+          }
         } catch (err) {
           log.warn(
             { providerId: p.id, name: p.name, type: p.type, err },

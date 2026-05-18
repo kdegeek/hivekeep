@@ -127,12 +127,14 @@ kinRoutes.post('/generate-config', async (c) => {
     )
   }
 
-  // Collect available LLM model IDs for the suggestion
+  // Collect available LLM model IDs for the suggestion. Skip rows that
+  // don't declare LLM in their capabilities array — saves an API call.
   const allProviders = await db.select().from(providers).all()
   const availableModels: string[] = []
   for (const p of allProviders) {
     if (!p.isValid) continue
-    if (p.family !== 'llm') continue
+    const caps = JSON.parse(p.capabilities) as string[]
+    if (!caps.includes('llm')) continue
     try {
       const pConfig = JSON.parse(await decrypt(p.configEncrypted))
       const pModels = await listModelsForProvider(p.type, pConfig, 'llm')
@@ -1312,15 +1314,18 @@ kinRoutes.post('/import', async (c) => {
     if (!p.isValid) continue
     try {
       const pConfig = JSON.parse(await decrypt(p.configEncrypted))
-      const pModels = await listModelsForProvider(
-        p.type,
-        pConfig,
-        p.family as 'llm' | 'embedding' | 'image',
-      )
-      if (pModels.some((m) => m.id === model)) {
-        modelFound = true
-        break
+      const caps = JSON.parse(p.capabilities) as string[]
+      // Search the model across every family this row serves — the
+      // requested model could be LLM, embedding, or image.
+      for (const family of caps) {
+        if (family !== 'llm' && family !== 'embedding' && family !== 'image') continue
+        const pModels = await listModelsForProvider(p.type, pConfig, family)
+        if (pModels.some((m) => m.id === model)) {
+          modelFound = true
+          break
+        }
       }
+      if (modelFound) break
     } catch {
       // Skip provider on error
     }

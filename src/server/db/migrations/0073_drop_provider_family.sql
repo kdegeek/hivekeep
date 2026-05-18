@@ -1,0 +1,22 @@
+-- Reversal of 0072_provider_family.sql.
+--
+-- The "one row per family" model split a single OpenAI account into 3 rows
+-- (LLM / Embedding / Image) sharing the same encrypted config. In practice
+-- the user thinks of OpenAI as ONE account with multiple capabilities, and
+-- the 3 rows produced confusing UX:
+--   - 3 separate entries in the providers list with no visible link
+--   - editing one row shows an empty API key (the others share the config)
+--   - deleting one row orphans the credential
+--
+-- New model: 1 row per provider account. The row's `capabilities` JSON
+-- array is the authoritative source for which families it serves. The
+-- dispatcher's `listModelsForProvider(type, config, family)` is already
+-- family-aware, so callers iterate `row.capabilities` and call once per
+-- family they care about.
+--
+-- Wipe + recreate strategy: existing rows are left in place but stripped
+-- of their `family` column. Each row still has `capabilities` set to its
+-- single original family, so it continues to function — the user can
+-- delete the duplicate rows and re-add a single multi-capability one when
+-- they want the consolidated UX.
+ALTER TABLE providers DROP COLUMN family;

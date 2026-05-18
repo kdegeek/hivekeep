@@ -105,7 +105,9 @@ export function getCapabilitiesForType(type: string): ProviderCapability[] {
 
 // ─── Dispatcher helpers ──────────────────────────────────────────────────────
 
-/** Provider family — matches the `providers.family` column on each row. */
+/** Provider family hint passed to the dispatcher to route the call to a
+ *  specific native registry. Each `providers.capabilities[]` entry
+ *  matches one of these values. */
 export type ProviderFamily = 'llm' | 'embedding' | 'image'
 
 /**

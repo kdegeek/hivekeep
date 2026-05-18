@@ -401,7 +401,7 @@ export function ProviderFormDialog({ open, onOpenChange, onSaved, provider, prov
               <p className="text-xs text-muted-foreground">
                 {t(
                   'onboarding.providers.familiesHint',
-                  'One row per family is created in the providers list, all sharing the same API key. You can rename, re-test or delete each one independently.',
+                  'A single provider row is created with the selected capabilities. The same API key powers every family you enable — toggling them later is a row edit, not a new entry.',
                 )}
               </p>
             </div>
