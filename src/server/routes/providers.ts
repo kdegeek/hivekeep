@@ -246,34 +246,30 @@ providerRoutes.delete('/:id', async (c) => {
     return c.json({ error: { code: 'PROVIDER_NOT_FOUND', message: 'Provider not found' } }, 404)
   }
 
-  // Check if this is the last provider covering a required capability
+  // Note: we deliberately do NOT block deletion of "the last provider
+  // with capability X". The previous lock (PROVIDER_REQUIRED 409 on the
+  // last llm/embedding row) made consolidating split rows into a single
+  // multi-capability row impossible — the user had to delete the
+  // single-capability row first, which the lock refused. KinBot trusts
+  // the user to know whether memory/chat will still work after a
+  // delete. We do emit a warning log so a future incident can be
+  // reconstructed from the logs.
   const allProviders = await db.select().from(providers).all()
   const otherProviders = allProviders.filter((p) => p.id !== id)
-
   const existingCapabilities = JSON.parse(existing.capabilities) as string[]
-  const requiredCapabilities = ['llm', 'embedding']
-
-  for (const required of requiredCapabilities) {
-    if (existingCapabilities.includes(required)) {
-      const otherHasCapability = otherProviders.some((p) => {
-        try {
-          return (JSON.parse(p.capabilities) as string[]).includes(required)
-        } catch {
-          return false
-        }
-      })
-
-      if (!otherHasCapability) {
-        return c.json(
-          {
-            error: {
-              code: 'PROVIDER_REQUIRED',
-              message: `Cannot delete: this is the last provider with "${required}" capability`,
-            },
-          },
-          409,
-        )
+  for (const cap of existingCapabilities) {
+    const remaining = otherProviders.some((p) => {
+      try {
+        return (JSON.parse(p.capabilities) as string[]).includes(cap)
+      } catch {
+        return false
       }
+    })
+    if (!remaining) {
+      log.warn(
+        { providerId: id, name: existing.name, type: existing.type, capability: cap },
+        'Deleting the last provider with this capability — downstream features will be unavailable until another is configured',
+      )
     }
   }
 
