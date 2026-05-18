@@ -234,7 +234,11 @@ providerRoutes.patch('/:id', async (c) => {
     updates.configEncrypted = await encrypt(JSON.stringify(mergedConfig))
 
     // Re-test connection
-    const testResult = await testProviderConnection(existing.type, mergedConfig)
+    const testResult = await testProviderConnection(
+      existing.type,
+      mergedConfig,
+      existing.family as 'llm' | 'embedding' | 'image',
+    )
     updates.isValid = testResult.valid
     updates.lastError = testResult.valid ? null : (testResult.error ?? null)
     if (testResult.valid) {
@@ -362,7 +366,11 @@ providerRoutes.post('/:id/test', async (c) => {
   }
 
   const providerConfig = JSON.parse(await decrypt(existing.configEncrypted))
-  const result = await testProviderConnection(existing.type, providerConfig)
+  const result = await testProviderConnection(
+    existing.type,
+    providerConfig,
+    existing.family as 'llm' | 'embedding' | 'image',
+  )
 
   // Update validity status, error, and capabilities
   const updates: Record<string, unknown> = {
@@ -419,7 +427,14 @@ providerRoutes.get('/models', async (c) => {
 
     try {
       const providerConfig = JSON.parse(await decrypt(p.configEncrypted))
-      const providerModels = await listModelsForProvider(p.type, providerConfig)
+      // p.family pins the dispatch — without it, a row whose type is
+      // also registered in multiple families (e.g. openai = llm + emb +
+      // image) would silently return the LLM models for every row.
+      const providerModels = await listModelsForProvider(
+        p.type,
+        providerConfig,
+        p.family as 'llm' | 'embedding' | 'image',
+      )
 
       for (const model of providerModels) {
         models.push({

@@ -105,7 +105,7 @@ export async function refreshAllProviderModels(): Promise<void> {
       .map(async (p) => {
         try {
           const cfg = JSON.parse(await decrypt(p.configEncrypted))
-          await listModelsForProvider(p.type, cfg)
+          await listModelsForProvider(p.type, cfg, p.family as 'llm' | 'embedding' | 'image')
         } catch (err) {
           log.warn(
             { providerId: p.id, name: p.name, type: p.type, err },

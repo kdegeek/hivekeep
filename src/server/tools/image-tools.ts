@@ -40,12 +40,14 @@ export const listImageModelsTool: ToolRegistration = {
 
         for (const p of allProviders) {
           if (!p.isValid) continue
+          if (p.family !== 'image') continue
           try {
-            const capabilities = JSON.parse(p.capabilities) as string[]
-            if (!capabilities.includes('image')) continue
-
             const providerConfig = JSON.parse(await decrypt(p.configEncrypted))
-            const providerModels = await listModelsForProvider(p.type, providerConfig)
+            const providerModels = await listModelsForProvider(
+              p.type,
+              providerConfig,
+              'image',
+            )
 
             for (const model of providerModels) {
               if (model.capability !== 'image') continue

@@ -80,7 +80,11 @@ export const listModelsTool: ToolRegistration = {
           if (!p.isValid) continue
           try {
             const providerConfig = JSON.parse(await decrypt(p.configEncrypted))
-            const providerModels = await listModelsForProvider(p.type, providerConfig)
+            const providerModels = await listModelsForProvider(
+              p.type,
+              providerConfig,
+              p.family as 'llm' | 'embedding' | 'image',
+            )
 
             for (const model of providerModels) {
               if (capability && model.capability !== capability) continue

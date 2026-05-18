@@ -104,7 +104,7 @@ export async function resolveImageTarget(
       baseUrl?: string
     }
     try {
-      const models = await listModelsForProvider(provider.type, providerConfig)
+      const models = await listModelsForProvider(provider.type, providerConfig, 'image')
       const first = models.find((m) => m.capability === 'image')
       if (first) effectiveModelId = first.id
     } catch {

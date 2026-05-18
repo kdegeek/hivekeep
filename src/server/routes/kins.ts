@@ -132,9 +132,10 @@ kinRoutes.post('/generate-config', async (c) => {
   const availableModels: string[] = []
   for (const p of allProviders) {
     if (!p.isValid) continue
+    if (p.family !== 'llm') continue
     try {
       const pConfig = JSON.parse(await decrypt(p.configEncrypted))
-      const pModels = await listModelsForProvider(p.type, pConfig)
+      const pModels = await listModelsForProvider(p.type, pConfig, 'llm')
       for (const m of pModels) {
         if (m.capability === 'llm' && !availableModels.includes(m.id)) {
           availableModels.push(m.id)
@@ -1311,7 +1312,11 @@ kinRoutes.post('/import', async (c) => {
     if (!p.isValid) continue
     try {
       const pConfig = JSON.parse(await decrypt(p.configEncrypted))
-      const pModels = await listModelsForProvider(p.type, pConfig)
+      const pModels = await listModelsForProvider(
+        p.type,
+        pConfig,
+        p.family as 'llm' | 'embedding' | 'image',
+      )
       if (pModels.some((m) => m.id === model)) {
         modelFound = true
         break

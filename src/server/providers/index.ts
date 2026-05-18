@@ -105,9 +105,23 @@ export function getCapabilitiesForType(type: string): ProviderCapability[] {
 
 // ─── Dispatcher helpers ──────────────────────────────────────────────────────
 
+/** Provider family — matches the `providers.family` column on each row. */
+export type ProviderFamily = 'llm' | 'embedding' | 'image'
+
 /**
  * Look up a provider across the three native registries and run `fn`
- * against the first match. Returns null when the type is unknown.
+ * against the matching one. Returns null when the type isn't registered
+ * in the requested family (or in any family when `family` is omitted).
+ *
+ * The `family` hint is critical for multi-capability providers
+ * (OpenAI llm+embedding+image, Replicate, …) where the same type is
+ * registered in several registries. Without the hint we'd silently
+ * route every call to the first family found — usually LLM — and the
+ * embedding/image rows would never see their own listModels().
+ *
+ * When `family` is omitted (legacy callers that haven't migrated yet),
+ * we fall back to "try LLM, then embedding, then image" for backward
+ * compat. New call sites should always pass the row's family.
  */
 async function tryDispatch<T>(
   type: string,
@@ -117,7 +131,21 @@ async function tryDispatch<T>(
     embedding: (p: NonNullable<ReturnType<typeof getEmbeddingProvider>>) => Promise<T>
     image: (p: NonNullable<ReturnType<typeof getImageProvider>>) => Promise<T>
   },
+  family?: ProviderFamily,
 ): Promise<T | null> {
+  if (family === 'llm') {
+    const llm = getLLMProvider(type)
+    return llm ? fn.llm(llm) : null
+  }
+  if (family === 'embedding') {
+    const emb = getEmbeddingProvider(type)
+    return emb ? fn.embedding(emb) : null
+  }
+  if (family === 'image') {
+    const img = getImageProvider(type)
+    return img ? fn.image(img) : null
+  }
+  // No family hint — try in order.
   const llm = getLLMProvider(type)
   if (llm) return fn.llm(llm)
   const emb = getEmbeddingProvider(type)
@@ -132,6 +160,7 @@ async function tryDispatch<T>(
 export async function testProviderConnection(
   type: string,
   config: KinbotProviderConfig,
+  family?: ProviderFamily,
 ): Promise<{ valid: boolean; capabilities: string[]; error?: string }> {
   // In E2E test mode, skip real provider connection tests
   if (process.env.E2E_SKIP_PROVIDER_TEST === 'true') {
@@ -140,11 +169,16 @@ export async function testProviderConnection(
     return { valid: true, capabilities }
   }
 
-  const result = await tryDispatch<{ valid: boolean; error?: string }>(type, config, {
-    llm: (p) => p.authenticate(config).then((r) => ({ valid: r.valid, error: r.error })),
-    embedding: (p) => p.authenticate(config).then((r) => ({ valid: r.valid, error: r.error })),
-    image: (p) => p.authenticate(config).then((r) => ({ valid: r.valid, error: r.error })),
-  })
+  const result = await tryDispatch<{ valid: boolean; error?: string }>(
+    type,
+    config,
+    {
+      llm: (p) => p.authenticate(config).then((r) => ({ valid: r.valid, error: r.error })),
+      embedding: (p) => p.authenticate(config).then((r) => ({ valid: r.valid, error: r.error })),
+      image: (p) => p.authenticate(config).then((r) => ({ valid: r.valid, error: r.error })),
+    },
+    family,
+  )
 
   if (!result) {
     log.error({ type }, 'Unknown provider type')
@@ -162,40 +196,46 @@ export async function testProviderConnection(
 export async function listModelsForProvider(
   type: string,
   config: KinbotProviderConfig,
+  family?: ProviderFamily,
 ): Promise<ProviderModel[]> {
-  log.debug({ type }, 'Listing models for provider')
+  log.debug({ type, family }, 'Listing models for provider')
 
-  const models = await tryDispatch<ProviderModel[]>(type, config, {
-    llm: async (p) => {
-      const list = await p.listModels(config)
-      return list.map((m): ProviderModel => ({
-        id: m.id,
-        name: m.name,
-        capability: 'llm',
-        ...(m.supportsImageInput ? { supportsImageInput: true } : {}),
-        ...(m.contextWindow ? { contextWindow: m.contextWindow } : {}),
-        ...(m.maxOutput != null ? { maxOutput: m.maxOutput } : {}),
-      }))
+  const models = await tryDispatch<ProviderModel[]>(
+    type,
+    config,
+    {
+      llm: async (p) => {
+        const list = await p.listModels(config)
+        return list.map((m): ProviderModel => ({
+          id: m.id,
+          name: m.name,
+          capability: 'llm',
+          ...(m.supportsImageInput ? { supportsImageInput: true } : {}),
+          ...(m.contextWindow ? { contextWindow: m.contextWindow } : {}),
+          ...(m.maxOutput != null ? { maxOutput: m.maxOutput } : {}),
+        }))
+      },
+      embedding: async (p) => {
+        const list = await p.listModels(config)
+        return list.map((m): ProviderModel => ({
+          id: m.id,
+          name: m.name,
+          capability: 'embedding',
+          ...(m.maxInputTokens ? { contextWindow: m.maxInputTokens } : {}),
+        }))
+      },
+      image: async (p) => {
+        const list = await p.listModels(config)
+        return list.map((m): ProviderModel => ({
+          id: m.id,
+          name: m.name,
+          capability: 'image',
+          ...(m.supportsImageInput ? { supportsImageInput: true } : {}),
+        }))
+      },
     },
-    embedding: async (p) => {
-      const list = await p.listModels(config)
-      return list.map((m): ProviderModel => ({
-        id: m.id,
-        name: m.name,
-        capability: 'embedding',
-        ...(m.maxInputTokens ? { contextWindow: m.maxInputTokens } : {}),
-      }))
-    },
-    image: async (p) => {
-      const list = await p.listModels(config)
-      return list.map((m): ProviderModel => ({
-        id: m.id,
-        name: m.name,
-        capability: 'image',
-        ...(m.supportsImageInput ? { supportsImageInput: true } : {}),
-      }))
-    },
-  })
+    family,
+  )
 
   if (!models) {
     log.error({ type }, 'Cannot list models for unknown provider type')
