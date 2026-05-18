@@ -95,18 +95,20 @@ providerRoutes.get('/types', async (c) => {
 // without touching the other families.
 providerRoutes.post('/', async (c) => {
   const body = await c.req.json()
-  const { name, type, config: providerConfig } = body as {
+  const { name, type, config: providerConfig, families: requestedFamilies } = body as {
     name: string
     type: string
     config: { apiKey: string; baseUrl?: string }
+    /** Subset of the type's supported families to actually enable. When
+     *  omitted or empty, every family the type advertises is created
+     *  (backward compatible). */
+    families?: string[]
   }
 
   // Test connection
   const testResult = await testProviderConnection(type, providerConfig)
 
-  const allCaps = testResult.valid
-    ? getCapabilitiesForType(type)
-    : (getCapabilitiesForType(type).length > 0 ? getCapabilitiesForType(type) : [])
+  const allCaps = getCapabilitiesForType(type)
 
   const configEncrypted = await encrypt(JSON.stringify(providerConfig))
 
@@ -115,9 +117,17 @@ providerRoutes.post('/', async (c) => {
   const FAMILY_ORDER = ['llm', 'embedding', 'image'] as const
   type Family = (typeof FAMILY_ORDER)[number]
   const FAMILY_LABEL: Record<Family, string> = { llm: 'LLM', embedding: 'Embedding', image: 'Image' }
-  const familiesToCreate = FAMILY_ORDER.filter((f) =>
-    (allCaps as readonly string[]).includes(f),
-  ) as Family[]
+  const allFamilies = FAMILY_ORDER.filter((f) => (allCaps as readonly string[]).includes(f)) as Family[]
+  const familiesToCreate = requestedFamilies && requestedFamilies.length > 0
+    ? allFamilies.filter((f) => requestedFamilies.includes(f))
+    : allFamilies
+
+  if (familiesToCreate.length === 0) {
+    return c.json(
+      { error: { code: 'NO_FAMILIES', message: 'No valid families to create — at least one of the requested families must be supported by the provider type.' } },
+      400,
+    )
+  }
 
   const createdRows: Array<{ id: string; slug: string; name: string; family: Family; capabilities: string[] }> = []
   const baseSlug = generateProviderSlug(name)

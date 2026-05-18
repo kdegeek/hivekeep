@@ -55,7 +55,17 @@ export function ProviderCard({ provider, isTesting, onTest, onEdit, onDelete }: 
           </div>
           <div className="min-w-0">
             <p className="text-sm font-medium">{provider.name}</p>
-            <p className="text-xs text-muted-foreground">{PROVIDER_DISPLAY_NAMES[provider.type] ?? provider.type}</p>
+            <p className="text-xs text-muted-foreground">
+              {PROVIDER_DISPLAY_NAMES[provider.type] ?? provider.type}
+              {provider.slug && (
+                <>
+                  <span className="mx-1.5 opacity-40">·</span>
+                  <span className="font-mono text-[11px] opacity-70" title={t('settings.providers.slugTooltip', 'Use this slug as `provider_id` in spawn_self / spawn_kin tool calls')}>
+                    {provider.slug}
+                  </span>
+                </>
+              )}
+            </p>
             {!provider.isValid && provider.lastError && (
               <TooltipProvider>
                 <Tooltip>

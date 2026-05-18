@@ -63,6 +63,10 @@ export function ProviderFormDialog({ open, onOpenChange, onSaved, provider, prov
   const [providerType, setProviderType] = useState<string>(defaultType)
   const [providerName, setProviderName] = useState('')
   const [apiKey, setApiKey] = useState('')
+  /** When the selected type advertises multiple families (LLM / Embeddings /
+   *  Images), the user picks which ones to actually create. Defaults to all
+   *  three on first render; reset to all whenever the type changes. */
+  const [selectedFamilies, setSelectedFamilies] = useState<readonly string[]>([])
 
   // Populate form when editing
   useEffect(() => {
@@ -81,6 +85,7 @@ export function ProviderFormDialog({ open, onOpenChange, onSaved, provider, prov
     setProviderType(defaultType)
     setProviderName('')
     setApiKey('')
+    setSelectedFamilies([])
     setError('')
     setTestPassed(false)
     setIsTesting(false)
@@ -104,6 +109,36 @@ export function ProviderFormDialog({ open, onOpenChange, onSaved, provider, prov
   const isApiKeyOptional = (PROVIDERS_WITHOUT_API_KEY as readonly string[]).includes(providerType)
   const hasOptionalApiKey = (PROVIDERS_WITH_OPTIONAL_API_KEY as readonly string[]).includes(providerType)
   const apiKeyUrl = PROVIDER_API_KEY_URLS[providerType] as string | undefined
+
+  // Families this provider type can serve, in display order. When more than
+  // one is available, the form shows checkboxes so the user can opt into a
+  // subset (e.g. only "Images" for OpenAI). Defaults all checked.
+  const FAMILY_ORDER = ['llm', 'embedding', 'image'] as const
+  const FAMILY_LABEL_KEY: Record<string, string> = {
+    llm: 'onboarding.providers.familyLlm',
+    embedding: 'onboarding.providers.familyEmbedding',
+    image: 'onboarding.providers.familyImage',
+  }
+  const FAMILY_LABEL_FALLBACK: Record<string, string> = {
+    llm: 'LLM (chat)',
+    embedding: 'Embeddings (memory search)',
+    image: 'Image generation',
+  }
+  const supportedFamilies = FAMILY_ORDER.filter((f) =>
+    getCapabilitiesForType(providerType).includes(f),
+  )
+  // Initialise selected families when the type changes (or first selected).
+  useEffect(() => {
+    setSelectedFamilies(supportedFamilies)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerType])
+  const showsFamilyPicker = !isEditing && supportedFamilies.length > 1
+  const toggleFamily = (family: string) => {
+    setSelectedFamilies((prev) =>
+      prev.includes(family) ? prev.filter((f) => f !== family) : [...prev, family],
+    )
+    resetTest()
+  }
 
   const handleTestConnection = async () => {
     setError('')
@@ -163,6 +198,10 @@ export function ProviderFormDialog({ open, onOpenChange, onSaved, provider, prov
           name: providerName || (PROVIDER_DISPLAY_NAMES[providerType] ?? providerType),
           type: providerType,
           config,
+          // Only send `families` when the picker was actually shown — otherwise
+          // the backend defaults to "every family the type supports", which is
+          // exactly what we want for single-family providers.
+          ...(showsFamilyPicker ? { families: selectedFamilies } : {}),
         })
       }
 
@@ -179,7 +218,11 @@ export function ProviderFormDialog({ open, onOpenChange, onSaved, provider, prov
   const nameChanged = isEditing && providerName !== provider!.name
   const configChanged = !!apiKey
   const canSaveWithoutTest = isEditing && nameChanged && !configChanged
-  const canSave = testPassed || canSaveWithoutTest
+  // Block save when the family picker is shown and no family is selected —
+  // the backend would reject this with NO_FAMILIES; surface the constraint
+  // in the UI instead so the user doesn't have to round-trip.
+  const familiesValid = !showsFamilyPicker || selectedFamilies.length > 0
+  const canSave = (testPassed || canSaveWithoutTest) && familiesValid
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose() }}>
@@ -286,6 +329,38 @@ export function ProviderFormDialog({ open, onOpenChange, onSaved, provider, prov
               </a>
             )}
           </div>
+
+          {showsFamilyPicker && (
+            <div className="space-y-2">
+              <Label className="text-sm">
+                {t('onboarding.providers.familiesLabel', 'Enable for')}
+              </Label>
+              <div className="grid gap-1.5">
+                {supportedFamilies.map((family) => (
+                  <label
+                    key={family}
+                    className="flex cursor-pointer items-start gap-2 rounded-md border border-border/60 bg-card/50 p-2.5 hover:bg-card/80"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedFamilies.includes(family)}
+                      onChange={() => toggleFamily(family)}
+                      className="mt-0.5"
+                    />
+                    <span className="text-sm">
+                      {t(FAMILY_LABEL_KEY[family]!, FAMILY_LABEL_FALLBACK[family]!)}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  'onboarding.providers.familiesHint',
+                  'One row per family is created in the providers list, all sharing the same API key. You can rename, re-test or delete each one independently.',
+                )}
+              </p>
+            </div>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={handleClose}>
