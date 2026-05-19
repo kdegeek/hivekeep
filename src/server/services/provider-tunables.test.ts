@@ -10,7 +10,10 @@
  */
 
 import { describe, it, expect, beforeAll } from 'bun:test'
-import { getMaxToolsForProvider } from '@/server/services/tool-cap'
+import {
+  getMaxToolsForProvider,
+  getMaxToolsForRequest,
+} from '@/server/services/tool-cap'
 import { providerPriority } from '@/server/llm/core/provider-priority'
 import { registerBuiltinLLMProviders } from '@/server/llm/llm/register'
 
@@ -45,6 +48,43 @@ describe('getMaxToolsForProvider', () => {
 
   it('falls back when providerType is null (no Kin model selected yet)', () => {
     expect(getMaxToolsForProvider(null)).toBe(128)
+  })
+})
+
+describe('getMaxToolsForRequest (per-model override)', () => {
+  it('honours `model.maxTools: 0` even when the provider declares a non-zero default', () => {
+    // Anthropic declares 512, but a hypothetical Anthropic-hosted
+    // text-completion model could mark itself non-tool-capable.
+    expect(getMaxToolsForRequest('anthropic', { maxTools: 0 })).toBe(0)
+  })
+
+  it('honours a per-model cap below the provider default', () => {
+    expect(getMaxToolsForRequest('anthropic', { maxTools: 32 })).toBe(32)
+  })
+
+  it('honours a per-model cap above the provider default', () => {
+    // Trust the provider's declaration — KinBot caps based on what the
+    // provider says, not on a stricter ceiling.
+    expect(getMaxToolsForRequest('openai', { maxTools: 256 })).toBe(256)
+  })
+
+  it('falls back to the provider default when the model declines (undefined maxTools)', () => {
+    expect(getMaxToolsForRequest('anthropic', { maxTools: undefined })).toBe(512)
+    expect(getMaxToolsForRequest('openai', {})).toBe(128)
+  })
+
+  it('falls back through provider default to global default when no model is supplied', () => {
+    expect(getMaxToolsForRequest('anthropic', null)).toBe(512)
+    expect(getMaxToolsForRequest('plugin:made-up-vendor', null)).toBe(128)
+    expect(getMaxToolsForRequest(null, null)).toBe(128)
+  })
+
+  it('treats per-model `maxTools: 0` as a hard signal (no fallback to provider)', () => {
+    // The whole point: a plugin marketplace (Replicate, …) can flag a
+    // completion-only model with `maxTools: 0` and the engine respects
+    // it even though the provider's own `defaultMaxTools` is generous.
+    expect(getMaxToolsForRequest('anthropic-oauth', { maxTools: 0 })).toBe(0)
+    expect(getMaxToolsForRequest('openai', { maxTools: 0 })).toBe(0)
   })
 })
 

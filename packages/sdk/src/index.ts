@@ -646,8 +646,27 @@ export interface LLMModel {
    *  defaults or treat undefined as "unknown". */
   contextWindow?: number
   maxOutput?: number
-  /** Hard limit on the number of tools the provider accepts per request.
-   *  Undefined = no known limit. */
+  /**
+   * Per-model cap on the number of tools KinBot sends in a single chat
+   * request. Used as a per-model OVERRIDE of `LLMProvider.defaultMaxTools`
+   * — the engine resolves the effective cap as
+   * `model.maxTools ?? provider.defaultMaxTools ?? DEFAULT (128)`.
+   *
+   * Special value `0` means "this model doesn't support tool calling
+   * at all": the engine omits every tool from the request AND tells
+   * the prompt builder to skip the tool-heavy sections of the system
+   * prompt (otherwise the model sees "use tools" instructions, no
+   * tools, and starts hallucinating JSON tool-call syntax in the text).
+   *
+   * Useful for plugin providers hosting a heterogeneous catalogue:
+   * Replicate / Together / OpenRouter / Ollama can mark text-only
+   * completion models with `maxTools: 0` while leaving instruct-tuned
+   * tool-capable models on the default.
+   *
+   * Undefined = inherit the provider's `defaultMaxTools` (the common
+   * case for built-ins where every model in the catalogue behaves
+   * uniformly).
+   */
   maxTools?: number
   /** True when the model can accept image blocks in user messages. */
   supportsImageInput?: boolean

@@ -23,7 +23,7 @@ import { decrypt } from '@/server/services/encryption'
 import { buildSystemPrompt, joinSystemPrompt } from '@/server/services/prompt-builder'
 import { buildSegmentedMessages } from '@/server/services/llm-cache-hints'
 import { stringifyToolResultValue } from '@/server/llm/core/vercel-bridge'
-import { DEFAULT_MAX_LLM_TOOLS, getMaxToolsForProvider } from '@/server/services/tool-cap'
+import { DEFAULT_MAX_LLM_TOOLS, getMaxToolsForRequest } from '@/server/services/tool-cap'
 import { dequeueMessage, markQueueItemDone, isKinProcessing, getQueueSize, recoverStaleProcessingItems, popQueueMessageMetadata } from '@/server/services/queue'
 import { recoverStaleTasks } from '@/server/services/tasks'
 import { sseManager } from '@/server/sse/index'
@@ -110,9 +110,22 @@ function capTools(
   tools: Record<string, Tool<any, any>>,
   kinId: string,
   providerType: string | null,
+  model?: { maxTools?: number } | null,
 ): Record<string, Tool<any, any>> {
-  const cap = getMaxToolsForProvider(providerType)
+  const cap = getMaxToolsForRequest(providerType, model ?? null)
   const names = Object.keys(tools)
+  // Cap of 0 means "model can't tool-call at all" — drop everything,
+  // including protected tools. The system prompt builder is fed the
+  // same signal so it skips tool-usage instructions in that mode.
+  if (cap === 0) {
+    if (names.length > 0) {
+      log.info(
+        { kinId, providerType, modelMaxTools: model?.maxTools, dropped: names.length },
+        'Model declares maxTools: 0 — dropping every tool from the request.',
+      )
+    }
+    return {}
+  }
   if (names.length <= cap) return tools
 
   // Partition into protected and droppable buckets, preserving insertion order
@@ -1307,6 +1320,28 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
       ? await buildActiveProjectInfo(resolvedActiveProjectId)
       : null
 
+    // Resolve LLM (provider + model + decrypted config) BEFORE building
+    // the system prompt — the prompt's tool-gating decision needs to
+    // see `resolved.model.maxTools`. The provider/model are
+    // family-invariant for the rest of this turn so this is the right
+    // place to do it.
+    let resolved
+    try {
+      const { resolveLLM } = await import('@/server/llm/core/resolve')
+      resolved = await resolveLLM({ modelId: kin.model, providerId: kin.providerId })
+    } catch (err) {
+      log.warn({ kinId, modelId: kin.model, err }, 'No LLM provider available')
+      sseManager.sendToKin(kinId, {
+        type: 'kin:error',
+        kinId,
+        data: { error: 'No LLM provider available for this model' },
+      })
+      import('@/server/services/notifications').then(({ createNotification }) =>
+        createNotification({ type: 'kin:error', title: 'Kin error', body: 'No LLM provider available for this model', kinId, relatedId: kinId, relatedType: 'kin' }),
+      ).catch(() => {})
+      return true
+    }
+
     const systemSegments = buildSystemPrompt({
       kin: { name: kin.name, slug: kin.slug, role: kin.role, character: kin.character, expertise: kin.expertise },
       contacts: contactsWithSlug,
@@ -1333,6 +1368,13 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
       },
       workspacePath: kin.workspacePath,
       activeProject: activeProject ?? undefined,
+      // When the model declares maxTools=0 (Replicate-style non-tool-
+      // calling completion model), strip every tool-related section
+      // of the prompt — otherwise the model sees "use these tools"
+      // guidance with no actual tool channel and starts emitting JSON
+      // tool-call syntax as plain text. Computed from the model +
+      // provider directly so it's available BEFORE `capTools` runs.
+      toolsEnabled: getMaxToolsForRequest(resolved.providerRow.type, resolved.model) > 0,
     })
     const systemPrompt = joinSystemPrompt(systemSegments)
 
@@ -1391,23 +1433,8 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
       return true
     }
 
-    // Resolve LLM (provider + model + decrypted config)
-    let resolved
-    try {
-      const { resolveLLM } = await import('@/server/llm/core/resolve')
-      resolved = await resolveLLM({ modelId: kin.model, providerId: kin.providerId })
-    } catch (err) {
-      log.warn({ kinId, modelId: kin.model, err }, 'No LLM provider available')
-      sseManager.sendToKin(kinId, {
-        type: 'kin:error',
-        kinId,
-        data: { error: 'No LLM provider available for this model' },
-      })
-      import('@/server/services/notifications').then(({ createNotification }) =>
-        createNotification({ type: 'kin:error', title: 'Kin error', body: 'No LLM provider available for this model', kinId, relatedId: kinId, relatedType: 'kin' }),
-      ).catch(() => {})
-      return true
-    }
+    // `resolved` was set earlier (just before buildSystemPrompt) so
+    // the prompt-gating decision could see `resolved.model.maxTools`.
 
     // Resolve tools for this Kin's context (native + MCP), filtered by toolConfig
     const toolConfig: KinToolConfig | null = kin.toolConfig
@@ -1455,8 +1482,11 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
       delete mergedTools['list_kins']
     }
 
-    // Wrap tools to spill large results to temp files, then enforce sequential execution
-    const tools = capTools(wrapToolsWithSpill(mergedTools, kin.workspacePath), kinId, providerType)
+    // Wrap tools to spill large results to temp files, then enforce sequential execution.
+    // Pass the resolved model so `maxTools: 0` on a Replicate-style
+    // non-tool-calling model drops the toolset entirely (and the prompt
+    // builder skips the tool-heavy sections below).
+    const tools = capTools(wrapToolsWithSpill(mergedTools, kin.workspacePath), kinId, providerType, resolved.model)
 
     const hasTools = Object.keys(tools).length > 0
 
@@ -2117,6 +2147,26 @@ export async function processQuickMessage(kinId: string): Promise<boolean> {
       ? await buildActiveProjectInfo(kin.activeProjectId)
       : null
 
+    // Resolve LLM BEFORE buildSystemPrompt for the same reason as the
+    // main queue path — the prompt's tool-gating reads
+    // `qsResolved.model.maxTools`.
+    let qsResolved
+    try {
+      const { resolveLLM } = await import('@/server/llm/core/resolve')
+      qsResolved = await resolveLLM({ modelId: kin.model, providerId: kin.providerId })
+    } catch (err) {
+      log.warn({ kinId, sessionId, modelId: kin.model, err }, 'No LLM provider available for quick session')
+      sseManager.sendToKin(kinId, {
+        type: 'kin:error',
+        kinId,
+        data: { error: 'No LLM provider available for this model', sessionId },
+      })
+      import('@/server/services/notifications').then(({ createNotification }) =>
+        createNotification({ type: 'kin:error', title: 'Kin error', body: 'No LLM provider available for this model', kinId, relatedId: kinId, relatedType: 'kin' }),
+      ).catch(() => {})
+      return true
+    }
+
     const systemSegments = buildSystemPrompt({
       kin: { name: kin.name, slug: kin.slug, role: kin.role, character: kin.character, expertise: kin.expertise },
       contacts: [],
@@ -2129,6 +2179,8 @@ export async function processQuickMessage(kinId: string): Promise<boolean> {
       userLanguage,
       workspacePath: kin.workspacePath,
       activeProject: quickSessionActiveProject ?? undefined,
+      // Same model-driven tool gating as the main queue path.
+      toolsEnabled: getMaxToolsForRequest(qsResolved.providerRow.type, qsResolved.model) > 0,
     })
 
     // Build quick session message history (only messages from this session, no compacting)
@@ -2178,23 +2230,7 @@ export async function processQuickMessage(kinId: string): Promise<boolean> {
       }
     }
 
-    // Resolve LLM (provider + model + decrypted config)
-    let qsResolved
-    try {
-      const { resolveLLM } = await import('@/server/llm/core/resolve')
-      qsResolved = await resolveLLM({ modelId: kin.model, providerId: kin.providerId })
-    } catch (err) {
-      log.warn({ kinId, sessionId, modelId: kin.model, err }, 'No LLM provider available for quick session')
-      sseManager.sendToKin(kinId, {
-        type: 'kin:error',
-        kinId,
-        data: { error: 'No LLM provider available for this model', sessionId },
-      })
-      import('@/server/services/notifications').then(({ createNotification }) =>
-        createNotification({ type: 'kin:error', title: 'Kin error', body: 'No LLM provider available for this model', kinId, relatedId: kinId, relatedType: 'kin' }),
-      ).catch(() => {})
-      return true
-    }
+    // `qsResolved` was set earlier (just before buildSystemPrompt).
 
     // Resolve thinking config for quick session (defaults to enabled)
     const qsThinkingConfig = resolveThinkingConfig(kin.thinkingConfig)
@@ -2218,7 +2254,7 @@ export async function processQuickMessage(kinId: string): Promise<boolean> {
     // Apply quick session exclusion list
     for (const name of QUICK_SESSION_EXCLUDED_TOOLS) delete nativeTools[name]
 
-    const tools = capTools(wrapToolsWithSpill({ ...nativeTools }, kin.workspacePath), kinId, qsProviderType)
+    const tools = capTools(wrapToolsWithSpill({ ...nativeTools }, kin.workspacePath), kinId, qsProviderType, qsResolved.model)
     const hasTools = Object.keys(tools).length > 0
 
     // Stream LLM response — custom single-step loop (same pattern as processKinQueue)

@@ -128,6 +128,21 @@ interface PromptParams {
     subject: string
     status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
   }>
+  /**
+   * Whether the resolved model can actually invoke tools. When false,
+   * the prompt builder omits the tool-usage instruction sections (the
+   * "Call tools silently", "Use dedicated file tools, not shell
+   * wrappers", "Plan with `think` when you're about to thrash", etc.)
+   * — otherwise the model sees tool guidance without an actual
+   * tool-calling channel and starts emitting JSON tool-call syntax
+   * as plain text.
+   *
+   * Defaults to true for legacy compat — every existing built-in
+   * provider supports tools. Replicate-style plugins hosting
+   * non-tool-calling completion models set this to false via
+   * `LLMModel.maxTools: 0` flowing through `getMaxToolsForRequest`.
+   */
+  toolsEnabled?: boolean
 }
 
 export interface ActiveProjectPromptInfo {
@@ -776,6 +791,13 @@ export function joinSystemPrompt(p: BuiltSystemPrompt): string {
 export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
   const stableBlocks: string[] = []
   const volatileBlocks: string[] = []
+  // When the resolved model declares `maxTools: 0` (no tool calling)
+  // the engine sets this to false. In that mode every tool-usage
+  // instruction is skipped — otherwise the model sees "call tools
+  // silently / use these specific tools / spawn_self / think tool"
+  // guidance with no actual tool channel and starts emitting JSON
+  // tool-call syntax as plain text.
+  const toolsEnabled = params.toolsEnabled !== false
 
   if (params.isSubKin && params.taskDescription) {
     // Sub-Kin prompt
@@ -914,29 +936,34 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
     )
 
     // [1.6] Tool calling discipline (strong rule against pre-narration / hallucinated results)
-    stableBlocks.push(
-      `## Tool calling discipline\n\n` +
-      `IMPORTANT: Call tools silently. Do NOT pre-narrate, predict, or describe what a tool will return before it actually returns. After the tool returns, comment on the actual result only.\n\n` +
-      `IMPORTANT: You MUST avoid speculative or filler phrases before/around a tool call. NEVER write things like:\n` +
-      `- "Let me check...", "I'll grab that for you...", "Just a moment..."\n` +
-      `- "The result should be...", "Looking at this, I can see..."\n` +
-      `- "Great, it worked!", "Perfect, the screenshot is taken!", "Voilà, c'est bon !" — before any tool result is actually visible to you\n` +
-      `- Any summary of what the tool "did" before its output is in your context\n\n` +
-      `IMPORTANT: If a tool fails, returns an error, or returns nothing useful, say so honestly. NEVER invent a successful outcome. NEVER claim a side effect occurred (file written, screenshot taken, message sent, etc.) unless the tool's actual return value confirms it.\n\n` +
-      `When a tool call depends on the result of a previous one, you MUST call them one at a time across separate steps. Wait to receive each result before calling the next tool. Never batch dependent tool calls — you cannot predict outputs.\n\n` +
-      `### Concrete anti-pattern (NEVER do this)\n\n` +
-      `BAD — fabricating a result before the tool runs:\n` +
-      `> "✅ Article published. Link: https://example.com/news/my-article — Discord notification sent to #announcements."\n` +
-      `> [then calls publish_article and send_discord_message]\n\n` +
-      `The URL above is invented. The user has now read a confirmation that did not happen yet, with a fake link. Even if the tools succeed afterwards, the message is a lie.\n\n` +
-      `GOOD — call first, describe after:\n` +
-      `> [calls publish_article → returns { url: "https://real.example.com/news/abc" }]\n` +
-      `> [calls send_discord_message → returns { ok: true, messageId: "..." }]\n` +
-      `> "Article published at https://real.example.com/news/abc and announced on Discord."\n\n` +
-      `Use ONLY URLs, IDs, counts, and outcomes that appear in actual tool results in your context. If you have not yet seen the tool's return value, you do not know the outcome — do not describe it.\n\n` +
-      `### Embedding images in your response\n\n` +
-      `When a tool returns an image URL (screenshot, generated image, or any fileUrl with image/* mime type), embed it inline using markdown image syntax: \`![short description](url)\`. The chat renderer displays these inline with click-to-zoom. Do NOT use plain link syntax \`[text](url)\` for images — that produces a clickable text link instead of the image itself. Plain links remain correct for non-image URLs.`,
-    )
+    // Skipped entirely when the resolved model can't tool-call — otherwise
+    // it sees these instructions, has no tool channel, and starts emitting
+    // JSON tool-call syntax as plain text.
+    if (toolsEnabled) {
+      stableBlocks.push(
+        `## Tool calling discipline\n\n` +
+        `IMPORTANT: Call tools silently. Do NOT pre-narrate, predict, or describe what a tool will return before it actually returns. After the tool returns, comment on the actual result only.\n\n` +
+        `IMPORTANT: You MUST avoid speculative or filler phrases before/around a tool call. NEVER write things like:\n` +
+        `- "Let me check...", "I'll grab that for you...", "Just a moment..."\n` +
+        `- "The result should be...", "Looking at this, I can see..."\n` +
+        `- "Great, it worked!", "Perfect, the screenshot is taken!", "Voilà, c'est bon !" — before any tool result is actually visible to you\n` +
+        `- Any summary of what the tool "did" before its output is in your context\n\n` +
+        `IMPORTANT: If a tool fails, returns an error, or returns nothing useful, say so honestly. NEVER invent a successful outcome. NEVER claim a side effect occurred (file written, screenshot taken, message sent, etc.) unless the tool's actual return value confirms it.\n\n` +
+        `When a tool call depends on the result of a previous one, you MUST call them one at a time across separate steps. Wait to receive each result before calling the next tool. Never batch dependent tool calls — you cannot predict outputs.\n\n` +
+        `### Concrete anti-pattern (NEVER do this)\n\n` +
+        `BAD — fabricating a result before the tool runs:\n` +
+        `> "✅ Article published. Link: https://example.com/news/my-article — Discord notification sent to #announcements."\n` +
+        `> [then calls publish_article and send_discord_message]\n\n` +
+        `The URL above is invented. The user has now read a confirmation that did not happen yet, with a fake link. Even if the tools succeed afterwards, the message is a lie.\n\n` +
+        `GOOD — call first, describe after:\n` +
+        `> [calls publish_article → returns { url: "https://real.example.com/news/abc" }]\n` +
+        `> [calls send_discord_message → returns { ok: true, messageId: "..." }]\n` +
+        `> "Article published at https://real.example.com/news/abc and announced on Discord."\n\n` +
+        `Use ONLY URLs, IDs, counts, and outcomes that appear in actual tool results in your context. If you have not yet seen the tool's return value, you do not know the outcome — do not describe it.\n\n` +
+        `### Embedding images in your response\n\n` +
+        `When a tool returns an image URL (screenshot, generated image, or any fileUrl with image/* mime type), embed it inline using markdown image syntax: \`![short description](url)\`. The chat renderer displays these inline with click-to-zoom. Do NOT use plain link syntax \`[text](url)\` for images — that produces a clickable text link instead of the image itself. Plain links remain correct for non-image URLs.`,
+      )
+    }
 
     // [2] Character
     if (params.kin.character) {
@@ -1099,8 +1126,13 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
     )
   }
 
-  // [6] Hidden system instructions (main agent only) — stable, large block
-  if (!params.isSubKin) {
+  // [6] Hidden system instructions (main agent only) — stable, large block.
+  // Skipped when the model can't tool-call: every section in here
+  // references a specific tool (memorize/recall/find_contact_by_identifier/
+  // store_file/grep/edit_file/spawn_self/…) and a tool-less model
+  // can do none of it; injecting the section just teaches the model
+  // to fabricate tool-call syntax.
+  if (!params.isSubKin && toolsEnabled) {
     stableBlocks.push(
       `## Internal instructions (do not share with the user)\n\n` +
       `### Contact management\n` +
@@ -1200,8 +1232,9 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
   }
 
   // [6.5] MCP tools (external tool servers) — stable summary
-  // (individual tool descriptions live in the AI SDK tools parameter)
-  if (params.mcpTools && params.mcpTools.length > 0) {
+  // (individual tool descriptions live in the LLM's `tools` parameter).
+  // Skipped when the resolved model can't tool-call.
+  if (toolsEnabled && params.mcpTools && params.mcpTools.length > 0) {
     const mcpLines = params.mcpTools
       .map((server) => `- **${server.serverName}** (${server.tools.length} tools)`)
       .join('\n')

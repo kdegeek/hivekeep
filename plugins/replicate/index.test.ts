@@ -161,6 +161,12 @@ describe('replicate plugin — LLM provider', () => {
     expect(models[0]?.contextWindow).toBeUndefined()
     // The second model has no schema → maxOutput undefined
     expect(models[1]?.maxOutput).toBeUndefined()
+    // Every model in the catalogue is uniformly marked as non-tool-
+    // calling — Replicate's chat() does a plain prompt round-trip,
+    // no tool-use protocol. The KinBot engine's per-model
+    // `maxTools` override picks this up and skips the tool-usage
+    // sections of the system prompt.
+    for (const m of models) expect(m.maxTools).toBe(0)
   })
 
   it('lists nothing when the collection has no models (returns []) ', async () => {

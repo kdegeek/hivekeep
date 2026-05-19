@@ -179,6 +179,22 @@ function llmModelFrom(m: ReplicateCollectionModel): LLMModel {
     // contextWindow is left undefined — Replicate doesn't expose it
     // uniformly across community models. The SDK allows undefined.
     ...(typeof maxOutput === 'number' ? { maxOutput } : {}),
+    // UNIFORM rule across the entire Replicate catalogue: this plugin's
+    // `chat()` implements a plain `prompt + system_prompt` round-trip
+    // — no tool calling. Setting `maxTools: 0` on every surfaced model
+    // tells the KinBot engine to (a) drop every tool from the request,
+    // (b) skip tool-usage instructions in the system prompt. Without
+    // this, Replicate-hosted instruct models (DeepSeek, Qwen3, …) see
+    // "use these tools" guidance with no actual tool channel and
+    // fabricate JSON tool-call syntax as text.
+    //
+    // No hardcoded model whitelist: every model from the curated
+    // language-models collection AND every custom LLM gets the same
+    // treatment. When a future iteration adds a JSON tool-calling
+    // layer to this plugin, that layer will set maxTools > 0 from
+    // an automatic schema heuristic (e.g. `tool_use` field in the
+    // model's OpenAPI Input), never from a model-name allowlist.
+    maxTools: 0,
   }
 }
 
