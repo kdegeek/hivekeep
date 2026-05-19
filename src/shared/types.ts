@@ -69,7 +69,7 @@ export interface ContactForNotification {
   platformId: string
 }
 
-export type ProviderType = 'anthropic' | 'anthropic-oauth' | 'openai' | 'openai-codex'
+export type ProviderType = 'anthropic' | 'anthropic-oauth' | 'openai' | 'openai-codex' | 'gemini'
 
 // ProviderCapability lives in the SDK (single source of truth shared
 // with plugin authors). The SDK version includes the forward-looking

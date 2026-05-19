@@ -9,11 +9,13 @@ const ICON_LOADERS: Record<string, () => Promise<{ default: SvgIcon & { Color?: 
   'anthropic-oauth': () => import('@lobehub/icons/es/Claude') as any,
   openai: () => import('@lobehub/icons/es/OpenAI') as any,
   'openai-codex': () => import('@lobehub/icons/es/OpenAI') as any,
+  gemini: () => import('@lobehub/icons/es/Gemini') as any,
 }
 
 /** Providers that have a .Color variant */
 const HAS_COLOR_VARIANT = new Set([
   'anthropic', 'anthropic-oauth',
+  'gemini',
 ])
 
 /** Cache resolved icon modules to avoid re-importing */

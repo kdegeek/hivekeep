@@ -23,6 +23,7 @@ export const PROVIDER_META = {
   'anthropic-oauth':  { capabilities: ['llm'],                       displayName: 'Anthropic (Claude Max)', noApiKey: true },
   openai:             { capabilities: ['llm', 'embedding', 'image'], displayName: 'OpenAI',                 apiKeyUrl: 'https://platform.openai.com/api-keys' },
   'openai-codex':     { capabilities: ['llm'],                       displayName: 'OpenAI (Codex CLI)',     noApiKey: true },
+  gemini:             { capabilities: ['llm'],                       displayName: 'Google Gemini',          apiKeyUrl: 'https://aistudio.google.com/apikey' },
 } as const satisfies Record<string, ProviderMeta>
 
 export type ProviderType = keyof typeof PROVIDER_META

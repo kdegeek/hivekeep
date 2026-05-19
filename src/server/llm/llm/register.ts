@@ -3,6 +3,7 @@ import { anthropicKeyProvider } from '@/server/llm/llm/anthropic-key'
 import { anthropicOAuthProvider } from '@/server/llm/llm/anthropic-oauth'
 import { openaiKeyProvider } from '@/server/llm/llm/openai-key'
 import { openaiCodexProvider } from '@/server/llm/llm/openai-codex'
+import { geminiProvider } from '@/server/llm/llm/gemini'
 
 /**
  * Register every built-in LLM provider in the registry. Called once at
@@ -13,4 +14,5 @@ export function registerBuiltinLLMProviders(): void {
   registerLLMProvider(anthropicOAuthProvider)
   registerLLMProvider(openaiKeyProvider)
   registerLLMProvider(openaiCodexProvider)
+  registerLLMProvider(geminiProvider)
 }
