@@ -1494,38 +1494,22 @@
     },
     "marketplace": {
       "title": "Explorar plugins",
-      "description": "Descubre e instala plugins de la comunidad desde el registro.",
+      "description": "Plugins publicados en npm con la palabra clave `kinbot-plugin`. Cualquiera puede publicar — revisa el autor y el repositorio fuente antes de instalar.",
       "refresh": "Actualizar",
-      "searchPlaceholder": "Buscar plugins...",
+      "searchPlaceholder": "Buscar en npm...",
       "allTags": "Todos",
       "installed": "Instalado",
       "installBtn": "Instalar",
       "installing": "Instalando...",
-      "installSuccess": "Plugin \"{name}\" instalado exitosamente",
+      "installSuccess": "Plugin \"{{name}}\" instalado exitosamente",
       "uninstall": "Desinstalar",
       "uninstallSuccess": "Plugin desinstalado",
-      "incompatible": "Requiere KinBot {range} (tienes {version})",
-      "incompatibleWarning": "Advertencia de compatibilidad",
-      "incompatibleDetail": "Este plugin requiere KinBot {range}, pero estás ejecutando {version}. Puede que no funcione correctamente.",
-      "author": "Autor",
-      "license": "Licencia",
-      "compatibility": "Compatibilidad",
-      "homepage": "Página web",
-      "repository": "Repositorio",
-      "noReadme": "No hay README disponible para este plugin.",
-      "empty": {
-        "title": "No se encontraron plugins",
-        "description": "Ningún plugin coincide con tus criterios de búsqueda. Intenta ajustar tus filtros."
-      },
-      "communityTab": "Comunidad",
-      "storeTab": "Tienda",
-      "storeDescription": "Plugins curados incluidos en el repositorio de KinBot. Estos son revisados y mantenidos por el equipo de KinBot.",
-      "storeEmpty": {
-        "title": "No hay plugins en la tienda",
-        "description": "Aún no hay plugins curados disponibles en la tienda."
-      },
-      "curated": "Curado",
-      "permissions": "Permisos"
+      "repository": "fuente",
+      "noDescription": "Sin descripción.",
+      "npmEmpty": {
+        "title": "Sin resultados",
+        "description": "Ningún paquete coincide con tu búsqueda. Prueba con un término más amplio."
+      }
     },
     "logs": {
       "title": "Registros",

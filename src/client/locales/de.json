@@ -1494,38 +1494,22 @@
     },
     "marketplace": {
       "title": "Plugins entdecken",
-      "description": "Entdecken und installiere die Community Plugins aus der Registrierung.",
+      "description": "Auf npm mit dem Stichwort `kinbot-plugin` veröffentlichte Plugins. Jeder kann veröffentlichen — prüfe den Autor und das Quell-Repository vor der Installation.",
       "refresh": "Aktualisieren",
-      "searchPlaceholder": "Suche Plugins...",
+      "searchPlaceholder": "Auf npm suchen...",
       "allTags": "Alle",
       "installed": "Installiert",
       "installBtn": "Installieren",
       "installing": "Installieren...",
-      "installSuccess": "Plugin „{name}“ erfolgreich installiert",
+      "installSuccess": "Plugin „{{name}}“ erfolgreich installiert",
       "uninstall": "Deinstallieren",
       "uninstallSuccess": "Plugin deinstalliert",
-      "incompatible": "Erfordert KinBot {range} (Du hast {version})",
-      "incompatibleWarning": "Kompatibilitätswarnung",
-      "incompatibleDetail": "Für diesen Plugin ist KinBot {range} erforderlich, aber du verwendest {version}. Möglicherweise funktioniert es nicht richtig.",
-      "author": "Autor",
-      "license": "Lizenz",
-      "compatibility": "Kompatibilität",
-      "homepage": "Homepage",
-      "repository": "Repository",
-      "noReadme": "Für diesen Plugin ist keine README-Datei verfügbar.",
-      "empty": {
-        "title": "Keine Plugins",
-        "description": "Kein Plugins entspricht deinen Suchkriterien. Versuche, deine Filter anzupassen."
-      },
-      "communityTab": "Gemeinschaft",
-      "storeTab": "Speichern",
-      "storeDescription": "Kuratiertes Plugins im KinBot-Repository enthalten. Diese werden vom KinBot-Team überprüft und gepflegt.",
-      "storeEmpty": {
-        "title": "Store leer",
-        "description": "Es sind noch keine kuratierten Plugins im Store verfügbar."
-      },
-      "curated": "Kuratiert",
-      "permissions": "Berechtigungen"
+      "repository": "Quelle",
+      "noDescription": "Keine Beschreibung verfügbar.",
+      "npmEmpty": {
+        "title": "Keine Ergebnisse",
+        "description": "Kein Paket entspricht deiner Suche. Versuche einen breiteren Begriff."
+      }
     },
     "logs": {
       "title": "Protokolle",

@@ -8,6 +8,14 @@ mock.module('@/server/services/vault', () => ({
     if (key === 'empty-key') return null
     return null
   },
+  // Bun's mock.module is global and pollutes sibling test files —
+  // stub every named export the production code imports so unrelated
+  // tests don't fail with "Export not found" syntax errors.
+  getSecretByKey: async () => null,
+  createSecret: async () => ({ id: 'sec-1', key: 'TEST', createdAt: new Date() }),
+  updateSecretValueByKey: async () => null,
+  deleteSecret: async () => true,
+  listKeysByPrefix: async () => [],
 }))
 
 mock.module('@/server/logger', () => ({

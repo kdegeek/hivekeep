@@ -15,6 +15,9 @@ const mockVault = {
   getEntryValue: mock(() => Promise.resolve(null as any)),
   createEntry: mock(() => Promise.resolve({ id: 'ent-1', key: 'TEST', entryType: 'text' })),
   getAttachment: mock(() => Promise.resolve(null as any)),
+  // Required by plugins.ts vault adapter — Bun's mock.module is global so
+  // every vault mock must expose every named export the production code uses.
+  listKeysByPrefix: mock(() => Promise.resolve([] as string[])),
 }
 
 const mockVaultTypes = {

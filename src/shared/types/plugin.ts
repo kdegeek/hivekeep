@@ -82,7 +82,7 @@ export interface PluginChannelMeta {
   displayName: string
 }
 
-export type PluginInstallSource = 'local' | 'git' | 'npm' | 'store'
+export type PluginInstallSource = 'local' | 'git' | 'npm'
 
 export interface PluginInstallMeta {
   url?: string        // git URL
@@ -92,20 +92,6 @@ export interface PluginInstallMeta {
 }
 
 // ─── Registry Types ──────────────────────────────────────────────────────────
-
-export interface RegistryPlugin {
-  name: string
-  description: string
-  author: string
-  version: string
-  repo: string
-  tags: string[]
-  compatible_versions: string
-  icon?: string
-  homepage?: string
-  license?: string
-  readme_url?: string
-}
 
 /**
  * Normalised npm search result. Built from registry.npmjs.org's

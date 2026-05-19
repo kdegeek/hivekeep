@@ -223,19 +223,6 @@ import { grepTool } from '@/server/tools/grep-tools'
 import { multiEditTool } from '@/server/tools/multi-edit-tools'
 import { thinkTool } from '@/server/tools/think-tool'
 import { taskTodosTool } from '@/server/tools/task-todos-tool'
-import {
-  listInstalledPluginsTool,
-  browsePluginStoreTool,
-  installPluginTool,
-  uninstallPluginTool,
-  enablePluginTool,
-  disablePluginTool,
-  configurePluginTool,
-  getPluginDetailsTool,
-  checkPluginUpdatesTool,
-  updatePluginTool,
-} from '@/server/tools/plugin-tools'
-
 const log = createLogger('tools')
 
 /**
@@ -476,18 +463,6 @@ export function registerAllTools(): void {
   toolRegistry.register('get_mini_app_console', getMiniAppConsoleTool, 'mini-apps')
   toolRegistry.register('edit_mini_app_file', editMiniAppFileTool, 'mini-apps')
   toolRegistry.register('multi_edit_mini_app_file', multiEditMiniAppFileTool, 'mini-apps')
-
-  // Plugin management tools (main only, opt-in)
-  toolRegistry.register('list_installed_plugins', listInstalledPluginsTool, 'plugins')
-  toolRegistry.register('browse_plugin_store', browsePluginStoreTool, 'plugins')
-  toolRegistry.register('install_plugin', installPluginTool, 'plugins')
-  toolRegistry.register('uninstall_plugin', uninstallPluginTool, 'plugins')
-  toolRegistry.register('enable_plugin', enablePluginTool, 'plugins')
-  toolRegistry.register('disable_plugin', disablePluginTool, 'plugins')
-  toolRegistry.register('configure_plugin', configurePluginTool, 'plugins')
-  toolRegistry.register('get_plugin_details', getPluginDetailsTool, 'plugins')
-  toolRegistry.register('check_plugin_updates', checkPluginUpdatesTool, 'plugins')
-  toolRegistry.register('update_plugin', updatePluginTool, 'plugins')
 
   // Filesystem tools (main + sub-kin)
   toolRegistry.register('read_file', readFileTool, 'filesystem')

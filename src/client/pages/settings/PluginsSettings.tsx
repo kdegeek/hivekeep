@@ -64,11 +64,9 @@ export function PluginsSettings() {
   const [configValues, setConfigValues] = useState<Record<string, any>>({})
   const [saving, setSaving] = useState(false)
 
-  // Install dialog state
+  // Install dialog state (Git URL only — npm is in the Marketplace tab)
   const [installOpen, setInstallOpen] = useState(false)
-  const [installSource, setInstallSource] = useState<'git' | 'npm'>('git')
   const [installUrl, setInstallUrl] = useState('')
-  const [installPackage, setInstallPackage] = useState('')
   const [installing, setInstalling] = useState(false)
 
   // Uninstall confirmation
@@ -139,15 +137,13 @@ export function PluginsSettings() {
   const handleInstall = async () => {
     setInstalling(true)
     try {
-      const body = installSource === 'git'
-        ? { source: 'git' as const, url: installUrl }
-        : { source: 'npm' as const, package: installPackage }
-
-      const result = await api.post<{ success: boolean; name: string }>('/plugins/install', body)
+      const result = await api.post<{ success: boolean; name: string }>('/plugins/install', {
+        source: 'git' as const,
+        url: installUrl,
+      })
       toast.success(t('settings.plugins.installSuccess', { name: result.name }))
       setInstallOpen(false)
       setInstallUrl('')
-      setInstallPackage('')
       await fetchPlugins()
     } catch (err) {
       toastError(err)
@@ -512,47 +508,17 @@ export function PluginsSettings() {
 
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label>{t('settings.plugins.installSourceLabel')}</Label>
-              <Select value={installSource} onValueChange={(v) => setInstallSource(v as 'git' | 'npm')}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="git">
-                    <span className="flex items-center gap-2">
-                      <GitBranch className="size-3" /> Git URL
-                    </span>
-                  </SelectItem>
-                  <SelectItem value="npm">
-                    <span className="flex items-center gap-2">
-                      <Package className="size-3" /> npm
-                    </span>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="git-url" className="flex items-center gap-2">
+                <GitBranch className="size-3" />
+                {t('settings.plugins.gitUrl')}
+              </Label>
+              <Input
+                id="git-url"
+                placeholder="https://github.com/user/kinbot-plugin-xxx.git"
+                value={installUrl}
+                onChange={(e) => setInstallUrl(e.target.value)}
+              />
             </div>
-
-            {installSource === 'git' ? (
-              <div className="space-y-1.5">
-                <Label htmlFor="git-url">{t('settings.plugins.gitUrl')}</Label>
-                <Input
-                  id="git-url"
-                  placeholder="https://github.com/user/kinbot-plugin-xxx.git"
-                  value={installUrl}
-                  onChange={(e) => setInstallUrl(e.target.value)}
-                />
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                <Label htmlFor="npm-package">{t('settings.plugins.npmPackage')}</Label>
-                <Input
-                  id="npm-package"
-                  placeholder="kinbot-plugin-xxx"
-                  value={installPackage}
-                  onChange={(e) => setInstallPackage(e.target.value)}
-                />
-              </div>
-            )}
           </div>
 
           <DialogFooter>
@@ -561,7 +527,7 @@ export function PluginsSettings() {
             </Button>
             <Button
               onClick={handleInstall}
-              disabled={installing || (installSource === 'git' ? !installUrl : !installPackage)}
+              disabled={installing || !installUrl}
             >
               {installing ? (
                 <>

@@ -625,6 +625,10 @@ const LIFECYCLE_TIMEOUT_MS = 30_000
 class PluginManager {
   private plugins = new Map<string, LoadedPlugin>()
   private pluginsDir: string
+  // Workspace for install operations — temp dirs + bun cache. Lives OUTSIDE
+  // `plugins/` so the internal file watcher doesn't see it as a new plugin
+  // and trigger a full rescan mid-install (which deadlocks `bun add`).
+  private installWorkspace: string
   private watcher: FSWatcher | null = null
   private reloadTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
@@ -632,6 +636,7 @@ class PluginManager {
 
   constructor() {
     this.pluginsDir = resolve(process.cwd(), 'plugins')
+    this.installWorkspace = resolve(process.cwd(), 'data', '.plugin-install')
   }
 
   /** Get the current KinBot version from package.json (cached) */
@@ -1486,6 +1491,50 @@ class PluginManager {
 
   // ─── Install / Uninstall / Update ────────────────────────────────────────
 
+  // Always drain stdout+stderr in parallel: piping without reading can deadlock the
+  // child once the kernel pipe buffer (~64KB) fills.
+  //
+  // Optional timeoutMs guards against silent hangs (e.g. lock contention on
+  // `~/.bun/install/cache` when our parent process is itself a bun runtime
+  // that holds a shared lock on the cache). Without a ceiling the handler
+  // sits on `proc.exited` indefinitely and the UI spinner spins forever.
+  private async runSpawn(
+    cmd: string[],
+    opts: { cwd?: string; env?: Record<string, string>; timeoutMs?: number } = {},
+  ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+    const proc = Bun.spawn(cmd, {
+      cwd: opts.cwd,
+      env: opts.env ? { ...process.env, ...opts.env } : undefined,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      stdin: 'ignore',
+    })
+
+    let timedOut = false
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+    if (opts.timeoutMs) {
+      timeoutHandle = setTimeout(() => {
+        timedOut = true
+        try { proc.kill() } catch {}
+      }, opts.timeoutMs)
+    }
+
+    const [stdout, stderr] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ])
+    const exitCode = await proc.exited
+    if (timeoutHandle) clearTimeout(timeoutHandle)
+
+    if (timedOut) {
+      throw new Error(
+        `Command timed out after ${opts.timeoutMs}ms: ${cmd.join(' ')}` +
+          (stderr.trim() ? ` — stderr: ${stderr.trim()}` : ''),
+      )
+    }
+    return { exitCode, stdout, stderr }
+  }
+
   /** Install a plugin from a git URL */
   async installFromGit(url: string): Promise<{ name: string }> {
     // Validate URL protocol (prevent SSRF via file://, ssh://, etc.)
@@ -1499,22 +1548,19 @@ class PluginManager {
       throw new Error('Only HTTPS and HTTP git URLs are allowed')
     }
 
-    // Ensure plugins dir exists
+    // Ensure plugins dir + install workspace exist
     await mkdir(this.pluginsDir, { recursive: true })
+    await mkdir(this.installWorkspace, { recursive: true })
 
-    // Clone to a temp directory first
+    // Clone into install workspace (outside plugins/ to bypass the internal
+    // file watcher) then mv into plugins/<name> once validated.
     const tempName = `_installing_${Date.now()}`
-    const tempDir = join(this.pluginsDir, tempName)
+    const tempDir = join(this.installWorkspace, tempName)
 
     try {
       // Clone the repo
-      const proc = Bun.spawn(['git', 'clone', '--depth', '1', url, tempDir], {
-        stdout: 'pipe',
-        stderr: 'pipe',
-      })
-      const exitCode = await proc.exited
+      const { exitCode, stderr } = await this.runSpawn(['git', 'clone', '--depth', '1', url, tempDir])
       if (exitCode !== 0) {
-        const stderr = await new Response(proc.stderr).text()
         throw new Error(`Git clone failed: ${stderr.trim()}`)
       }
 
@@ -1548,8 +1594,7 @@ class PluginManager {
       }
 
       // Rename temp dir to plugin name
-      const renameProc = Bun.spawn(['mv', tempDir, targetDir], { stdout: 'pipe', stderr: 'pipe' })
-      await renameProc.exited
+      await this.runSpawn(['mv', tempDir, targetDir])
 
       // Remove .git directory to save space (keep it simple)
       // Actually keep .git for updates via git pull
@@ -1614,6 +1659,8 @@ class PluginManager {
 
   /** Install a plugin from an npm package */
   async installFromNpm(packageName: string): Promise<{ name: string }> {
+    log.info({ package: packageName }, 'npm install: start')
+
     // Validate package name (prevent path traversal and command injection)
     if (packageName.includes('..') || packageName.includes('/') && !packageName.startsWith('@')) {
       throw new Error('Invalid npm package name')
@@ -1627,10 +1674,13 @@ class PluginManager {
     }
 
     await mkdir(this.pluginsDir, { recursive: true })
+    await mkdir(this.installWorkspace, { recursive: true })
 
-    // Use a temp directory approach: create plugin dir, init, install
+    // Workspace and cache live OUTSIDE plugins/ so they don't trigger the
+    // PluginManager's internal file watcher (which would kick off a full
+    // rescan mid-install and deadlock `bun add`).
     const tempName = `_npm_${Date.now()}`
-    const tempDir = join(this.pluginsDir, tempName)
+    const tempDir = join(this.installWorkspace, tempName)
 
     try {
       await mkdir(tempDir, { recursive: true })
@@ -1638,16 +1688,23 @@ class PluginManager {
       // Initialize a minimal package.json and install the package
       await Bun.write(join(tempDir, 'package.json'), JSON.stringify({ name: 'kinbot-plugin-install', private: true }))
 
-      const proc = Bun.spawn(['bun', 'add', packageName], {
-        cwd: tempDir,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      })
-      const exitCode = await proc.exited
+      // Dedicated cache dir, persisted across installs. Also outside plugins/
+      // for the same reason as tempDir.
+      const isolatedCache = join(this.installWorkspace, 'bun-cache')
+      log.info({ package: packageName, tempDir, cache: isolatedCache }, 'npm install: running bun add (60s timeout)')
+
+      const { exitCode, stderr, stdout } = await this.runSpawn(
+        ['bun', 'add', packageName],
+        {
+          cwd: tempDir,
+          env: { BUN_INSTALL_CACHE_DIR: isolatedCache },
+          timeoutMs: 60_000,
+        },
+      )
       if (exitCode !== 0) {
-        const stderr = await new Response(proc.stderr).text()
-        throw new Error(`npm install failed: ${stderr.trim()}`)
+        throw new Error(`npm install failed (exit ${exitCode}): ${stderr.trim() || stdout.trim() || '(no output)'}`)
       }
+      log.info({ package: packageName }, 'npm install: bun add done')
 
       // Find the installed package's plugin.json
       const nodeModulesDir = join(tempDir, 'node_modules', packageName)
@@ -1666,6 +1723,7 @@ class PluginManager {
       }
 
       const manifest = data as PluginManifest
+      log.info({ plugin: manifest.name, version: manifest.version }, 'npm install: manifest validated')
 
       // Check version compatibility
       const compat = await this.checkCompatibility(manifest)
@@ -1679,8 +1737,8 @@ class PluginManager {
 
       // Move the package contents to plugins/<name>
       const targetDir = join(this.pluginsDir, manifest.name)
-      const mvProc = Bun.spawn(['mv', nodeModulesDir, targetDir], { stdout: 'pipe', stderr: 'pipe' })
-      await mvProc.exited
+      await this.runSpawn(['mv', nodeModulesDir, targetDir], { timeoutMs: 10_000 })
+      log.info({ plugin: manifest.name, targetDir }, 'npm install: mv to plugins/ done')
 
       // Cleanup temp dir
       await rm(tempDir, { recursive: true, force: true }).catch(() => {})
@@ -1717,8 +1775,10 @@ class PluginManager {
         installSource: 'npm',
         installMeta,
       })
+      log.info({ plugin: manifest.name }, 'npm install: db + state updated, activating')
 
       await this.activatePlugin(manifest.name)
+      log.info({ plugin: manifest.name }, 'npm install: activation done')
 
       sseManager.broadcast({
         type: 'plugin:installed',
@@ -1734,108 +1794,43 @@ class PluginManager {
   }
 
   /** Install a plugin from the in-repo store/ directory */
-  async installFromStore(storeName: string): Promise<{ name: string }> {
-    if (storeName.includes('..') || storeName.includes('/') || storeName.includes('\\')) {
-      throw new Error('Invalid store plugin name')
-    }
-    const storeDir = resolve(process.cwd(), 'store', storeName)
-
-    // Verify the store plugin exists
-    let raw: string
-    try {
-      raw = await readFile(join(storeDir, 'plugin.json'), 'utf-8')
-    } catch {
-      throw new Error(`Store plugin "${storeName}" not found`)
-    }
-
-    const data = JSON.parse(raw)
-    const validation = validateManifest(data)
-    if (!validation.valid) {
-      throw new Error(`Invalid manifest: ${validation.errors.join('; ')}`)
-    }
-
-    const manifest = data as PluginManifest
-
-    // Check version compatibility
-    const compat = await this.checkCompatibility(manifest)
-    if (!compat.compatible) {
-      throw new Error(compat.error!)
-    }
-
-    // Check if already installed
-    if (this.plugins.has(manifest.name)) {
-      throw new Error(`Plugin "${manifest.name}" is already installed`)
-    }
-
-    await mkdir(this.pluginsDir, { recursive: true })
-    const targetDir = join(this.pluginsDir, manifest.name)
-
-    // Copy store plugin to plugins directory
-    const cpProc = Bun.spawn(['cp', '-r', storeDir, targetDir], {
-      stdout: 'pipe',
-      stderr: 'pipe',
-    })
-    const exitCode = await cpProc.exited
-    if (exitCode !== 0) {
-      const stderr = await new Response(cpProc.stderr).text()
-      throw new Error(`Failed to copy store plugin: ${stderr.trim()}`)
-    }
-
-    // Save install source in DB
-    const now = new Date()
-    const installMeta: PluginInstallMeta = {
-      version: manifest.version,
-      installedAt: now.toISOString(),
-    }
-
-    const existing = await this.getState(manifest.name)
-    if (existing) {
-      await db.update(pluginStates).set({
-        enabled: true,
-        installSource: 'store',
-        installMeta: JSON.stringify(installMeta),
-        updatedAt: now,
-      }).where(eq(pluginStates.name, manifest.name))
-    } else {
-      await db.insert(pluginStates).values({
-        name: manifest.name,
-        enabled: true,
-        installSource: 'store',
-        installMeta: JSON.stringify(installMeta),
-        createdAt: now,
-        updatedAt: now,
-      })
-    }
-
-    // Register and activate
-    this.plugins.set(manifest.name, {
-      manifest,
-      exports: null,
-      enabled: false,
-      registeredTools: [],
-      registeredHooks: [],
-      registeredProviders: [],
-      registeredChannels: [],
-            health: { totalErrors: 0, consecutiveErrors: 0, autoDisabled: false },
-      installSource: 'store',
-      installMeta,
-    })
-
-    await this.activatePlugin(manifest.name)
-
-    sseManager.broadcast({
-      type: 'plugin:installed',
-      data: { name: manifest.name, source: 'store' },
-    })
-
-    log.info({ plugin: manifest.name, storeName }, 'Plugin installed from store')
-    return { name: manifest.name }
-  }
-
   /** Uninstall a plugin: deactivate, remove files, clean DB */
   async uninstallPlugin(name: string): Promise<void> {
     const plugin = this.plugins.get(name)
-    if (!plugin) throw new Error(`Plugin "${name}" not found`)
+    const pluginDir = join(this.pluginsDir, name)
+
+    // Orphan recovery: not in memory, but maybe an orphan row/dir is lying around.
+    // Reclaim it instead of returning "not found" — the user has no other path back.
+    if (!plugin) {
+      const state = await this.getState(name)
+      let dirExists = false
+      try {
+        await access(pluginDir)
+        dirExists = true
+      } catch {}
+
+      if (!state && !dirExists) {
+        throw new Error(`Plugin "${name}" not found`)
+      }
+
+      if (state) {
+        await db.delete(pluginStorage).where(eq(pluginStorage.pluginName, name))
+        await db.delete(pluginStates).where(eq(pluginStates.name, name))
+      }
+
+      sseManager.broadcast({ type: 'plugin:uninstalled', data: { name } })
+      log.info({ plugin: name, recovery: true }, 'Plugin uninstalled (orphan recovery)')
+
+      // Filesystem cleanup delayed (same reason as the regular path).
+      if (dirExists) {
+        setTimeout(() => {
+          rm(pluginDir, { recursive: true, force: true }).catch((err) => {
+            log.warn({ plugin: name, err }, 'Plugin directory cleanup failed (non-fatal)')
+          })
+        }, 2000)
+      }
+      return
+    }
 
     // Prevent uninstall if other plugins depend on this one
     const dependents = this.getDependents(name)
@@ -1853,15 +1848,12 @@ class PluginManager {
       await this.deactivatePlugin(name)
     }
 
-    // Remove plugin directory
-    const pluginDir = join(this.pluginsDir, name)
-    await rm(pluginDir, { recursive: true, force: true })
-
-    // Clean up DB
+    // Clean DB + memory BEFORE removing the plugin directory. `bun --watch`
+    // tracks dynamic-imported plugin modules; deleting their source file
+    // triggers a server reload that would kill an in-flight request before
+    // the response is flushed and before the DB delete commits.
     await db.delete(pluginStorage).where(eq(pluginStorage.pluginName, name))
     await db.delete(pluginStates).where(eq(pluginStates.name, name))
-
-    // Remove from memory
     this.plugins.delete(name)
 
     sseManager.broadcast({
@@ -1870,6 +1862,19 @@ class PluginManager {
     })
 
     log.info({ plugin: name }, 'Plugin uninstalled')
+
+    // Filesystem cleanup last — and delayed so the watch-induced reload
+    // (if any) happens after the client's follow-up refresh request has
+    // already been served. `bun --watch` tracks dynamic-imported plugin
+    // modules; deleting their source file triggers a full server reload
+    // that would otherwise kill the immediate follow-up `/plugins`-listing
+    // request the UI fires after the toast (manifests as a 500 + empty list
+    // until the user manually refreshes). 2s covers the worst-case round-trip.
+    setTimeout(() => {
+      rm(pluginDir, { recursive: true, force: true }).catch((err) => {
+        log.warn({ plugin: name, err }, 'Plugin directory cleanup failed (non-fatal)')
+      })
+    }, 2000)
   }
 
   /** Update a plugin (git pull or npm update) */
@@ -1881,56 +1886,30 @@ class PluginManager {
     const pluginDir = join(this.pluginsDir, name)
 
     if (source === 'git') {
-      // Git pull
-      const proc = Bun.spawn(['git', 'pull'], {
-        cwd: pluginDir,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      })
-      const exitCode = await proc.exited
+      const { exitCode, stderr } = await this.runSpawn(['git', 'pull'], { cwd: pluginDir })
       if (exitCode !== 0) {
-        const stderr = await new Response(proc.stderr).text()
         throw new Error(`Git pull failed: ${stderr.trim()}`)
       }
     } else if (source === 'npm') {
       const packageName = plugin.installMeta?.package
       if (!packageName) throw new Error('No package name stored for npm plugin')
 
-      // Re-install from npm (overwrite)
-      const tempDir = join(this.pluginsDir, `_update_${Date.now()}`)
+      // Re-install from npm (overwrite) — workspace outside plugins/
+      await mkdir(this.installWorkspace, { recursive: true })
+      const tempDir = join(this.installWorkspace, `_update_${Date.now()}`)
       await mkdir(tempDir, { recursive: true })
       await Bun.write(join(tempDir, 'package.json'), JSON.stringify({ name: 'kinbot-plugin-update', private: true }))
 
-      const proc = Bun.spawn(['bun', 'add', packageName], { cwd: tempDir, stdout: 'pipe', stderr: 'pipe' })
-      const exitCode = await proc.exited
+      const { exitCode, stderr } = await this.runSpawn(['bun', 'add', packageName], { cwd: tempDir })
       if (exitCode !== 0) {
         await rm(tempDir, { recursive: true, force: true }).catch(() => {})
-        const stderr = await new Response(proc.stderr).text()
         throw new Error(`npm update failed: ${stderr.trim()}`)
       }
 
       // Replace plugin dir
       await rm(pluginDir, { recursive: true, force: true })
-      const mvProc = Bun.spawn(['mv', join(tempDir, 'node_modules', packageName), pluginDir], { stdout: 'pipe', stderr: 'pipe' })
-      await mvProc.exited
+      await this.runSpawn(['mv', join(tempDir, 'node_modules', packageName), pluginDir])
       await rm(tempDir, { recursive: true, force: true }).catch(() => {})
-    } else if (source === 'store') {
-      // Re-copy from store directory
-      const storeDir = resolve(process.cwd(), 'store', name)
-      try {
-        await access(join(storeDir, 'plugin.json'))
-      } catch {
-        throw new Error(`Store plugin "${name}" no longer exists in store/`)
-      }
-
-      // Remove old and copy fresh
-      await rm(pluginDir, { recursive: true, force: true })
-      const cpProc = Bun.spawn(['cp', '-r', storeDir, pluginDir], { stdout: 'pipe', stderr: 'pipe' })
-      const cpExit = await cpProc.exited
-      if (cpExit !== 0) {
-        const stderr = await new Response(cpProc.stderr).text()
-        throw new Error(`Failed to copy store plugin: ${stderr.trim()}`)
-      }
     } else {
       throw new Error('Cannot update a local plugin')
     }
@@ -1988,49 +1967,25 @@ class PluginManager {
       if (!source || source === 'local') continue
 
       try {
-        if (source === 'store') {
-          const storeManifestPath = join(resolve(process.cwd(), 'store', name), 'plugin.json')
-          try {
-            const raw = await readFile(storeManifestPath, 'utf-8')
-            const storeManifest = JSON.parse(raw) as PluginManifest
-            if (storeManifest.version !== plugin.manifest.version) {
-              updates.push({
-                name,
-                currentVersion: plugin.manifest.version,
-                availableVersion: storeManifest.version,
-                source,
-              })
-            }
-          } catch {
-            // Store plugin removed or unreadable, skip
-          }
-        } else if (source === 'git') {
+        if (source === 'git') {
           // Fetch remote refs and compare local HEAD with remote HEAD
           const pluginDir = join(this.pluginsDir, name)
-          const fetchProc = Bun.spawn(['git', 'fetch'], {
-            cwd: pluginDir,
-            stdout: 'pipe',
-            stderr: 'pipe',
-          })
-          await fetchProc.exited
+          await this.runSpawn(['git', 'fetch'], { cwd: pluginDir })
 
           // Compare local and remote HEAD
-          const localProc = Bun.spawn(['git', 'rev-parse', 'HEAD'], { cwd: pluginDir, stdout: 'pipe', stderr: 'pipe' })
-          await localProc.exited
-          const localHead = (await new Response(localProc.stdout).text()).trim()
+          const { stdout: localOut } = await this.runSpawn(['git', 'rev-parse', 'HEAD'], { cwd: pluginDir })
+          const localHead = localOut.trim()
 
-          const remoteProc = Bun.spawn(['git', 'rev-parse', '@{u}'], { cwd: pluginDir, stdout: 'pipe', stderr: 'pipe' })
-          const remoteExit = await remoteProc.exited
-          const remoteHead = (await new Response(remoteProc.stdout).text()).trim()
+          const { exitCode: remoteExit, stdout: remoteOut } = await this.runSpawn(['git', 'rev-parse', '@{u}'], { cwd: pluginDir })
+          const remoteHead = remoteOut.trim()
 
           if (remoteExit === 0 && localHead !== remoteHead) {
             // Try to read remote manifest version
             let availableVersion = 'newer commit available'
             try {
-              const showProc = Bun.spawn(['git', 'show', '@{u}:plugin.json'], { cwd: pluginDir, stdout: 'pipe', stderr: 'pipe' })
-              const showExit = await showProc.exited
+              const { exitCode: showExit, stdout: showOut } = await this.runSpawn(['git', 'show', '@{u}:plugin.json'], { cwd: pluginDir })
               if (showExit === 0) {
-                const remoteManifest = JSON.parse(await new Response(showProc.stdout).text())
+                const remoteManifest = JSON.parse(showOut)
                 if (remoteManifest.version && remoteManifest.version !== plugin.manifest.version) {
                   availableVersion = remoteManifest.version
                 }
@@ -2088,9 +2043,11 @@ class PluginManager {
       this.watcher = watch(this.pluginsDir, { recursive: true }, (eventType, filename) => {
         if (!filename) return
 
-        // Extract plugin name (first path segment)
+        // Extract plugin name (first path segment). Skip leading `_` (install
+        // tempdirs) and `.` (hidden caches / workspace residue) — neither
+        // should ever trigger a hot-reload.
         const pluginName = filename.split('/')[0]?.split('\\')[0]
-        if (!pluginName || pluginName.startsWith('_')) return
+        if (!pluginName || pluginName.startsWith('_') || pluginName.startsWith('.')) return
 
         // Debounce: wait 500ms after last change
         const existing = this.reloadTimers.get(pluginName)
