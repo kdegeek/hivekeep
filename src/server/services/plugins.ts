@@ -1023,9 +1023,40 @@ class PluginManager {
     } catch (err) {
       // Extract structured error info to avoid pino circular-reference issues
       // when err carries SDK objects (AbortController, sockets, etc.) on its stack.
-      const errMessage = err instanceof Error ? err.message : (typeof err === 'string' ? err : 'Activation failed')
-      const errStack = err instanceof Error ? err.stack : undefined
-      const causeMessage = err instanceof Error && err.cause instanceof Error ? err.cause.message : undefined
+      //
+      // Real-world throws aren't always `Error` instances — Bun's failed
+      // dynamic imports, `Promise.reject(undefined)`, plugin code that
+      // does `throw { code: 'BAD' }`, etc. all bypass the Error path. The
+      // final fallback used to be the literal string "Activation failed"
+      // which gave the user nothing to debug from. Now we serialize the
+      // value with type info so something useful always reaches the log
+      // AND the UI's plugin.error field.
+      let errMessage: string
+      let errStack: string | undefined
+      let causeMessage: string | undefined
+
+      if (err instanceof Error) {
+        errMessage = err.message || `${err.name} (empty message)`
+        errStack = err.stack
+        if (err.cause instanceof Error) causeMessage = err.cause.message
+      } else if (typeof err === 'string') {
+        errMessage = err || 'Activation threw an empty string'
+      } else if (err === undefined) {
+        errMessage = 'Activation threw undefined (likely a missing module or a Promise rejected without a reason)'
+      } else if (err === null) {
+        errMessage = 'Activation threw null'
+      } else {
+        // Last-resort: serialise the value. Bun.inspect gives the cleanest
+        // output for objects with toJSON, getters, or circular refs.
+        let serialised: string
+        try {
+          serialised = Bun.inspect(err, { depth: 2 })
+        } catch {
+          try { serialised = JSON.stringify(err) } catch { serialised = String(err) }
+        }
+        errMessage = `Activation threw a non-Error value (${typeof err}): ${serialised}`
+      }
+
       plugin.error = errMessage
       plugin.enabled = false
       log.error({ plugin: name, errMessage, errStack, causeMessage }, 'Plugin activation failed')
