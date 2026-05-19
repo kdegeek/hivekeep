@@ -69,12 +69,15 @@ export interface Tool<INPUT = any, OUTPUT = any> {
  * Infer the parsed input type of a tool's `inputSchema`.
  *
  * - When the schema is a zod schema → `z.infer<SCHEMA>`.
- * - When the schema exposes a Vercel-style `_output` phantom field → that type.
- * - Fallback `unknown`.
+ * - Otherwise → `unknown` (the tool's `execute` callback then has to
+ *   narrow the input itself).
+ *
+ * The KinBot core only ships zod-schema tools, but the type sits at
+ * `unknown` for the fallback so plugin authors who roll their own
+ * schema validators still get a workable signature.
  */
 type InferToolInput<SCHEMA> =
   SCHEMA extends z.ZodType<infer T> ? T
-  : SCHEMA extends { _output: infer O } ? O
   : unknown
 
 /**
@@ -174,8 +177,32 @@ export interface ToolRegistration {
   availability: ToolAvailability[]
   /** Disabled by default unless the Kin's toolConfig opts in. */
   defaultDisabled?: boolean
+  /**
+   * True iff this tool **never** modifies external state — pure reads
+   * only. Used by KinBot's tool-executor to bundle consecutive
+   * read-only calls into a single parallel batch (with `concurrencySafe`
+   * also true). Conservative default `false` — set this only when
+   * you're certain the tool has no side effects. A `get_*` / `list_*`
+   * tool against a DB usually qualifies; anything that writes a log,
+   * touches the FS for caching, or mutates upstream state does not.
+   */
   readOnly?: boolean
+  /**
+   * True iff calling this tool concurrently with itself (or other
+   * concurrency-safe tools) within the same LLM step is correct.
+   * Triggers parallel execution alongside other `concurrencySafe`
+   * tools, bounded by `KINBOT_MAX_TOOL_USE_CONCURRENCY` (default 10).
+   * Default `false` — non-safe tools each run alone in their own
+   * serial batch. Stateful or order-dependent tools must stay at
+   * `false`.
+   */
   concurrencySafe?: boolean
+  /**
+   * True iff this tool may delete, overwrite, or otherwise destroy
+   * data the user cares about (rm, drop_table, delete_kin, etc.).
+   * Surfaced in UI as a confirmation prompt and to gating logic.
+   * Doesn't affect execution scheduling — purely a user-facing signal.
+   */
   destructive?: boolean
   /** Optional gating predicate evaluated at resolve time. Return false to omit
    *  the tool from the resolved toolset for a particular context. */
@@ -186,9 +213,18 @@ export interface ToolRegistration {
 //  Channels
 // ════════════════════════════════════════════════════════════════════════════
 
+/**
+ * UI metadata KinBot displays for a channel adapter (chip color,
+ * provider-style icon, friendly name). All fields are optional;
+ * KinBot falls back to the channel's machine name and a generic icon
+ * when omitted. Returned by `ChannelAdapter.meta`.
+ */
 export interface ChannelAdapterMeta {
+  /** Human-readable name shown in the channels list (e.g. "Telegram"). */
   displayName: string
+  /** Hex color used as the chip accent (e.g. "#229ED9"). */
   brandColor?: string
+  /** Absolute or `/api/`-relative URL to the adapter's logo. */
   iconUrl?: string
 }
 
@@ -272,19 +308,59 @@ export interface OutboundMessageResult {
   deliveryMeta?: Record<string, unknown>
 }
 
+/**
+ * The contract every channel adapter implements to connect KinBot to
+ * an external messaging platform (Telegram, Discord, Slack, custom
+ * webhook bridge, …). One adapter per platform handles many channels
+ * (one channel = one chat / room / DM). The Kin's queue and KinBot
+ * core stay platform-agnostic; the adapter owns every protocol detail.
+ *
+ * Lifecycle KinBot drives:
+ *   1. `validateConfig` — called by the UI before saving channel config.
+ *   2. `getBotInfo`     — read the platform-side identity (used for
+ *                          display + outbound author).
+ *   3. `start`          — open the inbound stream (polling, WebSocket,
+ *                          webhook subscription) and hand KinBot the
+ *                          `onMessage` callback. Must remain idempotent.
+ *   4. `sendMessage`    — outbound from a Kin's response.
+ *   5. `stop`           — clean teardown when the channel is disabled
+ *                          or KinBot shuts down.
+ *
+ * Optional surface area (implement only what your platform supports):
+ *   - `sendTypingIndicator`, `webhook`, `formatInboundContext`,
+ *     `onIdentityChange` — see each method's doc.
+ *
+ * Adapters from plugins must consume *only* `@kinbot-developer/sdk`.
+ */
 export interface ChannelAdapter {
+  /** Stable platform id ('telegram', 'discord', 'mattermost', …). Used
+   *  as the foreign key in the `channels` table. Plugins must prefix
+   *  with their plugin name to avoid collisions with built-ins. */
   readonly platform: string
+  /** Optional UI metadata (display name, icon, brand color). */
   readonly meta?: ChannelAdapterMeta
+  /** Schema for the per-channel config form (bot token, server URL, …). */
   readonly configSchema?: ChannelConfigSchema
 
+  /**
+   * Open the inbound stream for this channel. KinBot calls this once
+   * per channel at startup, and again each time the channel is
+   * re-enabled. Must be idempotent — calling twice with the same
+   * channelId is a no-op for the second call (or a clean restart).
+   * `onMessage` is the only path inbound messages reach the Kin queue.
+   */
   start(
     channelId: string,
     config: Record<string, unknown>,
     onMessage: IncomingMessageHandler,
   ): Promise<void>
 
+  /** Tear down the inbound stream + any platform-side webhook
+   *  subscription. Called on disable/delete or KinBot shutdown. */
   stop(channelId: string): Promise<void>
 
+  /** Send an outbound message authored by the Kin. Throw on failure;
+   *  KinBot records the error and surfaces it in the UI. */
   sendMessage(
     channelId: string,
     config: Record<string, unknown>,
@@ -423,11 +499,24 @@ export type ProviderConfig = Record<string, string | undefined>
 
 // ─── Authentication ─────────────────────────────────────────────────────────
 
+/**
+ * What `authenticate()` returns. The KinBot UI calls this after the
+ * user enters credentials but before saving — so a `valid: false`
+ * response is surfaced inline next to the form rather than during the
+ * first real call. Implementations should be cheap (a lightweight
+ * "who am I" probe is ideal); avoid burning a real generation budget
+ * just to verify a key works.
+ */
 export interface AuthResult {
+  /** True when the credentials work and the provider is ready to serve. */
   valid: boolean
+  /** Reason for failure (`401`, expired token, etc.) — shown verbatim
+   *  in the form's error area when `valid: false`. */
   error?: string
   /** Optional human-readable account identifier (e.g. "user@example.com",
-   *  "ChatGPT Plus account #abc123"). Surfaced in the UI when present. */
+   *  "ChatGPT Plus account #abc123"). Surfaced in the UI when present —
+   *  helps the user disambiguate when they have several accounts of
+   *  the same type. */
   accountLabel?: string
 }
 
@@ -741,6 +830,13 @@ export interface LLMProvider extends ProviderUIHints {
 
 // ─── Embedding ──────────────────────────────────────────────────────────────
 
+/**
+ * Metadata for one embedding model the provider's `listModels()`
+ * returns. KinBot uses the model's `dimensions` to size the sqlite-vec
+ * column and `maxInputTokens` to chunk long texts before calling
+ * `embed()`. Both fields are optional — provider catalogues vary in
+ * what they expose, and KinBot infers from the first call when needed.
+ */
 export interface EmbeddingModel {
   id: string
   name: string
@@ -757,7 +853,12 @@ export interface EmbeddingModel {
   }
 }
 
+/** Payload passed to `EmbeddingProvider.embed`. Single text per call —
+ *  KinBot batches at a higher level for now (one embed per chunk),
+ *  so providers don't need to implement batching themselves. */
 export interface EmbedRequest {
+  /** Text to encode. Already truncated to the model's
+   *  `maxInputTokens` budget by the caller when known. */
   text: string
   signal?: AbortSignal
 }
@@ -787,6 +888,19 @@ export interface EmbeddingProvider extends ProviderUIHints {
 
 // ─── Image ──────────────────────────────────────────────────────────────────
 
+/**
+ * Metadata for one image-generation model. Populated by
+ * `ImageProvider.listModels()`; consumed by:
+ * - The host's `list_image_models` tool — surfaces `maxImageInputs`
+ *   so the LLM knows how many URLs to pass through `generate_image`.
+ * - The UI's size picker — constrained by `supportedSizes`.
+ * - The model browser modal — shows `pricing` when present.
+ *
+ * Per-model *tunable parameters* (seed, guidance, style, …) live in a
+ * separate {@link ImageModelParamsSchema} surfaced lazily through
+ * {@link ImageProvider.describeModel} to keep this listing payload
+ * lean.
+ */
 export interface ImageModel {
   id: string
   name: string
@@ -812,6 +926,14 @@ export interface ImageModel {
   }
 }
 
+/**
+ * What `ImageProvider.generate()` receives. The host pre-processes
+ * `imageUrls` from the LLM tool call into raw bytes here — providers
+ * never resolve URLs themselves, which keeps every provider on the
+ * same input shape regardless of how callers expressed sources.
+ *
+ * See also: {@link ImageModel}, {@link ImageModelParamsSchema}.
+ */
 export interface ImageRequest {
   prompt: string
   /**
@@ -842,9 +964,15 @@ export interface ImageRequest {
   signal?: AbortSignal
 }
 
+/**
+ * What `ImageProvider.generate()` returns. KinBot writes the bytes
+ * to the kin's upload directory, registers an entry in `files`, and
+ * surfaces a URL back to the tool caller.
+ */
 export interface ImageResult {
   /** Raw image bytes. */
   data: Uint8Array
+  /** MIME type — `image/png`, `image/jpeg`, `image/webp`. */
   mediaType: string
 }
 

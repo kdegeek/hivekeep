@@ -1,5 +1,14 @@
 # KinBot — Contrats API
 
+> ⚠️ **Partiellement obsolète.** Ce document décrit les contrats REST tels qu'imaginés avant le refactor providers/plugins/images. Routes qui ont changé depuis :
+> - `POST/PATCH /api/providers` : payload `families[]` au lieu de `family`, capacité multiple par row (`capabilities[]`)
+> - `GET /api/providers/:id` : nouveau (retourne `safeConfig` pour le pré-remplissage du formulaire d'édition)
+> - `GET /api/providers/:id/models` : nouveau (browser modal)
+> - `POST /api/providers/:id/test` : accepte maintenant un body `{ config: {...} }` optionnel pour tester une config partielle sans réencoder les secrets
+> - Tools image (`generate_image`, `list_image_models`, nouveau `describe_image_model`) : payload différent (`imageUrls[]`, `params`, `maxImageInputs`)
+>
+> Le **code des routes** dans `src/server/routes/` fait foi. Quand un contrat ici contredit la route, c'est ce fichier qui est obsolète. À utiliser comme référence d'intention, pas comme spec stricte.
+
 Toutes les routes retournent du JSON. Les erreurs suivent le format standard :
 
 ```json

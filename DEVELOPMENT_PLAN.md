@@ -1,5 +1,13 @@
 # KinBot — Plan de développement
 
+> ⚠️ **Document historique.** Ce plan a guidé le développement initial (Phases 0-9, architecture provider monolithique avec Vercel AI SDK). Depuis, plusieurs gros refactors ont eu lieu :
+> - Suppression de Vercel AI SDK, primitives natives `LLMProvider`/`EmbeddingProvider`/`ImageProvider`
+> - Système de plugins (`packages/sdk`, `plugins/`)
+> - Consolidation "one row per provider account + `capabilities[]`" (l'ancien "one row per family" a été supprimé via les migrations 0072/0073)
+> - Image generation multi-input + per-model `params` découverts via `describe_image_model`
+>
+> Les noms de fichiers, structures de dossiers et certaines interfaces décrits ci-dessous ne reflètent plus la réalité. **Pour l'état actuel**, voir : [`structure.md`](./structure.md), [`packages/sdk/src/index.ts`](./packages/sdk/src/index.ts) (surface publique), [`src/server/llm/llm/registry.ts`](./src/server/llm/llm/registry.ts) (LLM providers), [`src/server/providers/index.ts`](./src/server/providers/index.ts) (dispatcher). Les sections ci-dessous restent utiles pour comprendre les décisions originales et le séquencement des phases ; suivre les checkboxes sans recouper avec le code actuel mènera à l'erreur.
+
 Ce document sert de feuille de route pour le développement de KinBot. Chaque phase est conçue pour être autonome et testable. Les phases doivent être suivies dans l'ordre car chacune dépend des précédentes.
 
 **Convention** : chaque tâche est marquée `[ ]` (à faire), `[~]` (en cours), ou `[x]` (terminé).
