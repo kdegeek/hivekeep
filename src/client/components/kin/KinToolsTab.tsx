@@ -273,14 +273,24 @@ export function KinToolsTab({ kinId, toolConfig, onToolConfigChange, isHub }: Ki
                 allEnabled={allEnabled}
                 onToggleAll={() => togglePluginGroup(group)}
               >
-                {group.tools.map((tool) => (
-                  <ToolRow
-                    key={tool.name}
-                    label={resolveToolLabel(tool.name, tool.label, userLang)}
-                    enabled={isNativeToolEnabled(tool.name, true)}
-                    onToggle={() => toggleNativeTool(tool.name, true)}
-                  />
-                ))}
+                {group.tools.map((tool) => {
+                  // Show the prettified name (prefix-stripped) as the
+                  // mono subtitle whenever the author-supplied label
+                  // differs from it — same UX as native tools, where
+                  // the technical name appears next to the friendly
+                  // translation when they don't match.
+                  const strippedName = prettifyToolName(tool.name)
+                  const label = resolveToolLabel(tool.name, tool.label, userLang)
+                  return (
+                    <ToolRow
+                      key={tool.name}
+                      label={label}
+                      toolKey={label !== strippedName ? strippedName : undefined}
+                      enabled={isNativeToolEnabled(tool.name, true)}
+                      onToggle={() => toggleNativeTool(tool.name, true)}
+                    />
+                  )
+                })}
               </PluginGroup>
             )
           })}
