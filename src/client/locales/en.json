@@ -1658,6 +1658,8 @@
       "reload": "Reload",
       "reloaded": "Plugins reloaded",
       "checkUpdates": "Check for updates",
+      "browse": "Browse",
+      "installFromGit": "From Git URL",
       "allUpToDate": "All plugins are up to date",
       "updatesAvailable_one": "{{count}} update available",
       "updatesAvailable_other": "{{count}} updates available",

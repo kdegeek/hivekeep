@@ -1456,6 +1456,8 @@
       "reload": "Recargar",
       "reloaded": "Plugins recargados",
       "checkUpdates": "Buscar actualizaciones",
+      "browse": "Explorar",
+      "installFromGit": "Desde Git",
       "allUpToDate": "Todos los plugins están actualizados",
       "updatesAvailable_one": "{{count}} actualización disponible",
       "updatesAvailable_other": "{{count}} actualizaciones disponibles",

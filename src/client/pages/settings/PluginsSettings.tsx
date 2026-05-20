@@ -53,11 +53,14 @@ import {
   Loader2,
   HeartPulse,
   Check,
+  ShoppingBag,
 } from 'lucide-react'
 import type { PluginSummary, PluginConfigField } from '@/shared/types/plugin'
+import { useSettingsNav } from '@/client/pages/settings/SettingsPage'
 
 export function PluginsSettings() {
   const { t } = useTranslation()
+  const navigate = useSettingsNav()
   const [plugins, setPlugins] = useState<PluginSummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [reloading, setReloading] = useState(false)
@@ -278,9 +281,16 @@ export function PluginsSettings() {
           <p className="text-sm text-muted-foreground">{t('settings.plugins.description')}</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Primary action: browse the npm marketplace. This is the
+              90% case (most admins discover plugins from npm, not from
+              a Git URL they happen to know). */}
+          <Button size="sm" onClick={() => navigate('marketplace')}>
+            <ShoppingBag className="size-4 mr-2" />
+            {t('settings.plugins.browse')}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setInstallOpen(true)}>
             <Plus className="size-4 mr-2" />
-            {t('settings.plugins.install')}
+            {t('settings.plugins.installFromGit')}
           </Button>
           <Button variant="outline" size="sm" onClick={() => fetchUpdates()} disabled={checkingUpdates}>
             <ArrowUpCircle className={`size-4 mr-2 ${checkingUpdates ? 'animate-spin' : ''}`} />

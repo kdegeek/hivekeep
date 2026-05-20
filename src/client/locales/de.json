@@ -1456,6 +1456,8 @@
       "reload": "Neu laden",
       "reloaded": "Plugins neu geladen",
       "checkUpdates": "Nach Updates suchen",
+      "browse": "Entdecken",
+      "installFromGit": "Aus Git",
       "allUpToDate": "Alle Plugins sind auf dem neuesten Stand",
       "updatesAvailable_one": "{{count}} Update verfügbar",
       "updatesAvailable_other": "{{count}} Updates verfügbar",

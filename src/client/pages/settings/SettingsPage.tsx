@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, createContext, useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Dialog,
@@ -119,6 +119,15 @@ const sectionGroups: SectionGroup[] = [
 const allSections = sectionGroups.flatMap((g) => g.items)
 
 type SectionId = string
+
+/** Lets any settings sub-section navigate to another (e.g. the Plugins
+ *  page surfacing an "Explore" button that jumps to the Marketplace). */
+const SettingsNavContext = createContext<((section: SectionId) => void) | null>(null)
+
+export function useSettingsNav(): (section: SectionId) => void {
+  const ctx = useContext(SettingsNavContext)
+  return ctx ?? (() => {})
+}
 
 const sectionComponents: Record<string, React.FC> = {
   general: GeneralSettings,
@@ -324,11 +333,13 @@ export function SettingsModal({ open, onOpenChange, initialSection, initialFilte
           {/* Main content */}
           <div className="flex-1 overflow-y-auto p-4 md:p-6">
             <div className="mx-auto max-w-2xl">
-              {ActiveComponent && (
-                activeSection === 'tokenUsage' && initialFilters
-                  ? <TokenUsageSettings initialKinFilter={initialFilters.kinId} />
-                  : <ActiveComponent />
-              )}
+              <SettingsNavContext.Provider value={setActiveSection}>
+                {ActiveComponent && (
+                  activeSection === 'tokenUsage' && initialFilters
+                    ? <TokenUsageSettings initialKinFilter={initialFilters.kinId} />
+                    : <ActiveComponent />
+                )}
+              </SettingsNavContext.Provider>
             </div>
           </div>
         </div>

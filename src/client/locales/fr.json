@@ -1658,6 +1658,8 @@
       "reload": "Recharger",
       "reloaded": "Plugins rechargés",
       "checkUpdates": "Vérifier les mises à jour",
+      "browse": "Explorer",
+      "installFromGit": "Depuis Git",
       "allUpToDate": "Tous les plugins sont à jour",
       "updatesAvailable_one": "{{count}} mise à jour disponible",
       "updatesAvailable_other": "{{count}} mises à jour disponibles",
