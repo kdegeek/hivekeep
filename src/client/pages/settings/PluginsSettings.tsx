@@ -332,77 +332,93 @@ export function PluginsSettings() {
                     {plugin.icon}
                   </span>
                 ) : null}
-                <div className="flex-1 min-w-0">
-                  {/* flex-wrap so the badge row doesn't overflow the
-                      ~600px modal width when the display name, mono
-                      technical name, version, source, and status
-                      badges all fight for space. */}
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <h4 className="font-medium">{plugin.displayName || plugin.name}</h4>
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  {/* Title row — display name only. Free to take all
+                      the width it needs and truncate gracefully. */}
+                  <h4 className="font-medium truncate">
+                    {plugin.displayName || plugin.name}
+                  </h4>
+
+                  {/* Metadata strip — factual, low-emphasis. mono npm
+                      slug + version + source on a single muted line,
+                      separated by middle dots. break-all on the slug
+                      so it can wrap inside a long string instead of
+                      pushing siblings off the row. */}
+                  <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                     {plugin.displayName && (
-                      <span className="text-xs text-muted-foreground/70 font-mono break-all">
-                        {plugin.name}
-                      </span>
+                      <>
+                        <span className="font-mono break-all">{plugin.name}</span>
+                        <span aria-hidden="true">·</span>
+                      </>
                     )}
-                    <Badge variant="outline" className="text-xs">
-                      v{plugin.version}
-                    </Badge>
-                    <Badge variant="secondary" className="text-xs gap-1">
+                    <span>v{plugin.version}</span>
+                    <span aria-hidden="true">·</span>
+                    <span className="inline-flex items-center gap-1">
                       {getSourceIcon(plugin.installSource)}
                       {getSourceLabel(plugin.installSource)}
-                    </Badge>
-                    {/* "Up to date" badge — only on remote plugins (git/npm)
-                        and only after we've actually queried the registry. */}
+                    </span>
+                    {/* Subtle "up to date" indicator inline with metadata —
+                        no need for a full badge when nothing's wrong. */}
                     {updatesChecked
                       && (plugin.installSource === 'git' || plugin.installSource === 'npm')
-                      && !updatableNames.has(plugin.name)
-                      && (
-                        <Badge
-                          variant="outline"
-                          className="text-xs gap-1 text-emerald-600 border-emerald-500/40 dark:text-emerald-400"
-                        >
-                          <Check className="size-3" />
-                          {t('settings.plugins.upToDate')}
-                        </Badge>
+                      && !updatableNames.has(plugin.name) && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                            <Check className="size-3" />
+                            {t('settings.plugins.upToDate')}
+                          </span>
+                        </>
                       )}
-                    {/* "Update available" badge — pairs with the action
-                        button at the right side of the row. */}
-                    {(plugin.installSource === 'git' || plugin.installSource === 'npm')
-                      && updatableNames.has(plugin.name)
-                      && (
-                        <Badge
-                          variant="outline"
-                          className="text-xs gap-1 text-amber-600 border-amber-500/40"
-                        >
-                          <ArrowUpCircle className="size-3" />
-                          {t('settings.plugins.updateAvailable')}
-                        </Badge>
-                      )}
-                    {plugin.error && (
-                      <Badge variant="destructive" className="text-xs">
-                        <AlertTriangle className="size-3 mr-1" />
-                        {t('settings.plugins.error')}
-                      </Badge>
-                    )}
-                    {plugin.compatible === false && (
-                      <Badge variant="outline" className="text-xs text-amber-600 border-amber-400">
-                        <AlertTriangle className="size-3 mr-1" />
-                        {plugin.compatibilityError ?? t('settings.plugins.incompatible', 'Incompatible')}
-                      </Badge>
-                    )}
-                    {plugin.health?.autoDisabled && (
-                      <Badge variant="destructive" className="text-xs">
-                        <AlertTriangle className="size-3 mr-1" />
-                        {t('settings.plugins.autoDisabled', 'Auto-disabled')}
-                      </Badge>
-                    )}
-                    {plugin.health?.totalErrors > 0 && !plugin.health?.autoDisabled && (
-                      <Badge variant="outline" className="text-xs text-amber-600 border-amber-400">
-                        {plugin.health.totalErrors} {t('settings.plugins.errors', 'errors')}
-                      </Badge>
-                    )}
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">
+
+                  {/* Status badges — only the ones that warrant
+                      attention. Update-available + error/health states.
+                      Wrap freely since they signal something the user
+                      should look at. */}
+                  {(
+                    ((plugin.installSource === 'git' || plugin.installSource === 'npm') && updatableNames.has(plugin.name))
+                    || plugin.error
+                    || plugin.compatible === false
+                    || plugin.health?.autoDisabled
+                    || (plugin.health?.totalErrors > 0 && !plugin.health?.autoDisabled)
+                  ) && (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {(plugin.installSource === 'git' || plugin.installSource === 'npm')
+                        && updatableNames.has(plugin.name)
+                        && (
+                          <Badge variant="outline" className="text-xs gap-1 text-amber-600 border-amber-500/40">
+                            <ArrowUpCircle className="size-3" />
+                            {t('settings.plugins.updateAvailable')}
+                          </Badge>
+                        )}
+                      {plugin.error && (
+                        <Badge variant="destructive" className="text-xs">
+                          <AlertTriangle className="size-3 mr-1" />
+                          {t('settings.plugins.error')}
+                        </Badge>
+                      )}
+                      {plugin.compatible === false && (
+                        <Badge variant="outline" className="text-xs text-amber-600 border-amber-400">
+                          <AlertTriangle className="size-3 mr-1" />
+                          {plugin.compatibilityError ?? t('settings.plugins.incompatible', 'Incompatible')}
+                        </Badge>
+                      )}
+                      {plugin.health?.autoDisabled && (
+                        <Badge variant="destructive" className="text-xs">
+                          <AlertTriangle className="size-3 mr-1" />
+                          {t('settings.plugins.autoDisabled', 'Auto-disabled')}
+                        </Badge>
+                      )}
+                      {plugin.health?.totalErrors > 0 && !plugin.health?.autoDisabled && (
+                        <Badge variant="outline" className="text-xs text-amber-600 border-amber-400">
+                          {plugin.health.totalErrors} {t('settings.plugins.errors', 'errors')}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+
+                  <p className="text-sm text-muted-foreground">
                     {plugin.description}
                   </p>
                   {plugin.author && (
