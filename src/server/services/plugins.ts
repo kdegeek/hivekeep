@@ -1732,21 +1732,21 @@ class PluginManager {
       // Initialize a minimal package.json and install the package
       await Bun.write(join(tempDir, 'package.json'), JSON.stringify({ name: 'kinbot-plugin-install', private: true }))
 
-      // Dedicated cache dir, persisted across installs. Also outside plugins/
-      // for the same reason as tempDir.
-      const isolatedCache = join(this.installWorkspace, 'bun-cache')
-      log.info({ package: packageName, tempDir, cache: isolatedCache }, 'npm install: running bun add (120s timeout)')
+      log.info({ package: packageName, tempDir }, 'npm install: running npm install (90s timeout)')
 
+      // We use `npm install` rather than `bun add` here even though the
+      // host runtime is bun. When `bun add` is spawned from a bun parent
+      // process via Bun.spawn() it hangs indefinitely on "Resolving
+      // dependencies" — the two bun processes contend on internal state
+      // that can't be isolated via BUN_INSTALL_CACHE_DIR. Manual `bun
+      // add` in a fresh shell works fine, so the issue is specific to
+      // the parent/child bun pair. npm has no such relationship with bun,
+      // installs reliably from this context.
       const { exitCode, stderr, stdout } = await this.runSpawn(
-        ['bun', 'add', packageName],
+        ['npm', 'install', packageName, '--no-audit', '--no-fund', '--silent'],
         {
           cwd: tempDir,
-          env: { BUN_INSTALL_CACHE_DIR: isolatedCache },
-          // 120s — bun shares some global state with the parent runtime
-          // (the dev server is itself a bun process), and the resolve
-          // step can briefly contend on it. 60s was too tight in
-          // practice; this gives the lock plenty of time to free.
-          timeoutMs: 120_000,
+          timeoutMs: 90_000,
         },
       )
       if (exitCode !== 0) {
@@ -2003,19 +2003,19 @@ class PluginManager {
       try {
         await Bun.write(join(tempDir, 'package.json'), JSON.stringify({ name: 'kinbot-plugin-update', private: true }))
 
-        const isolatedCache = join(this.installWorkspace, 'bun-cache')
+        // Same `npm install` (rather than `bun add`) trick as installFromNpm —
+        // see the comment there for why we can't spawn bun from a bun parent.
         const { exitCode, stderr, stdout } = await this.runSpawn(
-          ['bun', 'add', `${packageName}@latest`],
+          ['npm', 'install', `${packageName}@latest`, '--no-audit', '--no-fund', '--silent'],
           {
             cwd: tempDir,
-            env: { BUN_INSTALL_CACHE_DIR: isolatedCache },
-            timeoutMs: 120_000,
+            timeoutMs: 90_000,
           },
         )
         if (exitCode !== 0) {
           throw new Error(`npm update failed (exit ${exitCode}): ${stderr.trim() || stdout.trim() || '(no output)'}`)
         }
-        log.info({ plugin: name }, 'npm update: bun add done')
+        log.info({ plugin: name }, 'npm update: npm install done')
 
         // Replace plugin dir
         await rm(pluginDir, { recursive: true, force: true })
