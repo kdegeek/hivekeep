@@ -14,7 +14,7 @@ import { Cron } from 'croner'
 import { db } from '@/server/db/index'
 import { providers as providersTable } from '@/server/db/schema'
 import { decrypt } from '@/server/services/encryption'
-import { listModelsForProvider } from '@/server/providers/index'
+import { listModelsForProvider, getCapabilitiesForType } from '@/server/providers/index'
 import { createLogger } from '@/server/logger'
 import { setModelInfoLookup } from '@/shared/model-context-windows'
 import { config } from '@/server/config'
@@ -102,6 +102,17 @@ export async function refreshAllProviderModels(): Promise<void> {
     const allProviders = await db.select().from(providersTable).all()
     const tasks = allProviders
       .filter((p) => p.isValid)
+      .filter((p) => {
+        // Skip orphaned plugin providers — the row points at a
+        // `plugin:<name>:<type>` namespace whose plugin is currently
+        // disabled or uninstalled. Hitting listModels would just log
+        // a warn per family per tick; the row is effectively dead
+        // until the user reinstalls the plugin or deletes the row.
+        if (!p.type.startsWith('plugin:')) return true
+        if (getCapabilitiesForType(p.type).length > 0) return true
+        log.debug({ providerId: p.id, name: p.name, type: p.type }, 'Skipping orphaned plugin provider')
+        return false
+      })
       .map(async (p) => {
         try {
           const cfg = JSON.parse(await decrypt(p.configEncrypted))

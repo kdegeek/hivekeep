@@ -190,6 +190,16 @@ export async function testProviderConnection(
   )
 
   if (!result) {
+    // A `plugin:` type that no longer resolves means the contributing
+    // plugin is disabled or uninstalled (typical after a package rename
+    // or local→npm reinstall — the old prefix is orphaned). Surface it
+    // as a soft warn so the user can act, but don't pollute the error
+    // channel with a recoverable state.
+    const isOrphanPlugin = type.startsWith('plugin:')
+    if (isOrphanPlugin) {
+      log.warn({ type }, 'Provider type belongs to a plugin that is not currently loaded')
+      return { valid: false, capabilities: [], error: `Plugin not loaded: ${type}` }
+    }
     log.error({ type }, 'Unknown provider type')
     return { valid: false, capabilities: [], error: `Unknown provider type: ${type}` }
   }
@@ -247,6 +257,13 @@ export async function listModelsForProvider(
   )
 
   if (!models) {
+    // Orphaned plugin type (plugin disabled/uninstalled while a provider
+    // row still points at its namespace). Stay at debug — refresh loops
+    // hit this on every tick and we don't want it in the error stream.
+    if (type.startsWith('plugin:')) {
+      log.debug({ type, family }, 'Skipping listModels — plugin not loaded')
+      return []
+    }
     log.error({ type }, 'Cannot list models for unknown provider type')
     return []
   }
