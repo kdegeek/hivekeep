@@ -104,14 +104,15 @@ export function PluginsSettings() {
   const fetchUpdates = useCallback(async (opts?: { silent?: boolean }) => {
     setCheckingUpdates(true)
     try {
-      const data = await api.get<{ name: string }[]>('/plugins/updates')
-      setUpdatableNames(new Set(data.map((u) => u.name)))
+      const data = await api.get<{ updates: { name: string }[] }>('/plugins/updates')
+      const updates = data.updates ?? []
+      setUpdatableNames(new Set(updates.map((u) => u.name)))
       setUpdatesChecked(true)
       if (!opts?.silent) {
-        if (data.length === 0) {
+        if (updates.length === 0) {
           toast.success(t('settings.plugins.allUpToDate'))
         } else {
-          toast.info(t('settings.plugins.updatesAvailable', { count: data.length }))
+          toast.info(t('settings.plugins.updatesAvailable', { count: updates.length }))
         }
       }
     } catch (err) {

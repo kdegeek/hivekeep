@@ -100,10 +100,22 @@ pluginRoutes.get('/', async (c) => {
 })
 
 // GET /api/plugins/:name — get a single plugin's details
+// GET /api/plugins/updates — check for available plugin updates
+// Defined BEFORE `/:name` so Hono's first-match routing doesn't capture
+// "updates" as a plugin name. Other literal sub-paths (`/reload`,
+// `/install`) are POST so they don't collide with the GET `/:name` rule.
+pluginRoutes.get('/updates', async (c) => {
+  try {
+    const updates = await pluginManager.checkUpdates()
+    return c.json({ updates })
+  } catch (err) {
+    log.error({ err }, 'Failed to check plugin updates')
+    return c.json({ error: { code: 'UPDATE_CHECK_FAILED', message: 'Failed to check for updates' } }, 500)
+  }
+})
+
 pluginRoutes.get('/:name', async (c) => {
   const { name } = c.req.param()
-  // Avoid matching sub-routes like "registry", "store", "version", "reload"
-  if (['registry', 'store', 'version', 'reload', 'updates', 'install'].includes(name)) return c.notFound()
   const plugins = pluginManager.listPlugins()
   const plugin = plugins.find(p => p.name === name)
   if (!plugin) {
@@ -223,17 +235,6 @@ pluginRoutes.post('/:name/health/reset', requireAdmin, async (c) => {
     return c.json({ success: true })
   } catch (err) {
     return c.json({ error: { code: 'HEALTH_RESET_FAILED', message: err instanceof Error ? err.message : 'Failed to reset health' } }, 400)
-  }
-})
-
-// GET /api/plugins/updates — check for available plugin updates
-pluginRoutes.get('/updates', async (c) => {
-  try {
-    const updates = await pluginManager.checkUpdates()
-    return c.json({ updates })
-  } catch (err) {
-    log.error({ err }, 'Failed to check plugin updates')
-    return c.json({ error: { code: 'UPDATE_CHECK_FAILED', message: 'Failed to check for updates' } }, 500)
   }
 })
 
