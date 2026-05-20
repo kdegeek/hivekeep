@@ -1657,6 +1657,7 @@
       "description": "Manage plugins that extend KinBot with new tools, hooks, and integrations.",
       "reload": "Reload",
       "reloaded": "Plugins reloaded",
+      "checkUpdates": "Check for updates",
       "enabled": "Plugin enabled",
       "disabled": "Plugin disabled",
       "error": "Error",

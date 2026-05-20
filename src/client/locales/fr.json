@@ -1657,6 +1657,7 @@
       "description": "Gérez les plugins qui ajoutent des outils, hooks et intégrations à KinBot.",
       "reload": "Recharger",
       "reloaded": "Plugins rechargés",
+      "checkUpdates": "Vérifier les mises à jour",
       "enabled": "Plugin activé",
       "disabled": "Plugin désactivé",
       "error": "Erreur",

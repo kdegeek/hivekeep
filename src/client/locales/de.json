@@ -1455,6 +1455,7 @@
       "description": "Plugins verwalten",
       "reload": "Neu laden",
       "reloaded": "Plugins neu geladen",
+      "checkUpdates": "Nach Updates suchen",
       "enabled": "Plugin aktiviert",
       "disabled": "Plugin deaktiviert",
       "error": "Fehler",

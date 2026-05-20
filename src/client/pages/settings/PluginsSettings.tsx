@@ -75,6 +75,11 @@ export function PluginsSettings() {
 
   // Update state
   const [updatingPlugin, setUpdatingPlugin] = useState<string | null>(null)
+  /** Plugin names that have an update available on the registry (npm)
+   *  or remote (git). Computed from `/api/plugins/updates`. The Update
+   *  button only renders for plugins in this set. */
+  const [updatableNames, setUpdatableNames] = useState<Set<string>>(new Set())
+  const [checkingUpdates, setCheckingUpdates] = useState(false)
 
   // Health reset state
   const [resettingHealth, setResettingHealth] = useState<string | null>(null)
@@ -90,15 +95,29 @@ export function PluginsSettings() {
     }
   }, [])
 
+  const fetchUpdates = useCallback(async () => {
+    setCheckingUpdates(true)
+    try {
+      const data = await api.get<{ name: string }[]>('/plugins/updates')
+      setUpdatableNames(new Set(data.map((u) => u.name)))
+    } catch {
+      // Registry unreachable, network down — just keep the previous
+      // set rather than wiping it.
+    } finally {
+      setCheckingUpdates(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchPlugins()
-  }, [fetchPlugins])
+    fetchUpdates()
+  }, [fetchPlugins, fetchUpdates])
 
   // Keep plugin list in sync when other clients/the server changes plugin state
   useSSE({
-    'plugin:installed': () => fetchPlugins(),
-    'plugin:uninstalled': () => fetchPlugins(),
-    'plugin:updated': () => fetchPlugins(),
+    'plugin:installed': () => { fetchPlugins(); fetchUpdates() },
+    'plugin:uninstalled': () => { fetchPlugins(); fetchUpdates() },
+    'plugin:updated': () => { fetchPlugins(); fetchUpdates() },
     'plugin:reloaded': () => fetchPlugins(),
     'plugin:enabled': () => fetchPlugins(),
     'plugin:disabled': () => fetchPlugins(),
@@ -248,6 +267,10 @@ export function PluginsSettings() {
           <Button variant="outline" size="sm" onClick={() => setInstallOpen(true)}>
             <Plus className="size-4 mr-2" />
             {t('settings.plugins.install')}
+          </Button>
+          <Button variant="outline" size="sm" onClick={fetchUpdates} disabled={checkingUpdates}>
+            <ArrowUpCircle className={`size-4 mr-2 ${checkingUpdates ? 'animate-spin' : ''}`} />
+            {t('settings.plugins.checkUpdates')}
           </Button>
           <Button variant="outline" size="sm" onClick={handleReload} disabled={reloading}>
             <RefreshCw className={`size-4 mr-2 ${reloading ? 'animate-spin' : ''}`} />
@@ -449,8 +472,11 @@ export function PluginsSettings() {
                       )}
                     </Button>
                   )}
-                  {/* Update button for git/npm plugins */}
-                  {(plugin.installSource === 'git' || plugin.installSource === 'npm') && (
+                  {/* Update button — only shown when /api/plugins/updates
+                      flagged this plugin as having a newer version on the
+                      registry (npm) or remote (git). Avoids the dead-end
+                      "re-install same version" UX. */}
+                  {(plugin.installSource === 'git' || plugin.installSource === 'npm') && updatableNames.has(plugin.name) && (
                     <Button
                       variant="ghost"
                       size="icon"
