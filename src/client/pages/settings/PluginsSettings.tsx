@@ -52,6 +52,7 @@ import {
   FolderOpen,
   Loader2,
   HeartPulse,
+  Check,
 } from 'lucide-react'
 import type { PluginSummary, PluginConfigField } from '@/shared/types/plugin'
 
@@ -80,6 +81,11 @@ export function PluginsSettings() {
    *  button only renders for plugins in this set. */
   const [updatableNames, setUpdatableNames] = useState<Set<string>>(new Set())
   const [checkingUpdates, setCheckingUpdates] = useState(false)
+  /** True after at least one successful `/plugins/updates` round-trip.
+   *  Gates the "up to date" badge — without this we'd flash a green
+   *  check on every remote plugin before the registry has even been
+   *  queried. */
+  const [updatesChecked, setUpdatesChecked] = useState(false)
 
   // Health reset state
   const [resettingHealth, setResettingHealth] = useState<string | null>(null)
@@ -95,29 +101,36 @@ export function PluginsSettings() {
     }
   }, [])
 
-  const fetchUpdates = useCallback(async () => {
+  const fetchUpdates = useCallback(async (opts?: { silent?: boolean }) => {
     setCheckingUpdates(true)
     try {
       const data = await api.get<{ name: string }[]>('/plugins/updates')
       setUpdatableNames(new Set(data.map((u) => u.name)))
-    } catch {
-      // Registry unreachable, network down — just keep the previous
-      // set rather than wiping it.
+      setUpdatesChecked(true)
+      if (!opts?.silent) {
+        if (data.length === 0) {
+          toast.success(t('settings.plugins.allUpToDate'))
+        } else {
+          toast.info(t('settings.plugins.updatesAvailable', { count: data.length }))
+        }
+      }
+    } catch (err) {
+      if (!opts?.silent) toastError(err)
     } finally {
       setCheckingUpdates(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     fetchPlugins()
-    fetchUpdates()
+    fetchUpdates({ silent: true })
   }, [fetchPlugins, fetchUpdates])
 
   // Keep plugin list in sync when other clients/the server changes plugin state
   useSSE({
-    'plugin:installed': () => { fetchPlugins(); fetchUpdates() },
-    'plugin:uninstalled': () => { fetchPlugins(); fetchUpdates() },
-    'plugin:updated': () => { fetchPlugins(); fetchUpdates() },
+    'plugin:installed': () => { fetchPlugins(); fetchUpdates({ silent: true }) },
+    'plugin:uninstalled': () => { fetchPlugins(); fetchUpdates({ silent: true }) },
+    'plugin:updated': () => { fetchPlugins(); fetchUpdates({ silent: true }) },
     'plugin:reloaded': () => fetchPlugins(),
     'plugin:enabled': () => fetchPlugins(),
     'plugin:disabled': () => fetchPlugins(),
@@ -268,7 +281,7 @@ export function PluginsSettings() {
             <Plus className="size-4 mr-2" />
             {t('settings.plugins.install')}
           </Button>
-          <Button variant="outline" size="sm" onClick={fetchUpdates} disabled={checkingUpdates}>
+          <Button variant="outline" size="sm" onClick={() => fetchUpdates()} disabled={checkingUpdates}>
             <ArrowUpCircle className={`size-4 mr-2 ${checkingUpdates ? 'animate-spin' : ''}`} />
             {t('settings.plugins.checkUpdates')}
           </Button>
@@ -316,6 +329,33 @@ export function PluginsSettings() {
                       {getSourceIcon(plugin.installSource)}
                       {getSourceLabel(plugin.installSource)}
                     </Badge>
+                    {/* "Up to date" badge — only on remote plugins (git/npm)
+                        and only after we've actually queried the registry. */}
+                    {updatesChecked
+                      && (plugin.installSource === 'git' || plugin.installSource === 'npm')
+                      && !updatableNames.has(plugin.name)
+                      && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs gap-1 text-emerald-600 border-emerald-500/40 dark:text-emerald-400"
+                        >
+                          <Check className="size-3" />
+                          {t('settings.plugins.upToDate')}
+                        </Badge>
+                      )}
+                    {/* "Update available" badge — pairs with the action
+                        button at the right side of the row. */}
+                    {(plugin.installSource === 'git' || plugin.installSource === 'npm')
+                      && updatableNames.has(plugin.name)
+                      && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs gap-1 text-amber-600 border-amber-500/40"
+                        >
+                          <ArrowUpCircle className="size-3" />
+                          {t('settings.plugins.updateAvailable')}
+                        </Badge>
+                      )}
                     {plugin.error && (
                       <Badge variant="destructive" className="text-xs">
                         <AlertTriangle className="size-3 mr-1" />
