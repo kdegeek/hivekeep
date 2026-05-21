@@ -30,6 +30,7 @@ export const PROVIDER_META = {
   openai:             { capabilities: ['llm', 'embedding', 'image'], displayName: 'OpenAI',                 lobehubIcon: 'OpenAI',  apiKeyUrl: 'https://platform.openai.com/api-keys' },
   'openai-codex':     { capabilities: ['llm'],                       displayName: 'OpenAI (Codex CLI)',     lobehubIcon: 'OpenAI',  noApiKey: true },
   gemini:             { capabilities: ['llm', 'image'],              displayName: 'Google Gemini',          lobehubIcon: 'Gemini',  apiKeyUrl: 'https://aistudio.google.com/apikey' },
+  'brave-search':     { capabilities: ['search'],                    displayName: 'Brave Search',                                   apiKeyUrl: 'https://brave.com/search/api/' },
 } as const satisfies Record<string, ProviderMeta>
 
 export type ProviderType = keyof typeof PROVIDER_META
