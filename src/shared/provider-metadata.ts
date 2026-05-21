@@ -40,7 +40,7 @@ export interface ProviderMeta {
 export const PROVIDER_META = {
   anthropic:          { capabilities: ['llm'],                       displayName: 'Anthropic',              lobehubIcon: 'Claude',  apiKeyUrl: 'https://console.anthropic.com/settings/keys' },
   'anthropic-oauth':  { capabilities: ['llm'],                       displayName: 'Anthropic (Claude Max)', lobehubIcon: 'Claude',  noApiKey: true },
-  openai:             { capabilities: ['llm', 'embedding', 'image'], displayName: 'OpenAI',                 lobehubIcon: 'OpenAI',  apiKeyUrl: 'https://platform.openai.com/api-keys' },
+  openai:             { capabilities: ['llm', 'embedding', 'image', 'tts', 'stt'], displayName: 'OpenAI', lobehubIcon: 'OpenAI', apiKeyUrl: 'https://platform.openai.com/api-keys' },
   'openai-codex':     { capabilities: ['llm'],                       displayName: 'OpenAI (Codex CLI)',     lobehubIcon: 'OpenAI',  noApiKey: true },
   gemini:             { capabilities: ['llm', 'image'],              displayName: 'Google Gemini',          lobehubIcon: 'Gemini',  apiKeyUrl: 'https://aistudio.google.com/apikey' },
   'brave-search':     { capabilities: ['search'],                    displayName: 'Brave Search',           reactIcon: 'si/SiBrave', brandColor: '#FB542B', apiKeyUrl: 'https://brave.com/search/api/' },
