@@ -984,8 +984,8 @@
       }
     },
     "providers": {
-      "title": "Fournisseurs IA",
-      "description": "Gérez vos connexions aux fournisseurs IA",
+      "title": "Fournisseurs",
+      "description": "Gérez vos connexions aux fournisseurs (LLM, embedding, image, recherche).",
       "empty": "Aucun fournisseur configuré",
       "add": "Ajouter un fournisseur",
       "edit": "Modifier le fournisseur",

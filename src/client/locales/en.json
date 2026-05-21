@@ -984,8 +984,8 @@
       }
     },
     "providers": {
-      "title": "AI Providers",
-      "description": "Manage your AI provider connections",
+      "title": "Providers",
+      "description": "Manage your provider connections (LLM, embedding, image, search).",
       "empty": "No providers configured",
       "add": "Add provider",
       "edit": "Edit provider",

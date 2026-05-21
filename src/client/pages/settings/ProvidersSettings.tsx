@@ -16,12 +16,16 @@ export function ProvidersSettings() {
   // Live catalogue (built-ins + plugin-contributed). Used both as the
   // filter for the saved providers list and as the picker entries.
   const catalogue = useProviderTypes()
-  const aiTypes = catalogue.entries.length > 0
+  // Every provider family the host knows about. The Providers page is
+  // capability-agnostic: LLM, embedding, image, search — same UX, same
+  // table, same lifecycle. The old filter was a hangover from when only
+  // the three AI families existed and excluded search rows from the list.
+  const providerTypes = catalogue.entries.length > 0
     ? catalogue.entries
-        .filter((e) => e.capabilities.some((c) => c === 'llm' || c === 'embedding' || c === 'image'))
+        .filter((e) => e.capabilities.some((c) => c === 'llm' || c === 'embedding' || c === 'image' || c === 'search'))
         .map((e) => e.type)
     : catalogue.types
-  const { providers, isLoading, refetch: fetchProviders } = useProviders({ filterTypes: aiTypes })
+  const { providers, isLoading, refetch: fetchProviders } = useProviders({ filterTypes: providerTypes })
 
   const {
     testingId,
@@ -95,7 +99,7 @@ export function ProvidersSettings() {
         onOpenChange={setModalOpen}
         onSaved={handleProviderSaved}
         provider={editingProvider}
-        providerTypes={aiTypes}
+        providerTypes={providerTypes}
       />
     </div>
   )
