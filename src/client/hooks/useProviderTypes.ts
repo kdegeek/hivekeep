@@ -109,10 +109,17 @@ export function useProviderTypes(): ProviderTypesView {
     refresh()
   }, [])
 
-  // Pick up plugin activations / deactivations live. Server emits these
-  // SSE events when a plugin is enabled or disabled — that's when the
-  // provider type list changes.
+  // Pick up plugin lifecycle changes live. We listen to both the
+  // install/uninstall pair AND the enable/disable pair — `installed`
+  // / `uninstalled` fire on the npm install path (when a freshly
+  // fetched plugin gets activated for the first time), `enabled` /
+  // `disabled` fire when the user toggles an already-installed
+  // plugin. Subscribing only to enable/disable would miss
+  // freshly-installed plugins, which is the bug the platforms picker
+  // hit when twilio / teamspeak first landed.
   useSSE({
+    'plugin:installed': () => { refresh() },
+    'plugin:uninstalled': () => { refresh() },
     'plugin:enabled': () => { refresh() },
     'plugin:disabled': () => { refresh() },
     'plugin:autoDisabled': () => { refresh() },

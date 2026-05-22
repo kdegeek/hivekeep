@@ -63,10 +63,23 @@ export function usePlatforms() {
     })
   }, [])
 
-  // Re-fetch when a plugin's lifecycle changes — newly-enabled channel
-  // adapters need to appear in the picker, just-disabled ones need to
-  // disappear. Same SSE events `useProviderTypes` listens to.
+  // Re-fetch when a plugin's lifecycle changes — newly-installed or
+  // -enabled channel adapters need to appear in the picker,
+  // just-uninstalled or -disabled ones need to disappear.
+  //
+  // Note on `installed`/`uninstalled`: these fire on the initial
+  // install path (npm fetch + activatePlugin) — they're DIFFERENT
+  // from `enabled`/`disabled` which fire when the user toggles an
+  // already-installed plugin. We need both pairs; subscribing only
+  // to enable/disable misses freshly-installed plugins entirely,
+  // which is the bug the prod user hit on 0.5.x.
   useSSE({
+    'plugin:installed': () => {
+      fetchPlatforms(true).then(setPlatforms)
+    },
+    'plugin:uninstalled': () => {
+      fetchPlatforms(true).then(setPlatforms)
+    },
     'plugin:enabled': () => {
       fetchPlatforms(true).then(setPlatforms)
     },
