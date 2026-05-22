@@ -402,56 +402,6 @@ describe('buildSystemPrompt', () => {
     expect(result).not.toContain('★ [fact] Normal fact')
   })
 
-  // --- Hub Kin directory ---
-
-  it('includes hub view kin directory with routing instructions', () => {
-    const result = buildSystemPrompt(makeParams({
-      isHub: true,
-      hubKinDirectory: [
-        {
-          slug: 'coder',
-          name: 'Coder',
-          role: 'software engineer',
-          expertiseSummary: 'Python, TypeScript, DevOps',
-          activeChannels: ['discord', 'telegram'],
-        },
-        {
-          slug: 'writer',
-          name: 'Writer',
-          role: 'content writer',
-          expertiseSummary: 'Blog posts, documentation',
-        },
-      ],
-    }))
-    expect(result).toContain('## Kin directory (Hub view)')
-    expect(result).toContain('central coordinator')
-    expect(result).toContain('### Routing behavior')
-    expect(result).toContain('**Coder** (slug: coder)')
-    expect(result).toContain('Expertise: Python, TypeScript, DevOps')
-    expect(result).toContain('Connected channels: discord, telegram')
-    expect(result).toContain('**Writer** (slug: writer)')
-    // Writer entry should NOT have "Connected channels" line (no activeChannels)
-    // Extract just the Writer block and verify no "Connected channels" in it
-    const writerSection = result.split('**Writer**')[1]?.split('\n\n')[0] ?? ''
-    expect(writerSection).not.toContain('Connected channels')
-    // Should NOT include the standard kin directory block
-    expect(result).not.toContain('### Collaboration and delegation')
-  })
-
-  it('prefers hub directory over standard directory when isHub is true', () => {
-    const result = buildSystemPrompt(makeParams({
-      isHub: true,
-      hubKinDirectory: [
-        { slug: 'helper', name: 'Helper', role: 'assistant', expertiseSummary: 'General' },
-      ],
-      kinDirectory: [
-        { slug: 'helper', name: 'Helper', role: 'assistant' },
-      ],
-    }))
-    expect(result).toContain('## Kin directory (Hub view)')
-    expect(result).not.toContain('### Collaboration and delegation')
-  })
-
   // --- Participants ---
 
   it('includes participants block for group conversation', () => {

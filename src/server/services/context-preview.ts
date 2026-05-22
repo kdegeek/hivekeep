@@ -9,7 +9,7 @@ import { listAvailableKins } from '@/server/services/inter-kin'
 import { getMCPToolsSummary, resolveMCPTools } from '@/server/services/mcp'
 import { resolveCustomTools } from '@/server/services/custom-tools'
 import { toolRegistry } from '@/server/tools/index'
-import { getGlobalPrompt, getHubKinId } from '@/server/services/app-settings'
+import { getGlobalPrompt } from '@/server/services/app-settings'
 import { fetchPreviousCronRuns } from '@/server/services/tasks'
 import { fetchCronLearnings } from '@/server/services/cron-learnings'
 import { getActiveChannelsForKin } from '@/server/services/channels'
@@ -347,32 +347,6 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
   // Global prompt
   const globalPrompt = await getGlobalPrompt()
 
-  // Hub detection
-  const hubKinId = await getHubKinId()
-  const isHub = hubKinId === kinId
-
-  let hubKinDirectory: Array<{ slug: string | null; name: string; role: string; expertiseSummary: string; activeChannels?: string[] }> | undefined
-  if (isHub) {
-    const otherKins = db
-      .select({ id: kins.id, slug: kins.slug, name: kins.name, role: kins.role, expertise: kins.expertise })
-      .from(kins)
-      .where(ne(kins.id, kinId))
-      .all()
-
-    hubKinDirectory = await Promise.all(
-      otherKins.map(async (k) => {
-        const kinChannels = await getActiveChannelsForKin(k.id)
-        return {
-          slug: k.slug,
-          name: k.name,
-          role: k.role,
-          expertiseSummary: k.expertise.length > 300 ? k.expertise.slice(0, 300) + '...' : k.expertise,
-          activeChannels: kinChannels.length > 0 ? kinChannels.map((ch) => `${ch.platform}: "${ch.name}"`) : undefined,
-        }
-      }),
-    )
-  }
-
   // Compacting summaries (from active in-context summaries)
   const activeSummaries = db
     .select()
@@ -486,8 +460,6 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
     activeChannels: activeChannels.length > 0 ? activeChannels : undefined,
     globalPrompt,
     userLanguage,
-    isHub,
-    hubKinDirectory,
     compactingSummaries: compactingSummariesData,
     conversationState: {
       visibleMessageCount,
@@ -507,13 +479,11 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
     }
   }
 
-  if (!isHub) {
-    const allRegistered = toolRegistry.list()
-    const optInSet = new Set(toolConfig?.enabledOptInTools ?? [])
-    for (const reg of allRegistered) {
-      if (reg.defaultDisabled && !optInSet.has(reg.name)) {
-        delete nativeTools[reg.name]
-      }
+  const allRegistered = toolRegistry.list()
+  const optInSet = new Set(toolConfig?.enabledOptInTools ?? [])
+  for (const reg of allRegistered) {
+    if (reg.defaultDisabled && !optInSet.has(reg.name)) {
+      delete nativeTools[reg.name]
     }
   }
 

@@ -31,7 +31,7 @@ import {
 } from '@/server/services/kins'
 import { markKinAsRead } from '@/server/services/kin-read-state'
 import { kinAvatarUrl, validateKinFields } from '@/server/services/field-validator'
-import { getHubKinId, getDefaultLlmModel, getDefaultLlmProviderId } from '@/server/services/app-settings'
+import { getDefaultLlmModel, getDefaultLlmProviderId } from '@/server/services/app-settings'
 import { listModelsForProvider } from '@/server/providers/index'
 import type { AppVariables } from '@/server/app'
 import { createLogger } from '@/server/logger'
@@ -44,9 +44,8 @@ const kinRoutes = new Hono<{ Variables: AppVariables }>()
 
 // GET /api/kins — list all kins
 kinRoutes.get('/', async (c) => {
-  const [allKins, hubKinId, allQueueItems] = await Promise.all([
+  const [allKins, allQueueItems] = await Promise.all([
     db.select().from(kins).all(),
-    getHubKinId(),
     db.select({ kinId: queueItems.kinId, status: queueItems.status, createdAt: queueItems.createdAt }).from(queueItems).all(),
   ])
 
@@ -76,7 +75,6 @@ kinRoutes.get('/', async (c) => {
         providerId: k.providerId ?? null,
         activeProjectId: k.activeProjectId ?? null,
         createdAt: k.createdAt,
-        isHub: k.id === hubKinId,
         thinkingEnabled: resolveThinkingConfig(k.thinkingConfig).enabled === true,
         thinkingEffort: resolveThinkingConfig(k.thinkingConfig).effort ?? null,
         isProcessing: qs?.isProcessing ?? false,

@@ -43,7 +43,7 @@ import { linkFilesToMessage, getFilesForMessage } from '@/server/services/files'
 import { popChannelQueueMeta, getChannelQueueMeta, deliverChannelResponse, getActiveChannelsForKin, getChannel, findContactByPlatformId, getChannelOriginMeta } from '@/server/services/channels'
 import { popStagedAttachments, clearStagedAttachments } from '@/server/tools/attach-file-tool'
 import { parseMentions, notifyMentionedUsers } from '@/server/services/mentions'
-import { getGlobalPrompt, getHubKinId, getSetting, setSetting } from '@/server/services/app-settings'
+import { getGlobalPrompt, getSetting, setSetting } from '@/server/services/app-settings'
 import { wrapToolsWithSpill } from '@/server/services/tool-output-spill'
 import { executeToolBatch } from '@/server/services/tool-executor'
 import { recordUsage, aggregateUsages } from '@/server/services/token-usage'
@@ -1206,36 +1206,6 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
 
     const globalPrompt = await getGlobalPrompt()
 
-    // Detect Hub status and build enriched directory if needed
-    const hubKinId = await getHubKinId()
-    const isHub = hubKinId === kinId
-
-    let hubKinDirectory: Array<{ slug: string | null; name: string; role: string; expertiseSummary: string; activeChannels?: string[] }> | undefined
-    if (isHub) {
-      const otherKins = db
-        .select({ id: kins.id, slug: kins.slug, name: kins.name, role: kins.role, expertise: kins.expertise })
-        .from(kins)
-        .where(ne(kins.id, kinId))
-        .all()
-
-      hubKinDirectory = await Promise.all(
-        otherKins.map(async (k) => {
-          const kinChannels = await getActiveChannelsForKin(k.id)
-          return {
-            slug: k.slug,
-            name: k.name,
-            role: k.role,
-            expertiseSummary: k.expertise.length > 300
-              ? k.expertise.slice(0, 300) + '...'
-              : k.expertise,
-            activeChannels: kinChannels.length > 0
-              ? kinChannels.map((ch) => `${ch.platform}: "${ch.name}"`)
-              : undefined,
-          }
-        }),
-      )
-    }
-
     // Build message history (also returns compacting summaries for system prompt injection)
     const { messages: messageHistory, compactingSummaries: compactingSummariesData, participants, visibleMessageCount, totalMessageCount, hasCompactedHistory, oldestVisibleMessageAt, maskedToolGroups, observationCompactedCount, estimatedTokensSavedByMasking, emergencyTrimmedCount, trimmedToolResultsCount, trimmedToolResultsTokensSaved, trimmedToolCallArgsCount, trimmedToolCallArgsTokensSaved, trimmedAssistantContentCount, trimmedAssistantContentTokensSaved, trimmedUserContentCount, trimmedUserContentTokensSaved } = await buildMessageHistory(kinId)
 
@@ -1353,8 +1323,6 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
       activeChannels: activeChannels.length > 0 ? activeChannels : undefined,
       globalPrompt,
       userLanguage,
-      isHub,
-      hubKinDirectory,
       compactingSummaries: compactingSummariesData,
       participants: participants.length > 0 ? participants : undefined,
       currentMessageSource,
@@ -1460,15 +1428,12 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
       }
     }
 
-    // Filter out defaultDisabled tools not explicitly opted-in
-    // Hub Kin gets ALL opt-in tools automatically
-    if (!isHub) {
-      const allRegistered = toolRegistry.list()
-      const optInSet = new Set(toolConfig?.enabledOptInTools ?? [])
-      for (const reg of allRegistered) {
-        if (reg.defaultDisabled && !optInSet.has(reg.name)) {
-          delete nativeTools[reg.name]
-        }
+    // Filter out defaultDisabled tools not explicitly opted-in.
+    const allRegistered = toolRegistry.list()
+    const optInSet = new Set(toolConfig?.enabledOptInTools ?? [])
+    for (const reg of allRegistered) {
+      if (reg.defaultDisabled && !optInSet.has(reg.name)) {
+        delete nativeTools[reg.name]
       }
     }
 

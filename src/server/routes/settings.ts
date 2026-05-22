@@ -10,8 +10,6 @@ import {
   setExtractionModel,
   getEmbeddingModel,
   setEmbeddingModel,
-  getHubKinId,
-  setHubKinId,
   getExtractionProviderId,
   setExtractionProviderId,
   getEmbeddingProviderId,
@@ -334,69 +332,6 @@ settingsRoutes.put('/embedding-model', async (c) => {
   await setEmbeddingProviderId(providerId ?? null)
   log.info({ model: model.trim(), providerId }, 'Embedding model updated')
   return c.json({ embeddingModel: model.trim(), embeddingProviderId: providerId ?? null })
-})
-
-// GET /api/settings/hub
-settingsRoutes.get('/hub', async (c) => {
-  const hubKinId = await getHubKinId()
-  let hubKinName: string | null = null
-  let hubKinSlug: string | null = null
-
-  if (hubKinId) {
-    const kin = db
-      .select({ name: kins.name, slug: kins.slug })
-      .from(kins)
-      .where(eq(kins.id, hubKinId))
-      .get()
-
-    if (kin) {
-      hubKinName = kin.name
-      hubKinSlug = kin.slug
-    } else {
-      // Kin was deleted but setting wasn't cleaned up — clear it
-      await setHubKinId(null)
-    }
-  }
-
-  return c.json({ hubKinId: hubKinId ?? null, hubKinName, hubKinSlug })
-})
-
-// PUT /api/settings/hub
-settingsRoutes.put('/hub', async (c) => {
-  const body = await c.req.json()
-  const { kinId } = body as { kinId: string | null }
-
-  if (kinId !== null && typeof kinId !== 'string') {
-    return c.json(
-      { error: { code: 'INVALID_BODY', message: 'kinId must be a string or null' } },
-      400,
-    )
-  }
-
-  if (kinId !== null) {
-    const kin = db
-      .select({ id: kins.id })
-      .from(kins)
-      .where(eq(kins.id, kinId))
-      .get()
-
-    if (!kin) {
-      return c.json(
-        { error: { code: 'KIN_NOT_FOUND', message: 'Kin not found' } },
-        404,
-      )
-    }
-  }
-
-  await setHubKinId(kinId)
-
-  sseManager.broadcast({
-    type: 'settings:hub-changed',
-    data: { hubKinId: kinId },
-  })
-
-  log.info({ hubKinId: kinId }, 'Hub Kin updated')
-  return c.json({ hubKinId: kinId })
 })
 
 export { settingsRoutes }

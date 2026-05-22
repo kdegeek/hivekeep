@@ -89,15 +89,6 @@ export async function setEmbeddingProviderId(providerId: string | null): Promise
   return setSetting('embedding_provider_id', providerId)
 }
 
-export async function getHubKinId(): Promise<string | null> {
-  return getSetting('hub_kin_id')
-}
-
-export async function setHubKinId(kinId: string | null): Promise<void> {
-  if (kinId === null) return deleteSetting('hub_kin_id')
-  return setSetting('hub_kin_id', kinId)
-}
-
 // ─── Default LLM (for new kins) ──────────────────────────────────────────────
 
 export async function getDefaultLlmModel(): Promise<string | null> {

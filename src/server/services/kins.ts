@@ -37,7 +37,6 @@ import {
   getBaseAvatarBytes,
   ImageGenerationError,
 } from '@/server/services/image-generation'
-import { getHubKinId, setHubKinId } from '@/server/services/app-settings'
 import { createLogger } from '@/server/logger'
 import { deleteChannel } from '@/server/services/channels'
 import { stopJob } from '@/server/services/crons'
@@ -347,14 +346,6 @@ export async function deleteKin(kinId: string): Promise<boolean> {
 
   // Delete the kin
   await db.delete(kins).where(eq(kins.id, kinId))
-
-  // Clear hub designation if this was the hub
-  const hubKinId = await getHubKinId()
-  if (hubKinId === kinId) {
-    await setHubKinId(null)
-    sseManager.broadcast({ type: 'settings:hub-changed', data: { hubKinId: null } })
-    log.info({ kinId }, 'Hub designation cleared — hub Kin was deleted')
-  }
 
   // Remove workspace directory
   if (existing.workspacePath && existsSync(existing.workspacePath)) {

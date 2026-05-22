@@ -14,8 +14,6 @@ const mockGetExtractionModel = mock(() => Promise.resolve(null as string | null)
 const mockSetExtractionModel = mock(() => Promise.resolve())
 const mockGetEmbeddingModel = mock(() => Promise.resolve(null as string | null))
 const mockSetEmbeddingModel = mock(() => Promise.resolve())
-const mockGetHubKinId = mock(() => Promise.resolve(null as string | null))
-const mockSetHubKinId = mock(() => Promise.resolve())
 
 const mockSseBroadcast = mock(() => {})
 
@@ -50,8 +48,6 @@ mock.module('@/server/services/app-settings', () => ({
   setExtractionModel: mockSetExtractionModel,
   getEmbeddingModel: mockGetEmbeddingModel,
   setEmbeddingModel: mockSetEmbeddingModel,
-  getHubKinId: mockGetHubKinId,
-  setHubKinId: mockSetHubKinId,
 }))
 
 mock.module('@/server/sse/index', () => ({
@@ -120,8 +116,6 @@ describe('settings routes', () => {
     mockSetExtractionModel.mockReset()
     mockGetEmbeddingModel.mockReset()
     mockSetEmbeddingModel.mockReset()
-    mockGetHubKinId.mockReset()
-    mockSetHubKinId.mockReset()
     mockSseBroadcast.mockReset()
 
     mockGetGlobalPrompt.mockImplementation(() => Promise.resolve(null))
@@ -131,8 +125,6 @@ describe('settings routes', () => {
     mockSetExtractionModel.mockImplementation(() => Promise.resolve())
     mockGetEmbeddingModel.mockImplementation(() => Promise.resolve(null))
     mockSetEmbeddingModel.mockImplementation(() => Promise.resolve())
-    mockGetHubKinId.mockImplementation(() => Promise.resolve(null))
-    mockSetHubKinId.mockImplementation(() => Promise.resolve())
   })
 
   // ─── Admin Guard ────────────────────────────────────────────────────────
@@ -332,114 +324,4 @@ describe('settings routes', () => {
     })
   })
 
-  // ─── Hub ────────────────────────────────────────────────────────────────
-
-  describe('GET /hub', () => {
-    itMocked('returns null hub when not configured', async () => {
-      const app = createApp()
-      const res = await app.request('/api/settings/hub')
-      expect(res.status).toBe(200)
-      const body = await res.json()
-      expect(body.hubKinId).toBeNull()
-      expect(body.hubKinName).toBeNull()
-      expect(body.hubKinSlug).toBeNull()
-    })
-
-    itMocked('returns hub kin info when configured and kin exists', async () => {
-      const app = createApp()
-      mockGetHubKinId.mockImplementation(() => Promise.resolve('kin-123'))
-
-      // First call returns admin role, second call returns kin info
-      let callCount = 0
-      mockDbSelectGet.mockImplementation(() => {
-        callCount++
-        if (callCount <= 1) return { role: 'admin' } // admin guard
-        return { name: 'Hub Bot', slug: 'hub-bot' } // kin lookup
-      })
-
-      const res = await app.request('/api/settings/hub')
-      expect(res.status).toBe(200)
-      const body = await res.json()
-      expect(body.hubKinId).toBe('kin-123')
-      expect(body.hubKinName).toBe('Hub Bot')
-      expect(body.hubKinSlug).toBe('hub-bot')
-    })
-
-    itMocked('clears hub setting when kin no longer exists', async () => {
-      const app = createApp()
-      mockGetHubKinId.mockImplementation(() => Promise.resolve('kin-deleted'))
-
-      let callCount = 0
-      mockDbSelectGet.mockImplementation(() => {
-        callCount++
-        if (callCount <= 1) return { role: 'admin' } // admin guard
-        return null // kin not found
-      })
-
-      const res = await app.request('/api/settings/hub')
-      expect(res.status).toBe(200)
-      expect(mockSetHubKinId).toHaveBeenCalledWith(null)
-    })
-  })
-
-  describe('PUT /hub', () => {
-    itMocked('sets hub kin', async () => {
-      const app = createApp()
-
-      let callCount = 0
-      mockDbSelectGet.mockImplementation(() => {
-        callCount++
-        if (callCount <= 1) return { role: 'admin' }
-        return { id: 'kin-abc' } // kin exists
-      })
-
-      const res = await app.request('/api/settings/hub', json({ kinId: 'kin-abc' }))
-      expect(res.status).toBe(200)
-      expect(mockSetHubKinId).toHaveBeenCalledWith('kin-abc')
-      expect(mockSseBroadcast).toHaveBeenCalled()
-      const body = await res.json()
-      expect(body.hubKinId).toBe('kin-abc')
-    })
-
-    itMocked('clears hub kin when set to null', async () => {
-      const app = createApp()
-      const res = await app.request('/api/settings/hub', json({ kinId: null }))
-      expect(res.status).toBe(200)
-      expect(mockSetHubKinId).toHaveBeenCalledWith(null)
-      expect(mockSseBroadcast).toHaveBeenCalled()
-    })
-
-    itMocked('returns 404 when kin not found', async () => {
-      const app = createApp()
-
-      let callCount = 0
-      mockDbSelectGet.mockImplementation(() => {
-        callCount++
-        if (callCount <= 1) return { role: 'admin' }
-        return null // kin not found
-      })
-
-      const res = await app.request('/api/settings/hub', json({ kinId: 'nonexistent' }))
-      expect(res.status).toBe(404)
-      const body = await res.json()
-      expect(body.error.code).toBe('KIN_NOT_FOUND')
-    })
-
-    itMocked('returns 400 for non-string non-null kinId', async () => {
-      const app = createApp()
-      const res = await app.request('/api/settings/hub', json({ kinId: 123 }))
-      expect(res.status).toBe(400)
-      const body = await res.json()
-      expect(body.error.code).toBe('INVALID_BODY')
-    })
-
-    itMocked('broadcasts SSE event on hub change', async () => {
-      const app = createApp()
-      await app.request('/api/settings/hub', json({ kinId: null }))
-      expect(mockSseBroadcast).toHaveBeenCalledWith({
-        type: 'settings:hub-changed',
-        data: { hubKinId: null },
-      })
-    })
-  })
 })
