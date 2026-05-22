@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, ChevronRight, Cpu, Bot, Network, Radio, Sparkles } from 'lucide-react'
+import { Check, ChevronRight, Cpu, Bot, Radio, Sparkles } from 'lucide-react'
 import { Button } from '@/client/components/ui/button'
 import { api } from '@/client/lib/api'
 import { cn } from '@/client/lib/utils'
@@ -67,15 +67,21 @@ function Step({ number, title, description, done, active, icon: Icon, actionLabe
 }
 
 interface GettingStartedChecklistProps {
-  /** Number of non-hub Kins */
-  specialistKinCount: number
-  hubKinId: string | null
-  onCreateHub: () => void
+  /** Total number of Kins on the instance — distinction between hub
+   *  and specialists was retired (Phase 0). The Phase 2 rewrite will
+   *  also wire capability-aware items (embedding / image / search /
+   *  voice) and per-item skip; this 3-step shape is the interim
+   *  scaffolding that keeps the dashboard meaningful until then. */
+  kinCount: number
+  /** True when at least one LLM model is reachable from the catalogue.
+   *  Drives the 'create your first Kin' affordance — without an LLM,
+   *  manual creation still works but the wizard can't generate. */
+  hasLlm: boolean
   onCreateKin: () => void
   onOpenSettings: (section?: string) => void
 }
 
-export function GettingStartedChecklist({ specialistKinCount, hubKinId, onCreateHub, onCreateKin, onOpenSettings }: GettingStartedChecklistProps) {
+export function GettingStartedChecklist({ kinCount, hasLlm: _hasLlm, onCreateKin, onOpenSettings }: GettingStartedChecklistProps) {
   const { t } = useTranslation()
   const [providerCount, setProviderCount] = useState<number | null>(null)
   const [channelCount, setChannelCount] = useState<number | null>(null)
@@ -95,20 +101,17 @@ export function GettingStartedChecklist({ specialistKinCount, hubKinId, onCreate
       .get<{ channels: unknown[] }>('/channels')
       .then((data) => setChannelCount(data.channels.length))
       .catch(() => setChannelCount(0))
-    // Re-evaluate when the provider catalogue changes (plugin
-    // enable/disable adds new types to consider as AI providers).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catalogue.types])
 
   if (providerCount === null) return null
 
   const hasProviders = providerCount > 0
-  const hasHub = !!hubKinId
   const hasChannels = (channelCount ?? 0) > 0
-  const hasSpecialists = specialistKinCount > 0
+  const hasKins = kinCount > 0
 
-  // Determine active step (4 steps: providers → hub → specialist → channels)
-  const activeStep = !hasProviders ? 1 : !hasHub ? 2 : !hasSpecialists ? 3 : !hasChannels ? 4 : 0
+  // Active step now linear: providers → first Kin → channels.
+  const activeStep = !hasProviders ? 1 : !hasKins ? 2 : !hasChannels ? 3 : 0
 
   return (
     <div className="w-full max-w-md space-y-6 animate-fade-in-up">
@@ -135,30 +138,20 @@ export function GettingStartedChecklist({ specialistKinCount, hubKinId, onCreate
         />
         <Step
           number={2}
-          title={t('chat.welcome.step2Title')}
-          description={t('chat.welcome.step2Desc')}
-          done={hasHub}
-          active={activeStep === 2}
-          icon={Network}
-          actionLabel={t('chat.welcome.step2Action')}
-          onAction={onCreateHub}
-        />
-        <Step
-          number={3}
           title={t('chat.welcome.step3Title')}
           description={t('chat.welcome.step3Desc')}
-          done={hasSpecialists && hasHub}
-          active={activeStep === 3}
+          done={hasKins}
+          active={activeStep === 2}
           icon={Bot}
           actionLabel={t('chat.welcome.step3Action')}
           onAction={onCreateKin}
         />
         <Step
-          number={4}
+          number={3}
           title={t('chat.welcome.step4Title')}
           description={t('chat.welcome.step4Desc')}
           done={hasChannels}
-          active={activeStep === 4}
+          active={activeStep === 3}
           icon={Radio}
           actionLabel={t('chat.welcome.step4Action')}
           onAction={() => onOpenSettings('channels')}

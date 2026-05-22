@@ -33,7 +33,6 @@ interface KinSummary {
   model: string
   providerId: string | null
   createdAt: string
-  isHub: boolean
 }
 
 interface AppSidebarProps {
@@ -48,7 +47,6 @@ interface AppSidebarProps {
   onCreateKin: () => void
   onEditKin: (id: string) => void
   onDeleteKin?: (id: string) => void
-  onSetAsHub?: (id: string) => void
   onReorderKins: (newOrder: string[]) => void
   onOpenSettings?: (section?: string, filters?: { kinId?: string }) => void
 }
@@ -64,7 +62,6 @@ export function AppSidebar({
   onCreateKin,
   onEditKin,
   onDeleteKin,
-  onSetAsHub,
   onReorderKins,
   onOpenSettings,
 }: AppSidebarProps) {
@@ -160,7 +157,6 @@ export function AppSidebar({
             onCreateKin={onCreateKin}
             onEditKin={onEditKin}
             onDeleteKin={onDeleteKin}
-            onSetAsHub={onSetAsHub}
             onViewUsage={onOpenSettings ? (kinId: string) => onOpenSettings('tokenUsage', { kinId }) : undefined}
             onReorderKins={onReorderKins}
           />

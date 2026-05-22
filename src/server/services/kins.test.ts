@@ -39,11 +39,6 @@ mock.module('@/server/sse/index', () => ({
 // the full suite. The kins module only uses it in createKin/generateAndSaveAvatar
 // which we don't test here (they're async + DB-heavy).
 
-mock.module('@/server/services/app-settings', () => ({
-  getHubKinId: mock(async () => null),
-  setHubKinId: mock(async () => {}),
-}))
-
 mock.module('@/server/logger', () => ({
   createLogger: () => ({
     info: mock(() => {}),

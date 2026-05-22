@@ -4,7 +4,6 @@ import { toast } from 'sonner'
 import { Button } from '@/client/components/ui/button'
 import { Label } from '@/client/components/ui/label'
 import { MarkdownEditor } from '@/client/components/ui/markdown-editor'
-import { KinSelector } from '@/client/components/common/KinSelector'
 import { api, getErrorMessage, toastError } from '@/client/lib/api'
 import { Skeleton } from '@/client/components/ui/skeleton'
 import { InfoTip } from '@/client/components/common/InfoTip'
@@ -20,33 +19,13 @@ export function GeneralSettings() {
   const [globalPrompt, setGlobalPrompt] = useState('')
   const [initialGlobalPrompt, setInitialGlobalPrompt] = useState('')
 
-  // Hub Kin
-  const [hubKinId, setHubKinId] = useState<string | null>(null)
-  const [initialHubKinId, setInitialHubKinId] = useState<string | null>(null)
-  const [allKins, setAllKins] = useState<{ id: string; name: string; role?: string; avatarUrl?: string | null }[]>([])
-
-  // Saving state (unified)
+  // Saving state
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setFetchError(null)
-    Promise.all([fetchGlobalPrompt(), fetchHubKin()]).catch(() => {})
+    fetchGlobalPrompt().catch(() => {})
   }, [])
-
-  const fetchHubKin = async () => {
-    try {
-      const [hubData, kinsData] = await Promise.all([
-        api.get<{ hubKinId: string | null }>('/settings/hub'),
-        api.get<{ kins: { id: string; name: string; role: string; avatarUrl: string | null }[] }>('/kins'),
-      ])
-      setHubKinId(hubData.hubKinId)
-      setInitialHubKinId(hubData.hubKinId)
-      setAllKins(kinsData.kins)
-    } catch (err: unknown) {
-      setFetchError(getErrorMessage(err))
-      toast.error(t('settings.general.fetchError', 'Failed to load settings'))
-    }
-  }
 
   const fetchGlobalPrompt = async () => {
     try {
@@ -64,36 +43,11 @@ export function GeneralSettings() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const promises: Promise<unknown>[] = []
-
       if (hasPromptChanges) {
-        promises.push(api.put('/settings/global-prompt', { globalPrompt }))
-      }
-
-      if (hasHubChanges) {
-        const actualKinId = hubKinId === '__none__' ? null : hubKinId
-        promises.push(api.put('/settings/hub', { kinId: actualKinId }))
-      }
-
-      await Promise.all(promises)
-
-      if (hasPromptChanges) {
+        await api.put('/settings/global-prompt', { globalPrompt })
         setInitialGlobalPrompt(globalPrompt)
       }
-      if (hasHubChanges) {
-        const actualKinId = hubKinId === '__none__' ? null : hubKinId
-        setInitialHubKinId(actualKinId)
-        setHubKinId(actualKinId)
-      }
-
-      if (hasPromptChanges && hasHubChanges) {
-        toast.success(t('settings.general.saved'))
-        toast.success(t('settings.general.hubSaved'))
-      } else if (hasHubChanges) {
-        toast.success(t('settings.general.hubSaved'))
-      } else {
-        toast.success(t('settings.general.saved'))
-      }
+      toast.success(t('settings.general.saved'))
     } catch (err: unknown) {
       toastError(err)
     } finally {
@@ -103,14 +57,11 @@ export function GeneralSettings() {
 
   const handleDiscard = () => {
     setGlobalPrompt(initialGlobalPrompt)
-    setHubKinId(initialHubKinId)
   }
 
   const MAX_PROMPT_LENGTH = 10000
   const hasPromptChanges = globalPrompt !== initialGlobalPrompt
-  const effectiveHubKinId = hubKinId === '__none__' ? null : hubKinId
-  const hasHubChanges = effectiveHubKinId !== initialHubKinId
-  const hasChanges = hasPromptChanges || hasHubChanges
+  const hasChanges = hasPromptChanges
   const approxTokens = Math.ceil(globalPrompt.length / 4)
   const isOverLimit = globalPrompt.length > MAX_PROMPT_LENGTH
 
@@ -135,7 +86,7 @@ export function GeneralSettings() {
         <Button variant="outline" onClick={() => {
           setIsLoading(true)
           setFetchError(null)
-          Promise.all([fetchGlobalPrompt(), fetchHubKin()]).catch(() => {})
+          fetchGlobalPrompt().catch(() => {})
         }}>
           {t('common.retry', 'Retry')}
         </Button>
@@ -148,28 +99,6 @@ export function GeneralSettings() {
       <p className="text-sm text-muted-foreground">
         {t('settings.general.description')}
       </p>
-
-      {/* Hub Kin selector */}
-      {allKins.length > 0 && (
-        <div className="space-y-2">
-          <Label className="inline-flex items-center gap-1.5">
-            {t('settings.general.hubKin')}
-            <InfoTip content={t('settings.general.hubKinTip')} />
-          </Label>
-          <KinSelector
-            value={hubKinId ?? '__none__'}
-            onValueChange={setHubKinId}
-            kins={allKins}
-            placeholder={t('settings.general.hubKinPlaceholder')}
-            noneLabel={t('settings.general.hubKinNone', 'None')}
-            noneValue="__none__"
-            triggerClassName="w-full max-w-sm h-auto min-h-9"
-          />
-          <p className="text-xs text-muted-foreground">
-            {t('settings.general.hubKinHint')}
-          </p>
-        </div>
-      )}
 
       {/* Global prompt */}
       <div className="space-y-2">

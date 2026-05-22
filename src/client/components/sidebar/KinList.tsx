@@ -36,7 +36,6 @@ interface KinSummary {
   role: string
   avatarUrl: string | null
   model: string
-  isHub: boolean
 }
 
 interface KinListProps {
@@ -50,14 +49,13 @@ interface KinListProps {
   onCreateKin: () => void
   onEditKin: (id: string) => void
   onDeleteKin?: (id: string) => void
-  onSetAsHub?: (id: string) => void
   onViewUsage?: (kinId: string) => void
   onReorderKins: (newOrder: string[]) => void
 }
 
 const KIN_SEARCH_THRESHOLD = 5
 
-export const KinList = memo(function KinList({ kins, llmModels, selectedKinSlug, unavailableKinIds, kinQueueState, unreadCounts, onSelectKin, onCreateKin, onEditKin, onDeleteKin, onSetAsHub, onViewUsage, onReorderKins }: KinListProps) {
+export const KinList = memo(function KinList({ kins, llmModels, selectedKinSlug, unavailableKinIds, kinQueueState, unreadCounts, onSelectKin, onCreateKin, onEditKin, onDeleteKin, onViewUsage, onReorderKins }: KinListProps) {
   const { t } = useTranslation()
   const [searchQuery, setSearchQuery] = useState('')
   const navigate = useNavigate()
@@ -71,17 +69,14 @@ export const KinList = memo(function KinList({ kins, llmModels, selectedKinSlug,
     navigate('/settings/channels')
   }, [navigate])
 
-  // Separate hub from regular kins
-  const hubKin = useMemo(() => kins.find((k) => k.isHub), [kins])
-  const regularKins = useMemo(() => kins.filter((k) => !k.isHub), [kins])
-
+  // Hub Kin distinction retired — all kins live in one sortable list.
   const filteredKins = useMemo(() => {
-    if (!searchQuery.trim()) return regularKins
+    if (!searchQuery.trim()) return kins
     const q = searchQuery.toLowerCase()
-    return regularKins.filter(
+    return kins.filter(
       (k) => k.name.toLowerCase().includes(q) || k.role.toLowerCase().includes(q),
     )
-  }, [regularKins, searchQuery])
+  }, [kins, searchQuery])
 
   const showSearch = kins.length >= KIN_SEARCH_THRESHOLD
 
@@ -94,17 +89,15 @@ export const KinList = memo(function KinList({ kins, llmModels, selectedKinSlug,
     const { active, over } = event
     if (!over || active.id === over.id) return
 
-    const oldIndex = regularKins.findIndex((k) => k.id === active.id)
-    const newIndex = regularKins.findIndex((k) => k.id === over.id)
+    const oldIndex = kins.findIndex((k) => k.id === active.id)
+    const newIndex = kins.findIndex((k) => k.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
 
-    const newKins = [...regularKins]
+    const newKins = [...kins]
     const [moved] = newKins.splice(oldIndex, 1)
     newKins.splice(newIndex, 0, moved!)
-    // Preserve hub at the beginning of the order if it exists
-    const allIds = hubKin ? [hubKin.id, ...newKins.map((k) => k.id)] : newKins.map((k) => k.id)
-    onReorderKins(allIds)
-  }, [regularKins, hubKin, onReorderKins])
+    onReorderKins(newKins.map((k) => k.id))
+  }, [kins, onReorderKins])
 
   const handleExportKin = useCallback(async (kinId: string) => {
     try {
@@ -126,7 +119,7 @@ export const KinList = memo(function KinList({ kins, llmModels, selectedKinSlug,
     }
   }, [])
 
-  const regularKinIds = regularKins.map((k) => k.id)
+  const sortableKinIds = kins.map((k) => k.id)
 
   return (
     <SidebarGroup className="flex-1 min-h-0">
@@ -165,38 +158,8 @@ export const KinList = memo(function KinList({ kins, llmModels, selectedKinSlug,
               </p>
             ) : (
           <div className="flex-1 min-h-0 overflow-y-auto">
-            {/* Hub kin pinned at top (outside drag-and-drop) */}
-            {hubKin && (!searchQuery.trim() || hubKin.name.toLowerCase().includes(searchQuery.toLowerCase()) || hubKin.role.toLowerCase().includes(searchQuery.toLowerCase())) && (
-              <div className="px-1 pb-1">
-                <KinCard
-                  id={hubKin.id}
-                  name={hubKin.name}
-                  role={hubKin.role}
-                  avatarUrl={hubKin.avatarUrl}
-                  isHub
-                  modelDisplayName={llmModels.find((m) => m.id === hubKin.model)?.name}
-                  isSelected={selectedKinSlug === hubKin.slug}
-                  isProcessing={kinQueueState.get(hubKin.id)?.isProcessing}
-                  queueSize={kinQueueState.get(hubKin.id)?.queueSize}
-                  modelUnavailable={unavailableKinIds.has(hubKin.id)}
-                  unreadCount={unreadCounts.get(hubKin.id) ?? 0}
-                  shortcutIndex={1}
-                  channels={channelsByKinId.get(hubKin.id)}
-                  onOpenChannel={openChannelSettings}
-                  onClick={() => onSelectKin(hubKin.slug)}
-                  onEdit={() => onEditKin(hubKin.id)}
-                  onDelete={onDeleteKin ? () => onDeleteKin(hubKin.id) : undefined}
-                  onExport={() => handleExportKin(hubKin.id)}
-                  onSetAsHub={onSetAsHub ? () => onSetAsHub(hubKin.id) : undefined}
-                  onViewUsage={onViewUsage ? () => onViewUsage(hubKin.id) : undefined}
-                />
-                {filteredKins.length > 0 && (
-                  <div className="mx-2 mt-1 border-t border-border/40" />
-                )}
-              </div>
-            )}
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={regularKinIds} strategy={verticalListSortingStrategy}>
+            <SortableContext items={sortableKinIds} strategy={verticalListSortingStrategy}>
               <div className="space-y-0.5 px-1">
                 {filteredKins.map((kin, index) => {
                   const queueState = kinQueueState.get(kin.id)
@@ -214,14 +177,13 @@ export const KinList = memo(function KinList({ kins, llmModels, selectedKinSlug,
                       queueSize={queueState?.queueSize}
                       modelUnavailable={unavailableKinIds.has(kin.id)}
                       unreadCount={unreadCounts.get(kin.id) ?? 0}
-                      shortcutIndex={hubKin ? index + 2 : index + 1}
+                      shortcutIndex={index + 1}
                       channels={channelsByKinId.get(kin.id)}
                       onOpenChannel={openChannelSettings}
                       onClick={() => onSelectKin(kin.slug)}
                       onEdit={() => onEditKin(kin.id)}
                       onDelete={onDeleteKin ? () => onDeleteKin(kin.id) : undefined}
                       onExport={() => handleExportKin(kin.id)}
-                      onSetAsHub={onSetAsHub ? () => onSetAsHub(kin.id) : undefined}
                       onViewUsage={onViewUsage ? () => onViewUsage(kin.id) : undefined}
                     />
                   )

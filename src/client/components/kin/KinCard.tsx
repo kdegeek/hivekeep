@@ -35,7 +35,6 @@ export interface KinCardProps extends HTMLAttributes<HTMLDivElement> {
   isSelected?: boolean
   isDragging?: boolean
   modelUnavailable?: boolean
-  isHub?: boolean
   unreadCount?: number
   shortcutIndex?: number
   /**
@@ -51,7 +50,6 @@ export interface KinCardProps extends HTMLAttributes<HTMLDivElement> {
   onEdit?: () => void
   onDelete?: () => void
   onExport?: () => void
-  onSetAsHub?: () => void
   onViewUsage?: () => void
   dragHandleProps?: Record<string, unknown>
 }
@@ -68,7 +66,6 @@ export const KinCard = forwardRef<HTMLDivElement, KinCardProps>(function KinCard
   isSelected = false,
   isDragging = false,
   modelUnavailable = false,
-  isHub = false,
   unreadCount = 0,
   shortcutIndex,
   channels,
@@ -77,7 +74,6 @@ export const KinCard = forwardRef<HTMLDivElement, KinCardProps>(function KinCard
   onEdit,
   onDelete,
   onExport,
-  onSetAsHub,
   onViewUsage,
   dragHandleProps,
   style,
@@ -131,13 +127,6 @@ export const KinCard = forwardRef<HTMLDivElement, KinCardProps>(function KinCard
         >
           {avatarUrl ? (
             <img src={avatarUrl} alt={name} className="size-full object-cover" />
-          ) : isHub ? (
-            <Network
-              className={cn(
-                'size-5',
-                isSelected ? 'text-white' : 'text-secondary-foreground/70',
-              )}
-            />
           ) : (
             <Bot
               className={cn(
@@ -158,13 +147,8 @@ export const KinCard = forwardRef<HTMLDivElement, KinCardProps>(function KinCard
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <div className={cn('truncate text-[13px] leading-tight flex items-center gap-1.5', isSelected ? 'font-semibold' : 'font-medium')}>
+        <div className={cn('truncate text-[13px] leading-tight', isSelected ? 'font-semibold' : 'font-medium')}>
           <span className="truncate">{name}</span>
-          {isHub && (
-            <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-[9px] leading-tight font-medium">
-              Hub
-            </Badge>
-          )}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           {isProcessing ? (
@@ -292,15 +276,6 @@ export const KinCard = forwardRef<HTMLDivElement, KinCardProps>(function KinCard
               <Coins className="size-4" />
               {t('sidebar.kins.contextMenu.viewUsage')}
             </ContextMenuItem>
-          )}
-          {onSetAsHub && !isHub && (
-            <>
-              <ContextMenuSeparator />
-              <ContextMenuItem onClick={onSetAsHub}>
-                <Crown className="size-4" />
-                {t('sidebar.kins.contextMenu.setAsHub')}
-              </ContextMenuItem>
-            </>
           )}
           {onDelete && (
             <>

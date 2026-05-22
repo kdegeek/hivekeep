@@ -98,8 +98,6 @@ interface ChannelFormDialogProps {
   onTransfer?: (channelId: string, data: { targetKinId: string; reason?: string }) => Promise<void>
   channel?: ChannelSummary | null
   kins: KinOption[]
-  /** Hub Kin ID — pre-selected for new channels */
-  hubKinId?: string | null
 }
 
 /**
@@ -130,7 +128,6 @@ export function ChannelFormDialog({
   onTransfer,
   channel,
   kins,
-  hubKinId,
 }: ChannelFormDialogProps) {
   const { t } = useTranslation()
   const isEdit = !!channel
@@ -169,14 +166,14 @@ export function ChannelFormDialog({
     } else {
       setName('')
       setPlatform(platforms[0]?.platform ?? '')
-      setSelectedKinId(hubKinId ?? '')
+      setSelectedKinId('')
       setFormValues({})
     }
     // Always reset the transfer reason when the dialog re-opens or the
     // edited channel changes; stale text from a previous edit must not
     // leak into a new transfer.
     setTransferReason('')
-  }, [channel, open, hubKinId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [channel, open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset form values to the active platform's schema defaults whenever
   // the platform changes (creation flow only).
@@ -261,11 +258,6 @@ export function ChannelFormDialog({
               kins={kins}
               placeholder={t('settings.channels.kinPlaceholder')}
             />
-            {hubKinId && selectedKinId === hubKinId && (
-              <p className="text-xs text-muted-foreground">
-                {t('hub.channelHint')}
-              </p>
-            )}
             {kinChanged && (
               <p className="flex items-start gap-1.5 text-xs text-warning">
                 <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />

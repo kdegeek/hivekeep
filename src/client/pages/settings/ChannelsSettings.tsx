@@ -22,7 +22,6 @@ export function ChannelsSettings() {
   const [isLoading, setIsLoading] = useState(true)
   const { kins: kinList } = useKinList()
   const kins: KinOption[] = kinList.map((k) => ({ id: k.id, name: k.name, role: k.role ?? '', avatarUrl: k.avatarUrl }))
-  const [hubKinId, setHubKinId] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingChannel, setEditingChannel] = useState<ChannelSummary | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
@@ -42,9 +41,6 @@ export function ChannelsSettings() {
 
   useEffect(() => {
     fetchChannels()
-    api.get<{ hubKinId: string | null }>('/settings/hub')
-      .then((data) => setHubKinId(data.hubKinId))
-      .catch(() => {})
   }, [fetchChannels])
 
   // SSE: react to channel changes from other tabs/users
@@ -251,7 +247,6 @@ export function ChannelsSettings() {
         onTransfer={handleTransfer}
         channel={editingChannel}
         kins={kins}
-        hubKinId={hubKinId}
       />
 
     </div>

@@ -61,7 +61,6 @@ interface KinDetail {
   toolConfig?: KinToolConfig | null
   compactingConfig?: KinCompactingConfig | null
   thinkingConfig?: KinThinkingConfig | null
-  isHub?: boolean
 }
 
 interface KinFormModalProps {
@@ -104,8 +103,6 @@ interface KinFormModalProps {
     character: string
     expertise: string
   }) => Promise<string>
-  /** When true, pre-fills the description for a Hub (coordinator) Kin */
-  hubMode?: boolean
 }
 
 type TabId = 'general' | 'tools' | 'memory' | 'compaction' | 'thinking'
@@ -167,16 +164,12 @@ export function KinFormModal({
   onDeleteKin,
   onGenerateKinConfig,
   onGenerateAvatarPreviewFromConfig,
-  hubMode = false,
 }: KinFormModalProps) {
   const { t, i18n } = useTranslation()
 
   const isEdit = !!kin
   const defaultCharacter = t('kin.defaults.character')
   const defaultExpertise = t('kin.defaults.expertise')
-
-  // Hub: grant all tools by default
-  const [hubGrantAllTools, setHubGrantAllTools] = useState(true)
 
   // Unsaved changes guard
   const { isDirty, markDirty, resetDirty, guardedClose, confirmDialogProps } = useUnsavedChanges({
@@ -271,8 +264,7 @@ export function KinFormModal({
       setAvatarPreview(null)
       setWizardStep('describe')
       setWasAiGenerated(false)
-      setWizardDescription(hubMode ? t('hub.defaultDescription') : '')
-      setHubGrantAllTools(true)
+      setWizardDescription('')
 
       // Pre-populate with default LLM model
       api.get<{ defaultLlmModel: string | null; defaultLlmProviderId: string | null }>('/settings/default-models')
@@ -435,13 +427,9 @@ export function KinFormModal({
       } else if (onCreateKin) {
         const created = await onCreateKin({ name, slug: slug || undefined, role, character, expertise, model, providerId })
         if (avatarFile) await onUploadAvatar(created.id, avatarFile)
-        // Hub with "grant all tools": override AI config to enable everything
-        const effectiveToolConfig = (hubMode && hubGrantAllTools)
-          ? { disabledNativeTools: [], mcpAccess: {}, enabledOptInTools: Object.keys(getToolDomainMap()) }
-          : toolConfig
         // If tool config was set by wizard, update it after creation
-        if (effectiveToolConfig && onUpdateKin) {
-          await onUpdateKin(created.id, { toolConfig: effectiveToolConfig })
+        if (toolConfig && onUpdateKin) {
+          await onUpdateKin(created.id, { toolConfig: toolConfig })
         }
       }
       resetDirty()
@@ -492,89 +480,18 @@ export function KinFormModal({
             <>
               <DialogHeader className="shrink-0 border-b px-6 py-4">
                 <DialogTitle className="gradient-primary-text">
-                  {hubMode ? t('hub.wizard.title') : t('kin.wizard.title')}
+                  {t('kin.wizard.title')}
                 </DialogTitle>
                 <DialogDescription className="sr-only">
-                  {hubMode ? t('hub.wizard.title') : t('kin.wizard.title')}
+                  {t('kin.wizard.title')}
                 </DialogDescription>
               </DialogHeader>
 
               <div className="flex flex-1 flex-col items-center overflow-y-auto px-8 py-10">
                 <div className="m-auto w-full max-w-xl animate-fade-in-up space-y-6">
-                  {hubMode ? (
-                    <>
-                      <p className="text-center text-muted-foreground">
-                        {t('hub.wizard.subtitle')}
-                      </p>
-
-                      {/* Hub pattern mini-diagram — horizontal compact */}
-                      <div className="rounded-xl border border-primary/20 bg-primary/5 px-5 py-4">
-                        <div className="flex items-center justify-center gap-3">
-                          {/* You */}
-                          <div className="flex flex-col items-center gap-1">
-                            <div className="flex size-8 items-center justify-center rounded-full bg-muted">
-                              <User className="size-4 text-muted-foreground" />
-                            </div>
-                            <span className="text-[10px] font-medium text-muted-foreground">{t('hub.wizard.diagramYou')}</span>
-                          </div>
-
-                          {/* Arrow You → Hub */}
-                          <svg viewBox="0 0 24 2" className="w-6 shrink-0" style={{ height: 2 }} aria-hidden="true">
-                            <line x1="0" y1="1" x2="24" y2="1" className="stroke-muted-foreground/40" strokeWidth={1.2} strokeDasharray="3 3" />
-                          </svg>
-
-                          {/* Hub */}
-                          <div className="flex flex-col items-center gap-1">
-                            <div className="flex size-8 items-center justify-center rounded-full bg-primary/20 ring-1 ring-primary/40">
-                              <Network className="size-4 text-primary" />
-                            </div>
-                            <span className="text-[10px] font-semibold text-primary">{t('kin.hub')}</span>
-                          </div>
-
-                          {/* Arrow Hub → Specialists */}
-                          <svg viewBox="0 0 24 2" className="w-6 shrink-0" style={{ height: 2 }} aria-hidden="true">
-                            <line x1="0" y1="1" x2="24" y2="1" className="stroke-muted-foreground/40" strokeWidth={1.2} strokeDasharray="3 3" />
-                          </svg>
-
-                          {/* Specialists */}
-                          <div className="flex gap-2">
-                            {[
-                              { label: t('hub.wizard.specDev'), icon: Bot },
-                              { label: t('hub.wizard.specResearch'), icon: Bot },
-                              { label: t('hub.wizard.specWriter'), icon: Bot },
-                            ].map(({ label, icon: Icon }, i) => (
-                              <div key={i} className="flex flex-col items-center gap-1">
-                                <div className="flex size-7 items-center justify-center rounded-full bg-muted">
-                                  <Icon className="size-3.5 text-muted-foreground" />
-                                </div>
-                                <span className="text-[10px] text-muted-foreground">{label}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <p className="mt-2.5 text-center text-xs text-muted-foreground">
-                          {t('hub.wizard.diagramCaption')}
-                        </p>
-                      </div>
-
-                      {/* Grant all tools switch */}
-                      <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
-                        <Switch
-                          id="hub-grant-all-tools"
-                          checked={hubGrantAllTools}
-                          onCheckedChange={setHubGrantAllTools}
-                        />
-                        <Label htmlFor="hub-grant-all-tools" className="flex flex-1 cursor-pointer items-center gap-1.5 text-sm font-medium">
-                          <ShieldCheck className="size-3.5 text-primary" />
-                          {t('hub.wizard.grantAllTools')}
-                        </Label>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-center text-muted-foreground">
-                      {t('kin.wizard.subtitle')}
-                    </p>
-                  )}
+                  <p className="text-center text-muted-foreground">
+                    {t('kin.wizard.subtitle')}
+                  </p>
 
                   <Textarea
                     value={wizardDescription}
@@ -851,7 +768,6 @@ export function KinFormModal({
                           kinId={isEdit ? kin.id : null}
                           toolConfig={toolConfig}
                           onToolConfigChange={setToolConfig}
-                          isHub={isEdit && kin?.isHub}
                         />
                       )}
 

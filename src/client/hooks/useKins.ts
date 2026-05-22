@@ -14,7 +14,6 @@ interface KinSummary {
   providerId: string | null
   activeProjectId: string | null
   createdAt: string
-  isHub: boolean
   thinkingEnabled: boolean
   thinkingEffort: KinThinkingEffort | null
 }
@@ -147,7 +146,6 @@ export function useKins() {
         activeProjectId: (data.activeProjectId as string | null) ?? null,
         avatarUrl: (data.avatarUrl as string | null) ?? null,
         createdAt: data.createdAt as string,
-        isHub: false,
         thinkingEnabled: (data.thinkingEnabled as boolean) ?? false,
         thinkingEffort: (data.thinkingEffort as KinThinkingEffort | null) ?? null,
       }
@@ -221,12 +219,6 @@ export function useKins() {
         })
         return next
       })
-    },
-    'settings:hub-changed': (data) => {
-      const newHubKinId = (data.hubKinId as string | null) ?? null
-      setKins((prev) =>
-        prev.map((k) => ({ ...k, isHub: k.id === newHubKinId })),
-      )
     },
     'kin:active-project': (data) => {
       const kinId = data.kinId as string

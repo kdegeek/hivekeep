@@ -87,7 +87,6 @@ export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
   }, [kins, llmModels])
 
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [showCreateHubModal, setShowCreateHubModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingKin, setEditingKin] = useState<Awaited<ReturnType<typeof getKin>> | null>(null)
 
@@ -107,17 +106,10 @@ export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
     setShowCreateModal(true)
   }
 
-  const handleOpenCreateHubModal = () => {
-    refetchModels()
-    setShowCreateHubModal(true)
-  }
-
-  // Derive hub kin ID from the kins list
-  const hubKinId = useMemo(() => kins.find((k) => k.isHub)?.id ?? null, [kins])
-
-  // Onboarding is complete when we have providers + hub + at least one specialist kin
-  const specialistKinCount = useMemo(() => kins.filter((k) => !k.isHub).length, [kins])
-  const onboardingComplete = llmModels.length > 0 && !!hubKinId && specialistKinCount > 0
+  // Onboarding is complete when at least one LLM is configured AND at least
+  // one Kin exists. The Hub Kin distinction was retired — every Kin is a
+  // first-class citizen now that channels bind directly to any of them.
+  const onboardingComplete = llmModels.length > 0 && kins.length > 0
 
   // Suppress the onboarding checklist while initial data is still loading.
   // Without this, the chat momentarily renders the checklist when arriving
@@ -125,21 +117,6 @@ export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
   // "Select a kin" placeholder once data lands. Showing nothing during
   // load is much calmer than the flash.
   const initialDataLoaded = !kinsLoading && (llmModels.length > 0 || kins.length > 0)
-
-  // Create a Hub kin and auto-designate it
-  const handleCreateHubKin = useCallback(async (data: Parameters<typeof createKin>[0]) => {
-    const result = await createKin(data)
-    // Auto-designate as Hub and refresh kin list so checklist updates immediately
-    await api.put('/settings/hub', { kinId: result.id })
-    await refetchKins()
-    return result
-  }, [createKin, refetchKins])
-
-  // Designate an existing kin as Hub
-  const handleSetAsHub = useCallback(async (kinId: string) => {
-    await api.put('/settings/hub', { kinId })
-    await refetchKins()
-  }, [refetchKins])
 
   const handleOpenEditModal = async (kinId?: string) => {
     const id = kinId ?? selectedKin?.id
@@ -243,7 +220,6 @@ export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
         onCreateKin={handleOpenCreateModal}
         onEditKin={handleOpenEditModal}
         onDeleteKin={handleDeleteKin}
-        onSetAsHub={handleSetAsHub}
         onReorderKins={reorderKins}
         onOpenSettings={handleOpenSettings}
       />
@@ -262,30 +238,10 @@ export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
           {/* Connection lost banner */}
           <ConnectionBanner />
 
-          {/* Onboarding progress banner — shown in chat when setup isn't complete */}
-          {!onboardingComplete && selectedKin && (() => {
-            const step = !hubKinId ? { num: 2, label: t('chat.welcome.step2Title'), action: t('chat.welcome.step2Action'), onClick: handleOpenCreateHubModal }
-              : specialistKinCount === 0 ? { num: 3, label: t('chat.welcome.step3Title'), action: t('chat.welcome.step3Action'), onClick: handleOpenCreateModal }
-              : null
-            if (!step) return null
-            return (
-              <div className="flex items-center justify-between gap-3 border-b bg-primary/5 px-4 py-2">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/15">
-                    <Network className="size-3 text-primary" />
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {t('chat.welcome.onboardingStep', { current: step.num, total: 4 })}
-                  </span>
-                  <span className="text-xs font-medium truncate">{step.label}</span>
-                </div>
-                <Button size="sm" variant="ghost" className="shrink-0 gap-1 text-xs text-primary h-7" onClick={step.onClick}>
-                  {step.action}
-                  <ChevronRight className="size-3" />
-                </Button>
-              </div>
-            )
-          })()}
+          {/* Onboarding progress banner removed alongside the Hub Kin
+              concept — the per-step banner mapped 1:1 to 'create hub'
+              / 'create specialist' which are no longer distinct. The
+              full setup checklist below replaces the per-step nudge. */}
 
           {/* Page content */}
           <Routes>
@@ -322,9 +278,8 @@ export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
                     ) : !onboardingComplete ? (
                       /* ── Onboarding not finished: show checklist ── */
                       <GettingStartedChecklist
-                        specialistKinCount={specialistKinCount}
-                        hubKinId={hubKinId}
-                        onCreateHub={handleOpenCreateHubModal}
+                        kinCount={kins.length}
+                        hasLlm={llmModels.length > 0}
                         onCreateKin={handleOpenCreateModal}
                         onOpenSettings={handleOpenSettings}
                       />
@@ -384,24 +339,6 @@ export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
             onGenerateKinConfig={generateKinConfig}
             onGenerateAvatarPreviewFromConfig={generateAvatarPreviewFromConfig}
             hasImageCapability={hasImageCapability}
-          />
-        )}
-
-        {/* Create Hub Kin modal */}
-        {showCreateHubModal && (
-          <KinFormModal
-            open={showCreateHubModal}
-            onOpenChange={setShowCreateHubModal}
-            llmModels={llmModels}
-            imageModels={imageModels}
-            onCreateKin={handleCreateHubKin}
-            onUpdateKin={updateKin}
-            onUploadAvatar={uploadAvatar}
-            onGenerateAvatarPreview={generateAvatarPreview}
-            onGenerateKinConfig={generateKinConfig}
-            onGenerateAvatarPreviewFromConfig={generateAvatarPreviewFromConfig}
-            hasImageCapability={hasImageCapability}
-            hubMode
           />
         )}
 

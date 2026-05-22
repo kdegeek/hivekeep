@@ -15,7 +15,6 @@ interface KinToolsTabProps {
   kinId: string | null
   toolConfig: KinToolConfig | null
   onToolConfigChange: (config: KinToolConfig | null) => void
-  isHub?: boolean
 }
 
 function getEffectiveConfig(config: KinToolConfig | null): KinToolConfig {
@@ -47,7 +46,7 @@ function prettifyToolName(name: string): string {
   return match ? match[1]! : name
 }
 
-export function KinToolsTab({ kinId, toolConfig, onToolConfigChange, isHub }: KinToolsTabProps) {
+export function KinToolsTab({ kinId, toolConfig, onToolConfigChange }: KinToolsTabProps) {
   const { t, i18n } = useTranslation()
   const { nativeTools, pluginTools, mcpTools, isLoading } = useKinTools(kinId)
   const userLang = (i18n.language || 'en').split('-')[0]! // 'fr-FR' → 'fr'
@@ -211,14 +210,6 @@ export function KinToolsTab({ kinId, toolConfig, onToolConfigChange, isHub }: Ki
 
   return (
     <div className="space-y-6">
-      {isHub && (
-        <div className="flex items-start gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
-          <Plug className="mt-0.5 size-4 shrink-0 text-primary" />
-          <p className="text-sm text-muted-foreground">
-            {t('kin.tools.hubNotice')}
-          </p>
-        </div>
-      )}
       {/* Native tools */}
       <div className="space-y-3">
         <h3 className="text-sm font-semibold text-foreground">{t('kin.tools.native')}</h3>
