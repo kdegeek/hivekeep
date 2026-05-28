@@ -811,9 +811,12 @@ export function ChatPanel({ kin, llmModels, modelUnavailable = false, queueState
       )}
 
       {/* Middle: messages + optional tool calls panel */}
-      <div className="flex min-h-0 flex-1">
-        {/* Messages area */}
-        <div ref={scrollAreaRef} className="relative min-h-0 flex-1 flex flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1">
+        {/* Messages area — min-w-0 lets it shrink below its content width when
+            the tool-calls panel opens, so wide content (code blocks) scrolls
+            inside the ScrollArea instead of forcing the row to overflow
+            ChatPanel and spill over the adjacent mini-app panel. */}
+        <div ref={scrollAreaRef} className="relative min-h-0 min-w-0 flex-1 flex flex-col">
         <ScrollArea className="min-h-0 flex-1">
           <SearchHighlightProvider value={searchQuery}>
           <MentionLookupProvider users={mentionableUsers} kins={mentionableKins}>
