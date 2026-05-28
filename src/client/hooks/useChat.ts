@@ -222,10 +222,20 @@ export function useChat(kinId: string | null) {
       // We only seed when the streamed messageId is NOT already in the
       // persisted message list — once `chat:done` fires, the row is in
       // `data.messages` and the snapshot is stale.
+      //
+      // We also require the snapshot to actually carry something to render
+      // (content or reasoning). The server registers the snapshot at the very
+      // start of the turn, before the model emits any token, so it can be
+      // empty during the initial "thinking" window. Seeding an empty snapshot
+      // would render a blank bubble *alongside* the typing indicator (which
+      // already conveys "processing"); the live SSE tokens recreate the bubble
+      // as soon as real output arrives.
       if (data.streamingMessage) {
         const snapshotId = data.streamingMessage.messageId
         const alreadyPersisted = data.messages.some((m) => m.id === snapshotId)
-        if (!alreadyPersisted) {
+        const hasContent = (data.streamingMessage.content ?? '').length > 0
+        const hasReasoning = (data.streamingMessage.reasoning?.length ?? 0) > 0
+        if (!alreadyPersisted && (hasContent || hasReasoning)) {
           seedStreaming({
             messageId: snapshotId,
             content: data.streamingMessage.content,
