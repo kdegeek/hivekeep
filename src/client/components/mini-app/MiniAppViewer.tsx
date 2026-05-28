@@ -625,7 +625,7 @@ export function MiniAppViewer() {
           ref={iframeRef}
           key={iframeKey}
           src={iframeSrc}
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads"
           allow="microphone; camera; clipboard-read; clipboard-write; autoplay"
           className="min-h-0 flex-1 w-full border-0"
           title={app?.name ?? 'Mini App'}
@@ -780,7 +780,7 @@ export function MiniAppViewer() {
                 ref={iframeRef}
                 key={iframeKey}
                 src={iframeSrc}
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads"
                 allow="microphone; camera; clipboard-read; clipboard-write; autoplay"
                 className="min-h-0 flex-1 w-full border-0"
                 title={app?.name ?? 'Mini App'}
