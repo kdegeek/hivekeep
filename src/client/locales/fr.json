@@ -611,8 +611,8 @@
     "empty": "Aucun message. Dites bonjour !",
     "streaming": "Réflexion...",
     "thinking": {
-      "tokens": "~{{value}} tokens",
-      "tokensHint": "Estimation des tokens générés jusqu'ici",
+      "tokens": "{{value}} tokens",
+      "tokensHint": "Tokens générés jusqu'ici (mis à jour à chaque étape)",
       "toolsHint": "Outils utilisés ce tour — cliquer pour voir"
     },
     "contextUsage": "Contexte : ~{{tokens}} / {{max}} tokens ({{percent}} %), inclut prompt système, historique et outils",

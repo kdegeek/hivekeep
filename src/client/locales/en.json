@@ -611,8 +611,8 @@
     },
     "streaming": "Thinking...",
     "thinking": {
-      "tokens": "~{{value}} tokens",
-      "tokensHint": "Estimated output tokens generated so far",
+      "tokens": "{{value}} tokens",
+      "tokensHint": "Output tokens generated so far (updates each step)",
       "toolsHint": "Tool calls this turn — click to view"
     },
     "contextUsage": "Context: ~{{tokens}} / {{max}} tokens ({{percent}}%), includes system prompt, history & tools",

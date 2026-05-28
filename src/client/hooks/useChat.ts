@@ -121,6 +121,7 @@ interface MessagesStreamingSnapshot {
   content: string
   reasoning: Array<{ offset: number; text: string }> | null
   toolCalls: ToolCallEntry[] | null
+  outputTokens: number
   sourceName: string | null
   sourceAvatarUrl: string | null
   startedAt: number
@@ -142,8 +143,8 @@ export function useChat(kinId: string | null) {
   const [isLoadingMore, setIsLoadingMore] = useState(false)
 
   const {
-    streamingMessage, isStreaming, tokenStalled, streamingReasoning,
-    handleToken, handleReasoningToken, handleDone, seedStreaming, resetStreaming, cleanup,
+    streamingMessage, isStreaming, tokenStalled, streamingReasoning, streamingOutputTokens,
+    handleToken, handleReasoningToken, handleTokenUsage, handleDone, seedStreaming, resetStreaming, cleanup,
   } = useChatStreaming({ trackTokenStall: true })
 
   // Map task title → taskId, populated from SSE events so we can enrich
@@ -240,6 +241,7 @@ export function useChat(kinId: string | null) {
             messageId: snapshotId,
             content: data.streamingMessage.content,
             reasoning: data.streamingMessage.reasoning,
+            outputTokens: data.streamingMessage.outputTokens,
             sourceName: data.streamingMessage.sourceName,
             sourceAvatarUrl: data.streamingMessage.sourceAvatarUrl,
           })
@@ -375,6 +377,13 @@ export function useChat(kinId: string | null) {
         messageId: data.messageId as string,
         token: data.token as string,
       })
+    },
+
+    'chat:token-usage': (data) => {
+      if (data.kinId !== kinId) return
+      if (data.taskId) return
+      if (data.sessionId) return
+      handleTokenUsage(data.outputTokens as number)
     },
 
     'chat:done': (data) => {
@@ -702,6 +711,7 @@ export function useChat(kinId: string | null) {
     messages,
     streamingMessage,
     streamingReasoning,
+    streamingOutputTokens,
     liveTasks,
     liveCompacting,
     isLoading,

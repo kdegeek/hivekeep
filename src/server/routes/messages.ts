@@ -266,6 +266,7 @@ messageRoutes.get('/', async (c) => {
         content: streamSnapshot.content,
         reasoning: streamSnapshot.reasoning.length > 0 ? streamSnapshot.reasoning : null,
         toolCalls: streamSnapshot.toolCalls.length > 0 ? streamSnapshot.toolCalls : null,
+        outputTokens: streamSnapshot.outputTokens,
         sourceName: streamSnapshot.sourceName,
         sourceAvatarUrl: streamSnapshot.sourceAvatarUrl,
         startedAt: streamSnapshot.startedAt,

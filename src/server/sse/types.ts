@@ -7,6 +7,7 @@ export type SSEEventType =
   | 'chat:tool-result'
   | 'chat:reasoning-token'
   | 'chat:reasoning-done'
+  | 'chat:token-usage'
   | 'chat:cleared'
   | 'task:status'
   | 'task:done'

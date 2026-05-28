@@ -229,6 +229,9 @@ export interface ActiveKinStreamSnapshot {
   content: string
   reasoning: Array<{ offset: number; text: string }>
   toolCalls: Array<{ id: string; name: string; args: unknown; result?: unknown; offset: number }>
+  /** Running sum of output tokens reported so far this turn (one increment per
+   *  completed step). Drives the live token counter in the thinking bubble. */
+  outputTokens: number
   sourceName: string | null
   sourceAvatarUrl: string | null
   startedAt: number
@@ -1359,6 +1362,7 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
         content: '',
         reasoning: [],
         toolCalls: [],
+        outputTokens: 0,
         sourceName: kin.name,
         sourceAvatarUrl: kin.avatarPath ? `/api/uploads/kins/${kin.id}/avatar.${kin.avatarPath.split('.').pop()}` : null,
         startedAt: Date.now(),
@@ -1544,6 +1548,7 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
       content: '',
       reasoning: reasoningSegments,
       toolCalls: toolCallsLog,
+      outputTokens: 0,
       sourceName: kin.name,
       sourceAvatarUrl: kin.avatarPath ? `/api/uploads/kins/${kin.id}/avatar.${kin.avatarPath.split('.').pop()}` : null,
       startedAt: Date.now(),
@@ -1616,7 +1621,21 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
           'Dropped pre-narration from intermediate step',
         ),
       }, step)
-      if (outcome.usage) stepUsages.push(outcome.usage)
+      if (outcome.usage) {
+        stepUsages.push(outcome.usage)
+        // Push the running output-token total to clients so the thinking
+        // bubble can show real tokens accumulating across steps. Usage is only
+        // known at each step's `finish` chunk, so this increments per step
+        // (not per token) — which is the finest granularity the provider gives.
+        if (outcome.usage.outputTokens) {
+          kinStreamSnapshot.outputTokens += outcome.usage.outputTokens
+          sseManager.sendToKin(kinId, {
+            type: 'chat:token-usage',
+            kinId,
+            data: { messageId: assistantMessageId, outputTokens: kinStreamSnapshot.outputTokens },
+          })
+        }
+      }
 
       if (outcome.error && !outcome.wasAborted) throw outcome.error
       if (outcome.wasAborted) wasAborted = true

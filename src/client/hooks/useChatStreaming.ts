@@ -36,6 +36,8 @@ export interface StreamingSnapshot {
   messageId: string
   content: string
   reasoning?: Array<{ offset: number; text: string }> | null
+  /** Running output-token total reported by the server for this in-flight turn */
+  outputTokens?: number | null
   sourceName?: string | null
   sourceAvatarUrl?: string | null
 }
@@ -59,6 +61,10 @@ export function useChatStreaming(options?: UseChatStreamingOptions) {
   const [isStreaming, setIsStreaming] = useState(false)
   const [tokenStalled, setTokenStalled] = useState(false)
   const [streamingReasoning, setStreamingReasoning] = useState('')
+  // Running output-token total for the current turn, fed by `chat:token-usage`
+  // SSE events (one per completed step) — drives the live counter in the
+  // thinking bubble.
+  const [streamingOutputTokens, setStreamingOutputTokens] = useState(0)
 
   const streamingContentRef = useRef('')
   const streamingMessageIdRef = useRef<string | null>(null)
@@ -181,6 +187,14 @@ export function useChatStreaming(options?: UseChatStreamingOptions) {
   }, [trackTokenStall])
 
   /**
+   * Handle a `chat:token-usage` SSE event — the server's running output-token
+   * total for the current turn. Monotonic; ignore stale/lower values.
+   */
+  const handleTokenUsage = useCallback((outputTokens: number) => {
+    setStreamingOutputTokens((prev) => (outputTokens > prev ? outputTokens : prev))
+  }, [])
+
+  /**
    * Handle a `chat:done` SSE event.
    * Flushes pending timers, builds the promoted ChatMessage (or null if no
    * streaming was active), and resets internal state.
@@ -236,6 +250,7 @@ export function useChatStreaming(options?: UseChatStreamingOptions) {
     setStreamingMessage(null)
     setTokenStalled(false)
     setStreamingReasoning('')
+    setStreamingOutputTokens(0)
     streamingContentRef.current = ''
     streamingReasoningRef.current = ''
     streamingMessageIdRef.current = null
@@ -273,6 +288,10 @@ export function useChatStreaming(options?: UseChatStreamingOptions) {
     if (reasoningText && streamingReasoningRef.current.length < reasoningText.length) {
       streamingReasoningRef.current = reasoningText
       setStreamingReasoning(reasoningText)
+    }
+
+    if (typeof snapshot.outputTokens === 'number') {
+      setStreamingOutputTokens((prev) => Math.max(prev, snapshot.outputTokens!))
     }
 
     setIsStreaming(true)
@@ -331,6 +350,7 @@ export function useChatStreaming(options?: UseChatStreamingOptions) {
     setStreamingMessage(null)
     setTokenStalled(false)
     setStreamingReasoning('')
+    setStreamingOutputTokens(0)
     streamingContentRef.current = ''
     streamingReasoningRef.current = ''
     streamingMessageIdRef.current = null
@@ -350,8 +370,10 @@ export function useChatStreaming(options?: UseChatStreamingOptions) {
     isStreaming,
     tokenStalled,
     streamingReasoning,
+    streamingOutputTokens,
     handleToken,
     handleReasoningToken,
+    handleTokenUsage,
     handleDone,
     seedStreaming,
     resetStreaming,
