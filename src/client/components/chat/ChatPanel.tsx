@@ -702,8 +702,34 @@ export function ChatPanel({ kin, llmModels, modelUnavailable = false, queueState
     | { kind: 'liveTask'; task: LiveTask }
 
   const timeline = useMemo<TimelineItem[]>(() => {
-    const items: TimelineItem[] = processedMessages.map((entry) => ({ kind: 'message' as const, entry }))
+    // Anchor live task cards to the assistant message that spawned them when
+    // we know it (triggerMessageId set by the task:status SSE, see useChat).
+    // A task spawned mid-turn carries the id of the in-flight assistant
+    // message; rendering the card right under that message keeps the logical
+    // order. Tasks with no trigger (webhooks, crons, restored-after-navigation)
+    // or whose trigger message isn't in the current window fall back to the
+    // createdAt-based placement as standalone timeline items.
+    const messageIds = new Set(processedMessages.map((e) => e.msg.id))
+    const anchoredByMessage = new Map<string, LiveTask[]>()
+    const orphanTasks: LiveTask[] = []
     for (const task of liveTasks) {
+      if (task.triggerMessageId && messageIds.has(task.triggerMessageId)) {
+        const list = anchoredByMessage.get(task.triggerMessageId)
+        if (list) list.push(task)
+        else anchoredByMessage.set(task.triggerMessageId, [task])
+      } else {
+        orphanTasks.push(task)
+      }
+    }
+
+    // Sort anchored tasks within each message group by createdAt so multiple
+    // spawns in the same turn keep a stable, chronological order.
+    for (const list of anchoredByMessage.values()) {
+      list.sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0))
+    }
+
+    const items: TimelineItem[] = processedMessages.map((entry) => ({ kind: 'message' as const, entry }))
+    for (const task of orphanTasks) {
       items.push({ kind: 'liveTask' as const, task })
     }
     // Stable sort by createdAt (string ISO dates compare lexicographically)
@@ -717,7 +743,22 @@ export function ChatPanel({ kin, llmModels, modelUnavailable = false, queueState
       if (a.kind === 'liveTask' && b.kind === 'message') return 1
       return 0
     })
-    return items
+
+    // Splice anchored tasks in right after their trigger message.
+    if (anchoredByMessage.size === 0) return items
+    const result: TimelineItem[] = []
+    for (const item of items) {
+      result.push(item)
+      if (item.kind === 'message') {
+        const anchored = anchoredByMessage.get(item.entry.msg.id)
+        if (anchored) {
+          for (const task of anchored) {
+            result.push({ kind: 'liveTask' as const, task })
+          }
+        }
+      }
+    }
+    return result
   }, [processedMessages, liveTasks])
 
   // Mark initial load as done after the first batch of messages is processed

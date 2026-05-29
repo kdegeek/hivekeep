@@ -94,6 +94,13 @@ export interface LiveTask {
   result: string | null
   error: string | null
   createdAt: string
+  /** Id of the assistant message that triggered this task (spawn_self /
+   *  spawn_kin fired mid-turn). Set from the `task:status` SSE payload. Lets
+   *  the timeline anchor the card directly under its spawning message instead
+   *  of sorting it by createdAt (which lands before the message, since the
+   *  assistant row is only persisted at end-of-turn). Null for tasks spawned
+   *  outside a main-thread turn (webhooks, crons) or restored after navigation. */
+  triggerMessageId: string | null
 }
 
 /** Live compacting card rendered in the conversation while compacting is active */
@@ -281,6 +288,9 @@ export function useChat(kinId: string | null) {
               result: null,
               error: null,
               createdAt: t.createdAt,
+              // Tasks restored after navigation have no live stream to anchor
+              // against — fall back to createdAt-based placement.
+              triggerMessageId: null,
             }))
           return newTasks.length > 0 ? [...prev, ...newTasks] : prev
         })
@@ -493,6 +503,7 @@ export function useChat(kinId: string | null) {
             result: null,
             error: null,
             createdAt: new Date().toISOString(),
+            triggerMessageId: (data.triggerMessageId as string) ?? null,
           },
         ]
       })

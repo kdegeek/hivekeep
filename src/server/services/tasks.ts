@@ -11,7 +11,7 @@ import { getSystemContext } from '@/server/services/system-context'
 import { buildSegmentedMessages } from '@/server/services/llm-cache-hints'
 import { stringifyToolResultValue } from '@/server/llm/core/vercel-bridge'
 import type { KinbotMessage, KinbotMessageBlock } from '@/server/llm/llm/types'
-import { resolveThinkingConfig, isContextTooLargeError, sanitizePersistedToolCalls } from '@/server/services/kin-engine'
+import { resolveThinkingConfig, isContextTooLargeError, sanitizePersistedToolCalls, getActiveKinStreamSnapshot } from '@/server/services/kin-engine'
 import { toolRegistry } from '@/server/tools/index'
 import { resolveMCPTools } from '@/server/services/mcp'
 import { resolveCustomTools } from '@/server/services/custom-tools'
@@ -547,6 +547,17 @@ export async function spawnTask(params: SpawnParams) {
   const executingKinId = params.sourceKinId ?? params.parentKinId
   const executingKin = await db.select().from(kins).where(eq(kins.id, executingKinId)).get()
 
+  // Anchor the live task card to the assistant message that triggered the
+  // spawn. When spawn_self / spawn_kin fire mid-turn, the parent Kin still has
+  // an in-flight main-thread stream whose messageId IS the spawning assistant
+  // message (the same id is reused as the persisted DB row at chat:done). The
+  // client uses this to render the card directly under that message instead of
+  // sorting it by createdAt (which lands before the message, since the row is
+  // only persisted at end-of-turn). Null for tasks spawned outside a main-thread
+  // turn (webhooks, crons, retries, sub-Kin spawns) — those fall back to the
+  // createdAt-based placement.
+  const triggerMessageId = getActiveKinStreamSnapshot(params.parentKinId)?.messageId ?? null
+
   // Emit SSE event with metadata for live task card
   sseManager.sendToKin(params.parentKinId, {
     type: 'task:status',
@@ -559,6 +570,7 @@ export async function spawnTask(params: SpawnParams) {
       senderName: executingKin?.name ?? null,
       senderAvatarUrl: kinAvatarUrl(executingKinId, executingKin?.avatarPath ?? null, executingKin?.updatedAt),
       concurrencyGroup,
+      triggerMessageId,
     },
   })
 
