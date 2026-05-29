@@ -93,6 +93,19 @@ const PRESETS: Record<Exclude<SubKinPreset, 'all'>, PresetConfig> = {
       // research tasks.
       'recall',
       'list_memories',
+
+      // Project knowledge — a ticket-bound sub-Kin must be able to read AND
+      // contribute durable project knowledge (architectural decisions,
+      // conventions, gotchas it uncovers while working the ticket). Without
+      // these in the 'code' preset, the knowledge tools get filtered out of
+      // every ticket sub-task and calling them returns "has no execute
+      // function". The tools self-gate to the ticket's project anyway.
+      'add_project_knowledge',
+      'search_project_knowledge',
+      'list_project_knowledge',
+      'get_project_knowledge',
+      'update_project_knowledge',
+      'pin_project_knowledge',
     ],
   },
   research: {

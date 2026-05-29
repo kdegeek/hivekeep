@@ -17,6 +17,11 @@ function buildSampleToolMap(): Record<string, string> {
     // Code preset extras
     'get_project', 'list_tickets', 'get_ticket', 'update_ticket', 'web_search', 'browse_url',
     'recall', 'list_memories',
+    // Project knowledge (code preset)
+    'add_project_knowledge', 'search_project_knowledge', 'get_project_knowledge',
+    'list_project_knowledge', 'update_project_knowledge', 'pin_project_knowledge',
+    // Knowledge tool no preset whitelists (destructive)
+    'delete_project_knowledge',
     // Research-only extras
     'memorize', 'search_history', 'screenshot_url',
     // Ops-only extras
@@ -70,6 +75,25 @@ describe('applyPreset', () => {
     expect(filtered).not.toHaveProperty('add_mcp_server')
     expect(filtered).not.toHaveProperty('create_channel')
     expect(filtered).not.toHaveProperty('execute_sql')
+  })
+
+  it("'code' keeps the project-knowledge tools so ticket sub-Kins can read + contribute", () => {
+    // Regression: these were registered but absent from the 'code' preset,
+    // so every ticket sub-task had them filtered out and calling one
+    // returned "Tool add_project_knowledge has no execute function".
+    const filtered = applyPreset(buildSampleToolMap(), 'code')
+    for (const t of [
+      'add_project_knowledge',
+      'search_project_knowledge',
+      'get_project_knowledge',
+      'list_project_knowledge',
+      'update_project_knowledge',
+      'pin_project_knowledge',
+    ]) {
+      expect(filtered).toHaveProperty(t)
+    }
+    // delete is destructive and intentionally NOT in the preset.
+    expect(filtered).not.toHaveProperty('delete_project_knowledge')
   })
 
   it("'research' keeps history + memorize + screenshot, drops project write tools", () => {
