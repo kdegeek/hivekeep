@@ -3,11 +3,13 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/client/components/ui/button'
 import { Label } from '@/client/components/ui/label'
+import { Switch } from '@/client/components/ui/switch'
 import { MarkdownEditor } from '@/client/components/ui/markdown-editor'
 import { api, getErrorMessage, toastError } from '@/client/lib/api'
 import { Skeleton } from '@/client/components/ui/skeleton'
 import { InfoTip } from '@/client/components/common/InfoTip'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
+import { getToolCallsDefaultOpen, setToolCallsDefaultOpen } from '@/client/lib/tool-call-prefs'
 
 export function GeneralSettings() {
   const { t } = useTranslation()
@@ -21,6 +23,14 @@ export function GeneralSettings() {
 
   // Saving state
   const [saving, setSaving] = useState(false)
+
+  // Interface preference: expand tool calls by default (client-side, applies instantly)
+  const [toolsDefaultOpen, setToolsDefaultOpenState] = useState(getToolCallsDefaultOpen)
+
+  const handleToolsDefaultOpenChange = (value: boolean) => {
+    setToolsDefaultOpenState(value)
+    setToolCallsDefaultOpen(value)
+  }
 
   useEffect(() => {
     setFetchError(null)
@@ -136,6 +146,26 @@ export function GeneralSettings() {
             {t('common.discard', 'Discard')}
           </Button>
         )}
+      </div>
+
+      {/* Interface preferences (applied instantly, stored locally) */}
+      <div className="space-y-3 border-t border-border/60 pt-6">
+        <h3 className="text-sm font-medium">{t('settings.general.interface.title')}</h3>
+        <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/30 px-4 py-3">
+          <div className="space-y-0.5">
+            <Label htmlFor="tools-default-open" className="cursor-pointer">
+              {t('settings.general.toolsDefaultOpen.label')}
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              {t('settings.general.toolsDefaultOpen.hint')}
+            </p>
+          </div>
+          <Switch
+            id="tools-default-open"
+            checked={toolsDefaultOpen}
+            onCheckedChange={handleToolsDefaultOpenChange}
+          />
+        </div>
       </div>
 
       <HelpPanel

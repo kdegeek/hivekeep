@@ -11,6 +11,7 @@ import { TOOL_DOMAIN_META } from '@/shared/constants'
 import { ToolDomainIcon } from '@/client/components/common/ToolDomainIcon'
 import { JsonViewer } from '@/client/components/common/JsonViewer'
 import { getRenderer, getPreviewRenderer } from '@/client/lib/tool-renderers'
+import { getToolCallsDefaultOpen } from '@/client/lib/tool-call-prefs'
 import type { ToolCallViewItem, ToolCallStatus } from '@/client/hooks/useToolCalls'
 
 const STATUS_ICONS: Record<ToolCallStatus, typeof CheckCircle2> = {
@@ -31,7 +32,7 @@ interface ToolCallItemProps {
 
 export const ToolCallItem = memo(function ToolCallItem({ toolCall }: ToolCallItemProps) {
   const { t } = useTranslation()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(getToolCallsDefaultOpen)
 
   const meta = TOOL_DOMAIN_META[toolCall.domain]
   const StatusIcon = STATUS_ICONS[toolCall.status]

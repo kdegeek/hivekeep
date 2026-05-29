@@ -1046,6 +1046,13 @@
       "hubSaved": "Hub Kin updated",
       "hubKinNone": "None",
       "fetchError": "Failed to load settings",
+      "interface": {
+        "title": "Interface"
+      },
+      "toolsDefaultOpen": {
+        "label": "Expand tool calls by default",
+        "hint": "Show tool call details expanded in every chat (main chat, quick session, tasks). You can still collapse individual calls."
+      },
       "help": {
         "content": "General settings control platform-wide behavior that applies to all your Kins. The global prompt lets you define instructions every Kin follows.",
         "bullet1": "The global prompt is injected into every Kin's system prompt. Use it for universal rules or guidelines"

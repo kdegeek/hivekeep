@@ -1046,6 +1046,13 @@
       "hubSaved": "Kin Hub mis à jour",
       "hubKinNone": "Aucun",
       "fetchError": "Impossible de charger les paramètres",
+      "interface": {
+        "title": "Interface"
+      },
+      "toolsDefaultOpen": {
+        "label": "Déplier les appels d'outils par défaut",
+        "hint": "Affiche les détails des appels d'outils dépliés dans tous les tchats (tchat principal, session rapide, tâches). Vous pouvez toujours replier un appel individuellement."
+      },
       "help": {
         "content": "Les paramètres généraux contrôlent le comportement global de la plateforme, applicable à tous vos Kins. Le prompt global permet de définir des instructions suivies par chaque Kin.",
         "bullet1": "Le prompt global est injecté dans le prompt système de chaque Kin. Utilisez-le pour des règles ou directives universelles"
