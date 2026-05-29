@@ -17,25 +17,16 @@ import type {
   ToolRegistration as SdkToolRegistration,
   Tool,
 } from '@kinbot-developer/sdk'
-import type { KinToolConfig } from '@/shared/types'
 
 export type { ToolAvailability } from '@kinbot-developer/sdk'
 
 /**
- * Server-side widened execution context. Same as the SDK's shape plus
- * `toolConfig` — the parsed `kins.tool_config` row deserialized once
- * per turn by the engine. Native tools read fields like
- * `allowPrivateNetworkHttpRequests` from it.
- *
- * Plugin tools see the narrower SDK shape; the host still passes the
- * full object at runtime, so a plugin that really needs to read
- * `toolConfig` can cast.
+ * Server-side widened execution context. Same as the SDK's shape plus a
+ * per-task `workspaceOverride`. Tool grants are resolved entirely through
+ * toolboxes now (see services/toolset-resolver.ts) — there is no per-Kin tool
+ * config threaded through the context anymore.
  */
 export interface ToolExecutionContext extends SdkToolExecutionContext {
-  /** Parsed per-Kin tool authorization config. Populated by the engine
-   *  for every native tool call; native tools read fields like
-   *  `allowPrivateNetworkHttpRequests` directly from here. */
-  toolConfig?: KinToolConfig | null
   /** Per-task workspace override. Set by the sub-task runner when the
    *  ticket's project has a ready clone — every filesystem + shell tool
    *  scopes its cwd to `path` instead of the Kin's static workspace, and
@@ -53,7 +44,7 @@ export type ToolFactory = (ctx: ToolExecutionContext) => Tool<any, any>
 
 /** Server-side ToolRegistration — same as the SDK shape but the
  *  `create` factory accepts the widened ToolExecutionContext (with
- *  `toolConfig`). Assignment-compatible with the SDK shape so plugin
+ *  `workspaceOverride`). Assignment-compatible with the SDK shape so plugin
  *  tools registered against the SDK type slot in seamlessly. */
 export interface ToolRegistration extends Omit<SdkToolRegistration, 'create'> {
   create: ToolFactory

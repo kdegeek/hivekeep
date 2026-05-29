@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { api } from '@/client/lib/api'
 import { useSSE, useSSEStatus } from '@/client/hooks/useSSE'
 import { useModels, type ProviderModel } from '@/client/hooks/useModels'
-import type { KinToolConfig, KinCompactingConfig, KinThinkingConfig, KinThinkingEffort, ContextTokenBreakdown, ContextPipelineStatus } from '@/shared/types'
+import type { KinCompactingConfig, KinThinkingConfig, KinThinkingEffort, ContextTokenBreakdown, ContextPipelineStatus } from '@/shared/types'
 
 interface KinSummary {
   id: string
@@ -22,7 +22,8 @@ interface KinDetail extends KinSummary {
   character: string
   expertise: string
   workspacePath: string
-  toolConfig: KinToolConfig | null
+  /** Toolbox selection (sole tool-grant primitive). Null → 'all' built-in. */
+  toolboxIds: string[] | null
   compactingConfig: KinCompactingConfig | null
   thinkingConfig: KinThinkingConfig | null
   mcpServers: { id: string; name: string }[]
@@ -36,8 +37,6 @@ export interface GeneratedKinConfig {
   character: string
   expertise: string
   suggestedModel: string
-  disableToolDomains: string[]
-  enableOptInToolDomains: string[]
 }
 
 interface CreateKinData {
@@ -48,6 +47,7 @@ interface CreateKinData {
   expertise: string
   model: string
   providerId?: string | null
+  toolboxIds?: string[] | null
 }
 
 interface UpdateKinData {
@@ -58,7 +58,7 @@ interface UpdateKinData {
   expertise?: string
   model?: string
   providerId?: string | null
-  toolConfig?: KinToolConfig | null
+  toolboxIds?: string[] | null
   compactingConfig?: KinCompactingConfig | null
   thinkingConfig?: KinThinkingConfig | null
 }

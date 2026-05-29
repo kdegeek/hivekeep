@@ -1,26 +1,19 @@
 import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test'
 
-// We need to test the private URL guard indirectly through the tool's execute
-// function. The direct helper below mirrors the source logic for edge-case unit
-// coverage while integration tests verify the real tool behavior.
+// We test the URL guard indirectly through the tool's execute function. The
+// direct helper below mirrors the source logic for edge-case unit coverage
+// while integration tests verify the real tool behavior.
+//
+// The TOOLBOX is the sole tool-grant primitive: there is no per-Kin network
+// flag. When `http_request` is granted it may reach private/local hosts — the
+// only hard, non-toggleable blocks are loopback / unspecified addresses, the
+// cloud-metadata endpoint, non-HTTP(S) schemes, and invalid URLs.
 
 type UrlSafety =
-  | { allowed: true; privateNetwork: boolean }
+  | { allowed: true }
   | { allowed: false; reason: string }
 
-function isPrivateIpv4(host: string): boolean {
-  return (
-    host.startsWith('10.') ||
-    host.startsWith('192.168.') ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
-  )
-}
-
-function isLocalNetworkHostname(host: string): boolean {
-  return host.endsWith('.internal') || host.endsWith('.local')
-}
-
-function checkUrlSafety(urlStr: string, allowPrivateNetwork: boolean): UrlSafety {
+function checkUrlSafety(urlStr: string): UrlSafety {
   let url: URL
   try {
     url = new URL(urlStr)
@@ -47,66 +40,40 @@ function checkUrlSafety(urlStr: string, allowPrivateNetwork: boolean): UrlSafety
     return { allowed: false, reason: 'Requests to link-local metadata endpoints are not allowed' }
   }
 
-  if (isPrivateIpv4(host) || isLocalNetworkHostname(host)) {
-    if (allowPrivateNetwork) return { allowed: true, privateNetwork: true }
-    return { allowed: false, reason: 'Requests to private/internal addresses are not allowed' }
-  }
-
-  return { allowed: true, privateNetwork: false }
+  return { allowed: true }
 }
 
-function isAllowed(url: string, allowPrivateNetwork = false): boolean {
-  return checkUrlSafety(url, allowPrivateNetwork).allowed
+function isAllowed(url: string): boolean {
+  return checkUrlSafety(url).allowed
 }
 
 describe('http_request URL safety', () => {
-  it('blocks localhost and loopback addresses even when private network access is enabled', () => {
+  it('always blocks localhost and loopback / unspecified addresses', () => {
     expect(isAllowed('http://localhost/api')).toBe(false)
     expect(isAllowed('http://127.0.0.1/')).toBe(false)
     expect(isAllowed('http://[::1]/')).toBe(false)
     expect(isAllowed('http://0.0.0.0/')).toBe(false)
-
-    expect(isAllowed('http://localhost/api', true)).toBe(false)
-    expect(isAllowed('http://127.0.0.1/', true)).toBe(false)
-    expect(isAllowed('http://[::1]/', true)).toBe(false)
-    expect(isAllowed('http://0.0.0.0/', true)).toBe(false)
   })
 
-  it('blocks RFC1918 private IP ranges by default', () => {
-    expect(isAllowed('http://10.0.0.1/')).toBe(false)
-    expect(isAllowed('http://10.255.255.255/')).toBe(false)
-    expect(isAllowed('http://192.168.1.1/')).toBe(false)
-    expect(isAllowed('http://192.168.0.100:9090/')).toBe(false)
-    expect(isAllowed('http://172.16.0.1/')).toBe(false)
-    expect(isAllowed('http://172.17.0.2/')).toBe(false)
-    expect(isAllowed('http://172.20.5.5/')).toBe(false)
-    expect(isAllowed('http://172.31.255.255/')).toBe(false)
+  it('allows RFC1918 private IP ranges (granting the tool is the gate)', () => {
+    expect(isAllowed('http://10.0.0.1/')).toBe(true)
+    expect(isAllowed('http://10.255.255.255/')).toBe(true)
+    expect(isAllowed('http://192.168.1.1/')).toBe(true)
+    expect(isAllowed('http://192.168.0.100:9090/')).toBe(true)
+    expect(isAllowed('http://172.16.0.1/')).toBe(true)
+    expect(isAllowed('http://172.17.0.2/')).toBe(true)
+    expect(isAllowed('http://172.20.5.5/')).toBe(true)
+    expect(isAllowed('http://172.31.255.255/')).toBe(true)
   })
 
-  it('allows RFC1918 private IP ranges when explicitly enabled', () => {
-    expect(isAllowed('http://10.0.0.1/', true)).toBe(true)
-    expect(isAllowed('http://10.255.255.255/', true)).toBe(true)
-    expect(isAllowed('http://192.168.1.1/', true)).toBe(true)
-    expect(isAllowed('http://192.168.0.100:9090/', true)).toBe(true)
-    expect(isAllowed('http://172.16.0.1/', true)).toBe(true)
-    expect(isAllowed('http://172.17.0.2/', true)).toBe(true)
-    expect(isAllowed('http://172.20.5.5/', true)).toBe(true)
-    expect(isAllowed('http://172.31.255.255/', true)).toBe(true)
-  })
-
-  it('blocks link-local metadata endpoint even when private network access is enabled', () => {
+  it('always blocks the link-local metadata endpoint', () => {
     expect(isAllowed('http://169.254.169.254/latest/meta-data/')).toBe(false)
-    expect(isAllowed('http://169.254.169.254/latest/meta-data/', true)).toBe(false)
   })
 
-  it('allows local-network hostnames only when explicitly enabled', () => {
-    expect(isAllowed('http://myservice.internal/')).toBe(false)
-    expect(isAllowed('http://db.cluster.internal:5432/')).toBe(false)
-    expect(isAllowed('http://printer.local/')).toBe(false)
-
-    expect(isAllowed('http://myservice.internal/', true)).toBe(true)
-    expect(isAllowed('http://db.cluster.internal:5432/', true)).toBe(true)
-    expect(isAllowed('http://printer.local/', true)).toBe(true)
+  it('allows local-network hostnames (granting the tool is the gate)', () => {
+    expect(isAllowed('http://myservice.internal/')).toBe(true)
+    expect(isAllowed('http://db.cluster.internal:5432/')).toBe(true)
+    expect(isAllowed('http://printer.local/')).toBe(true)
   })
 
   it('blocks invalid and non-HTTP URLs', () => {
@@ -165,33 +132,17 @@ describe('httpRequestTool execute', () => {
     globalThis.fetch = originalFetch
   })
 
-  async function getExecute(allowPrivateNetworkHttpRequests = false) {
+  async function getExecute() {
     const { httpRequestTool } = await import('./http-request-tools')
     const created = httpRequestTool.create({
       kinId: 'kin-1',
       isSubKin: false,
-      toolConfig: {
-        disabledNativeTools: [],
-        mcpAccess: {},
-        allowPrivateNetworkHttpRequests,
-      },
     })
     return (created as any).execute
   }
 
-  it('blocks requests to private IPs with SSRF error by default', async () => {
+  it('allows requests to private IPs (no network flag — granting is the gate)', async () => {
     const execute = await getExecute()
-    const result = await execute({
-      method: 'GET',
-      url: 'http://192.168.1.1/admin',
-      timeout_seconds: 5,
-    })
-    expect(result).toEqual({ error: 'Requests to private/internal addresses are not allowed' })
-    expect(mockFetchFn).not.toHaveBeenCalled()
-  })
-
-  it('allows requests to private IPs when explicitly enabled', async () => {
-    const execute = await getExecute(true)
     const result = await execute({
       method: 'GET',
       url: 'http://192.168.1.1/admin',
@@ -202,8 +153,8 @@ describe('httpRequestTool execute', () => {
     expect(mockFetchFn).toHaveBeenCalledTimes(1)
   })
 
-  it('allows requests to local-network hostnames when explicitly enabled', async () => {
-    const execute = await getExecute(true)
+  it('allows requests to local-network hostnames', async () => {
+    const execute = await getExecute()
     const result = await execute({
       method: 'GET',
       url: 'http://homeassistant.local:8123/api/',
@@ -213,8 +164,8 @@ describe('httpRequestTool execute', () => {
     expect(mockFetchFn).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps blocking localhost when private network access is enabled', async () => {
-    const execute = await getExecute(true)
+  it('keeps blocking localhost', async () => {
+    const execute = await getExecute()
     const result = await execute({
       method: 'GET',
       url: 'http://localhost:3000/secret',
@@ -224,8 +175,8 @@ describe('httpRequestTool execute', () => {
     expect(mockFetchFn).not.toHaveBeenCalled()
   })
 
-  it('keeps blocking cloud metadata when private network access is enabled', async () => {
-    const execute = await getExecute(true)
+  it('keeps blocking cloud metadata', async () => {
+    const execute = await getExecute()
     const result = await execute({
       method: 'GET',
       url: 'http://169.254.169.254/latest/meta-data/',

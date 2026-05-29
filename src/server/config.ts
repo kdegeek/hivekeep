@@ -530,9 +530,9 @@ export const config = {
   },
 
   // Tier 3: stateful, multi-turn browser sessions (browser_open_session etc.)
-  // Default: enabled. The browser_* tools are still per-Kin opt-in via
-  // tool_config.enabledOptInTools, so sessions cannot be used by accident.
-  // Set BROWSER_SESSIONS_ENABLED=false to disable globally.
+  // Default: enabled. The browser_* tools are defaultDisabled, so they only
+  // reach a Kin when a granted toolbox lists them by name — sessions cannot be
+  // used by accident. Set BROWSER_SESSIONS_ENABLED=false to disable globally.
   browserSessions: {
     enabled: process.env.BROWSER_SESSIONS_ENABLED !== 'false',
     /** Hard TTL for any session, regardless of activity. */

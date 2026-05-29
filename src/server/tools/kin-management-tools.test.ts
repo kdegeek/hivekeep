@@ -35,9 +35,22 @@ const mockGetKinDetails = mock(() => Promise.resolve({
   expertise: 'Everything',
   model: 'gpt-4o',
   mcpServers: [] as any[],
-  toolConfig: null as string | null,
+  toolboxIds: null as string | null,
   createdAt: new Date(),
 }))
+
+// Toolbox lookups used by update_kin (name → id) and get_kin_details (id → name).
+// A small in-memory registry covering the built-ins the tests reference.
+const TOOLBOX_REGISTRY: Record<string, { id: string; name: string }> = {
+  code: { id: 'tb-code', name: 'code' },
+  research: { id: 'tb-research', name: 'research' },
+  all: { id: 'tb-all', name: 'all' },
+}
+const TOOLBOX_BY_ID: Record<string, { id: string; name: string }> = Object.fromEntries(
+  Object.values(TOOLBOX_REGISTRY).map((b) => [b.id, b]),
+)
+const mockGetToolboxByName = mock((name: string) => TOOLBOX_REGISTRY[name] ?? null)
+const mockGetToolbox = mock((id: string) => TOOLBOX_BY_ID[id] ?? null)
 
 const mockGenerateAndSaveAvatar = mock(() => Promise.resolve('/api/uploads/kins/new-kin-id/avatar.png'))
 
@@ -57,6 +70,11 @@ mock.module('@/server/services/kins', () => ({
 
 mock.module('@/server/services/kin-resolver', () => ({
   resolveKinId: mockResolveKinId,
+}))
+
+mock.module('@/server/services/toolboxes', () => ({
+  getToolboxByName: mockGetToolboxByName,
+  getToolbox: mockGetToolbox,
 }))
 
 mock.module('@/server/logger', () => ({
@@ -313,20 +331,22 @@ describe('updateKinTool', () => {
     expect(result).toEqual({ error: 'Invalid slug format' })
   })
 
-  itMocked('rejects invalid tool_config JSON', async () => {
+  itMocked('rejects an unknown toolbox name', async () => {
     mockResolveKinId.mockReturnValueOnce('target-kin-id')
 
     const t = makeTool(updateKinTool)
     const result = await t.execute({
       kin_id: 'target-kin',
-      tool_config: 'not valid json {{{',
+      toolboxes: ['does-not-exist'],
       generate_avatar: false,
     }, { toolCallId: 'tc10', messages: [] })
 
-    expect(result).toEqual({ error: 'Invalid tool_config JSON format' })
+    expect(result).toEqual({
+      error: 'Unknown toolbox "does-not-exist". Use list_toolboxes to see available toolboxes.',
+    })
   })
 
-  itMocked('passes parsed tool_config to updateKin', async () => {
+  itMocked('resolves toolbox names to ids and passes toolboxIds to updateKin', async () => {
     mockResolveKinId.mockReturnValueOnce('target-kin-id')
     mockUpdateKin.mockResolvedValueOnce({
       kin: {
@@ -339,16 +359,40 @@ describe('updateKinTool', () => {
       },
     })
 
-    const toolConfig = { disabledNativeTools: ['web_search'], mcpAccess: {} }
     const t = makeTool(updateKinTool)
     await t.execute({
       kin_id: 'target-kin',
-      tool_config: JSON.stringify(toolConfig),
+      toolboxes: ['code', 'research'],
       generate_avatar: false,
     }, { toolCallId: 'tc11', messages: [] })
 
     expect(mockUpdateKin).toHaveBeenLastCalledWith('target-kin-id', expect.objectContaining({
-      toolConfig: toolConfig,
+      toolboxIds: ['tb-code', 'tb-research'],
+    }))
+  })
+
+  itMocked('resets toolbox selection to the all default on empty array', async () => {
+    mockResolveKinId.mockReturnValueOnce('target-kin-id')
+    mockUpdateKin.mockResolvedValueOnce({
+      kin: {
+        id: 'target-kin-id',
+        slug: 'target',
+        name: 'Target',
+        role: 'Role',
+        model: 'gpt-4o',
+        avatarUrl: null,
+      },
+    })
+
+    const t = makeTool(updateKinTool)
+    await t.execute({
+      kin_id: 'target-kin',
+      toolboxes: [],
+      generate_avatar: false,
+    }, { toolCallId: 'tc11b', messages: [] })
+
+    expect(mockUpdateKin).toHaveBeenLastCalledWith('target-kin-id', expect.objectContaining({
+      toolboxIds: null,
     }))
   })
 })
@@ -458,8 +502,7 @@ describe('getKinDetailsTool', () => {
     expect(result).toEqual({ error: 'Kin not found' })
   })
 
-  itMocked('returns kin details with parsed toolConfig', async () => {
-    const toolConfig = { disabledNativeTools: ['shell'], mcpAccess: {}, enabledOptInTools: [] }
+  itMocked('returns kin details with resolved toolbox names', async () => {
     mockResolveKinId.mockReturnValueOnce('target-kin-id')
     mockGetKinDetails.mockResolvedValueOnce({
       id: 'target-kin-id',
@@ -470,7 +513,7 @@ describe('getKinDetailsTool', () => {
       expertise: 'Everything',
       model: 'gpt-4o',
       mcpServers: [{ id: 'mcp-1', name: 'My MCP' }] as any[],
-      toolConfig: JSON.stringify(toolConfig) as string | null,
+      toolboxIds: JSON.stringify(['tb-code', 'tb-research']) as string | null,
       createdAt: new Date('2024-01-01'),
     })
 
@@ -483,10 +526,10 @@ describe('getKinDetailsTool', () => {
     expect(result.slug).toBe('target')
     expect(result.name).toBe('Target Kin')
     expect(result.mcpServers).toEqual([{ id: 'mcp-1', name: 'My MCP' }])
-    expect(result.toolConfig).toEqual(toolConfig)
+    expect(result.toolboxes).toEqual(['code', 'research'])
   })
 
-  itMocked('returns null toolConfig when not set', async () => {
+  itMocked('reports the all default when no toolboxes are set', async () => {
     mockResolveKinId.mockReturnValueOnce('target-kin-id')
     mockGetKinDetails.mockResolvedValueOnce({
       id: 'target-kin-id',
@@ -497,7 +540,7 @@ describe('getKinDetailsTool', () => {
       expertise: 'Everything',
       model: 'gpt-4o',
       mcpServers: [],
-      toolConfig: null,
+      toolboxIds: null,
       createdAt: new Date('2024-01-01'),
     })
 
@@ -506,6 +549,6 @@ describe('getKinDetailsTool', () => {
       kin_id: 'target',
     }, { toolCallId: 'tc20', messages: [] })
 
-    expect(result.toolConfig).toBeNull()
+    expect(result.toolboxes).toEqual(['all'])
   })
 })

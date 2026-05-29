@@ -10,7 +10,6 @@ import { db } from '@/server/db/index'
 import { createLogger } from '@/server/logger'
 import { mcpServers, kinMcpServers } from '@/server/db/schema'
 import type { Tool } from '@/server/tools/tool-helper'
-import type { KinToolConfig } from '@/shared/types'
 
 const log = createLogger('mcp')
 
@@ -294,63 +293,83 @@ export async function getMCPToolsSummary(kinId: string): Promise<MCPToolSummary[
   return summaries
 }
 
-// ─── Resolve MCP tools for a Kin ─────────────────────────────────────────────
+// ─── MCP catalog (all global active servers, no per-Kin gate) ────────────────
+
+/** A single MCP tool as it appears in the toolbox catalog. */
+export interface MCPCatalogEntry {
+  /** Stable grant name: `mcp_<sanitizeName(server)>_<sanitizeName(tool)>`. */
+  name: string
+  /** Human-facing display name of the originating server. */
+  serverName: string
+  serverId: string
+  /** Raw (unsanitized) upstream tool name. */
+  rawToolName: string
+  description: string
+}
 
 /**
- * Get all MCP tools available to a specific Kin.
- * Returns AI SDK Tool objects keyed by `mcp_{serverName}_{toolName}`.
+ * Enumerate every MCP tool from ALL global active servers, with no per-Kin
+ * gate. This powers the toolbox catalog: a toolbox can list any of these stable
+ * `mcp_*` names and the unified resolver will grant it to any Kin/task that
+ * references that toolbox (the server's creds stay global).
  *
- * When `toolConfig` is provided, only tools explicitly allowed in
- * `toolConfig.mcpAccess` are included — unless the server was created
- * by this Kin and is active (auto-enabled).
+ * Servers that are not `active` are skipped. A server we cannot connect to (so
+ * its tool list is unknown) contributes no entries — it simply won't appear in
+ * the catalog until it connects.
  */
-export async function resolveMCPTools(
-  kinId: string,
-  toolConfig?: KinToolConfig | null,
-): Promise<Record<string, Tool<any, any>>> {
-  // Get MCP servers assigned to this Kin via junction table
-  const links = await db
-    .select({ mcpServerId: kinMcpServers.mcpServerId })
-    .from(kinMcpServers)
-    .where(eq(kinMcpServers.kinId, kinId))
-    .all()
+export async function listAllMCPCatalogTools(): Promise<MCPCatalogEntry[]> {
+  const servers = await db.select().from(mcpServers).all()
+  const entries: MCPCatalogEntry[] = []
 
-  const linkedIds = new Set(links.map((l) => l.mcpServerId))
+  for (const server of servers) {
+    if (server.status !== 'active') continue
+    const conn = await getConnection(server.id)
+    if (!conn) continue
 
-  // Also include servers referenced in toolConfig.mcpAccess (may not be linked yet)
-  const mcpAccess = toolConfig?.mcpAccess
-  if (mcpAccess) {
-    for (const serverId of Object.keys(mcpAccess)) {
-      const access = mcpAccess[serverId]
-      if (access && access.length > 0) {
-        linkedIds.add(serverId)
-      }
+    for (const t of conn.tools) {
+      entries.push({
+        name: `mcp_${sanitizeName(conn.serverName)}_${sanitizeName(t.name)}`,
+        serverName: conn.serverName,
+        serverId: server.id,
+        rawToolName: t.name,
+        description: t.description,
+      })
     }
   }
 
-  if (linkedIds.size === 0) return {}
+  return entries
+}
+
+// ─── Resolve MCP tools (global, no per-Kin gate) ─────────────────────────────
+
+/**
+ * Resolve every MCP tool from ALL global ACTIVE servers, keyed by the canonical
+ * `mcp_{sanitizeName(server)}_{sanitizeName(tool)}` name.
+ *
+ * The TOOLBOX is now the sole tool-grant primitive (see toolset-resolver.ts):
+ * there is no per-Kin MCP access gate. MCP servers live globally in
+ * `mcp_servers` with their own credentials; a toolbox references an MCP tool by
+ * its stable name, and the unified resolver intersects that against this
+ * universe. Server-level approval status (`status === 'active'`) still applies —
+ * `pending_approval` servers contribute nothing.
+ *
+ * The `kinId` parameter is retained only for logging/diagnostic symmetry with
+ * the other source resolvers; it no longer filters the result.
+ */
+export async function resolveMCPTools(
+  _kinId?: string,
+): Promise<Record<string, Tool<any, any>>> {
+  const servers = await db.select().from(mcpServers).all()
 
   const resolved: Record<string, Tool<any, any>> = {}
 
-  for (const serverId of linkedIds) {
-    const conn = await getConnection(serverId)
+  for (const server of servers) {
+    if (server.status !== 'active') continue
+    const conn = await getConnection(server.id)
     if (!conn) continue
-
-    // Determine which tools are allowed from this server
-    const accessList = toolConfig?.mcpAccess?.[serverId]
-    const server = await db.select().from(mcpServers).where(eq(mcpServers.id, serverId)).get()
-    const autoEnabled = !accessList && server?.createdByKinId === kinId && server?.status === 'active'
-
-    // If toolConfig exists and no explicit access and not auto-enabled → skip server
-    if (toolConfig && !accessList && !autoEnabled) continue
 
     for (const mcpTool of conn.tools) {
       const toolKey = `mcp_${sanitizeName(conn.serverName)}_${sanitizeName(mcpTool.name)}`
-
-      // Check per-tool access if there's an explicit allow-list (not '*')
-      if (accessList && !accessList.includes('*') && !accessList.includes(mcpTool.name)) {
-        continue
-      }
 
       resolved[toolKey] = aiTool({
         description: `[MCP: ${conn.serverName}] ${mcpTool.description}`,
@@ -365,65 +384,6 @@ export async function resolveMCPTools(
   return resolved
 }
 
-/**
- * Get MCP tools metadata for a Kin, used by the tools API endpoint.
- * Returns ALL active MCP servers with per-tool enabled/disabled state.
- * This shows all globally-configured servers so the user can enable/disable
- * tools from any server for this Kin.
- */
-export async function getMCPToolsForConfig(
-  kinId: string,
-  toolConfig: KinToolConfig | null,
-): Promise<Array<{
-  serverId: string
-  serverName: string
-  autoEnabled: boolean
-  tools: Array<{ name: string; description: string; enabled: boolean }>
-}>> {
-  // Query ALL MCP servers — not just those linked via kinMcpServers
-  const allServers = await db
-    .select()
-    .from(mcpServers)
-    .all()
-
-  log.debug({ kinId, serverCount: allServers.length }, 'getMCPToolsForConfig: found MCP servers')
-
-  if (allServers.length === 0) return []
-
-  const result: Array<{
-    serverId: string
-    serverName: string
-    autoEnabled: boolean
-    tools: Array<{ name: string; description: string; enabled: boolean }>
-  }> = []
-
-  for (const server of allServers) {
-    const accessList = toolConfig?.mcpAccess?.[server.id]
-    const autoEnabled = !accessList && server.createdByKinId === kinId && server.status === 'active'
-
-    // Try to connect — if it fails, still show the server (with no tools)
-    const conn = await getConnection(server.id)
-
-    result.push({
-      serverId: server.id,
-      serverName: conn?.serverName ?? server.name,
-      autoEnabled,
-      tools: conn
-        ? conn.tools.map((t) => {
-            let enabled = false
-            if (autoEnabled) {
-              enabled = true
-            } else if (accessList) {
-              enabled = accessList.includes('*') || accessList.includes(t.name)
-            }
-            return { name: t.name, description: t.description, enabled }
-          })
-        : [],
-    })
-  }
-
-  return result
-}
 
 // ─── Call an MCP tool ────────────────────────────────────────────────────────
 

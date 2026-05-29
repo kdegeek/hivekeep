@@ -6,14 +6,13 @@ import { buildSystemPrompt, joinSystemPrompt } from '@/server/services/prompt-bu
 import { getRelevantMemories } from '@/server/services/memory'
 import { listContactsForPrompt } from '@/server/services/contacts'
 import { listAvailableKins } from '@/server/services/inter-kin'
-import { getMCPToolsSummary, resolveMCPTools } from '@/server/services/mcp'
-import { resolveCustomTools } from '@/server/services/custom-tools'
+import { getMCPToolsSummary } from '@/server/services/mcp'
 import { toolRegistry } from '@/server/tools/index'
 import { getGlobalPrompt } from '@/server/services/app-settings'
 import { fetchPreviousCronRuns } from '@/server/services/tasks'
 import { fetchCronLearnings } from '@/server/services/cron-learnings'
 import { getActiveChannelsForKin } from '@/server/services/channels'
-import type { KinToolConfig, KinCompactingConfig, ContextTokenBreakdown } from '@/shared/types'
+import type { KinCompactingConfig, ContextTokenBreakdown } from '@/shared/types'
 import { getModelContextWindow } from '@/shared/model-context-windows'
 import { config } from '@/server/config'
 import { getCacheMultipliers } from '@/shared/billing'
@@ -102,6 +101,27 @@ function buildLastTurnCache(
 }
 
 type ToolSource = 'native' | 'mcp' | 'custom'
+
+/**
+ * Infer the display provenance of a resolved tool from its stable name prefix.
+ * The unified `resolveToolset()` merges all four sources into one map, so the
+ * preview reconstructs the per-source badge from the canonical naming:
+ *   `mcp_*`    → MCP server, `custom_*` → user-defined custom tool.
+ * Native and plugin tools (the latter prefixed `plugin_`) both come from the
+ * registry and share the 'native' badge here (the preview's local source type
+ * predates the 4-way catalog split — plugin tools were always lumped in).
+ */
+function inferToolSource(name: string): ToolSource {
+  if (name.startsWith('mcp_')) return 'mcp'
+  if (name.startsWith('custom_')) return 'custom'
+  return 'native'
+}
+
+function buildSourceMap(tools: Record<string, unknown>): Map<string, ToolSource> {
+  const m = new Map<string, ToolSource>()
+  for (const name of Object.keys(tools)) m.set(name, inferToolSource(name))
+  return m
+}
 
 interface ToolDefinition {
   name: string
@@ -480,33 +500,15 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
     activeProject: activeProject ?? undefined,
   }))
 
-  // Resolve tools
-  const toolConfig: KinToolConfig | null = kin.toolConfig ? JSON.parse(kin.toolConfig) : null
-  const nativeTools = toolRegistry.resolve({ kinId, isSubKin: false, toolConfig })
-
-  if (toolConfig?.disabledNativeTools?.length) {
-    for (const name of toolConfig.disabledNativeTools) {
-      delete nativeTools[name]
-    }
-  }
-
-  const allRegistered = toolRegistry.list()
-  const optInSet = new Set(toolConfig?.enabledOptInTools ?? [])
-  for (const reg of allRegistered) {
-    if (reg.defaultDisabled && !optInSet.has(reg.name)) {
-      delete nativeTools[reg.name]
-    }
-  }
-
-  const mcpTools = await resolveMCPTools(kinId, toolConfig)
-  const customToolDefs = await resolveCustomTools(kinId)
-  const sourceMap = new Map<string, ToolSource>()
-  for (const name of Object.keys(nativeTools)) sourceMap.set(name, 'native')
-  for (const name of Object.keys(mcpTools)) sourceMap.set(name, 'mcp')
-  for (const name of Object.keys(customToolDefs)) sourceMap.set(name, 'custom')
-  const allTools = { ...nativeTools, ...mcpTools, ...customToolDefs }
-
-  const toolDefinitions = buildToolDefs(allTools, sourceMap)
+  // Resolve tools — unified resolver (toolbox is the sole grant primitive
+  // across native + plugin + MCP + custom). Mirrors processNextMessage.
+  const { resolveToolset } = await import('@/server/services/toolset-resolver')
+  const allTools = await resolveToolset({
+    kinId,
+    toolboxIds: kin.toolboxIds,
+    isSubKin: false,
+  })
+  const toolDefinitions = buildToolDefs(allTools, buildSourceMap(allTools))
 
   const combinedSummary = compactingSummariesData
     ? compactingSummariesData.map((s) => s.summary).join('\n\n---\n\n')
@@ -855,57 +857,38 @@ export async function buildTaskContextPreview(taskId: string): Promise<ContextPr
     }
   })
 
-  // Tools: same resolution as executeSubKin
-  const kinToolConfig: KinToolConfig | null = kinIdentity.toolConfig ? JSON.parse(kinIdentity.toolConfig) : null
-  const nativeTools = toolRegistry.resolve({ kinId: kinIdentity.id, taskId, taskDepth: task.depth, isSubKin: false, toolConfig: kinToolConfig })
-
-  if (kinToolConfig?.disabledNativeTools?.length) {
-    for (const name of kinToolConfig.disabledNativeTools) {
-      delete nativeTools[name]
-    }
-  }
-  const allRegistered = toolRegistry.list()
-  const optInSet = new Set(kinToolConfig?.enabledOptInTools ?? [])
-  for (const reg of allRegistered) {
-    if (reg.defaultDisabled && !optInSet.has(reg.name)) {
-      delete nativeTools[reg.name]
-    }
-  }
-
-  // Toolbox-based native filtering — mirror executeSubKin exactly: narrow to
-  // CORE_TOOLS ∪ (toolboxes' tool names), then subtract the hard sub-Kin floor
-  // AFTER the allow-list so even an 'all' toolbox can't smuggle a main-session
-  // tool through. Toolbox ids resolve from the task row (explicit toolbox_ids →
-  // legacy tool_preset → default 'code'/'all').
-  const { CORE_TOOLS, resolveToolboxNames } = await import('@/server/services/toolboxes')
+  // Tools: same resolution as executeSubKin. Unified resolver gives the spawned
+  // Kin's MAIN surface (isSubKin:false) intersected with the task's toolboxes;
+  // we subtract the hard sub-Kin floor AFTER the allow-list, then layer on the
+  // sub-Kin-only comms tools (infrastructure, never toolbox-gated). Toolbox ids
+  // resolve from the task row (explicit toolbox_ids → legacy tool_preset →
+  // default).
   const { resolveTaskToolboxIds, HARD_EXCLUDED_FROM_SUBKIN } = await import('@/server/services/tasks')
+  const { resolveToolset } = await import('@/server/services/toolset-resolver')
   const taskToolboxIds = await resolveTaskToolboxIds({
     toolboxIds: task.toolboxIds as string | null,
     toolPreset: task.toolPreset as string | null,
     ticketId: task.ticketId ?? null,
   })
-  const allowedNative = new Set<string>([...CORE_TOOLS, ...resolveToolboxNames(taskToolboxIds)])
-  for (const name of Object.keys(nativeTools)) {
-    if (!allowedNative.has(name)) delete nativeTools[name]
-  }
+  const mainSurface = await resolveToolset({
+    kinId: kinIdentity.id,
+    toolboxIds: taskToolboxIds,
+    isSubKin: false,
+    taskId,
+    taskDepth: task.depth,
+  })
   for (const name of HARD_EXCLUDED_FROM_SUBKIN) {
-    delete nativeTools[name]
+    delete mainSurface[name]
   }
 
-  const subKinTools = toolRegistry.resolve({ kinId: task.parentKinId, taskId, taskDepth: task.depth, isSubKin: true, toolConfig: kinToolConfig })
+  const subKinTools = toolRegistry.resolve({ kinId: task.parentKinId, taskId, taskDepth: task.depth, isSubKin: true })
   // Mirror executeSubKin: ticket sub-Kins drop report_to_parent (the parent has
   // nothing actionable to do with intermediate reports — the user reads the UI).
   if (task.ticketId) {
     delete subKinTools['report_to_parent']
   }
-  const mcpTools = await resolveMCPTools(kinIdentity.id, kinToolConfig)
-  const customToolDefs = await resolveCustomTools(kinIdentity.id)
-  const taskSourceMap = new Map<string, ToolSource>()
-  for (const name of Object.keys(nativeTools)) taskSourceMap.set(name, 'native')
-  for (const name of Object.keys(subKinTools)) taskSourceMap.set(name, 'native')
-  for (const name of Object.keys(mcpTools)) taskSourceMap.set(name, 'mcp')
-  for (const name of Object.keys(customToolDefs)) taskSourceMap.set(name, 'custom')
-  const allTools = { ...nativeTools, ...subKinTools, ...mcpTools, ...customToolDefs }
+  const allTools = { ...mainSurface, ...subKinTools }
+  const taskSourceMap = buildSourceMap(allTools)
 
   // Build cron run previews
   const cronRunPreviews: CronRunPreview[] = previousCronRuns
@@ -1053,33 +1036,19 @@ export async function buildQuickSessionContextPreview(kinId: string, sessionId: 
     }
   })
 
-  // Tools: same resolution as processQuickMessage
-  const kinToolConfig: KinToolConfig | null = kin.toolConfig ? JSON.parse(kin.toolConfig) : null
-  const nativeTools = toolRegistry.resolve({ kinId, isSubKin: false, toolConfig: kinToolConfig })
-
-  if (kinToolConfig?.disabledNativeTools?.length) {
-    for (const name of kinToolConfig.disabledNativeTools) {
-      delete nativeTools[name]
-    }
-  }
-  const allRegistered = toolRegistry.list()
-  const optInSet = new Set(kinToolConfig?.enabledOptInTools ?? [])
-  for (const reg of allRegistered) {
-    if (reg.defaultDisabled && !optInSet.has(reg.name)) {
-      delete nativeTools[reg.name]
-    }
-  }
+  // Tools: same resolution as processQuickMessage. Unified resolver then the
+  // quick-session exclusion list applied on top.
+  const { resolveToolset } = await import('@/server/services/toolset-resolver')
+  const allTools = await resolveToolset({
+    kinId,
+    toolboxIds: kin.toolboxIds,
+    isSubKin: false,
+    quick: true,
+  })
   for (const name of QUICK_SESSION_EXCLUDED_TOOLS) {
-    delete nativeTools[name]
+    delete allTools[name]
   }
-
-  const mcpTools = await resolveMCPTools(kinId, kinToolConfig)
-  const customToolDefs = await resolveCustomTools(kinId)
-  const qsSourceMap = new Map<string, ToolSource>()
-  for (const name of Object.keys(nativeTools)) qsSourceMap.set(name, 'native')
-  for (const name of Object.keys(mcpTools)) qsSourceMap.set(name, 'mcp')
-  for (const name of Object.keys(customToolDefs)) qsSourceMap.set(name, 'custom')
-  const allTools = { ...nativeTools, ...mcpTools, ...customToolDefs }
+  const qsSourceMap = buildSourceMap(allTools)
 
   // Quick session shares the Kin's calibration factor — same model, same tools.
   const calibrationFactor = await getKinCalibrationFactor(kinId)

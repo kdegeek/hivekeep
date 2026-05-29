@@ -429,7 +429,15 @@
         "tts": "Needs a text-to-speech provider — toggle works but the tool will return an error until one is configured.",
         "stt": "Needs a speech-to-text provider — toggle works but the tool will return an error until one is configured.",
         "embedding": "Needs an embedding provider — memory recall and storage will fail until one is configured."
-      }
+      },
+      "toolboxesTitle": "Toolboxes",
+      "toolboxesHint": "Pick one or more toolboxes to grant this Kin its tools. A toolbox bundles tools across all sources (native, plugin, MCP, custom).",
+      "defaultsToAll": "No toolbox selected — this Kin gets the built-in 'all' toolbox (every native tool).",
+      "noToolboxesTitle": "No toolboxes yet",
+      "noToolboxesDescription": "Create toolboxes from Settings to grant tools to this Kin.",
+      "resolvedPreviewTitle": "Granted tools",
+      "resolvedPreviewHint": "Read-only preview of the tools the selected toolboxes grant. Listed tools that don't exist are skipped.",
+      "resolvedPreviewEmpty": "No tools granted by the current selection."
     },
     "defaults": {
       "character": "You are a friendly, thoughtful, and versatile assistant. You communicate clearly and adapt your tone to the context - casual when appropriate, precise when needed.\n\nYou are patient, curious, and genuinely enjoy helping. When you don't know something, you say so honestly. You ask clarifying questions when the request is ambiguous.\n\nYou keep your responses concise unless the user explicitly asks for detail.",
@@ -1044,6 +1052,18 @@
     "allTools": "All tools",
     "toolCount": "{{count}} tools",
     "hardExcluded": "Unavailable in tasks",
+    "sources": {
+      "native": "Native",
+      "plugin": "Plugin",
+      "mcp": "MCP",
+      "custom": "Custom"
+    },
+    "sourceGroup": {
+      "native": "Native tools",
+      "plugin": "Plugin tools",
+      "mcp": "MCP tools",
+      "custom": "Custom tools"
+    },
     "created": "Toolbox created",
     "updated": "Toolbox updated",
     "deleted": "Toolbox deleted",

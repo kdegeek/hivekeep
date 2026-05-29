@@ -10,7 +10,6 @@ import {
 import { resolveKinId } from '@/server/services/kin-resolver'
 import { createLogger } from '@/server/logger'
 import type { ToolRegistration } from '@/server/tools/types'
-import type { KinToolConfig } from '@/shared/types'
 
 const log = createLogger('tools:kin-management')
 
@@ -83,7 +82,7 @@ export const updateKinTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        "Update a Kin's properties or tool configuration. Cannot modify yourself.",
+        "Update a Kin's properties or tool grants. Cannot modify yourself.",
       inputSchema: z.object({
         kin_id: z.string().describe('Slug or UUID'),
         name: z.string().optional(),
@@ -92,18 +91,18 @@ export const updateKinTool: ToolRegistration = {
         expertise: z.string().optional(),
         model: z.string().optional(),
         slug: z.string().optional().describe('Lowercase, hyphens, 2-50 chars'),
-        tool_config: z
-          .string()
+        toolboxes: z
+          .array(z.string())
           .optional()
           .describe(
-            'JSON: {"disabledNativeTools":[], "mcpAccess":{"serverId":["*"]}, "enabledOptInTools":[]}',
+            'Names of the toolboxes whose tools this Kin may use. The Kin\'s toolset is the mandatory core floor unioned with every chosen toolbox\'s tools. Built-ins: "code", "research", "ops", "scout", "all". Use list_toolboxes to discover available toolboxes. Pass [] to reset to the "all" default.',
           ),
         generate_avatar: z
           .boolean()
           .optional()
           .default(false),
       }),
-      execute: async ({ kin_id, name, role, character, expertise, model, slug, tool_config, generate_avatar }) => {
+      execute: async ({ kin_id, name, role, character, expertise, model, slug, toolboxes, generate_avatar }) => {
         const targetKinId = resolveKinId(kin_id)
         if (!targetKinId) {
           return { error: `Kin "${kin_id}" not found` }
@@ -115,13 +114,21 @@ export const updateKinTool: ToolRegistration = {
 
         log.info({ kinId: ctx.kinId, targetKinId, targetSlug: kin_id }, 'Kin update requested via tool')
 
-        // Parse tool_config JSON string if provided
-        let parsedToolConfig: KinToolConfig | undefined
-        if (tool_config) {
-          try {
-            parsedToolConfig = JSON.parse(tool_config) as KinToolConfig
-          } catch {
-            return { error: 'Invalid tool_config JSON format' }
+        // Resolve toolbox names to ids when provided. An explicit empty array
+        // resets the Kin to the 'all' built-in (null → 'all' at resolution).
+        let toolboxIds: string[] | null | undefined
+        if (toolboxes !== undefined) {
+          if (toolboxes.length === 0) {
+            toolboxIds = null
+          } else {
+            const { getToolboxByName } = await import('@/server/services/toolboxes')
+            const ids: string[] = []
+            for (const tbName of toolboxes) {
+              const box = getToolboxByName(tbName.trim())
+              if (box) ids.push(box.id)
+              else return { error: `Unknown toolbox "${tbName}". Use list_toolboxes to see available toolboxes.` }
+            }
+            toolboxIds = ids
           }
         }
 
@@ -133,7 +140,7 @@ export const updateKinTool: ToolRegistration = {
             expertise,
             model,
             slug,
-            toolConfig: parsedToolConfig,
+            toolboxIds,
           })
 
           if ('error' in result) {
@@ -238,9 +245,22 @@ export const getKinDetailsTool: ToolRegistration = {
           return { error: 'Kin not found' }
         }
 
-        const toolConfig: KinToolConfig | null = details.toolConfig
-          ? JSON.parse(details.toolConfig)
-          : null
+        // Resolve the Kin's toolbox ids to display names. Null/empty → the Kin
+        // defaults to the 'all' built-in at resolution time.
+        let toolboxNames: string[] = []
+        if (details.toolboxIds) {
+          try {
+            const ids = JSON.parse(details.toolboxIds)
+            if (Array.isArray(ids) && ids.length > 0) {
+              const { getToolbox } = await import('@/server/services/toolboxes')
+              toolboxNames = ids
+                .map((id: unknown) => (typeof id === 'string' ? getToolbox(id)?.name : undefined))
+                .filter((n): n is string => typeof n === 'string')
+            }
+          } catch {
+            // Malformed — treat as default (all).
+          }
+        }
 
         return {
           id: details.id,
@@ -251,7 +271,7 @@ export const getKinDetailsTool: ToolRegistration = {
           expertise: details.expertise,
           model: details.model,
           mcpServers: details.mcpServers.map((s) => ({ id: s.id, name: s.name })),
-          toolConfig,
+          toolboxes: toolboxNames.length > 0 ? toolboxNames : ['all'],
           createdAt: details.createdAt.toISOString(),
         }
       },

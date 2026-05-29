@@ -15,12 +15,7 @@ import {
 } from '@/server/services/image-generation'
 import { decrypt } from '@/server/services/encryption'
 import { deleteMemory, createMemory, updateMemory } from '@/server/services/memory'
-import { getMCPToolsForConfig } from '@/server/services/mcp'
-import { toolRegistry } from '@/server/tools/index'
-import { pluginManager } from '@/server/services/plugins'
-import { buildKinToolBuckets } from '@/server/services/kin-tools'
-import { TOOL_DOMAIN_META } from '@/shared/constants'
-import type { KinToolConfig, KinThinkingConfig, ToolDomain, MemoryCategory, MemoryScope } from '@/shared/types'
+import type { KinThinkingConfig, MemoryCategory, MemoryScope } from '@/shared/types'
 import { sseManager } from '@/server/sse/index'
 import { resolveKinByIdOrSlug } from '@/server/services/kin-resolver'
 import {
@@ -41,6 +36,38 @@ import { getModelContextWindow } from '@/shared/model-context-windows'
 
 const log = createLogger('routes:kins')
 const kinRoutes = new Hono<{ Variables: AppVariables }>()
+
+/**
+ * Parse the stored `kins.toolbox_ids` JSON column into a clean array (or null
+ * when unset). Returned to the client as `toolboxIds: string[] | null`; null
+ * means the Kin defaults to the 'all' built-in at resolution time.
+ */
+function parseToolboxIds(raw: string | null): string[] | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      const ids = parsed.filter((x): x is string => typeof x === 'string')
+      return ids.length > 0 ? ids : null
+    }
+  } catch {
+    // Malformed — treat as unset.
+  }
+  return null
+}
+
+/**
+ * Normalize an incoming `toolboxIds` body field into the service's
+ * `string[] | null | undefined` contract. `undefined` (field absent) → no
+ * change; anything else → an array of string ids (empty array allowed, which
+ * the service stores as null → 'all' default).
+ */
+function normalizeToolboxIdsInput(raw: unknown): string[] | null | undefined {
+  if (raw === undefined) return undefined
+  if (raw === null) return null
+  if (Array.isArray(raw)) return raw.filter((x): x is string => typeof x === 'string')
+  return undefined
+}
 
 // GET /api/kins — list all kins
 kinRoutes.get('/', async (c) => {
@@ -146,9 +173,6 @@ kinRoutes.post('/generate-config', async (c) => {
     }
   }
 
-  // Build tool domain descriptions for the LLM
-  const toolDomains = Object.keys(TOOL_DOMAIN_META).map((d) => d).join(', ')
-
   const lang = language === 'fr' ? 'French' : 'English'
 
   const systemPrompt = `You are a configuration generator for an AI assistant platform called KinBot. A "Kin" is a specialized AI assistant with a unique identity, personality, and expertise.
@@ -162,31 +186,6 @@ Given a user's description of the assistant they want, generate a complete Kin c
 - **character**: A detailed personality description (markdown, 3-5 paragraphs). Defines the tone, communication style, behavior, and values. Use "Tu" (informal) if French, "You" if English. Should feel like a real personality, not generic.
 - **expertise**: A detailed knowledge description (markdown, 3-5 paragraphs with bullet lists). Defines specific knowledge domains, methodologies, and objectives. Be concrete and specific to the domain.
 - **suggestedModel**: One of the available model IDs. Pick the most capable model for the task (prefer Claude or GPT-4 class for complex domains, lighter models for simple assistants).
-- **disableToolDomains**: Array of tool domain names to DISABLE (the Kin won't need these). Most Kins don't need all tools. Be selective — only disable tools clearly irrelevant to the domain.
-- **enableOptInToolDomains**: Array of opt-in tool domains to ENABLE. Currently only "kin-management" and "system" are opt-in. Only enable these for admin/platform-management Kins.
-
-## Available tool domains
-${toolDomains}
-
-Domain descriptions:
-- search: Web search capabilities
-- browse: Browse URLs, extract content, take screenshots
-- contacts: Manage contact records
-- memory: Store and recall long-term memories
-- vault: Secure secret storage
-- tasks: Spawn sub-tasks and manage delegated work
-- inter-kin: Communicate with other Kins on the platform
-- crons: Schedule recurring jobs
-- custom: Create and run custom scripts
-- images: Generate images
-- shell: Execute shell commands
-- file-storage: Store and manage files
-- mcp: Manage MCP (Model Context Protocol) servers
-- kin-management: Create/update/delete other Kins (opt-in, admin only)
-- webhooks: Manage incoming/outgoing webhooks
-- channels: Manage external messaging channels (Telegram, Discord)
-- system: Access platform logs (opt-in, admin only)
-- users: Manage platform users
 
 ## Available LLM models
 ${availableModels.join(', ')}
@@ -196,8 +195,6 @@ ${availableModels.join(', ')}
 - Output ONLY valid JSON, nothing else — no markdown fences, no comments
 - The character and expertise fields should be rich, specific, and tailored to the domain
 - Do not include generic filler — every sentence should be relevant to the specific domain
-- For disableToolDomains, think about what tools are NOT useful for this type of assistant. For example, a legal advisor doesn't need "images" or "shell", while a code expert would want "shell" enabled.
-- Always keep "memory", "tasks", "inter-kin" enabled (don't add them to disableToolDomains) as these are useful for all Kins.
 
 ## Output JSON schema
 {
@@ -205,9 +202,7 @@ ${availableModels.join(', ')}
   "role": "string",
   "character": "string (markdown)",
   "expertise": "string (markdown)",
-  "suggestedModel": "string (model ID)",
-  "disableToolDomains": ["string"],
-  "enableOptInToolDomains": ["string"]
+  "suggestedModel": "string (model ID)"
 }`
 
   let userPrompt: string
@@ -503,7 +498,7 @@ kinRoutes.get('/:id', async (c) => {
     model: details.model,
     providerId: details.providerId ?? null,
     workspacePath: details.workspacePath,
-    toolConfig: details.toolConfig ? JSON.parse(details.toolConfig) : null,
+    toolboxIds: parseToolboxIds(details.toolboxIds),
     compactingConfig: details.compactingConfig ? JSON.parse(details.compactingConfig) : null,
     thinkingConfig: details.thinkingConfig ? JSON.parse(details.thinkingConfig) : null,
     mcpServers: details.mcpServers,
@@ -531,6 +526,7 @@ kinRoutes.post('/', async (c) => {
     providerId?: string | null
     mcpServerIds?: string[]
   }
+  const toolboxIds = normalizeToolboxIdsInput(body.toolboxIds)
 
   // Fall back to default LLM if no model specified
   if (!model || !model.trim()) {
@@ -557,6 +553,7 @@ kinRoutes.post('/', async (c) => {
     providerId,
     createdBy: user.id,
     mcpServerIds,
+    toolboxIds: toolboxIds ?? undefined,
   })
 
   return c.json(
@@ -572,6 +569,7 @@ kinRoutes.post('/', async (c) => {
         model: newKin.model,
         providerId: newKin.providerId ?? null,
         workspacePath: newKin.workspacePath,
+        toolboxIds: parseToolboxIds(newKin.toolboxIds),
         mcpServers: [],
         queueSize: 0,
         isProcessing: false,
@@ -611,7 +609,7 @@ kinRoutes.patch('/:id', async (c) => {
     model: body.model,
     providerId: body.providerId,
     slug: body.slug,
-    toolConfig: body.toolConfig,
+    toolboxIds: normalizeToolboxIdsInput(body.toolboxIds),
     compactingConfig: body.compactingConfig,
     thinkingConfig: body.thinkingConfig,
     mcpServerIds: body.mcpServerIds,
@@ -635,7 +633,7 @@ kinRoutes.patch('/:id', async (c) => {
       model: details.model,
       providerId: details.providerId ?? null,
       workspacePath: details.workspacePath,
-      toolConfig: details.toolConfig ? JSON.parse(details.toolConfig) : null,
+      toolboxIds: parseToolboxIds(details.toolboxIds),
       compactingConfig: details.compactingConfig ? JSON.parse(details.compactingConfig) : null,
       thinkingConfig: details.thinkingConfig ? JSON.parse(details.thinkingConfig) : null,
       mcpServers: details.mcpServers,
@@ -817,37 +815,6 @@ kinRoutes.post('/:id/avatar/generate', async (c) => {
       502,
     )
   }
-})
-
-// ─── Tool authorization routes ────────────────────────────────────────────────
-
-// GET /api/kins/:id/tools — list all available tools with enabled/disabled state
-kinRoutes.get('/:id/tools', async (c) => {
-  const kin = resolveKinByIdOrSlug(c.req.param('id'))
-  if (!kin) {
-    return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Kin not found' } }, 404)
-  }
-
-  const toolConfig: KinToolConfig | null = kin.toolConfig
-    ? JSON.parse(kin.toolConfig)
-    : null
-
-  // Split the flat registry into native and per-plugin buckets via the
-  // shared helper. Each registered tool carries its domain directly (set
-  // at registration time in tools/register.ts) — single source of truth,
-  // a new tool can't slip through into "invisible in the UI" anymore.
-  const { nativeTools, pluginTools } = buildKinToolBuckets({
-    registered: toolRegistry.list(),
-    pluginGroups: pluginManager.listToolsByPlugin(),
-    toolConfig,
-  })
-
-  // MCP tools with enabled state
-  const mcpTools = await getMCPToolsForConfig(kin.id, toolConfig)
-
-  log.debug({ kinId: kin.id, nativeCount: nativeTools.length, pluginCount: pluginTools.length, mcpCount: mcpTools.length }, 'GET /tools response')
-
-  return c.json({ nativeTools, pluginTools, mcpTools })
 })
 
 // ─── Compacting routes ───────────────────────────────────────────────────────
@@ -1264,7 +1231,7 @@ kinRoutes.get('/:id/export', async (c) => {
     character: details.character,
     expertise: details.expertise,
     model: details.model,
-    toolConfig: details.toolConfig ? JSON.parse(details.toolConfig) : null,
+    toolboxIds: parseToolboxIds(details.toolboxIds),
     compactingConfig: details.compactingConfig ? JSON.parse(details.compactingConfig) : null,
     thinkingConfig: details.thinkingConfig ? JSON.parse(details.thinkingConfig) : null,
     mcpServers: mcpServerDetails,
@@ -1283,16 +1250,16 @@ kinRoutes.post('/import', async (c) => {
   const body = await c.req.json()
 
   // Validate required fields
-  const { name, role, character, expertise, model, toolConfig, thinkingConfig } = body as {
+  const { name, role, character, expertise, model, thinkingConfig } = body as {
     name?: string
     role?: string
     character?: string
     expertise?: string
     model?: string
-    toolConfig?: KinToolConfig | null
     thinkingConfig?: KinThinkingConfig | null
     _kinbot?: { version?: number }
   }
+  const toolboxIds = normalizeToolboxIdsInput(body.toolboxIds)
 
   if (!name || !role || !character || !expertise || !model) {
     return c.json(
@@ -1341,14 +1308,12 @@ kinRoutes.post('/import', async (c) => {
     expertise,
     model,
     createdBy: user.id,
+    toolboxIds: toolboxIds ?? undefined,
   })
 
-  // Apply toolConfig and thinkingConfig if present
-  if (toolConfig || thinkingConfig) {
-    await updateKin(newKin.id, {
-      ...(toolConfig ? { toolConfig } : {}),
-      ...(thinkingConfig ? { thinkingConfig } : {}),
-    })
+  // Apply thinkingConfig if present
+  if (thinkingConfig) {
+    await updateKin(newKin.id, { thinkingConfig })
   }
 
   return c.json(

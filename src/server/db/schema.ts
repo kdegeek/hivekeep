@@ -85,7 +85,7 @@ export const kins = sqliteTable('kins', {
   model: text('model').notNull(),
   providerId: text('provider_id').references(() => providers.id, { onDelete: 'set null' }),
   workspacePath: text('workspace_path').notNull(),
-  toolConfig: text('tool_config'), // JSON: KinToolConfig
+  toolboxIds: text('toolbox_ids'), // JSON string[] of toolbox ids; null/empty → 'all' built-in at resolution
   compactingConfig: text('compacting_config'), // JSON: KinCompactingConfig
   thinkingConfig: text('thinking_config'), // JSON: KinThinkingConfig
   activeProjectId: text('active_project_id').references((): AnySQLiteColumn => projects.id, { onDelete: 'set null' }),
@@ -315,7 +315,7 @@ export const tasks = sqliteTable('tasks', {
   ticketAssignmentSnapshot: text('ticket_assignment_snapshot'),
   /** Frozen JSON snapshot of the rest of the prompt context captured at spawn
    *  time: Kin identity (name/slug/role/character/expertise/workspacePath +
-   *  model/provider/thinkingConfig/toolConfig), global platform prompt, Kin
+   *  model/provider/thinkingConfig), global platform prompt, Kin
    *  directory, and cron context (previous runs + accumulated learnings) when
    *  the task is cron-bound. Together with `ticketAssignmentSnapshot` this
    *  freezes the entire stable system prefix for the task's lifetime, so the
@@ -326,9 +326,9 @@ export const tasks = sqliteTable('tasks', {
   promptContextSnapshot: text('prompt_context_snapshot'),
   allowHumanPrompt: integer('allow_human_prompt', { mode: 'boolean' }).notNull().default(true),
   thinkingConfig: text('thinking_config'), // JSON: KinThinkingConfig — overrides parent Kin if set
-  /** Optional sub-Kin tool preset. When set, overrides the auto-picker
-   *  (defaultPresetForTask). 'all' explicitly disables filtering. Null
-   *  falls back to the auto-picker behaviour (ticket → code, else full). */
+  /** Legacy sub-Kin tool preset alias. Superseded by `toolboxIds`; kept only
+   *  for back-compat — when set and `toolboxIds` is null, the preset name maps
+   *  to the built-in toolbox of the same name (see resolveTaskToolboxIds). */
   toolPreset: text('tool_preset'), // 'code' | 'research' | 'ops' | 'all' | null
   /** Optional array of toolbox ids (JSON string[]) defining the task's native
    *  toolset. The resolved native allow-list is CORE_TOOLS unioned with every

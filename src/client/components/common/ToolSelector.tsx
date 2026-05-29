@@ -7,7 +7,11 @@ import { ToolDomainIcon } from '@/client/components/common/ToolDomainIcon'
 import { TOOL_DOMAIN_META } from '@/shared/constants'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
-import type { ToolCatalogEntry, ToolDomain, ToolLabel } from '@/shared/types'
+import type { ToolCatalogEntry, ToolDomain, ToolLabel, ToolSource } from '@/shared/types'
+
+/** Stable render order for the four sources. Native first (the bulk of the
+ *  catalog and the only thing `*` expands to), then the explicit-grant sources. */
+const SOURCE_ORDER: ToolSource[] = ['native', 'plugin', 'mcp', 'custom']
 
 /**
  * Resolve a tool's display label:
@@ -55,12 +59,23 @@ interface DomainBucket {
   tools: ToolSelectorTool[]
 }
 
+interface SourceBucket {
+  source: ToolSource
+  tools: ToolSelectorTool[]
+  domains: DomainBucket[]
+}
+
 /**
- * Reusable presentational picker for native tools grouped by domain, with a
- * per-tool toggle and a per-domain "toggle the whole category" switch. Fully
- * controlled: the parent owns the selected `Set<string>` of tool names and is
- * notified through `onChange`. Used by the toolbox editor and (adapted) by the
- * Kin tools tab.
+ * Reusable presentational picker for grantable tools, grouped first by SOURCE
+ * (native / plugin / MCP / custom) and then by domain within each source, with
+ * a per-tool toggle, a per-domain "toggle the whole category" switch, and a
+ * per-source "toggle the whole source" switch. Fully controlled: the parent
+ * owns the selected `Set<string>` of tool names and is notified through
+ * `onChange`. Used by the toolbox editor (and adapted by the Kin tools tab).
+ *
+ * A catalog that contains only native tools (no plugin/MCP/custom entries)
+ * renders exactly one source group, so existing single-source callers keep
+ * their familiar domain-grouped layout.
  */
 export function ToolSelector({
   tools,
@@ -73,16 +88,37 @@ export function ToolSelector({
   const { t, i18n } = useTranslation()
   const userLang = (i18n.language || 'en').split('-')[0]!
 
-  // Bucket tools by domain, preserving the order in which each domain first
-  // appears in the catalog so the list stays stable across renders.
-  const buckets = useMemo<DomainBucket[]>(() => {
-    const map = new Map<ToolDomain, ToolSelectorTool[]>()
+  // Bucket tools by source, then by domain inside each source. Order: sources
+  // follow SOURCE_ORDER; domains follow first-appearance order within the
+  // source so the list stays stable across renders.
+  const sourceBuckets = useMemo<SourceBucket[]>(() => {
+    const bySource = new Map<ToolSource, ToolSelectorTool[]>()
     for (const tool of tools) {
-      const arr = map.get(tool.domain)
+      const src = tool.source ?? 'native'
+      const arr = bySource.get(src)
       if (arr) arr.push(tool)
-      else map.set(tool.domain, [tool])
+      else bySource.set(src, [tool])
     }
-    return Array.from(map.entries()).map(([domain, t]) => ({ domain, tools: t }))
+
+    const ordered: ToolSource[] = [
+      ...SOURCE_ORDER.filter((s) => bySource.has(s)),
+      ...Array.from(bySource.keys()).filter((s) => !SOURCE_ORDER.includes(s)),
+    ]
+
+    return ordered.map((source) => {
+      const srcTools = bySource.get(source)!
+      const byDomain = new Map<ToolDomain, ToolSelectorTool[]>()
+      for (const tool of srcTools) {
+        const arr = byDomain.get(tool.domain)
+        if (arr) arr.push(tool)
+        else byDomain.set(tool.domain, [tool])
+      }
+      return {
+        source,
+        tools: srcTools,
+        domains: Array.from(byDomain.entries()).map(([domain, dt]) => ({ domain, tools: dt })),
+      }
+    })
   }, [tools])
 
   const toggleTool = (name: string) => {
@@ -93,53 +129,145 @@ export function ToolSelector({
     onChange(next)
   }
 
-  const toggleDomain = (bucket: DomainBucket) => {
+  const toggleMany = (bucketTools: ToolSelectorTool[]) => {
     if (readOnly) return
-    const allSelected = bucket.tools.every((tool) => selected.has(tool.name))
+    const allSelected = bucketTools.every((tool) => selected.has(tool.name))
     const next = new Set(selected)
-    for (const tool of bucket.tools) {
+    for (const tool of bucketTools) {
       if (allSelected) next.delete(tool.name)
       else next.add(tool.name)
     }
     onChange(next)
   }
 
+  // Single-source catalog → render the domain groups directly (no redundant
+  // source header), preserving the original layout for native-only callers.
+  const singleSource = sourceBuckets.length === 1
+
   return (
     <div className="space-y-3">
-      {buckets.map((bucket) => {
-        const enabledCount = bucket.tools.filter((tool) => selected.has(tool.name)).length
-        const allEnabled = enabledCount === bucket.tools.length
-        return (
-          <DomainGroup
-            key={bucket.domain}
-            domain={bucket.domain}
-            enabledCount={enabledCount}
-            totalCount={bucket.tools.length}
-            allEnabled={allEnabled}
-            readOnly={readOnly}
-            onToggleAll={() => toggleDomain(bucket)}
-          >
-            {bucket.tools.map((tool) => {
-              const friendly = useFriendlyNames
-                ? t(`tools.names.${tool.name}`, resolveToolLabel(tool.name, tool.label, userLang))
-                : resolveToolLabel(tool.name, tool.label, userLang)
-              const showKey = friendly !== tool.name
+      {sourceBuckets.map((srcBucket) => {
+        const domainGroups = (
+          <div className="space-y-3">
+            {srcBucket.domains.map((bucket) => {
+              const enabledCount = bucket.tools.filter((tool) => selected.has(tool.name)).length
+              const allEnabled = enabledCount === bucket.tools.length
               return (
-                <ToolRow
-                  key={tool.name}
-                  label={friendly}
-                  toolKey={showKey ? tool.name : undefined}
-                  enabled={selected.has(tool.name)}
+                <DomainGroup
+                  key={bucket.domain}
+                  domain={bucket.domain}
+                  enabledCount={enabledCount}
+                  totalCount={bucket.tools.length}
+                  allEnabled={allEnabled}
                   readOnly={readOnly}
-                  note={toolNote?.(tool)}
-                  onToggle={() => toggleTool(tool.name)}
-                />
+                  onToggleAll={() => toggleMany(bucket.tools)}
+                >
+                  {bucket.tools.map((tool) => {
+                    const friendly = useFriendlyNames
+                      ? t(`tools.names.${tool.name}`, resolveToolLabel(tool.name, tool.label, userLang))
+                      : resolveToolLabel(tool.name, tool.label, userLang)
+                    const showKey = friendly !== tool.name
+                    const subLabel =
+                      tool.source === 'mcp'
+                        ? tool.mcpServerName ?? undefined
+                        : tool.source === 'custom'
+                          ? tool.customKinName ?? undefined
+                          : undefined
+                    return (
+                      <ToolRow
+                        key={tool.name}
+                        label={friendly}
+                        toolKey={showKey ? tool.name : undefined}
+                        subLabel={subLabel}
+                        enabled={selected.has(tool.name)}
+                        readOnly={readOnly}
+                        note={toolNote?.(tool)}
+                        onToggle={() => toggleTool(tool.name)}
+                      />
+                    )
+                  })}
+                </DomainGroup>
               )
             })}
-          </DomainGroup>
+          </div>
+        )
+
+        if (singleSource) return <div key={srcBucket.source}>{domainGroups}</div>
+
+        const srcEnabled = srcBucket.tools.filter((tool) => selected.has(tool.name)).length
+        return (
+          <SourceGroup
+            key={srcBucket.source}
+            source={srcBucket.source}
+            enabledCount={srcEnabled}
+            totalCount={srcBucket.tools.length}
+            allEnabled={srcEnabled === srcBucket.tools.length}
+            readOnly={readOnly}
+            onToggleAll={() => toggleMany(srcBucket.tools)}
+          >
+            {domainGroups}
+          </SourceGroup>
         )
       })}
     </div>
+  )
+}
+
+function SourceGroup({
+  source,
+  enabledCount,
+  totalCount,
+  allEnabled,
+  readOnly,
+  onToggleAll,
+  children,
+}: {
+  source: ToolSource
+  enabledCount: number
+  totalCount: number
+  allEnabled: boolean
+  readOnly?: boolean
+  onToggleAll: () => void
+  children: React.ReactNode
+}) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="rounded-lg border bg-card">
+        <div className="flex items-center justify-between px-3 py-2">
+          <CollapsibleTrigger asChild>
+            <button type="button" className="flex flex-1 items-center gap-2 text-left">
+              <ChevronRight
+                className={cn(
+                  'size-3.5 text-muted-foreground transition-transform',
+                  open && 'rotate-90',
+                )}
+              />
+              <span className="text-sm font-semibold">
+                {t(`toolboxes.sourceGroup.${source}`)}
+              </span>
+              <Badge variant="secondary" size="xs">
+                {t(`toolboxes.sources.${source}`)}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                {t('kin.tools.countEnabled', { count: enabledCount, total: totalCount })}
+              </span>
+            </button>
+          </CollapsibleTrigger>
+          <Switch
+            size="sm"
+            checked={allEnabled}
+            disabled={readOnly}
+            onCheckedChange={onToggleAll}
+          />
+        </div>
+        <CollapsibleContent>
+          <div className="border-t p-3">{children}</div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
   )
 }
 
@@ -203,6 +331,7 @@ function DomainGroup({
 function ToolRow({
   label,
   toolKey,
+  subLabel,
   enabled,
   readOnly,
   note,
@@ -210,6 +339,8 @@ function ToolRow({
 }: {
   label: string
   toolKey?: string
+  /** Secondary provenance line, e.g. the MCP server or owning Kin. */
+  subLabel?: string
   enabled: boolean
   readOnly?: boolean
   note?: string
@@ -224,6 +355,9 @@ function ToolRow({
             <span className="font-mono text-[11px] text-muted-foreground/70">{toolKey}</span>
           )}
         </span>
+        {subLabel && (
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{subLabel}</p>
+        )}
         {note && (
           <p className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400">{note}</p>
         )}

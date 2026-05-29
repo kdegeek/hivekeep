@@ -183,7 +183,7 @@ describe('config', () => {
     })
 
     it('browserSessions defaults', () => {
-      // Default-on; per-Kin opt-in via tool_config.enabledOptInTools still required.
+      // Default-on; the browser_* tools are still defaultDisabled, so a toolbox must list them.
       expect(config.browserSessions.enabled).toBe(true)
       expect(config.browserSessions.maxPerKin).toBe(1)
       expect(config.browserSessions.maxTotal).toBe(5)

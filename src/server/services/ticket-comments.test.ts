@@ -113,7 +113,7 @@ beforeAll(() => {
       model TEXT NOT NULL,
       provider_id TEXT,
       workspace_path TEXT NOT NULL,
-      tool_config TEXT,
+      toolbox_ids TEXT,
       compacting_config TEXT,
       thinking_config TEXT,
       active_project_id TEXT,

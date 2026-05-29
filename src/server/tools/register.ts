@@ -276,7 +276,7 @@ export function registerAllTools(): void {
   toolRegistry.register('list_stt_models', listSttModelsTool, 'voice')
   toolRegistry.register('transcribe_audio', transcribeAudioTool, 'voice')
 
-  // Web browsing — stateful sessions (opt-in: enable via tool_config.enabledOptInTools)
+  // Web browsing — stateful sessions (defaultDisabled: granted only when a toolbox lists them)
   toolRegistry.register('browser_open_session', browserOpenSessionTool, 'browse')
   toolRegistry.register('browser_close_session', browserCloseSessionTool, 'browse')
   toolRegistry.register('browser_list_sessions', browserListSessionsTool, 'browse')

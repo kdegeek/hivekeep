@@ -13,8 +13,6 @@ import { stringifyToolResultValue } from '@/server/llm/core/vercel-bridge'
 import type { KinbotMessage, KinbotMessageBlock } from '@/server/llm/llm/types'
 import { resolveThinkingConfig, isContextTooLargeError, sanitizePersistedToolCalls, getActiveKinStreamSnapshot } from '@/server/services/kin-engine'
 import { toolRegistry } from '@/server/tools/index'
-import { resolveMCPTools } from '@/server/services/mcp'
-import { resolveCustomTools } from '@/server/services/custom-tools'
 import { sseManager } from '@/server/sse/index'
 import { config } from '@/server/config'
 import { getGlobalPrompt } from '@/server/services/app-settings'
@@ -22,7 +20,7 @@ import { wrapToolsWithSpill } from '@/server/services/tool-output-spill'
 import { executeToolBatch } from '@/server/services/tool-executor'
 import { recordUsage, aggregateUsages, getTaskTotals } from '@/server/services/token-usage'
 import { runStreamStep } from '@/server/services/stream-runner'
-import type { TaskStatus, TaskMode, KinToolConfig, KinThinkingConfig } from '@/shared/types'
+import type { TaskStatus, TaskMode, KinThinkingConfig } from '@/shared/types'
 
 const log = createLogger('tasks')
 
@@ -439,7 +437,6 @@ export interface TaskPromptContextSnapshot {
     model: string
     providerId: string | null
     thinkingConfig: string | null
-    toolConfig: string | null
   }
   globalPrompt: string | null
   kinDirectory: Array<{ id: string; slug: string | null; name: string; role: string }>
@@ -488,7 +485,6 @@ async function captureTaskPromptContextSnapshot(params: {
       model: identityKin.model,
       providerId: identityKin.providerId,
       thinkingConfig: identityKin.thinkingConfig,
-      toolConfig: identityKin.toolConfig,
     },
     globalPrompt,
     kinDirectory,
@@ -930,70 +926,46 @@ async function executeSubKin(taskId: string, isNudge = false) {
     )
     const taskProviderType = taskResolved.providerRow.type
 
-    // Resolve tools: spawned Kin's full toolset (minus excluded) + sub-Kin communication tools
-    const kinToolConfig: KinToolConfig | null = kinIdentity.toolConfig
-      ? JSON.parse(kinIdentity.toolConfig)
-      : null
-
-    // Native tools resolved as the spawned Kin (same as a main Kin).
+    // Unified toolset resolution. The toolbox is the sole tool-grant primitive
+    // across native + plugin + MCP + custom for the spawned Kin. We resolve the
+    // spawned Kin's MAIN surface (isSubKin: false) intersected with the task's
+    // toolboxes, then subtract the hard sub-Kin floor, then layer on the
+    // sub-Kin-only comms tools (which are infrastructure, never toolbox-gated).
+    //
     // `workspaceOverride` (set above for ticket-on-a-cloned-project tasks)
-    // scopes every filesystem + shell tool to the per-task worktree and
-    // injects KINBOT_GH_TOKEN into spawned subprocesses for git auth.
-    const nativeTools = toolRegistry.resolve({
-      kinId: kinIdentity.id,
-      taskId,
-      taskDepth: task.depth,
-      isSubKin: false,
-      channelOriginId: task.channelOriginId ?? undefined,
-      cronId: task.cronId ?? undefined,
-      ticketId: task.ticketId ?? undefined,
-      toolConfig: kinToolConfig,
-      workspaceOverride,
-    })
-
-    // Filter disabled native tools per Kin config (deny-list)
-    if (kinToolConfig?.disabledNativeTools?.length) {
-      for (const name of kinToolConfig.disabledNativeTools) {
-        delete nativeTools[name]
-      }
-    }
-
-    // Filter out defaultDisabled tools not explicitly opted-in
-    const allRegistered = toolRegistry.list()
-    const optInSet = new Set(kinToolConfig?.enabledOptInTools ?? [])
-    for (const reg of allRegistered) {
-      if (reg.defaultDisabled && !optInSet.has(reg.name)) {
-        delete nativeTools[reg.name]
-      }
-    }
-
-    // Toolbox-based native filtering. The task's resolved native allow-list is
-    // CORE_TOOLS unioned with every referenced toolbox's tool names ("*"
-    // expands to all native tools). The toolbox ids are resolved from the
-    // task row (explicit toolbox_ids → legacy tool_preset → default), then
-    // the union floor is layered on top.
-    const { CORE_TOOLS, resolveToolboxNames } = await import('@/server/services/toolboxes')
+    // scopes every filesystem + shell tool to the per-task worktree and injects
+    // KINBOT_GH_TOKEN into spawned subprocesses for git auth.
     const taskToolboxIds = await resolveTaskToolboxIds({
       toolboxIds: task.toolboxIds as string | null,
       toolPreset: task.toolPreset as string | null,
       ticketId: task.ticketId ?? null,
     })
-    const allowedNative = new Set<string>([...CORE_TOOLS, ...resolveToolboxNames(taskToolboxIds)])
 
-    // Keep only the native tools the toolboxes (+ core floor) allow, then
-    // subtract the hard safety floor that can never run in a sub-Kin. The
-    // HARD list is applied AFTER the allow-list so even an 'all' toolbox can't
-    // smuggle a main-session-only tool through.
-    for (const name of Object.keys(nativeTools)) {
-      if (!allowedNative.has(name)) delete nativeTools[name]
-    }
+    const { resolveToolset } = await import('@/server/services/toolset-resolver')
+    const mainSurface = await resolveToolset({
+      kinId: kinIdentity.id,
+      toolboxIds: taskToolboxIds,
+      // isSubKin:false → resolve the spawned Kin's MAIN tool surface. The hard
+      // sub-Kin floor is subtracted explicitly below (so an 'all' toolbox can't
+      // smuggle a main-session-only tool through).
+      isSubKin: false,
+      taskId,
+      taskDepth: task.depth,
+      channelOriginId: task.channelOriginId ?? undefined,
+      cronId: task.cronId ?? undefined,
+      ticketId: task.ticketId ?? undefined,
+      workspaceOverride,
+    })
+
+    // Hard sub-Kin floor: removed AFTER the toolbox allow-list.
     for (const name of HARD_EXCLUDED_FROM_SUBKIN) {
-      delete nativeTools[name]
+      delete mainSurface[name]
     }
 
     // Sub-Kin-specific tools (scoped to parent for communication back).
     // Same workspace override applies — these tools are mostly comms-only
-    // but `record_findings` and friends still write into the worktree.
+    // but `record_findings` and friends still write into the worktree. These
+    // are NOT toolbox-filtered (infrastructure for the task protocol).
     const subKinTools = toolRegistry.resolve({
       kinId: task.parentKinId,
       taskId,
@@ -1001,7 +973,6 @@ async function executeSubKin(taskId: string, isNudge = false) {
       isSubKin: true,
       channelOriginId: task.channelOriginId ?? undefined,
       cronId: task.cronId ?? undefined,
-      toolConfig: kinToolConfig,
       workspaceOverride,
     })
 
@@ -1012,17 +983,8 @@ async function executeSubKin(taskId: string, isNudge = false) {
       delete subKinTools['report_to_parent']
     }
 
-    // MCP + custom tools for the spawned Kin
-    const mcpTools = await resolveMCPTools(kinIdentity.id, kinToolConfig)
-    const customToolDefs = await resolveCustomTools(kinIdentity.id)
-
-    // Native tools have already been right-sized above by the toolbox
-    // allow-list (CORE_TOOLS ∪ toolbox tool names, minus the hard floor). The
-    // sub-Kin comms tools are infrastructure and are NOT toolbox-filtered.
-    // MCP and per-Kin custom tools likewise flow through unfiltered — those
-    // have already been curated at the Kin level.
     const tools = wrapToolsWithSpill(
-      { ...nativeTools, ...subKinTools, ...mcpTools, ...customToolDefs },
+      { ...mainSurface, ...subKinTools },
       effectiveWorkspacePath,
     )
 
@@ -1030,10 +992,8 @@ async function executeSubKin(taskId: string, isNudge = false) {
       {
         taskId,
         toolboxIds: taskToolboxIds,
-        nativeCount: Object.keys(nativeTools).length,
+        mainSurfaceCount: Object.keys(mainSurface).length,
         subKinCount: Object.keys(subKinTools).length,
-        mcpCount: Object.keys(mcpTools).length,
-        customCount: Object.keys(customToolDefs).length,
       },
       'Sub-Kin toolbox surface resolved',
     )

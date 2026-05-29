@@ -64,7 +64,7 @@ mock.module('@/server/db/index', () => {
 mock.module('@/server/db/schema', () => ({
   ...fullMockSchema,
   userProfiles: { role: 'role', userId: 'user_id' },
-  kins: { id: 'id', toolConfig: 'toolConfig' },
+  kins: { id: 'id', toolboxIds: 'toolboxIds' },
 }))
 
 mock.module('drizzle-orm', () => ({

@@ -41,7 +41,7 @@ import { createLogger } from '@/server/logger'
 import { deleteChannel } from '@/server/services/channels'
 import { stopJob } from '@/server/services/crons'
 import { resolveThinkingConfig } from '@/server/services/kin-engine'
-import type { KinToolConfig, KinCompactingConfig, KinThinkingConfig } from '@/shared/types'
+import type { KinCompactingConfig, KinThinkingConfig } from '@/shared/types'
 
 const log = createLogger('services:kins')
 
@@ -57,6 +57,8 @@ export interface CreateKinInput {
   providerId?: string | null
   createdBy: string | null
   mcpServerIds?: string[]
+  /** Optional toolbox selection. Null/empty → 'all' built-in at resolution. */
+  toolboxIds?: string[] | null
 }
 
 export interface UpdateKinInput {
@@ -67,7 +69,9 @@ export interface UpdateKinInput {
   model?: string
   providerId?: string | null
   slug?: string
-  toolConfig?: KinToolConfig | null
+  /** JSON-serialized array of toolbox ids. Null/empty → 'all' built-in at
+   *  resolution. The toolbox is the sole tool-grant primitive. */
+  toolboxIds?: string[] | null
   compactingConfig?: KinCompactingConfig | null
   thinkingConfig?: KinThinkingConfig | null
   mcpServerIds?: string[]
@@ -84,7 +88,7 @@ export interface KinRecord {
   model: string
   providerId: string | null
   workspacePath: string
-  toolConfig: string | null
+  toolboxIds: string | null
   compactingConfig: string | null
   thinkingConfig: string | null
   createdBy: string | null
@@ -131,6 +135,7 @@ export async function createKin(input: CreateKinInput): Promise<KinRecord> {
       model: input.model,
       providerId: input.providerId ?? null,
       workspacePath,
+      toolboxIds: input.toolboxIds && input.toolboxIds.length > 0 ? JSON.stringify(input.toolboxIds) : null,
       createdBy: input.createdBy,
       createdAt: now,
       updatedAt: now,
@@ -183,7 +188,10 @@ export async function updateKin(
   if (input.expertise !== undefined) updates.expertise = input.expertise
   if (input.model !== undefined) updates.model = input.model
   if (input.providerId !== undefined) updates.providerId = input.providerId
-  if (input.toolConfig !== undefined) updates.toolConfig = JSON.stringify(input.toolConfig)
+  if (input.toolboxIds !== undefined) {
+    // Null/empty → store null so resolution falls back to the 'all' built-in.
+    updates.toolboxIds = input.toolboxIds && input.toolboxIds.length > 0 ? JSON.stringify(input.toolboxIds) : null
+  }
   if (input.compactingConfig !== undefined) updates.compactingConfig = input.compactingConfig ? JSON.stringify(input.compactingConfig) : null
   if (input.thinkingConfig !== undefined) updates.thinkingConfig = input.thinkingConfig ? JSON.stringify(input.thinkingConfig) : null
 
@@ -211,25 +219,6 @@ export async function updateKin(
     await db.delete(kinMcpServers).where(eq(kinMcpServers.kinId, kinId))
     for (const mcpServerId of input.mcpServerIds) {
       await db.insert(kinMcpServers).values({ kinId, mcpServerId })
-    }
-  }
-
-  // Auto-sync kinMcpServers links based on toolConfig.mcpAccess
-  if (input.toolConfig !== undefined && input.mcpServerIds === undefined) {
-    const tc = input.toolConfig
-    if (tc?.mcpAccess) {
-      const currentLinks = await db
-        .select({ mcpServerId: kinMcpServers.mcpServerId })
-        .from(kinMcpServers)
-        .where(eq(kinMcpServers.kinId, kinId))
-        .all()
-      const currentSet = new Set(currentLinks.map((l) => l.mcpServerId))
-
-      for (const [serverId, access] of Object.entries(tc.mcpAccess)) {
-        if (access.length > 0 && !currentSet.has(serverId)) {
-          await db.insert(kinMcpServers).values({ kinId, mcpServerId: serverId })
-        }
-      }
     }
   }
 

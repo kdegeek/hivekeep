@@ -9,29 +9,21 @@ const MAX_RESPONSE_BODY = 100 * 1024 // 100KB
 const DEFAULT_TIMEOUT = 30_000
 
 type UrlSafety =
-  | { allowed: true; privateNetwork: boolean }
+  | { allowed: true }
   | { allowed: false; reason: string }
-
-function isPrivateIpv4(host: string): boolean {
-  return (
-    host.startsWith('10.') ||
-    host.startsWith('192.168.') ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
-  )
-}
-
-function isLocalNetworkHostname(host: string): boolean {
-  return host.endsWith('.internal') || host.endsWith('.local')
-}
 
 /**
  * Check whether a URL is safe for http_request.
  *
- * Loopback, unspecified addresses, link-local metadata endpoints, and invalid
- * URLs are always blocked. RFC1918 IPv4 ranges and local-network hostnames can
- * be allowed per Kin through toolConfig.allowPrivateNetworkHttpRequests.
+ * The TOOLBOX is the sole tool-grant primitive: there is no per-Kin network
+ * flag. When `http_request` is granted (by listing it in a toolbox), it may
+ * reach private / local hosts — to block that, simply don't grant the tool.
+ *
+ * The only hard, non-negotiable blocks remaining are loopback / unspecified
+ * addresses, the link-local cloud-metadata endpoint, non-HTTP(S) schemes, and
+ * invalid URLs. These protect the host process itself and are never toggleable.
  */
-function checkUrlSafety(urlStr: string, allowPrivateNetwork: boolean): UrlSafety {
+function checkUrlSafety(urlStr: string): UrlSafety {
   let url: URL
   try {
     url = new URL(urlStr)
@@ -58,26 +50,21 @@ function checkUrlSafety(urlStr: string, allowPrivateNetwork: boolean): UrlSafety
     return { allowed: false, reason: 'Requests to link-local metadata endpoints are not allowed' }
   }
 
-  if (isPrivateIpv4(host) || isLocalNetworkHostname(host)) {
-    if (allowPrivateNetwork) return { allowed: true, privateNetwork: true }
-    return { allowed: false, reason: 'Requests to private/internal addresses are not allowed' }
-  }
-
-  return { allowed: true, privateNetwork: false }
+  return { allowed: true }
 }
 
 /**
  * http_request - Make HTTP requests to external APIs.
- * Available to main agents only.
+ * Available to main Kins and sub-Kins. Granting the tool (via a toolbox) is the
+ * only gate — there is no per-Kin network flag; private/local hosts are
+ * reachable when the tool is granted (loopback + cloud-metadata stay blocked).
  */
 export const httpRequestTool: ToolRegistration = {
   availability: ['main', 'sub-kin'],
-  create: (ctx: ToolExecutionContext) => {
-    const allowPrivateNetwork = ctx.toolConfig?.allowPrivateNetworkHttpRequests === true
+  create: (_ctx: ToolExecutionContext) => {
     return tool({
-      description: allowPrivateNetwork
-        ? 'Make an HTTP request to an external URL. RFC1918 and local-network addresses are allowed for this Kin, but loopback and metadata endpoints are still blocked.'
-        : 'Make an HTTP request to an external URL. Private/internal IPs are blocked.',
+      description:
+        'Make an HTTP request to a URL. May reach private/internal and local-network hosts; only loopback and cloud-metadata endpoints are blocked.',
       inputSchema: z.object({
         method: z
           .enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
@@ -98,8 +85,8 @@ export const httpRequestTool: ToolRegistration = {
           .describe('Default: 30, max: 120'),
       }),
       execute: async ({ method, url, headers, body, timeout_seconds }) => {
-        // SSRF protection
-        const urlSafety = checkUrlSafety(url, allowPrivateNetwork)
+        // SSRF guard — loopback / metadata / non-HTTP(S) are always blocked.
+        const urlSafety = checkUrlSafety(url)
         if (!urlSafety.allowed) {
           return { error: urlSafety.reason }
         }
@@ -123,7 +110,7 @@ export const httpRequestTool: ToolRegistration = {
             }
           }
 
-          log.debug({ method, url, privateNetwork: urlSafety.privateNetwork }, 'HTTP request')
+          log.debug({ method, url }, 'HTTP request')
 
           const response = await fetch(url, {
             method,

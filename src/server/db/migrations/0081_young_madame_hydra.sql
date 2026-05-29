@@ -1,0 +1,1 @@
+ALTER TABLE `kins` DROP COLUMN `tool_config`;

@@ -29,13 +29,12 @@ import { recoverStaleTasks } from '@/server/services/tasks'
 import { sseManager } from '@/server/sse/index'
 import { eventBus } from '@/server/services/events'
 import { hookRegistry } from '@/server/hooks/index'
-import { toolRegistry } from '@/server/tools/index'
 import { config } from '@/server/config'
 import { getRelevantMemories, rewriteQueryWithContext } from '@/server/services/memory'
 import { maybeCompact } from '@/server/services/compacting'
-import { resolveMCPTools, getMCPToolsSummary } from '@/server/services/mcp'
-import { resolveCustomTools } from '@/server/services/custom-tools'
-import type { KinToolConfig, KinThinkingConfig, KinThinkingEffort, ContextTokenBreakdown, ContextPipelineStatus } from '@/shared/types'
+import { getMCPToolsSummary } from '@/server/services/mcp'
+import { resolveToolset } from '@/server/services/toolset-resolver'
+import type { KinThinkingConfig, KinThinkingEffort, ContextTokenBreakdown, ContextPipelineStatus } from '@/shared/types'
 import { listAvailableKins } from '@/server/services/inter-kin'
 import { listContactsForPrompt, findContactByLinkedUserId } from '@/server/services/contacts'
 import { contactNotes as contactNotesTable } from '@/server/db/schema'
@@ -1408,42 +1407,20 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
     // `resolved` was set earlier (just before buildSystemPrompt) so
     // the prompt-gating decision could see `resolved.model.maxTools`.
 
-    // Resolve tools for this Kin's context (native + MCP), filtered by toolConfig
-    const toolConfig: KinToolConfig | null = kin.toolConfig
-      ? JSON.parse(kin.toolConfig)
-      : null
-
     // Resolve thinking config for this Kin (defaults to enabled if never configured)
     const thinkingConfig = resolveThinkingConfig(kin.thinkingConfig)
     const providerType = resolved.providerRow.type
 
-    const nativeTools = toolRegistry.resolve({
+    // Unified toolset resolution: the toolbox is the sole tool-grant primitive
+    // across native + plugin + MCP + custom. A null/empty `kins.toolbox_ids`
+    // resolves to the 'all' built-in at runtime (no SQL backfill).
+    const mergedTools = await resolveToolset({
       kinId,
-      userId: effectiveUserId,
+      toolboxIds: kin.toolboxIds,
       isSubKin: false,
+      userId: effectiveUserId,
       channelOriginId: queueItem.channelOriginId ?? undefined,
-      toolConfig,
     })
-
-    // Filter disabled native tools (deny-list)
-    if (toolConfig?.disabledNativeTools?.length) {
-      for (const name of toolConfig.disabledNativeTools) {
-        delete nativeTools[name]
-      }
-    }
-
-    // Filter out defaultDisabled tools not explicitly opted-in.
-    const allRegistered = toolRegistry.list()
-    const optInSet = new Set(toolConfig?.enabledOptInTools ?? [])
-    for (const reg of allRegistered) {
-      if (reg.defaultDisabled && !optInSet.has(reg.name)) {
-        delete nativeTools[reg.name]
-      }
-    }
-
-    const mcpTools = await resolveMCPTools(kinId, toolConfig)
-    const customToolDefs = await resolveCustomTools(kinId)
-    const mergedTools = { ...nativeTools, ...mcpTools, ...customToolDefs }
 
     // When processing a kin_reply, remove inter-kin tools to prevent ping-pong
     if (queueItem.messageType === 'kin_reply') {
@@ -2221,25 +2198,21 @@ export async function processQuickMessage(kinId: string): Promise<boolean> {
     const qsThinkingConfig = resolveThinkingConfig(kin.thinkingConfig)
     const qsProviderType = qsResolved.providerRow.type
 
-    // Resolve tools (with exclusion list for quick sessions)
-    const toolConfig: KinToolConfig | null = kin.toolConfig ? JSON.parse(kin.toolConfig) : null
+    // Unified toolset resolution (same model as a main turn) then apply the
+    // quick-session exclusion list on top. The toolbox is the sole grant
+    // primitive; a null/empty selection resolves to the 'all' built-in.
     const quickEffectiveUserId = queueItem.sourceType === 'user' ? (queueItem.sourceId ?? undefined) : undefined
-    const nativeTools = toolRegistry.resolve({ kinId, userId: quickEffectiveUserId, isSubKin: false, toolConfig })
-
-    // Apply Kin-level deny-list
-    if (toolConfig?.disabledNativeTools?.length) {
-      for (const name of toolConfig.disabledNativeTools) delete nativeTools[name]
-    }
-    // Filter out defaultDisabled tools not explicitly opted-in
-    const allRegistered = toolRegistry.list()
-    const optInSet = new Set(toolConfig?.enabledOptInTools ?? [])
-    for (const reg of allRegistered) {
-      if (reg.defaultDisabled && !optInSet.has(reg.name)) delete nativeTools[reg.name]
-    }
+    const quickTools = await resolveToolset({
+      kinId,
+      toolboxIds: kin.toolboxIds,
+      isSubKin: false,
+      userId: quickEffectiveUserId,
+      quick: true,
+    })
     // Apply quick session exclusion list
-    for (const name of QUICK_SESSION_EXCLUDED_TOOLS) delete nativeTools[name]
+    for (const name of QUICK_SESSION_EXCLUDED_TOOLS) delete quickTools[name]
 
-    const tools = capTools(wrapToolsWithSpill({ ...nativeTools }, kin.workspacePath), kinId, qsProviderType, qsResolved.model)
+    const tools = capTools(wrapToolsWithSpill({ ...quickTools }, kin.workspacePath), kinId, qsProviderType, qsResolved.model)
     const hasTools = Object.keys(tools).length > 0
 
     // Stream LLM response — custom single-step loop (same pattern as processKinQueue)

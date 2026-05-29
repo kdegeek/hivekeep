@@ -1,0 +1,1 @@
+ALTER TABLE `kins` ADD `toolbox_ids` text;

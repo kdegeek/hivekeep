@@ -429,7 +429,15 @@
         "tts": "Nécessite un fournisseur de synthèse vocale — la bascule fonctionne mais l'outil renverra une erreur tant qu'aucun n'est configuré.",
         "stt": "Nécessite un fournisseur de reconnaissance vocale — la bascule fonctionne mais l'outil renverra une erreur tant qu'aucun n'est configuré.",
         "embedding": "Nécessite un fournisseur d'embedding — le rappel et l'enregistrement en mémoire échoueront tant qu'aucun n'est configuré."
-      }
+      },
+      "toolboxesTitle": "Boîtes à outils",
+      "toolboxesHint": "Choisissez une ou plusieurs boîtes à outils pour accorder ses outils à ce Kin. Une boîte regroupe des outils de toutes les sources (natifs, plugin, MCP, personnalisés).",
+      "defaultsToAll": "Aucune boîte sélectionnée — ce Kin utilise la boîte intégrée « all » (tous les outils natifs).",
+      "noToolboxesTitle": "Aucune boîte à outils",
+      "noToolboxesDescription": "Créez des boîtes à outils depuis les Réglages pour accorder des outils à ce Kin.",
+      "resolvedPreviewTitle": "Outils accordés",
+      "resolvedPreviewHint": "Aperçu en lecture seule des outils accordés par les boîtes sélectionnées. Les outils listés qui n'existent pas sont ignorés.",
+      "resolvedPreviewEmpty": "Aucun outil accordé par la sélection actuelle."
     },
     "defaults": {
       "character": "Tu es un assistant amical, réfléchi et polyvalent. Tu communiques clairement et tu adaptes ton ton au contexte - décontracté quand c'est approprié, précis quand c'est nécessaire.\n\nTu es patient, curieux et tu prends plaisir à aider. Quand tu ne sais pas quelque chose, tu le dis honnêtement. Tu poses des questions de clarification quand la demande est ambiguë.\n\nTu gardes tes réponses concises sauf si l'utilisateur demande explicitement plus de détails.",
@@ -1044,6 +1052,18 @@
     "allTools": "Tous les outils",
     "toolCount": "{{count}} outils",
     "hardExcluded": "Indisponible dans les tâches",
+    "sources": {
+      "native": "Natif",
+      "plugin": "Plugin",
+      "mcp": "MCP",
+      "custom": "Personnalisé"
+    },
+    "sourceGroup": {
+      "native": "Outils natifs",
+      "plugin": "Outils de plugins",
+      "mcp": "Outils MCP",
+      "custom": "Outils personnalisés"
+    },
     "created": "Boîte à outils créée",
     "updated": "Boîte à outils mise à jour",
     "deleted": "Boîte à outils supprimée",

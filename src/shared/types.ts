@@ -141,18 +141,6 @@ export interface ToolCallEntry {
   offset?: number
 }
 
-/** Per-Kin tool authorization config (stored as JSON in kins.tool_config) */
-export interface KinToolConfig {
-  /** Native tool names that are DISABLED (deny-list, empty means all enabled) */
-  disabledNativeTools: string[]
-  /** MCP server access, serverId -> ['*'] (all tools) or specific tool names */
-  mcpAccess: Record<string, string[]>
-  /** Native tool names that are explicitly ENABLED despite being defaultDisabled (allow-list) */
-  enabledOptInTools?: string[]
-  /** Allow http_request to reach RFC1918 and local-network hostnames for this Kin */
-  allowPrivateNetworkHttpRequests?: boolean
-}
-
 /** A global, named set of native tools assignable to tasks. The resolved
  *  native toolset of a task is CORE_TOOLS unioned with every referenced
  *  toolbox's `toolNames` (the special value "*" expands to all native tools).
@@ -174,12 +162,28 @@ export interface Toolbox {
  *  every locale) or a `{ lang: text }` map. Mirrors the SDK `ToolLabel`. */
 export type ToolLabel = string | Record<string, string>
 
-/** A single entry of the Kin-agnostic native tool catalog returned by
- *  GET /api/tools/catalog. Carries metadata only (no per-Kin enabled state) so
- *  the toolbox editor can render every native tool with its domain, label, and
- *  a `hardExcludedFromSubKin` flag warning the tool can never run in a task. */
+/** Where a catalog tool originates. Drives the source grouping/badges in the
+ *  toolbox editor and the unified resolver's universe:
+ *   - native : built into KinBot (toolRegistry, name has no special prefix)
+ *   - plugin : contributed by an installed plugin (name `plugin_<plugin>_*`)
+ *   - mcp    : exposed by a global MCP server (name `mcp_<server>_<tool>`)
+ *   - custom : per-Kin user script (name `custom_<name>`)
+ *  "*" inside a toolbox still expands to NATIVE tools only — mcp/custom/plugin
+ *  tools must be listed by their stable name. */
+export type ToolSource = 'native' | 'plugin' | 'mcp' | 'custom'
+
+/** A single entry of the tool catalog returned by GET /api/tools/catalog.
+ *  Carries metadata only (no per-Kin enabled state) so the toolbox editor can
+ *  render every grantable tool with its source, domain, label, and a
+ *  `hardExcludedFromSubKin` flag warning the tool can never run in a task.
+ *
+ *  Native + plugin tools come from the registry. MCP tools come from ALL global
+ *  active servers (no per-Kin gate). Custom tools are per-Kin and are only
+ *  included when the request carries `?kinId=`. */
 export interface ToolCatalogEntry {
   name: string
+  /** Provenance of the tool. */
+  source: ToolSource
   domain: ToolDomain
   label: ToolLabel | null
   description: string | null
@@ -189,6 +193,12 @@ export interface ToolCatalogEntry {
   /** True when the tool is in HARD_EXCLUDED_FROM_SUBKIN — it cannot run inside a
    *  task even if a toolbox lists it. The UI surfaces a soft warning. */
   hardExcludedFromSubKin: boolean
+  /** MCP only: the display name of the originating server. */
+  mcpServerName?: string
+  /** Custom only: the id of the owning Kin. */
+  customKinId?: string
+  /** Custom only: the display name of the owning Kin (best-effort). */
+  customKinName?: string
 }
 
 /** Per-Kin compacting configuration (stored as JSON in kins.compacting_config) */

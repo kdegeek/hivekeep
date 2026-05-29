@@ -36,8 +36,7 @@ import { useUnsavedChanges } from '@/client/hooks/useUnsavedChanges'
 import { useHasCapability } from '@/client/hooks/useHasCapability'
 import { cn } from '@/client/lib/utils'
 import { api, getErrorMessage } from '@/client/lib/api'
-import { getToolDomainMap } from '@/client/lib/tool-domain-lookup'
-import type { KinToolConfig, KinCompactingConfig, KinThinkingConfig } from '@/shared/types'
+import type { KinCompactingConfig, KinThinkingConfig } from '@/shared/types'
 import type { GeneratedKinConfig } from '@/client/hooks/useKins'
 
 interface Model {
@@ -59,7 +58,7 @@ interface KinDetail {
   expertise: string
   model: string
   providerId?: string | null
-  toolConfig?: KinToolConfig | null
+  toolboxIds?: string[] | null
   compactingConfig?: KinCompactingConfig | null
   thinkingConfig?: KinThinkingConfig | null
 }
@@ -86,6 +85,7 @@ interface KinFormModalProps {
     expertise: string
     model: string
     providerId?: string | null
+    toolboxIds?: string[] | null
   }) => Promise<{ id: string }>
   // Mode edit
   kin?: KinDetail | null
@@ -120,27 +120,6 @@ const TABS: Array<{ id: TabId; icon: typeof Settings; labelKey: string }> = [
   { id: 'compaction', icon: Archive, labelKey: 'kin.tabs.compaction' },
   { id: 'thinking', icon: Sparkles, labelKey: 'kin.tabs.thinking' },
 ]
-
-/** Convert AI domain-level suggestions into KinToolConfig */
-function buildToolConfigFromDomains(
-  disableToolDomains: string[],
-  enableOptInToolDomains: string[],
-): KinToolConfig {
-  const map = getToolDomainMap()
-  const disabledNativeTools = Object.entries(map)
-    .filter(([, domain]) => disableToolDomains.includes(domain))
-    .map(([toolName]) => toolName)
-
-  const enabledOptInTools = Object.entries(map)
-    .filter(([, domain]) => enableOptInToolDomains.includes(domain))
-    .map(([toolName]) => toolName)
-
-  return {
-    disabledNativeTools,
-    mcpAccess: {},
-    enabledOptInTools: enabledOptInTools.length > 0 ? enabledOptInTools : undefined,
-  }
-}
 
 /** Convert data URL to File */
 function dataUrlToFile(dataUrl: string): File {
@@ -202,7 +181,7 @@ export function KinFormModal({
   const [expertise, setExpertise] = useState(defaultExpertise)
   const [model, setModel] = useState('')
   const [providerId, setProviderId] = useState<string | null>(null)
-  const [toolConfig, setToolConfig] = useState<KinToolConfig | null>(null)
+  const [toolboxIds, setToolboxIds] = useState<string[] | null>(null)
   const [compactingConfig, setCompactingConfig] = useState<KinCompactingConfig | null>(null)
   const [thinkingConfig, setThinkingConfig] = useState<KinThinkingConfig | null>(null)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
@@ -228,7 +207,7 @@ export function KinFormModal({
         if (data.character) setCharacter(data.character)
         if (data.expertise) setExpertise(data.expertise)
         if (data.model) setModel(data.model)
-        if (data.toolConfig) setToolConfig(data.toolConfig)
+        if (Array.isArray(data.toolboxIds)) setToolboxIds(data.toolboxIds)
         setWizardStep('form')
         markDirty()
       } catch {
@@ -250,7 +229,7 @@ export function KinFormModal({
       setExpertise(kin.expertise)
       setModel(kin.model)
       setProviderId(kin.providerId ?? null)
-      setToolConfig(kin.toolConfig ?? null)
+      setToolboxIds(kin.toolboxIds ?? null)
       setCompactingConfig(kin.compactingConfig ?? null)
       setThinkingConfig(kin.thinkingConfig ?? null)
       setAvatarPreview(kin.avatarUrl)
@@ -264,7 +243,7 @@ export function KinFormModal({
       setExpertise(defaultExpertise)
       setModel('')
       setProviderId(null)
-      setToolConfig(null)
+      setToolboxIds(null)
       setCompactingConfig(null)
       setThinkingConfig(null)
       setAvatarPreview(null)
@@ -304,13 +283,9 @@ export function KinFormModal({
       setModel(config.suggestedModel)
     }
 
-    // Apply tool config from domain suggestions
-    if (config.disableToolDomains || config.enableOptInToolDomains) {
-      setToolConfig(buildToolConfigFromDomains(
-        config.disableToolDomains ?? [],
-        config.enableOptInToolDomains ?? [],
-      ))
-    }
+    // Tool grants are managed exclusively through toolboxes now; a wizard-
+    // generated Kin defaults to the built-in 'all' toolbox (null selection).
+    // The user can narrow it from the Tools tab after generation.
 
     markDirty()
   }
@@ -428,15 +403,11 @@ export function KinFormModal({
           compactingConfig?.summaryBudgetPercent != null ||
           compactingConfig?.maxSummaries != null
         ) ? compactingConfig : null
-        await onUpdateKin(kin.id, { name, slug, role, character, expertise, model, providerId, toolConfig, compactingConfig: effectiveCompactingConfig, thinkingConfig })
+        await onUpdateKin(kin.id, { name, slug, role, character, expertise, model, providerId, toolboxIds, compactingConfig: effectiveCompactingConfig, thinkingConfig })
         if (avatarFile) await onUploadAvatar(kin.id, avatarFile)
       } else if (onCreateKin) {
-        const created = await onCreateKin({ name, slug: slug || undefined, role, character, expertise, model, providerId })
+        const created = await onCreateKin({ name, slug: slug || undefined, role, character, expertise, model, providerId, toolboxIds })
         if (avatarFile) await onUploadAvatar(created.id, avatarFile)
-        // If tool config was set by wizard, update it after creation
-        if (toolConfig && onUpdateKin) {
-          await onUpdateKin(created.id, { toolConfig: toolConfig })
-        }
       }
       resetDirty()
       onOpenChange(false)
@@ -832,8 +803,8 @@ export function KinFormModal({
                       {activeTab === 'tools' && (
                         <KinToolsTab
                           kinId={isEdit ? kin.id : null}
-                          toolConfig={toolConfig}
-                          onToolConfigChange={setToolConfig}
+                          toolboxIds={toolboxIds}
+                          onToolboxIdsChange={(next) => { setToolboxIds(next); markDirty() }}
                         />
                       )}
 

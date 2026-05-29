@@ -240,10 +240,21 @@ export function deleteToolbox(id: string): void {
 // ─── Resolution ─────────────────────────────────────────────────────────────────
 
 /**
- * Resolve an array of toolbox ids into the union of their native tool names.
- * "*" expands to every registered native tool name (via toolRegistry.list()).
+ * Resolve an array of toolbox ids into the union of their listed tool names.
+ *
+ * A toolbox may list any grantable tool name across all four sources: native,
+ * plugin (`plugin_*`), MCP (`mcp_*`), and custom (`custom_*`). Those explicit
+ * names are returned verbatim — the unified resolver intersects them with the
+ * Kin/task universe, so a name absent from the universe is silently dropped
+ * there.
+ *
+ * The single special value "*" expands to every registered NATIVE tool name
+ * ONLY (it is the 'all' built-in). Plugin tools live in the same registry, so
+ * they are explicitly excluded from the "*" expansion by their `plugin_`
+ * prefix — to grant a plugin/MCP/custom tool a toolbox must list it by name.
+ *
  * CORE_TOOLS is NOT added here — callers layer the floor on top (see
- * tool-presets / executeSubKin). Unknown ids are silently skipped.
+ * tool-presets / the unified resolver). Unknown ids are silently skipped.
  */
 export function resolveToolboxNames(ids: string[]): string[] {
   if (!ids || ids.length === 0) return []
@@ -264,7 +275,11 @@ export function resolveToolboxNames(ids: string[]): string[] {
   }
 
   if (wildcard) {
-    for (const t of toolRegistry.list()) result.add(t.name)
+    // "*" is native-only. Plugin tools share the registry but are namespaced
+    // with a `plugin_` prefix, so we exclude them from the wildcard expansion.
+    for (const t of toolRegistry.list()) {
+      if (!t.name.startsWith('plugin_')) result.add(t.name)
+    }
   }
 
   return Array.from(result)

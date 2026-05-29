@@ -86,7 +86,6 @@ mock.module('@/server/services/mcp', () => ({
   testConnection: () => Promise.resolve({ connected: false }),
   getMCPToolsSummary: () => Promise.resolve([]),
   resolveMCPTools: () => Promise.resolve([]),
-  getMCPToolsForConfig: () => Promise.resolve([]),
 }))
 
 mock.module('@/server/sse/index', () => ({

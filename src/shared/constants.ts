@@ -262,3 +262,49 @@ export const DEFAULT_PROJECT_TAGS: ReadonlyArray<{ label: string; color: string 
   { label: 'chore', color: '#6b7280' },
   { label: 'doc', color: '#f59e0b' },
 ]
+
+/**
+ * Mandatory tool floor present in EVERY resolved toolset (main Kins and tasks)
+ * regardless of toolbox selection, because the system protocol assumes them.
+ * The toolbox resolver unions this with the selected toolboxes' listed tools.
+ *
+ * This is the single source of truth, shared between the server resolver and
+ * the client (Kin tools preview). `@/server/services/tool-presets` re-exports
+ * it so existing server imports keep working.
+ */
+export const CORE_TOOLS: readonly string[] = [
+  // Filesystem (read + write paths). multi_edit is non-optional for
+  // efficient single-file refactors.
+  'read_file',
+  'write_file',
+  'edit_file',
+  'multi_edit',
+  'list_directory',
+  'grep',
+
+  // Shell (with the wrapper-refusal gate already in place).
+  'run_shell',
+
+  // Sub-Kin protocol — strictly required by the runner.
+  'update_task_status',
+  'request_input',
+  'report_to_parent',
+
+  // Human in the loop.
+  'prompt_human',
+  'notify',
+
+  // File attachments (sub-Kins often need to surface screenshots / files
+  // back to the user without going through write_file + a separate channel
+  // call).
+  'attach_file',
+
+  // Reasoning aid (no-op tool that logs a thought). Cheap, no side effects,
+  // available to every sub-Kin regardless of preset so it can be leaned on
+  // for planning before committing to concrete tool calls.
+  'think',
+
+  // Structured planning (TodoWrite-equivalent). Sub-Kins use it to lay out
+  // a plan up-front on multi-step work and surface progress to the user.
+  'task_todos',
+]
