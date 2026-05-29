@@ -46,6 +46,7 @@ mock.module('@/server/services/channels', () => ({
   getChannelOriginMeta: () => undefined,
   getActiveChannelsForKin: () => [],
   restoreActiveChannels: async () => {},
+  transferChannel: mock(() => Promise.resolve({ ok: true, transferred: true })),
 }))
 
 const mockSendMessage = mock(() => Promise.resolve({ platformMessageId: 'msg-123' }))

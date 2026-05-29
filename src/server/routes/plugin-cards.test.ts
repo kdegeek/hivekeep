@@ -21,7 +21,12 @@ mock.module('@/server/services/plugin-cards', () => ({
   getPluginCard: mock(() => Promise.resolve(null)),
 }))
 
+// Preserve the real module's other exports (e.g. createPluginVault) so that
+// other test files importing from '@/server/services/plugins' are not poisoned
+// by this partial mock when bun runs the whole suite in one process.
+const realPlugins = await import('@/server/services/plugins')
 mock.module('@/server/services/plugins', () => ({
+  ...realPlugins,
   pluginManager: { getPlugin: mockGetPlugin },
 }))
 

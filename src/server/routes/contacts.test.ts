@@ -20,26 +20,40 @@ let mockReplaceContactNicknames: ReturnType<typeof mock>
 let mockSetContactNote: ReturnType<typeof mock>
 let mockUpdateContactNote: ReturnType<typeof mock>
 let mockDeleteContactNote: ReturnType<typeof mock>
+let mockGetContactNoteById: ReturnType<typeof mock>
+let mockSetUserContactNote: ReturnType<typeof mock>
+let mockDeleteUserContactNote: ReturnType<typeof mock>
 
-mock.module('@/server/services/contacts', () => ({
-  listContactsWithDetails: (...args: unknown[]) => mockListContactsWithDetails(...args),
-  getContactWithDetails: (...args: unknown[]) => mockGetContactWithDetails(...args),
-  getContact: (...args: unknown[]) => mockGetContact(...args),
-  createContact: (...args: unknown[]) => mockCreateContact(...args),
-  updateContact: (...args: unknown[]) => mockUpdateContact(...args),
-  deleteContact: (...args: unknown[]) => mockDeleteContact(...args),
-  addContactIdentifier: (...args: unknown[]) => mockAddContactIdentifier(...args),
-  updateContactIdentifier: (...args: unknown[]) => mockUpdateContactIdentifier(...args),
-  removeContactIdentifier: (...args: unknown[]) => mockRemoveContactIdentifier(...args),
-  replaceContactIdentifiers: (...args: unknown[]) => mockReplaceContactIdentifiers(...args),
-  addContactNickname: (...args: unknown[]) => mockAddContactNickname(...args),
-  updateContactNickname: (...args: unknown[]) => mockUpdateContactNickname(...args),
-  removeContactNickname: (...args: unknown[]) => mockRemoveContactNickname(...args),
-  replaceContactNicknames: (...args: unknown[]) => mockReplaceContactNicknames(...args),
-  setContactNote: (...args: unknown[]) => mockSetContactNote(...args),
-  updateContactNote: (...args: unknown[]) => mockUpdateContactNote(...args),
-  deleteContactNote: (...args: unknown[]) => mockDeleteContactNote(...args),
-}))
+// Re-registering the mock in beforeEach (in addition to this top-level call)
+// makes it win over any other test file that registers a partial mock for the
+// same module (e.g. onboarding.test.ts spreads the REAL contacts module). Bun's
+// mock.module registry is global and last-write-wins, and beforeEach runs after
+// all top-level module loads, so this guarantees the route resolves OUR stubs.
+function installContactsMock() {
+  mock.module('@/server/services/contacts', () => ({
+    listContactsWithDetails: (...args: unknown[]) => mockListContactsWithDetails(...args),
+    getContactWithDetails: (...args: unknown[]) => mockGetContactWithDetails(...args),
+    getContact: (...args: unknown[]) => mockGetContact(...args),
+    createContact: (...args: unknown[]) => mockCreateContact(...args),
+    updateContact: (...args: unknown[]) => mockUpdateContact(...args),
+    deleteContact: (...args: unknown[]) => mockDeleteContact(...args),
+    addContactIdentifier: (...args: unknown[]) => mockAddContactIdentifier(...args),
+    updateContactIdentifier: (...args: unknown[]) => mockUpdateContactIdentifier(...args),
+    removeContactIdentifier: (...args: unknown[]) => mockRemoveContactIdentifier(...args),
+    replaceContactIdentifiers: (...args: unknown[]) => mockReplaceContactIdentifiers(...args),
+    addContactNickname: (...args: unknown[]) => mockAddContactNickname(...args),
+    updateContactNickname: (...args: unknown[]) => mockUpdateContactNickname(...args),
+    removeContactNickname: (...args: unknown[]) => mockRemoveContactNickname(...args),
+    replaceContactNicknames: (...args: unknown[]) => mockReplaceContactNicknames(...args),
+    setContactNote: (...args: unknown[]) => mockSetContactNote(...args),
+    updateContactNote: (...args: unknown[]) => mockUpdateContactNote(...args),
+    deleteContactNote: (...args: unknown[]) => mockDeleteContactNote(...args),
+    getContactNoteById: (...args: unknown[]) => mockGetContactNoteById(...args),
+    setUserContactNote: (...args: unknown[]) => mockSetUserContactNote(...args),
+    deleteUserContactNote: (...args: unknown[]) => mockDeleteUserContactNote(...args),
+  }))
+}
+installContactsMock()
 
 let mockListContactPlatformIds: ReturnType<typeof mock>
 let mockRemoveContactPlatformId: ReturnType<typeof mock>
@@ -140,6 +154,11 @@ beforeEach(() => {
   mockSetContactNote = mock(() => ({ id: 'n1', contactId: 'c1', kinId: 'k1', scope: 'global', content: 'note' }))
   mockUpdateContactNote = mock(() => ({ id: 'n1', content: 'updated' }))
   mockDeleteContactNote = mock(() => true)
+  mockGetContactNoteById = mock(() => ({ id: 'n1', contactId: 'c1', kinId: 'k1', userId: null, scope: 'global', content: 'note' }))
+  mockSetUserContactNote = mock(() => ({ id: 'n1', contactId: 'c1', userId: 'u1', content: 'note' }))
+  mockDeleteUserContactNote = mock(() => true)
+  // Re-assert our mock so it wins over partial mocks from sibling test files.
+  installContactsMock()
   mockListContactPlatformIds = mock(() => [])
   mockRemoveContactPlatformId = mock(() => true)
   mockAddContactPlatformId = mock(() => ({ id: 'p1', contactId: 'c1', platform: 'telegram', platformId: '123' }))
