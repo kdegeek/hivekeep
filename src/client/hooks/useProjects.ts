@@ -13,6 +13,7 @@ interface CreateProjectInput {
   model?: string | null
   providerId?: string | null
   thinkingConfig?: KinThinkingConfig | null
+  defaultToolboxIds?: string[] | null
 }
 
 interface UpdateProjectInput {
@@ -25,6 +26,7 @@ interface UpdateProjectInput {
   model?: string | null
   providerId?: string | null
   thinkingConfig?: KinThinkingConfig | null
+  defaultToolboxIds?: string[] | null
 }
 
 export function useProjects() {

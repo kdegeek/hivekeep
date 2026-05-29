@@ -2555,6 +2555,27 @@
     "kins": "Kins",
     "projects": "Projects"
   },
+  "orphanTask": {
+    "menuAction": "Start a task",
+    "title": "Start a task",
+    "description": "Launch a standalone task on {{name}} — no project or ticket needed. The result is posted back into this thread when it finishes.",
+    "promptField": "What should this task do?",
+    "promptPlaceholder": "e.g. research the top 3 vector databases and summarize trade-offs",
+    "promptHelp": "Describe the work for this one-off task. Max 2000 chars.",
+    "promptCounter": "{{count}} / 2000",
+    "titleField": "Title (optional)",
+    "titlePlaceholder": "Short label for this task",
+    "toolboxesField": "Toolboxes (optional)",
+    "toolboxesHelp": "Which tool sets this task can use, on top of the mandatory core set. Leave empty to use the built-in default.",
+    "modelField": "Model (optional)",
+    "modelInherit": "Inherit (Kin's model)",
+    "modelHelp": "Override the model for this task only. Leave on inherit to use the Kin's own model.",
+    "thinkingField": "Reasoning effort (optional)",
+    "thinkingInherit": "Inherit (Kin's setting)",
+    "thinkingHelp": "Override the reasoning effort for this task only. Leave on inherit to use the Kin's own setting.",
+    "start": "Start task",
+    "started": "Task started on {{name}}. The result will appear in this thread when it finishes."
+  },
   "projects": {
     "page": {
       "title": "Projects",
@@ -2788,6 +2809,12 @@
       "runPromptCounter": "{{count}} / 500",
       "toolboxesField": "Toolboxes",
       "toolboxesHelp": "Which tool sets this task can use. The task always keeps a mandatory core set; selected toolboxes add to it. Defaults to the Code toolbox.",
+      "modelField": "Model (optional)",
+      "modelInherit": "Inherit (project / Kin)",
+      "modelHelp": "Override the model for this run only. Leave on inherit to use the project default, then the Kin's own model.",
+      "thinkingField": "Reasoning effort (optional)",
+      "thinkingInherit": "Inherit (project / Kin)",
+      "thinkingHelp": "Override the reasoning effort for this run only. Leave on inherit to use the project default, then the Kin's own setting.",
       "start": "Start"
     },
     "enrich": {
@@ -2842,6 +2869,8 @@
       "thinkingField": "Default reasoning effort",
       "thinkingInherit": "Use each Kin's own setting",
       "thinkingHint": "Applied to sub-Kin tasks running on tickets of this project — overrides each Kin's own thinking config. A value chosen explicitly at task spawn still wins.",
+      "toolboxesField": "Default toolboxes for tasks",
+      "toolboxesHint": "Toolboxes given by default to tasks started on tickets of this project. Toolboxes picked explicitly when starting a task still win. Leave empty to fall back to the built-in default.",
       "delete": "Delete project",
       "deleteConfirm": {
         "title": "Delete this project?",

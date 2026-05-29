@@ -592,12 +592,19 @@ export async function spawnTask(params: SpawnParams) {
   let effectiveModel = params.model ?? null
   let effectiveProviderId = params.providerId ?? null
   let effectiveThinkingConfig: KinThinkingConfig | null = params.thinkingConfig ?? null
-  if ((!effectiveModel || !effectiveThinkingConfig) && params.ticketId) {
+  // Toolbox selection resolution chain: explicit spawn param > project
+  // default > runtime default ('code' for tickets / 'all' otherwise, resolved
+  // lazily by resolveTaskToolboxIds when this stays null). Freeze the project
+  // default onto the row so the task keeps the same toolset across re-entries.
+  const explicitToolboxIds = params.toolboxIds && params.toolboxIds.length > 0 ? params.toolboxIds : null
+  let effectiveToolboxIds: string[] | null = explicitToolboxIds
+  if ((!effectiveModel || !effectiveThinkingConfig || !effectiveToolboxIds) && params.ticketId) {
     const projectRow = db
       .select({
         model: projects.model,
         providerId: projects.providerId,
         thinkingConfig: projects.thinkingConfig,
+        defaultToolboxIds: projects.defaultToolboxIds,
       })
       .from(tickets)
       .innerJoin(projects, eq(projects.id, tickets.projectId))
@@ -613,6 +620,19 @@ export async function spawnTask(params: SpawnParams) {
       } catch {
         // Malformed JSON on the project row — ignore and fall back to the Kin.
         effectiveThinkingConfig = null
+      }
+    }
+    if (!effectiveToolboxIds && projectRow?.defaultToolboxIds) {
+      try {
+        const parsed = JSON.parse(projectRow.defaultToolboxIds)
+        if (Array.isArray(parsed)) {
+          const ids = parsed.filter((x): x is string => typeof x === 'string')
+          if (ids.length > 0) effectiveToolboxIds = ids
+        }
+      } catch {
+        // Malformed JSON on the project row — ignore and fall back to the
+        // runtime default via resolveTaskToolboxIds.
+        effectiveToolboxIds = null
       }
     }
   }
@@ -640,10 +660,7 @@ export async function spawnTask(params: SpawnParams) {
     allowHumanPrompt: params.allowHumanPrompt ?? true,
     thinkingConfig: effectiveThinkingConfig ? JSON.stringify(effectiveThinkingConfig) : null,
     toolPreset: params.toolPreset ?? null,
-    toolboxIds:
-      params.toolboxIds && params.toolboxIds.length > 0
-        ? JSON.stringify(params.toolboxIds)
-        : null,
+    toolboxIds: effectiveToolboxIds ? JSON.stringify(effectiveToolboxIds) : null,
     runPrompt: params.runPrompt ?? null,
     concurrencyGroup,
     concurrencyMax,
@@ -714,6 +731,82 @@ export async function spawnTask(params: SpawnParams) {
   }
 
   return { taskId, queued: false }
+}
+
+// ─── Orphan (standalone) tasks ─────────────────────────────────────────────────
+
+export interface StartOrphanTaskResult {
+  taskId: string
+  parentKinId: string
+  status: string
+  mode: TaskMode
+  queued: boolean
+  createdAt: number
+}
+
+/**
+ * Spawn a human-initiated standalone task on a Kin with NO project/ticket
+ * binding. The Kin runs the given prompt in an ephemeral sub-Kin and its
+ * result is deposited back as an informational message in the Kin's main
+ * session (async mode — same shape as cron/webhook orphan tasks).
+ *
+ * Resolution chains (all "inherit when unset"):
+ *   - model/provider: explicit override → Kin's own model (no project to
+ *     consult, since there is no ticket). model+providerId are coupled.
+ *   - thinking/effort: explicit override → Kin's own config.
+ *   - toolboxes: explicit selection → runtime default 'all' (non-ticket) via
+ *     resolveTaskToolboxIds when left null.
+ *
+ * Throws 'KIN_NOT_FOUND' / 'MODEL_AND_PROVIDER_MUST_BOTH_BE_SET' / 'EMPTY_PROMPT'.
+ */
+export async function startOrphanTask(
+  parentKinId: string,
+  input: {
+    prompt: string
+    title?: string | null
+    model?: string | null
+    providerId?: string | null
+    thinkingConfig?: KinThinkingConfig | null
+    toolboxIds?: string[] | null
+  },
+): Promise<StartOrphanTaskResult> {
+  const kin = db.select({ id: kins.id }).from(kins).where(eq(kins.id, parentKinId)).get()
+  if (!kin) throw new Error('KIN_NOT_FOUND')
+
+  const prompt = input.prompt?.trim() ?? ''
+  if (!prompt) throw new Error('EMPTY_PROMPT')
+
+  // model + providerId are coupled — both set or both absent (inherit from Kin).
+  const modelSet = !!(input.model && input.model.trim())
+  const providerSet = !!(input.providerId && input.providerId.trim())
+  if (modelSet !== providerSet) throw new Error('MODEL_AND_PROVIDER_MUST_BOTH_BE_SET')
+
+  const title = input.title?.trim() || null
+
+  const result = await spawnTask({
+    parentKinId,
+    description: prompt,
+    title: title ?? undefined,
+    // No parent queue to re-enter and no ticket gate → async, like crons.
+    mode: 'async',
+    spawnType: 'self',
+    model: modelSet ? input.model!.trim() : undefined,
+    providerId: providerSet ? input.providerId!.trim() : undefined,
+    thinkingConfig: input.thinkingConfig ?? undefined,
+    toolboxIds: input.toolboxIds && input.toolboxIds.length > 0 ? input.toolboxIds : undefined,
+  })
+
+  const row = db.select().from(tasks).where(eq(tasks.id, result.taskId)).get()
+  if (!row) throw new Error('TASK_NOT_FOUND_AFTER_SPAWN')
+
+  return {
+    taskId: row.id,
+    parentKinId,
+    status: row.status,
+    mode: row.mode as TaskMode,
+    queued: result.queued === true,
+    createdAt: row.createdAt instanceof Date ? row.createdAt.getTime() : Number(row.createdAt),
+  }
 }
 
 // ─── Sub-Kin Execution ───────────────────────────────────────────────────────

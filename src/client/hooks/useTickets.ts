@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api } from '@/client/lib/api'
 import { useSSE } from '@/client/hooks/useSSE'
-import type { TicketSummary, TicketStatus, Ticket } from '@/shared/types'
+import type { TicketSummary, TicketStatus, Ticket, KinThinkingConfig } from '@/shared/types'
 
 interface CreateTicketInput {
   title: string
@@ -127,11 +127,29 @@ export function useTickets(projectId: string | null) {
       kinId: string,
       runPrompt?: string,
       toolboxIds?: string[],
+      /** Per-run model override. Coupled with `providerId` (both or neither).
+       *  When unset, the server falls back to project default → Kin model. */
+      model?: string,
+      providerId?: string,
+      /** Per-run thinking/effort override. When unset, inherits project → Kin. */
+      thinkingConfig?: KinThinkingConfig,
     ): Promise<StartTicketTaskResult['task']> => {
       const trimmed = runPrompt?.trim() ?? ''
-      const body: { kinId: string; runPrompt?: string; toolboxIds?: string[] } = { kinId }
+      const body: {
+        kinId: string
+        runPrompt?: string
+        toolboxIds?: string[]
+        model?: string
+        providerId?: string
+        thinkingConfig?: KinThinkingConfig
+      } = { kinId }
       if (trimmed.length > 0) body.runPrompt = trimmed
       if (toolboxIds && toolboxIds.length > 0) body.toolboxIds = toolboxIds
+      if (model && providerId) {
+        body.model = model
+        body.providerId = providerId
+      }
+      if (thinkingConfig) body.thinkingConfig = thinkingConfig
       const data = await api.post<StartTicketTaskResult>(
         `/tickets/${ticketId}/start-task`,
         body,

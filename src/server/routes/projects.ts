@@ -149,6 +149,17 @@ projectRoutes.post('/', async (c) => {
       : null
     thinkingConfig = { enabled, ...(effort !== null ? { effort } : {}) }
   }
+  // Default toolbox selection: array of toolbox ids. null / [] both mean
+  // "inherit the runtime default" — normalized to null by the service layer.
+  let defaultToolboxIds: string[] | null | undefined
+  if (body.defaultToolboxIds === null) {
+    defaultToolboxIds = null
+  } else if (body.defaultToolboxIds !== undefined) {
+    if (!Array.isArray(body.defaultToolboxIds) || body.defaultToolboxIds.some((id: unknown) => typeof id !== 'string')) {
+      return c.json({ error: { code: 'INVALID_TOOLBOX_IDS', message: 'defaultToolboxIds must be an array of strings' } }, 400)
+    }
+    defaultToolboxIds = (body.defaultToolboxIds as string[]).map((id) => id.trim()).filter((id) => id.length > 0)
+  }
   try {
     const project = await createProject({
       title,
@@ -160,6 +171,7 @@ projectRoutes.post('/', async (c) => {
       model,
       providerId,
       thinkingConfig,
+      defaultToolboxIds,
     })
     return c.json({ project }, 201)
   } catch (err) {
@@ -193,6 +205,7 @@ projectRoutes.patch('/:id', async (c) => {
     model?: string | null
     providerId?: string | null
     thinkingConfig?: KinThinkingConfig | null
+    defaultToolboxIds?: string[] | null
   } = {}
   if (typeof body.title === 'string') update.title = body.title
   if (typeof body.description === 'string') update.description = body.description
@@ -238,6 +251,16 @@ projectRoutes.patch('/:id', async (c) => {
       ? (cfg.effort as KinThinkingEffort)
       : null
     update.thinkingConfig = { enabled, ...(effort !== null ? { effort } : {}) }
+  }
+  // defaultToolboxIds: null clears (inherit runtime default); array validates
+  // shape ([] is normalized to null by the service layer).
+  if (body.defaultToolboxIds === null) {
+    update.defaultToolboxIds = null
+  } else if (body.defaultToolboxIds !== undefined) {
+    if (!Array.isArray(body.defaultToolboxIds) || body.defaultToolboxIds.some((tid: unknown) => typeof tid !== 'string')) {
+      return c.json({ error: { code: 'INVALID_TOOLBOX_IDS', message: 'defaultToolboxIds must be an array of strings' } }, 400)
+    }
+    update.defaultToolboxIds = (body.defaultToolboxIds as string[]).map((tid) => tid.trim()).filter((tid) => tid.length > 0)
   }
   try {
     const project = await updateProject(id, update)

@@ -14,8 +14,12 @@ import { Label } from '@/client/components/ui/label'
 import { Textarea } from '@/client/components/ui/textarea'
 import { KinSelector } from '@/client/components/common/KinSelector'
 import { ToolboxMultiSelect } from '@/client/components/toolbox/ToolboxMultiSelect'
+import { ModelPicker, modelPickerValue } from '@/client/components/common/ModelPicker'
+import { ThinkingEffortSelect } from '@/client/components/common/ThinkingEffortSelect'
 import { useTickets } from '@/client/hooks/useTickets'
 import { useToolboxes } from '@/client/hooks/useToolboxes'
+import { useModels } from '@/client/hooks/useModels'
+import { choiceToConfig, type ThinkingChoice } from '@/client/lib/thinking-choice'
 import { toast } from 'sonner'
 
 interface KinFromApi {
@@ -39,10 +43,17 @@ export function StartTaskDialog({ open, onOpenChange, ticketId, projectId }: Sta
   const { t } = useTranslation()
   const { startTicketTask } = useTickets(projectId)
   const { toolboxes } = useToolboxes()
+  const { llmModels, isLoading: modelsLoading } = useModels()
   const [kins, setKins] = useState<KinFromApi[]>([])
   const [selectedKinId, setSelectedKinId] = useState<string>('')
   const [runPrompt, setRunPrompt] = useState('')
   const [selectedToolboxIds, setSelectedToolboxIds] = useState<string[]>([])
+  // Model + effort overrides. Both default to "inherit" (empty model / 'inherit'
+  // choice) so an unset picker changes nothing — resolution falls back to the
+  // project default, then the Kin.
+  const [model, setModel] = useState('')
+  const [providerId, setProviderId] = useState('')
+  const [thinkingChoice, setThinkingChoice] = useState<ThinkingChoice>('inherit')
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -77,6 +88,9 @@ export function StartTaskDialog({ open, onOpenChange, ticketId, projectId }: Sta
   useEffect(() => {
     if (!open) {
       setSelectedToolboxIds([])
+      setModel('')
+      setProviderId('')
+      setThinkingChoice('inherit')
       defaultAppliedRef.current = false
       return
     }
@@ -92,11 +106,20 @@ export function StartTaskDialog({ open, onOpenChange, ticketId, projectId }: Sta
     if (!selectedKinId) return
     setSubmitting(true)
     try {
+      // model + providerId are coupled — send only when both are set.
+      const modelOverride = model && providerId ? model : undefined
+      const providerOverride = model && providerId ? providerId : undefined
+      // 'inherit' → undefined (no override); everything else maps to a config.
+      const thinkingOverride =
+        thinkingChoice === 'inherit' ? undefined : (choiceToConfig(thinkingChoice) ?? undefined)
       await startTicketTask(
         ticketId,
         selectedKinId,
         runPrompt.trim() || undefined,
         selectedToolboxIds.length > 0 ? selectedToolboxIds : undefined,
+        modelOverride,
+        providerOverride,
+        thinkingOverride,
       )
       onOpenChange(false)
     } catch (err) {
@@ -170,6 +193,33 @@ export function StartTaskDialog({ open, onOpenChange, ticketId, projectId }: Sta
               <p className="text-xs text-muted-foreground">{t('projects.startTask.toolboxesHelp')}</p>
             </div>
           )}
+          <div className="space-y-1.5">
+            <Label>{t('projects.startTask.modelField')}</Label>
+            <ModelPicker
+              models={llmModels}
+              value={modelPickerValue(model, providerId)}
+              onValueChange={(modelId, pid) => {
+                setModel(modelId)
+                setProviderId(pid)
+              }}
+              placeholder={t('projects.startTask.modelInherit')}
+              clearLabel={t('projects.startTask.modelInherit')}
+              allowClear
+              isLoading={modelsLoading}
+              disabled={submitting}
+            />
+            <p className="text-xs text-muted-foreground">{t('projects.startTask.modelHelp')}</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t('projects.startTask.thinkingField')}</Label>
+            <ThinkingEffortSelect
+              value={thinkingChoice}
+              onChange={setThinkingChoice}
+              inheritLabel={t('projects.startTask.thinkingInherit')}
+              disabled={submitting}
+            />
+            <p className="text-xs text-muted-foreground">{t('projects.startTask.thinkingHelp')}</p>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>

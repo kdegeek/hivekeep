@@ -27,7 +27,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/client/components/ui/alert-dialog'
-import { AlertTriangle, Bot, Settings2, MessageSquare, Loader2, Wrench, Archive, Zap, FileText, FileJson, Search, Trash2, MoreVertical, Coins } from 'lucide-react'
+import { AlertTriangle, Bot, Settings2, MessageSquare, Loader2, Wrench, Archive, Zap, FileText, FileJson, Search, Trash2, MoreVertical, Coins, ListPlus } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 import { ContextBar } from '@/client/components/chat/ContextBar'
 import { ConversationStats } from '@/client/components/chat/ConversationStats'
@@ -68,6 +68,7 @@ interface ConversationHeaderProps {
   onForceCompact?: () => void
   isCompacting?: boolean
   onEdit: () => void
+  onStartTask?: () => void
   onQuickSession?: () => void
   onExportMarkdown?: () => void
   onExportJSON?: () => void
@@ -110,6 +111,7 @@ export const ConversationHeader = memo(function ConversationHeader({
   onForceCompact,
   isCompacting = false,
   onEdit,
+  onStartTask,
   onQuickSession,
   onExportMarkdown,
   onExportJSON,
@@ -452,6 +454,16 @@ export const ConversationHeader = memo(function ConversationHeader({
           <TooltipContent side="bottom">{t('chat.moreActions')}</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end">
+          {/* Launch a standalone (orphan) task on this Kin — no project/ticket. */}
+          {onStartTask && (
+            <>
+              <DropdownMenuItem onClick={onStartTask}>
+                <ListPlus className="mr-2 size-4" />
+                {t('orphanTask.menuAction')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
           {/* Mobile-only: quick session (hidden on sm+ where it has its own button) */}
           {onQuickSession && (
             <DropdownMenuItem onClick={onQuickSession} className="sm:hidden">

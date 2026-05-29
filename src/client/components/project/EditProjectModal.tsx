@@ -25,28 +25,17 @@ import { Label } from '@/client/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/client/components/ui/select'
 import { TagManager } from '@/client/components/project/TagManager'
 import { ModelPicker, modelPickerValue } from '@/client/components/common/ModelPicker'
+import { ToolboxMultiSelect } from '@/client/components/toolbox/ToolboxMultiSelect'
 import { VaultPatPicker } from '@/client/components/project/VaultPatPicker'
 import { GithubRepoPicker } from '@/client/components/project/GithubRepoPicker'
 import { CloneStatusBlock } from '@/client/components/project/CloneStatusBadge'
 import { useModels } from '@/client/hooks/useModels'
+import { useToolboxes } from '@/client/hooks/useToolboxes'
 import { getErrorMessage } from '@/client/lib/api'
+import { configToChoice, choiceToConfig, type ThinkingChoice } from '@/client/lib/thinking-choice'
 import { toast } from 'sonner'
 import { Trash2 } from 'lucide-react'
-import type { Project, KinThinkingConfig, KinThinkingEffort } from '@/shared/types'
-
-type ThinkingChoice = 'inherit' | 'off' | KinThinkingEffort
-
-function configToChoice(cfg: KinThinkingConfig | null): ThinkingChoice {
-  if (cfg === null) return 'inherit'
-  if (!cfg.enabled) return 'off'
-  return (cfg.effort ?? 'medium') as KinThinkingEffort
-}
-
-function choiceToConfig(choice: ThinkingChoice): KinThinkingConfig | null {
-  if (choice === 'inherit') return null
-  if (choice === 'off') return { enabled: false }
-  return { enabled: true, effort: choice }
-}
+import type { Project, KinThinkingConfig } from '@/shared/types'
 
 interface EditProjectModalProps {
   open: boolean
@@ -61,13 +50,23 @@ interface EditProjectModalProps {
     model?: string | null
     providerId?: string | null
     thinkingConfig?: KinThinkingConfig | null
+    defaultToolboxIds?: string[] | null
   }) => Promise<unknown>
   onDelete: () => Promise<void>
+}
+
+/** Order-insensitive equality for two toolbox-id selections. */
+function sameToolboxIds(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false
+  const sa = [...a].sort()
+  const sb = [...b].sort()
+  return sa.every((id, i) => id === sb[i])
 }
 
 export function EditProjectModal({ open, onOpenChange, project, onSave, onDelete }: EditProjectModalProps) {
   const { t } = useTranslation()
   const { llmModels } = useModels()
+  const { toolboxes } = useToolboxes()
   const [title, setTitle] = useState(project.title)
   const [description, setDescription] = useState(project.description)
   const [githubPatVaultKey, setGithubPatVaultKey] = useState<string | null>(project.githubPatVaultKey)
@@ -76,6 +75,7 @@ export function EditProjectModal({ open, onOpenChange, project, onSave, onDelete
   const [model, setModel] = useState(project.model ?? '')
   const [providerId, setProviderId] = useState(project.providerId ?? '')
   const [thinkingChoice, setThinkingChoice] = useState<ThinkingChoice>(configToChoice(project.thinkingConfig))
+  const [defaultToolboxIds, setDefaultToolboxIds] = useState<string[]>(project.defaultToolboxIds ?? [])
   const [submitting, setSubmitting] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -91,10 +91,13 @@ export function EditProjectModal({ open, onOpenChange, project, onSave, onDelete
       setModel(project.model ?? '')
       setProviderId(project.providerId ?? '')
       setThinkingChoice(configToChoice(project.thinkingConfig))
+      setDefaultToolboxIds(project.defaultToolboxIds ?? [])
     }
   }, [open, project])
 
   const initialThinkingChoice = configToChoice(project.thinkingConfig)
+  const initialToolboxIds = project.defaultToolboxIds ?? []
+  const toolboxesChanged = !sameToolboxIds(defaultToolboxIds, initialToolboxIds)
   const hasChanges =
     title !== project.title ||
     description !== project.description ||
@@ -103,7 +106,8 @@ export function EditProjectModal({ open, onOpenChange, project, onSave, onDelete
     defaultBranch !== (project.defaultBranch ?? 'main') ||
     (model || null) !== project.model ||
     (providerId || null) !== project.providerId ||
-    thinkingChoice !== initialThinkingChoice
+    thinkingChoice !== initialThinkingChoice ||
+    toolboxesChanged
 
   async function handleSave() {
     const trimmedTitle = title.trim()
@@ -125,6 +129,10 @@ export function EditProjectModal({ open, onOpenChange, project, onSave, onDelete
         model: modelChanged ? (model || null) : undefined,
         providerId: modelChanged ? (providerId || null) : undefined,
         thinkingConfig: thinkingChanged ? choiceToConfig(thinkingChoice) : undefined,
+        // Empty selection clears to null (inherit built-in default).
+        defaultToolboxIds: toolboxesChanged
+          ? (defaultToolboxIds.length > 0 ? defaultToolboxIds : null)
+          : undefined,
       })
       onOpenChange(false)
     } catch (err) {
@@ -274,6 +282,23 @@ export function EditProjectModal({ open, onOpenChange, project, onSave, onDelete
                 {t('projects.edit.thinkingHint')}
               </p>
             </div>
+
+            {/* Default toolboxes for tasks started on this project's tickets.
+                Empty = inherit the built-in default; an explicit pick at
+                task-start time still overrides this. */}
+            {toolboxes.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>{t('projects.edit.toolboxesField')}</Label>
+                <ToolboxMultiSelect
+                  toolboxes={toolboxes}
+                  selected={defaultToolboxIds}
+                  onChange={setDefaultToolboxIds}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t('projects.edit.toolboxesHint')}
+                </p>
+              </div>
+            )}
 
             <div className="space-y-1.5 border-t border-border pt-4">
               <Label>{t('projects.edit.tagsSection')}</Label>

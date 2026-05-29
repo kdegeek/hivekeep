@@ -26,6 +26,7 @@ import { useQueueItems } from '@/client/hooks/useQueueItems'
 import { useFileUpload } from '@/client/hooks/useFileUpload'
 import { useExportConversation } from '@/client/hooks/useExportConversation'
 const ConversationSearch = lazy(() => import('@/client/components/chat/ConversationSearch').then(m => ({ default: m.ConversationSearch })))
+const OrphanTaskDialog = lazy(() => import('@/client/components/chat/OrphanTaskDialog').then(m => ({ default: m.OrphanTaskDialog })))
 import { QueuePreview } from '@/client/components/chat/QueuePreview'
 import type { ContextTokenBreakdown, ContextPipelineStatus, KinThinkingEffort } from '@/shared/types'
 import { ChatEmptyState } from '@/client/components/chat/ChatEmptyState'
@@ -147,6 +148,7 @@ export function ChatPanel({ kin, llmModels, modelUnavailable = false, queueState
       return next
     })
   }, [])
+  const [isOrphanTaskOpen, setIsOrphanTaskOpen] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [searchHighlightId, setSearchHighlightId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -827,6 +829,7 @@ export function ChatPanel({ kin, llmModels, modelUnavailable = false, queueState
         onForceCompact={handleForceCompact}
         isCompacting={isCompacting}
         onEdit={onEditKin}
+        onStartTask={() => setIsOrphanTaskOpen(true)}
         onQuickSession={handleQuickSession}
         onExportMarkdown={exportAsMarkdown}
         onExportJSON={exportAsJSON}
@@ -848,6 +851,18 @@ export function ChatPanel({ kin, llmModels, modelUnavailable = false, queueState
             onSearchChange={handleSearchChange}
             messages={displayMessages}
             hasMore={hasMore}
+          />
+        </Suspense>
+      )}
+
+      {/* Orphan task launcher — standalone task on this Kin (no project/ticket) */}
+      {isOrphanTaskOpen && (
+        <Suspense fallback={null}>
+          <OrphanTaskDialog
+            open={isOrphanTaskOpen}
+            onOpenChange={setIsOrphanTaskOpen}
+            kinId={kin.id}
+            kinName={kin.name}
           />
         </Suspense>
       )}

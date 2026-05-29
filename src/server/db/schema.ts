@@ -917,6 +917,13 @@ export const projects = sqliteTable('projects', {
    *  pattern as `model`: copied into `tasks.thinking_config` if no explicit
    *  task override is given. Falls back to the parent Kin's own config. */
   thinkingConfig: text('thinking_config'),
+  /** Optional default toolbox selection for sub-Kin tasks spawned on tickets
+   *  of this project. JSON: string[] of toolbox ids. Frozen into
+   *  `tasks.toolbox_ids` at spawn when no explicit task override is provided.
+   *  Null means "inherit the runtime default" ('code' for ticket tasks via
+   *  resolveTaskToolboxIds). An explicit toolbox selection passed at spawn
+   *  still wins. */
+  defaultToolboxIds: text('default_toolbox_ids'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 }, (table) => [

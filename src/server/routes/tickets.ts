@@ -31,7 +31,9 @@ import { eq } from 'drizzle-orm'
 import type { AppVariables } from '@/server/app'
 import { createLogger } from '@/server/logger'
 import { TICKET_STATUSES } from '@/shared/constants'
-import type { TicketStatus } from '@/shared/types'
+import type { TicketStatus, KinThinkingConfig, KinThinkingEffort } from '@/shared/types'
+
+const TICKET_TASK_VALID_EFFORTS: readonly KinThinkingEffort[] = ['low', 'medium', 'high', 'max']
 
 const log = createLogger('routes:tickets')
 
@@ -226,8 +228,30 @@ ticketRoutes.post('/:id/start-task', async (c) => {
     toolboxIds = (body.toolboxIds as string[]).map((id) => id.trim()).filter((id) => id.length > 0)
   }
 
+  // Optional per-run model override. model + providerId are coupled: both must
+  // be present (and non-empty strings) to apply an override; anything else is
+  // treated as "inherit from project default → Kin".
+  let model: string | undefined
+  let providerId: string | undefined
+  if (typeof body.model === 'string' && body.model.trim() && typeof body.providerId === 'string' && body.providerId.trim()) {
+    model = body.model.trim()
+    providerId = body.providerId.trim()
+  }
+
+  // Optional per-run thinking/effort override. Shape mirrors the project /
+  // Kin thinking config. Absent → inherit from project default → Kin.
+  let thinkingConfig: KinThinkingConfig | undefined
+  if (body.thinkingConfig && typeof body.thinkingConfig === 'object') {
+    const cfg = body.thinkingConfig as Record<string, unknown>
+    const enabled = cfg.enabled === true
+    const effort = typeof cfg.effort === 'string' && (TICKET_TASK_VALID_EFFORTS as readonly string[]).includes(cfg.effort)
+      ? (cfg.effort as KinThinkingEffort)
+      : null
+    thinkingConfig = { enabled, ...(effort !== null ? { effort } : {}) }
+  }
+
   try {
-    const task = await startTicketTask(ticketId, kinId, { runPrompt: rawRunPrompt, toolboxIds })
+    const task = await startTicketTask(ticketId, kinId, { runPrompt: rawRunPrompt, toolboxIds, model, providerId, thinkingConfig })
     return c.json({ task }, 201)
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error'

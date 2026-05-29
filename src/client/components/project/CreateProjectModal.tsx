@@ -14,20 +14,15 @@ import { MarkdownEditor } from '@/client/components/ui/markdown-editor'
 import { Label } from '@/client/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/client/components/ui/select'
 import { ModelPicker, modelPickerValue } from '@/client/components/common/ModelPicker'
+import { ToolboxMultiSelect } from '@/client/components/toolbox/ToolboxMultiSelect'
 import { useModels } from '@/client/hooks/useModels'
+import { useToolboxes } from '@/client/hooks/useToolboxes'
 import { VaultPatPicker } from '@/client/components/project/VaultPatPicker'
 import { GithubRepoPicker } from '@/client/components/project/GithubRepoPicker'
 import { getErrorMessage } from '@/client/lib/api'
+import { choiceToConfig, type ThinkingChoice } from '@/client/lib/thinking-choice'
 import { toast } from 'sonner'
-import type { KinThinkingConfig, KinThinkingEffort } from '@/shared/types'
-
-type ThinkingChoice = 'inherit' | 'off' | KinThinkingEffort
-
-function choiceToConfig(choice: ThinkingChoice): KinThinkingConfig | null {
-  if (choice === 'inherit') return null
-  if (choice === 'off') return { enabled: false }
-  return { enabled: true, effort: choice }
-}
+import type { KinThinkingConfig } from '@/shared/types'
 
 interface CreateProjectInputSubset {
   title: string
@@ -38,6 +33,7 @@ interface CreateProjectInputSubset {
   model?: string | null
   providerId?: string | null
   thinkingConfig?: KinThinkingConfig | null
+  defaultToolboxIds?: string[] | null
 }
 
 interface CreateProjectModalProps {
@@ -50,6 +46,7 @@ interface CreateProjectModalProps {
 export function CreateProjectModal({ open, onOpenChange, onCreate, onCreated }: CreateProjectModalProps) {
   const { t } = useTranslation()
   const { llmModels } = useModels()
+  const { toolboxes } = useToolboxes()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [githubPatVaultKey, setGithubPatVaultKey] = useState<string | null>(null)
@@ -58,6 +55,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreate, onCreated }: 
   const [model, setModel] = useState('')
   const [providerId, setProviderId] = useState('')
   const [thinkingChoice, setThinkingChoice] = useState<ThinkingChoice>('inherit')
+  const [defaultToolboxIds, setDefaultToolboxIds] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
 
   function reset() {
@@ -69,6 +67,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreate, onCreated }: 
     setModel('')
     setProviderId('')
     setThinkingChoice('inherit')
+    setDefaultToolboxIds([])
   }
 
   async function handleSubmit() {
@@ -89,6 +88,8 @@ export function CreateProjectModal({ open, onOpenChange, onCreate, onCreated }: 
         model: bothSet ? model : undefined,
         providerId: bothSet ? providerId : undefined,
         thinkingConfig: thinkingChoice !== 'inherit' ? choiceToConfig(thinkingChoice) : undefined,
+        // Empty selection = inherit (built-in default). Only send when chosen.
+        defaultToolboxIds: defaultToolboxIds.length > 0 ? defaultToolboxIds : undefined,
       })
       onCreated?.(project.id)
       reset()
@@ -176,6 +177,23 @@ export function CreateProjectModal({ open, onOpenChange, onCreate, onCreated }: 
               {t('projects.edit.thinkingHint')}
             </p>
           </div>
+
+          {/* Default toolboxes for tasks started on this project's tickets.
+              Empty = inherit the built-in default; an explicit pick at
+              task-start time still overrides this. */}
+          {toolboxes.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>{t('projects.edit.toolboxesField')}</Label>
+              <ToolboxMultiSelect
+                toolboxes={toolboxes}
+                selected={defaultToolboxIds}
+                onChange={setDefaultToolboxIds}
+              />
+              <p className="text-xs text-muted-foreground">
+                {t('projects.edit.toolboxesHint')}
+              </p>
+            </div>
+          )}
 
           {/* GitHub integration: PAT + repo picker. Optional at create time
               — leaving them blank yields a project with no sub-task worktree

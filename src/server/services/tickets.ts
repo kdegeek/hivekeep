@@ -19,6 +19,7 @@ import type {
   ProjectTag,
   RunningKinOnTicket,
   TicketReporter,
+  KinThinkingConfig,
 } from '@/shared/types'
 import type { TicketAssignmentInfo } from '@/server/services/prompt-builder'
 
@@ -1260,7 +1261,17 @@ export const TICKET_TASK_RUN_PROMPT_MAX = 500
 export async function startTicketTask(
   ticketId: string,
   parentKinId: string,
-  options: { runPrompt?: string | null; toolboxIds?: string[] } = {},
+  options: {
+    runPrompt?: string | null
+    toolboxIds?: string[]
+    /** Per-run model override. Must be paired with `providerId`. When unset,
+     *  spawnTask falls back to project default → Kin model. */
+    model?: string
+    providerId?: string
+    /** Per-run thinking/effort override. When unset, spawnTask falls back to
+     *  project default → Kin config. */
+    thinkingConfig?: KinThinkingConfig
+  } = {},
 ): Promise<StartTicketTaskResult> {
   const ticket = db.select().from(tickets).where(eq(tickets.id, ticketId)).get()
   if (!ticket) throw new Error('TICKET_NOT_FOUND')
@@ -1300,9 +1311,14 @@ export async function startTicketTask(
     ticketId,
     runPrompt,
     // Freeze the user-chosen toolbox selection onto the task. When omitted,
-    // spawnTask/resolveTaskToolboxIds falls back to the 'code' built-in for
-    // ticket tasks (back-compat with the old preset behaviour).
+    // spawnTask/resolveTaskToolboxIds falls back to the project default, then
+    // the 'code' built-in for ticket tasks (back-compat with old presets).
     toolboxIds: options.toolboxIds && options.toolboxIds.length > 0 ? options.toolboxIds : undefined,
+    // Per-run overrides. When unset, spawnTask resolves model/thinking via
+    // project default → Kin (priority chain handled inside spawnTask).
+    model: options.model,
+    providerId: options.providerId,
+    thinkingConfig: options.thinkingConfig,
   })
 
   // Re-read the row to expose status + createdAt without coupling to spawnTask's return shape.

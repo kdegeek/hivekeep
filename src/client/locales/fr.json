@@ -2555,6 +2555,27 @@
     "kins": "Kins",
     "projects": "Projets"
   },
+  "orphanTask": {
+    "menuAction": "Lancer une tâche",
+    "title": "Lancer une tâche",
+    "description": "Lance une tâche autonome sur {{name}} — sans projet ni ticket. Le résultat est déposé dans ce fil quand elle se termine.",
+    "promptField": "Que doit faire cette tâche ?",
+    "promptPlaceholder": "ex. comparer les 3 meilleures bases vectorielles et résumer les compromis",
+    "promptHelp": "Décris le travail de cette tâche ponctuelle. Max 2000 caractères.",
+    "promptCounter": "{{count}} / 2000",
+    "titleField": "Titre (optionnel)",
+    "titlePlaceholder": "Libellé court pour cette tâche",
+    "toolboxesField": "Boîtes à outils (optionnel)",
+    "toolboxesHelp": "Les jeux d'outils que cette tâche peut utiliser, en plus du socle obligatoire. Laisse vide pour utiliser la valeur par défaut.",
+    "modelField": "Modèle (optionnel)",
+    "modelInherit": "Hériter (modèle du Kin)",
+    "modelHelp": "Remplace le modèle pour cette tâche uniquement. Laisse sur hériter pour utiliser le modèle du Kin.",
+    "thinkingField": "Effort de raisonnement (optionnel)",
+    "thinkingInherit": "Hériter (réglage du Kin)",
+    "thinkingHelp": "Remplace l'effort de raisonnement pour cette tâche uniquement. Laisse sur hériter pour utiliser le réglage du Kin.",
+    "start": "Lancer la tâche",
+    "started": "Tâche lancée sur {{name}}. Le résultat apparaîtra dans ce fil à la fin."
+  },
   "projects": {
     "page": {
       "title": "Projets",
@@ -2788,6 +2809,12 @@
       "runPromptCounter": "{{count}} / 500",
       "toolboxesField": "Boîtes à outils",
       "toolboxesHelp": "Les jeux d'outils que cette tâche peut utiliser. La tâche conserve toujours un socle d'outils obligatoire ; les boîtes sélectionnées s'y ajoutent. Par défaut : la boîte Code.",
+      "modelField": "Modèle (optionnel)",
+      "modelInherit": "Hériter (projet / Kin)",
+      "modelHelp": "Remplace le modèle pour ce run uniquement. Laisse sur hériter pour utiliser le modèle par défaut du projet, puis celui du Kin.",
+      "thinkingField": "Effort de raisonnement (optionnel)",
+      "thinkingInherit": "Hériter (projet / Kin)",
+      "thinkingHelp": "Remplace l'effort de raisonnement pour ce run uniquement. Laisse sur hériter pour utiliser le réglage par défaut du projet, puis celui du Kin.",
       "start": "Démarrer"
     },
     "enrich": {
@@ -2842,6 +2869,8 @@
       "thinkingField": "Effort de raisonnement par défaut",
       "thinkingInherit": "Utiliser le réglage propre à chaque Kin",
       "thinkingHint": "Appliqué aux sub-Kins lancés sur les tickets de ce projet — remplace la config de thinking propre à chaque Kin. Une valeur choisie explicitement au lancement d'une task reste prioritaire.",
+      "toolboxesField": "Boîtes à outils par défaut des tâches",
+      "toolboxesHint": "Boîtes à outils attribuées par défaut aux tâches lancées sur les tickets de ce projet. Les boîtes choisies explicitement au lancement d'une tâche restent prioritaires. Laisser vide pour retomber sur la boîte par défaut intégrée.",
       "delete": "Supprimer le projet",
       "deleteConfirm": {
         "title": "Supprimer ce projet ?",

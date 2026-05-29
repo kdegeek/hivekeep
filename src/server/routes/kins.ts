@@ -15,7 +15,7 @@ import {
 } from '@/server/services/image-generation'
 import { decrypt } from '@/server/services/encryption'
 import { deleteMemory, createMemory, updateMemory } from '@/server/services/memory'
-import type { KinThinkingConfig, MemoryCategory, MemoryScope } from '@/shared/types'
+import type { KinThinkingConfig, KinThinkingEffort, MemoryCategory, MemoryScope } from '@/shared/types'
 import { sseManager } from '@/server/sse/index'
 import { resolveKinByIdOrSlug } from '@/server/services/kin-resolver'
 import {
@@ -682,6 +682,73 @@ kinRoutes.patch('/:id/active-project', async (c) => {
     if (msg === 'KIN_NOT_FOUND') {
       return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Kin not found' } }, 404)
     }
+    return c.json({ error: { code: 'INTERNAL', message: msg } }, 500)
+  }
+})
+
+const ORPHAN_TASK_VALID_EFFORTS: readonly KinThinkingEffort[] = ['low', 'medium', 'high', 'max']
+
+// POST /api/kins/:id/tasks — start a standalone (orphan) task on this Kin with
+// NO project/ticket binding. Body: { prompt, title?, model?, providerId?,
+// thinkingConfig?, toolboxIds? }. model + providerId are coupled (both or
+// neither). Result is deposited back into the Kin's main session (async mode).
+kinRoutes.post('/:id/tasks', async (c) => {
+  const existing = resolveKinByIdOrSlug(c.req.param('id'))
+  if (!existing) {
+    return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Kin not found' } }, 404)
+  }
+  const body = await c.req.json().catch(() => ({}))
+
+  const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : ''
+  if (!prompt) {
+    return c.json({ error: { code: 'INVALID_INPUT', message: 'prompt is required' } }, 400)
+  }
+  const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim() : null
+
+  // model + providerId coupled — apply only when both are non-empty strings.
+  let model: string | null | undefined
+  let providerId: string | null | undefined
+  if (typeof body.model === 'string' && body.model.trim() && typeof body.providerId === 'string' && body.providerId.trim()) {
+    model = body.model.trim()
+    providerId = body.providerId.trim()
+  }
+
+  // Optional thinking/effort override. Absent → inherit from Kin.
+  let thinkingConfig: KinThinkingConfig | undefined
+  if (body.thinkingConfig && typeof body.thinkingConfig === 'object') {
+    const cfg = body.thinkingConfig as Record<string, unknown>
+    const enabled = cfg.enabled === true
+    const effort = typeof cfg.effort === 'string' && (ORPHAN_TASK_VALID_EFFORTS as readonly string[]).includes(cfg.effort)
+      ? (cfg.effort as KinThinkingEffort)
+      : null
+    thinkingConfig = { enabled, ...(effort !== null ? { effort } : {}) }
+  }
+
+  // Optional toolbox selection. Absent → runtime default ('all' for non-ticket).
+  let toolboxIds: string[] | undefined
+  if (body.toolboxIds !== undefined) {
+    if (!Array.isArray(body.toolboxIds) || body.toolboxIds.some((id: unknown) => typeof id !== 'string')) {
+      return c.json({ error: { code: 'INVALID_TOOLBOX_IDS', message: 'toolboxIds must be an array of strings' } }, 400)
+    }
+    toolboxIds = (body.toolboxIds as string[]).map((id) => id.trim()).filter((id) => id.length > 0)
+  }
+
+  const { startOrphanTask } = await import('@/server/services/tasks')
+  try {
+    const task = await startOrphanTask(existing.id, { prompt, title, model, providerId, thinkingConfig, toolboxIds })
+    return c.json({ task }, 201)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error'
+    if (msg === 'KIN_NOT_FOUND') {
+      return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Kin not found' } }, 404)
+    }
+    if (msg === 'EMPTY_PROMPT') {
+      return c.json({ error: { code: 'INVALID_INPUT', message: 'prompt is required' } }, 400)
+    }
+    if (msg === 'MODEL_AND_PROVIDER_MUST_BOTH_BE_SET') {
+      return c.json({ error: { code: 'MODEL_AND_PROVIDER_MUST_BOTH_BE_SET', message: 'model and providerId must be set together' } }, 400)
+    }
+    log.warn({ kinId: existing.id, err }, 'startOrphanTask failed')
     return c.json({ error: { code: 'INTERNAL', message: msg } }, 500)
   }
 })

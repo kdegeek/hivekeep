@@ -802,6 +802,11 @@ export interface Project {
    *  tickets of this project. Same freeze-at-spawn semantics as `model`.
    *  Null means "inherit from each Kin". */
   thinkingConfig: KinThinkingConfig | null
+  /** Optional default toolbox selection (toolbox ids) for sub-Kin tasks
+   *  spawned on tickets of this project. Frozen into the task at spawn when no
+   *  explicit toolbox selection is provided. Null means "inherit the runtime
+   *  default" ('code' for ticket tasks). An explicit selection at spawn wins. */
+  defaultToolboxIds: string[] | null
   tags: ProjectTag[]
   ticketCounts: Record<TicketStatus, number>
   createdAt: number

@@ -121,6 +121,19 @@ export async function getProject(projectId: string): Promise<Project | null> {
     }
   }
 
+  let defaultToolboxIds: string[] | null = null
+  if (row.defaultToolboxIds) {
+    try {
+      const parsed = JSON.parse(row.defaultToolboxIds)
+      if (Array.isArray(parsed)) {
+        const ids = parsed.filter((x): x is string => typeof x === 'string')
+        defaultToolboxIds = ids.length > 0 ? ids : null
+      }
+    } catch {
+      defaultToolboxIds = null
+    }
+  }
+
   return {
     id: row.id,
     slug: row.slug ?? '',
@@ -136,6 +149,7 @@ export async function getProject(projectId: string): Promise<Project | null> {
     model: row.model,
     providerId: row.providerId,
     thinkingConfig,
+    defaultToolboxIds,
     tags,
     ticketCounts,
     createdAt: toMillis(row.createdAt),
@@ -172,6 +186,9 @@ export interface CreateProjectInput {
   providerId?: string | null
   /** Default thinking config for sub-Kin tasks of this project. */
   thinkingConfig?: KinThinkingConfig | null
+  /** Default toolbox selection (toolbox ids) for sub-Kin tasks of this
+   *  project. Empty array / null both mean "inherit the runtime default". */
+  defaultToolboxIds?: string[] | null
   /** Optional explicit slug. If omitted, slug is auto-generated from title.
    *  Must match `PROJECT_SLUG_REGEX` when provided. */
   slug?: string
@@ -236,6 +253,10 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       model: modelSet ? input.model : null,
       providerId: providerSet ? input.providerId : null,
       thinkingConfig: input.thinkingConfig ? JSON.stringify(input.thinkingConfig) : null,
+      defaultToolboxIds:
+        input.defaultToolboxIds && input.defaultToolboxIds.length > 0
+          ? JSON.stringify(input.defaultToolboxIds)
+          : null,
       createdAt: now,
       updatedAt: now,
     })
@@ -299,6 +320,10 @@ export interface UpdateProjectInput {
   /** Default thinking config for sub-Kin tasks of this project. Pass null
    *  to clear (fall back to each Kin's own config). */
   thinkingConfig?: KinThinkingConfig | null
+  /** Default toolbox selection (toolbox ids) for sub-Kin tasks of this
+   *  project. Pass null or an empty array to clear (inherit the runtime
+   *  default). */
+  defaultToolboxIds?: string[] | null
 }
 
 export async function updateProject(
@@ -330,6 +355,12 @@ export async function updateProject(
   if (input.providerId !== undefined) update.providerId = input.providerId
   if (input.thinkingConfig !== undefined) {
     update.thinkingConfig = input.thinkingConfig === null ? null : JSON.stringify(input.thinkingConfig)
+  }
+  if (input.defaultToolboxIds !== undefined) {
+    update.defaultToolboxIds =
+      input.defaultToolboxIds && input.defaultToolboxIds.length > 0
+        ? JSON.stringify(input.defaultToolboxIds)
+        : null
   }
 
   if (input.slug !== undefined) {
