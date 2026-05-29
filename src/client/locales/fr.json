@@ -2241,7 +2241,11 @@
       "searchResults_plural": "{{count}} résultats",
       "searchAnswer": "Réponse",
       "searchNoResults": "Aucun résultat trouvé",
-      "searchUntitled": "Résultat sans titre"
+      "searchUntitled": "Résultat sans titre",
+      "knowledgeResults": "{{count}} entrée",
+      "knowledgeResults_plural": "{{count}} entrées",
+      "knowledgeNoResults": "Aucun résultat",
+      "knowledgeMatch": "{{score}} %"
     }
   },
   "invite": {

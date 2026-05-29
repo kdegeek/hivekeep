@@ -29,6 +29,7 @@ import { BrowserPageStateRenderer } from '@/client/components/chat/renderers/Bro
 import { SqlResultRenderer } from '@/client/components/chat/renderers/SqlResultRenderer'
 import { WebSearchRenderer } from '@/client/components/chat/renderers/WebSearchRenderer'
 import { GeneratedImageRenderer } from '@/client/components/chat/renderers/GeneratedImageRenderer'
+import { KnowledgeResultRenderer } from '@/client/components/chat/renderers/KnowledgeResultRenderer'
 
 registerRenderer('run_shell', ShellResultRenderer)
 registerRenderer('http_request', HttpRequestRenderer)
@@ -39,6 +40,12 @@ registerRenderer('list_directory', ListDirectoryRenderer)
 registerRenderer('execute_sql', SqlResultRenderer)
 registerRenderer('web_search', WebSearchRenderer)
 registerRenderer('generate_image', GeneratedImageRenderer)
+
+// Memory / knowledge lookups — list-of-hits shaped results
+registerRenderer('recall', KnowledgeResultRenderer)
+registerRenderer('search_knowledge', KnowledgeResultRenderer)
+registerRenderer('search_project_knowledge', KnowledgeResultRenderer)
+registerRenderer('list_project_knowledge', KnowledgeResultRenderer)
 
 // Browser tools — screenshot-shaped results (image thumbnail with click-to-zoom)
 registerRenderer('screenshot_url', BrowserScreenshotRenderer)
