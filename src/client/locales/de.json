@@ -510,6 +510,13 @@
       "triggerError": "Job konnte nicht ausgelöst werden",
       "targetKin": "Ziel-Kin",
       "oneTime": "Einmalig"
+    },
+    "triggerParentTurn": {
+      "label": "Eltern-Kin am Ende des Laufs aufwecken",
+      "help": "Der Abschlussbericht jeder Ausführung löst einen LLM-Turn beim Besitzer-Kin aus (z. B. um seinen Bericht erneut zu lesen und sich selbst zu kalibrieren).",
+      "warning": "Dieser Cron erzeugt bei jeder Ausführung einen LLM-Turn (Token-Verbrauch).",
+      "badge": "Weckt Eltern",
+      "detail": "Jede Ausführung weckt das Eltern-Kin für einen LLM-Turn (Token-Verbrauch)."
     }
   },
   "chat": {

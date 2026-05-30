@@ -158,6 +158,19 @@ Format the digest appropriately for the platform:
 - Slack: Use Slack mrkdwn format
 ```
 
+## Self-calibration (wake the parent Kin)
+
+By default a cron runs silently: its final report is injected into the owner Kin's context, but the Kin is never woken to act on it. If you want the Kin to **re-read its own digest at the end of each run and adjust its behavior** (refine the prompt, decide on a conditional action, fix a recurring quality issue), enable the "Wake the parent Kin at the end of the run" toggle when creating or editing the cron (`trigger_parent_turn` in the `create_cron` / `update_cron` tools).
+
+When enabled, the final report triggers a real LLM turn on the owner Kin. The Kin can then, for example:
+- Call `update_cron(cron_id, { task_description: "..." })` to tune its own instructions based on what worked or didn't
+- Take a conditional follow-up action depending on what the digest surfaced
+- Save a lesson via memory for the next run
+
+:::caution
+This generates an LLM turn (token consumption) on **every** execution. For a frequent cron this adds up. Use it for low-frequency, high-value crons (daily/weekly) where the feedback loop is worth it, and disable it once the cron is well calibrated.
+:::
+
 ## Variations
 
 ### Competitor monitoring

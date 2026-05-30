@@ -177,6 +177,31 @@ describe('CreateCronParams interface contracts', () => {
   })
 })
 
+// ─── triggerParentTurn → spawn mode routing ─────────────────────────────────
+
+/**
+ * Replicated from crons.ts triggerCron / triggerCronManually mode selection.
+ * When triggerParentTurn is set, the spawned task runs in 'await' mode so its
+ * final report wakes the parent Kin for an LLM turn; otherwise 'async' (silent).
+ */
+function spawnModeFor(cron: { triggerParentTurn?: boolean }): 'await' | 'async' {
+  return cron.triggerParentTurn ? 'await' : 'async'
+}
+
+describe('triggerParentTurn — spawn mode routing', () => {
+  it('uses await mode when triggerParentTurn is true', () => {
+    expect(spawnModeFor({ triggerParentTurn: true })).toBe('await')
+  })
+
+  it('uses async mode when triggerParentTurn is false', () => {
+    expect(spawnModeFor({ triggerParentTurn: false })).toBe('async')
+  })
+
+  it('defaults to async mode when flag is undefined (retro-compat)', () => {
+    expect(spawnModeFor({})).toBe('async')
+  })
+})
+
 // ─── SSE event types ────────────────────────────────────────────────────────
 
 describe('SSE event types for crons', () => {

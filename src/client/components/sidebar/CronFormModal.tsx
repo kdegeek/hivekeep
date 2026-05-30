@@ -18,7 +18,8 @@ import { KinSelector } from '@/client/components/common/KinSelector'
 import { KinSelectItem, type KinOption } from '@/client/components/common/KinSelectItem'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/client/components/ui/select'
 import type { KinThinkingEffort } from '@/shared/types'
-import { Loader2, Sparkles, Trash2 } from 'lucide-react'
+import { Switch } from '@/client/components/ui/switch'
+import { Loader2, Sparkles, Trash2, Bell, AlertTriangle } from 'lucide-react'
 import { InfoTip } from '@/client/components/common/InfoTip'
 import { UnsavedChangesDialog } from '@/client/components/common/UnsavedChangesDialog'
 import { useUnsavedChanges } from '@/client/hooks/useUnsavedChanges'
@@ -55,6 +56,7 @@ interface CronFormModalProps {
     model?: string
     providerId?: string
     runOnce?: boolean
+    triggerParentTurn?: boolean
     thinkingEffort?: KinThinkingEffort | null
   }) => Promise<CronSummary>
   onUpdate?: (id: string, updates: Record<string, unknown>) => Promise<CronSummary>
@@ -98,6 +100,7 @@ export function CronFormModal({
   const [kinId, setKinId] = useState('')
   const [schedule, setSchedule] = useState('')
   const [runOnce, setRunOnce] = useState(false)
+  const [triggerParentTurn, setTriggerParentTurn] = useState(false)
   const [scheduleDatetime, setScheduleDatetime] = useState('')
   const [taskDescription, setTaskDescription] = useState('')
   const [targetKinId, setTargetKinId] = useState<string>('')
@@ -115,6 +118,7 @@ export function CronFormModal({
         setKinId(cron.kinId)
         const isOneShot = cron.runOnce && isISODatetime(cron.schedule)
         setRunOnce(cron.runOnce ?? false)
+        setTriggerParentTurn(cron.triggerParentTurn ?? false)
         if (isOneShot) {
           setScheduleDatetime(cron.schedule.slice(0, 16)) // trim to datetime-local format
           setSchedule('')
@@ -131,6 +135,7 @@ export function CronFormModal({
         setName(defaults.name ?? '')
         setKinId(defaults.kinId ?? (kins.length === 1 ? kins[0]!.id : ''))
         setRunOnce(defaults.runOnce ?? false)
+        setTriggerParentTurn(defaults.triggerParentTurn ?? false)
         setSchedule(defaults.schedule ?? '')
         setScheduleDatetime('')
         setTaskDescription(defaults.taskDescription ?? '')
@@ -142,6 +147,7 @@ export function CronFormModal({
         setName('')
         setKinId(kins.length === 1 ? kins[0]!.id : '')
         setRunOnce(false)
+        setTriggerParentTurn(false)
         setSchedule('')
         setScheduleDatetime('')
         setTaskDescription('')
@@ -174,6 +180,7 @@ export function CronFormModal({
           model: model || null,
           providerId: modelProviderId || null,
           runOnce,
+          triggerParentTurn,
           thinkingEffort: effortPayload,
         })
       } else if (onCreate) {
@@ -186,6 +193,7 @@ export function CronFormModal({
           model: model || undefined,
           providerId: modelProviderId || undefined,
           runOnce: runOnce || undefined,
+          triggerParentTurn,
           thinkingEffort: effortPayload,
         })
       }
@@ -443,6 +451,31 @@ export function CronFormModal({
                   <SelectItem value="max">{t('chat.thinkingPicker.effort.max')}</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Trigger parent turn */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3 rounded-md border border-input bg-muted/30 px-3 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <Label htmlFor="cronTriggerParentTurn" className="inline-flex items-center gap-1.5 cursor-pointer">
+                    <Bell className="size-3.5" />
+                    {t('cron.triggerParentTurn.label')}
+                  </Label>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">{t('cron.triggerParentTurn.help')}</p>
+                </div>
+                <Switch
+                  id="cronTriggerParentTurn"
+                  checked={triggerParentTurn}
+                  onCheckedChange={(v) => { setTriggerParentTurn(v); markDirty() }}
+                  className="shrink-0"
+                />
+              </div>
+              {triggerParentTurn && (
+                <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-[11px] text-warning">
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                  <span>{t('cron.triggerParentTurn.warning')}</span>
+                </div>
+              )}
             </div>
           </div>
 

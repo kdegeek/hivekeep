@@ -33,7 +33,7 @@ import { cn } from '@/client/lib/utils'
 import { formatRelativeTime } from '@/client/lib/time'
 import { cronToHuman } from '@/client/lib/cron-human'
 import { cronNextRun, formatCountdown } from '@/client/lib/cron-next'
-import { Plus, Clock, CheckCircle2, Loader2, Search, GripVertical, Timer, FastForward } from 'lucide-react'
+import { Plus, Clock, CheckCircle2, Loader2, Search, GripVertical, Timer, FastForward, Bell } from 'lucide-react'
 import { EmptyState } from '@/client/components/common/EmptyState'
 import type { CronSummary } from '@/shared/types'
 
@@ -98,6 +98,11 @@ function CronCard({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 min-w-0">
           <p className="truncate font-medium text-foreground">{cron.name}</p>
+          {cron.triggerParentTurn && (
+            <Bell className="size-3 shrink-0 text-chart-4" aria-label={t('cron.triggerParentTurn.badge')}>
+              <title>{t('cron.triggerParentTurn.badge')}</title>
+            </Bell>
+          )}
           {isRunning && <Loader2 className="size-3 shrink-0 animate-spin text-primary" />}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">

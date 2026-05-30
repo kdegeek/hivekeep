@@ -608,6 +608,13 @@
       "triggerError": "Impossible de déclencher la tâche",
       "targetKin": "Kin cible",
       "oneTime": "Ponctuel"
+    },
+    "triggerParentTurn": {
+      "label": "Réveiller le Kin parent à la fin du run",
+      "help": "Le rapport final de chaque exécution déclenche un turn LLM sur le Kin propriétaire (par ex. pour relire son rapport et s'auto-calibrer).",
+      "warning": "Ce cron générera un turn LLM à chaque exécution (consommation de tokens).",
+      "badge": "Réveille le parent",
+      "detail": "Chaque exécution réveille le Kin parent pour un turn LLM (consommation de tokens)."
     }
   },
   "chat": {

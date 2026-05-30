@@ -608,6 +608,13 @@
       "triggerError": "Failed to trigger job",
       "targetKin": "Target Kin",
       "oneTime": "One-time"
+    },
+    "triggerParentTurn": {
+      "label": "Wake the parent Kin at the end of the run",
+      "help": "The final report of each run triggers an LLM turn on the owner Kin (e.g. to re-read its report and self-calibrate).",
+      "warning": "This cron will generate an LLM turn on every execution (token consumption).",
+      "badge": "Wakes parent",
+      "detail": "Each execution wakes the parent Kin for an LLM turn (token consumption)."
     }
   },
   "chat": {

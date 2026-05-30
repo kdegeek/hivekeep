@@ -286,6 +286,7 @@ export interface CronSummary {
   thinkingEnabled: boolean
   thinkingEffort: KinThinkingEffort | null
   runOnce: boolean
+  triggerParentTurn: boolean
   isActive: boolean
   requiresApproval: boolean
   lastTriggeredAt: number | null

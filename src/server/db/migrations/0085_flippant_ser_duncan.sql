@@ -1,0 +1,1 @@
+ALTER TABLE `crons` ADD `trigger_parent_turn` integer DEFAULT false NOT NULL;

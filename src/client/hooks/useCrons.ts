@@ -14,6 +14,8 @@ interface CreateCronData {
   taskDescription: string
   targetKinId?: string
   model?: string
+  runOnce?: boolean
+  triggerParentTurn?: boolean
 }
 
 type UpdateCronData = Partial<{
@@ -23,6 +25,8 @@ type UpdateCronData = Partial<{
   targetKinId: string
   model: string
   isActive: boolean
+  runOnce: boolean
+  triggerParentTurn: boolean
 }>
 
 export function useCrons() {

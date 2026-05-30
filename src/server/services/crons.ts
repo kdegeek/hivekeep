@@ -26,6 +26,7 @@ interface CreateCronParams {
   providerId?: string
   createdBy: 'user' | 'kin'
   runOnce?: boolean
+  triggerParentTurn?: boolean
   thinkingConfig?: { enabled: boolean; budgetTokens?: number | null }
 }
 
@@ -74,6 +75,7 @@ export async function createCron(params: CreateCronParams) {
     isActive: !isKinCreated,
     requiresApproval: isKinCreated,
     runOnce: params.runOnce ?? false,
+    triggerParentTurn: params.triggerParentTurn ?? false,
     createdBy: params.createdBy,
     createdAt: now,
     updatedAt: now,
@@ -123,6 +125,7 @@ export async function updateCron(
     thinkingConfig: string | null
     isActive: boolean
     runOnce: boolean
+    triggerParentTurn: boolean
   }>,
 ) {
   // Validate new schedule if provided
@@ -320,11 +323,13 @@ export async function triggerCronManually(cronId: string): Promise<{ taskId: str
     .set({ lastTriggeredAt: new Date(), updatedAt: new Date() })
     .where(eq(crons.id, cronId))
 
+  // 'await' wakes the parent Kin for an LLM turn when the task ends; 'async' is
+  // silent (report injected, no turn). Controlled by the triggerParentTurn flag.
   const { taskId } = await spawnTask({
     parentKinId: cron.kinId,
     title: cron.name,
     description: cron.taskDescription,
-    mode: 'async',
+    mode: cron.triggerParentTurn ? 'await' : 'async',
     spawnType: cron.targetKinId ? 'other' : 'self',
     sourceKinId: cron.targetKinId ?? undefined,
     model: cron.model ?? undefined,
@@ -353,13 +358,15 @@ async function triggerCron(cronId: string) {
     .set({ lastTriggeredAt: new Date(), updatedAt: new Date() })
     .where(eq(crons.id, cronId))
 
-  // Spawn sub-Kin task — async mode (result is informational, no LLM turn)
+  // Spawn sub-Kin task. Default 'async' mode is silent (report injected, no LLM
+  // turn). When triggerParentTurn is set, use 'await' so the final report wakes
+  // the parent Kin for a turn (enables auto-calibration / conditional actions).
   // Uses concurrency groups to queue tasks instead of dropping when max is reached
   const { taskId } = await spawnTask({
     parentKinId: cron.kinId,
     title: cron.name,
     description: cron.taskDescription,
-    mode: 'async',
+    mode: cron.triggerParentTurn ? 'await' : 'async',
     spawnType: cron.targetKinId ? 'other' : 'self',
     sourceKinId: cron.targetKinId ?? undefined,
     model: cron.model ?? undefined,

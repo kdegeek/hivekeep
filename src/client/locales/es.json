@@ -510,6 +510,13 @@
       "triggerError": "Error al activar la tarea",
       "targetKin": "Kin destino",
       "oneTime": "Una sola vez"
+    },
+    "triggerParentTurn": {
+      "label": "Despertar al Kin padre al final de la ejecución",
+      "help": "El informe final de cada ejecución activa un turno LLM en el Kin propietario (p. ej. para releer su informe y autocalibrarse).",
+      "warning": "Este cron generará un turno LLM en cada ejecución (consumo de tokens).",
+      "badge": "Despierta al padre",
+      "detail": "Cada ejecución despierta al Kin padre para un turno LLM (consumo de tokens)."
     }
   },
   "chat": {

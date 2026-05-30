@@ -56,12 +56,16 @@ export const createCronTool: ToolRegistration = {
           .boolean()
           .optional()
           .describe('If true, fires once then auto-deactivates.'),
+        trigger_parent_turn: z
+          .boolean()
+          .optional()
+          .describe('If true, the final report of each execution wakes the parent Kin for an LLM turn. Useful for self-calibrating crons (the Kin re-reads its report and adjusts its behavior). Costly in tokens if the cron is frequent. Default false.'),
         thinking_effort: z
           .enum(THINKING_EFFORT_VALUES)
           .optional()
           .describe('Reasoning effort for tasks spawned by this cron. "off" disables thinking. Defaults to "medium" if omitted.'),
       }),
-      execute: async ({ name, schedule, task_description, target_kin_slug, model, provider_id, run_once, thinking_effort }) => {
+      execute: async ({ name, schedule, task_description, target_kin_slug, model, provider_id, run_once, trigger_parent_turn, thinking_effort }) => {
         let targetKinId: string | undefined
         if (target_kin_slug) {
           const resolved = resolveKinId(target_kin_slug)
@@ -82,6 +86,7 @@ export const createCronTool: ToolRegistration = {
             providerId: provider_id,
             createdBy: 'kin',
             runOnce: run_once,
+            triggerParentTurn: trigger_parent_turn,
             thinkingConfig: effortToConfig(thinking_effort ?? 'medium'),
           })
           return {
@@ -89,6 +94,7 @@ export const createCronTool: ToolRegistration = {
             name: cron.name,
             schedule: cron.schedule,
             runOnce: cron.runOnce,
+            triggerParentTurn: cron.triggerParentTurn,
             requiresApproval: true,
             message: 'Cron created — awaiting user approval before activation.',
           }
@@ -123,10 +129,12 @@ export const updateCronTool: ToolRegistration = {
           .describe('Provider ID for the model override. Pass null to clear.'),
         run_once: z.boolean().optional()
           .describe('Toggle one-shot vs recurring behavior.'),
+        trigger_parent_turn: z.boolean().optional()
+          .describe('If true, the final report of each execution wakes the parent Kin for an LLM turn (self-calibration / conditional actions). Costly in tokens if frequent. Omit to keep current.'),
         thinking_effort: z.enum(THINKING_EFFORT_VALUES).optional()
           .describe('Change reasoning effort. "off" disables thinking. Omit to keep current.'),
       }),
-      execute: async ({ cron_id, name, schedule, task_description, is_active, target_kin_slug, model, provider_id, run_once, thinking_effort }) => {
+      execute: async ({ cron_id, name, schedule, task_description, is_active, target_kin_slug, model, provider_id, run_once, trigger_parent_turn, thinking_effort }) => {
         try {
           const updates: Parameters<typeof updateCron>[1] = {}
           if (name !== undefined) updates.name = name
@@ -134,6 +142,7 @@ export const updateCronTool: ToolRegistration = {
           if (task_description !== undefined) updates.taskDescription = task_description
           if (is_active !== undefined) updates.isActive = is_active
           if (run_once !== undefined) updates.runOnce = run_once
+          if (trigger_parent_turn !== undefined) updates.triggerParentTurn = trigger_parent_turn
           if (model !== undefined) updates.model = model
           if (provider_id !== undefined) updates.providerId = provider_id
 
@@ -160,6 +169,7 @@ export const updateCronTool: ToolRegistration = {
             schedule: updated.schedule,
             isActive: updated.isActive,
             runOnce: updated.runOnce,
+            triggerParentTurn: updated.triggerParentTurn,
             targetKinId: updated.targetKinId,
             model: updated.model,
             providerId: updated.providerId,
@@ -218,6 +228,7 @@ export const listCronsTool: ToolRegistration = {
             taskDescription: c.taskDescription,
             isActive: c.isActive,
             runOnce: c.runOnce,
+            triggerParentTurn: c.triggerParentTurn,
             requiresApproval: c.requiresApproval,
             targetKinId: c.targetKinId,
             model: c.model,

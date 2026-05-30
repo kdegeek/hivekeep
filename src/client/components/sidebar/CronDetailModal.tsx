@@ -33,6 +33,7 @@ import {
   Pause,
   Sparkles,
   Search,
+  Bell,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { MarkdownContent } from '@/client/components/chat/MarkdownContent'
@@ -223,6 +224,12 @@ export function CronDetailModal({
                     {t('cron.detail.oneTime', 'One-time')}
                   </Badge>
                 )}
+                {cron.triggerParentTurn && (
+                  <Badge variant="outline" className="text-chart-4 border-chart-4/40">
+                    <Bell className="mr-1 size-3" />
+                    {t('cron.triggerParentTurn.badge')}
+                  </Badge>
+                )}
               </div>
             </div>
           </DialogHeader>
@@ -310,6 +317,13 @@ export function CronDetailModal({
                 <div className="flex items-center gap-1.5 text-xs text-chart-4">
                   <Sparkles className="size-3" />
                   <span>{t('chat.thinkingToggle')}</span>
+                </div>
+              )}
+
+              {cron.triggerParentTurn && (
+                <div className="flex items-start gap-2 rounded-md border border-chart-4/30 bg-chart-4/5 px-3 py-2 text-xs text-chart-4">
+                  <Bell className="mt-0.5 size-3.5 shrink-0" />
+                  <span>{t('cron.triggerParentTurn.detail')}</span>
                 </div>
               )}
 

@@ -208,6 +208,20 @@ describe('cron-tools', () => {
       })
       expect(mockCrons.createCron.mock.calls[0][0].model).toBe('gpt-4o')
     })
+
+    itMocked('passes trigger_parent_turn flag when provided', async () => {
+      await execute(createCronTool, {
+        name: 'Calibrating', schedule: '0 9 * * *', task_description: 'Watch', trigger_parent_turn: true,
+      })
+      expect(mockCrons.createCron.mock.calls[0][0].triggerParentTurn).toBe(true)
+    })
+
+    itMocked('leaves trigger_parent_turn undefined when omitted', async () => {
+      await execute(createCronTool, {
+        name: 'Silent', schedule: '0 9 * * *', task_description: 'Watch',
+      })
+      expect(mockCrons.createCron.mock.calls[0][0].triggerParentTurn).toBeUndefined()
+    })
   })
 
   // ─── update_cron ───────────────────────────────────────────────────────
@@ -228,6 +242,12 @@ describe('cron-tools', () => {
       expect(updates).toEqual({ schedule: '*/5 * * * *' })
       expect(updates).not.toHaveProperty('name')
       expect(updates).not.toHaveProperty('isActive')
+    })
+
+    itMocked('passes trigger_parent_turn when provided', async () => {
+      await execute(updateCronTool, { cron_id: 'cron-abc', trigger_parent_turn: true })
+      const updates = mockCrons.updateCron.mock.calls[0][1]
+      expect(updates).toEqual({ triggerParentTurn: true })
     })
 
     itMocked('returns error when cron not found', async () => {

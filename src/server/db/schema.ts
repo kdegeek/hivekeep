@@ -397,6 +397,9 @@ export const crons = sqliteTable('crons', {
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
   requiresApproval: integer('requires_approval', { mode: 'boolean' }).notNull().default(false),
   runOnce: integer('run_once', { mode: 'boolean' }).notNull().default(false),
+  // When true, each execution's final report wakes the parent Kin for an LLM turn
+  // (spawnTask mode 'await'). Default false preserves silent 'async' behavior.
+  triggerParentTurn: integer('trigger_parent_turn', { mode: 'boolean' }).notNull().default(false),
   lastTriggeredAt: integer('last_triggered_at', { mode: 'timestamp_ms' }),
   createdBy: text('created_by'), // 'user' | 'kin'
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),

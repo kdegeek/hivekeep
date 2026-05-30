@@ -54,6 +54,7 @@ function serializeCron(cron: any, kinInfo?: KinInfo, targetKinInfo?: KinInfo) {
     thinkingEnabled: parseThinkingConfig(cron.thinkingConfig).enabled,
     thinkingEffort: parseThinkingConfig(cron.thinkingConfig).effort,
     runOnce: cron.runOnce,
+    triggerParentTurn: cron.triggerParentTurn,
     isActive: cron.isActive,
     requiresApproval: cron.requiresApproval,
     lastTriggeredAt: cron.lastTriggeredAt ? new Date(cron.lastTriggeredAt).getTime() : null,
@@ -94,6 +95,7 @@ cronRoutes.post('/', async (c) => {
     model?: string
     providerId?: string
     runOnce?: boolean
+    triggerParentTurn?: boolean
     thinkingEnabled?: boolean
     thinkingEffort?: 'low' | 'medium' | 'high' | 'max' | null
   }>()
@@ -126,6 +128,7 @@ cronRoutes.post('/', async (c) => {
       model: body.model,
       providerId: body.providerId,
       runOnce: body.runOnce,
+      triggerParentTurn: body.triggerParentTurn,
       thinkingConfig,
       createdBy: 'user',
     })
@@ -160,6 +163,7 @@ cronRoutes.patch('/:id', async (c) => {
     providerId?: string | null
     isActive?: boolean
     runOnce?: boolean
+    triggerParentTurn?: boolean
     thinkingEnabled?: boolean
     thinkingEffort?: 'low' | 'medium' | 'high' | 'max' | null
   }>()
