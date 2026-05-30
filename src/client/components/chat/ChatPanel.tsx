@@ -1168,6 +1168,13 @@ export function ChatPanel({ kin, llmModels, modelUnavailable = false, queueState
         mentionableKins={mentionableKins}
         activeProjectId={kin.activeProjectId ?? null}
         activeProjectSlug={activeProject?.slug ?? null}
+        llmModels={llmModels}
+        model={kin.model}
+        providerId={kin.providerId}
+        onModelChange={onModelChange}
+        thinkingEnabled={thinkingEnabled}
+        thinkingEffort={thinkingEffort}
+        onChangeThinking={updateThinking}
       />
 
       {/* Task detail modal — kept as fallback for legacy references */}

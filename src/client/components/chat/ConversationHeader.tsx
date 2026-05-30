@@ -1,4 +1,4 @@
-import { useState, useMemo, memo } from 'react'
+import { useState, useMemo, memo, useRef, useLayoutEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChatAvatar } from '@/client/components/chat/ChatAvatar'
 import { Button } from '@/client/components/ui/button'
@@ -7,9 +7,7 @@ import { Progress } from '@/client/components/ui/progress'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/client/components/ui/tooltip'
 import { computeCacheHitRate, computeFreshInput, getCacheMultipliers } from '@/shared/billing'
 import type { MessageTokenUsage, KinThinkingEffort } from '@/shared/types'
-import { ThinkingEffortPicker } from '@/client/components/chat/ThinkingEffortPicker'
 import { Popover, PopoverContent, PopoverTrigger } from '@/client/components/ui/popover'
-import { ModelPicker, modelPickerValue } from '@/client/components/common/ModelPicker'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -27,7 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/client/components/ui/alert-dialog'
-import { AlertTriangle, Bot, Settings2, MessageSquare, Loader2, Wrench, Archive, Zap, FileText, FileJson, Search, Trash2, MoreVertical, Coins, ListPlus } from 'lucide-react'
+import { AlertTriangle, Bot, Settings, Pencil, MessageSquare, Loader2, Wrench, Archive, Zap, FileText, FileJson, Search, Trash2, MoreHorizontal, Coins, ListPlus } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 import { ContextBar } from '@/client/components/chat/ContextBar'
 import { ConversationStats } from '@/client/components/chat/ConversationStats'
@@ -89,6 +87,37 @@ interface ConversationHeaderProps {
   thinkingEffort?: KinThinkingEffort | null
   onChangeThinking?: (next: { enabled: boolean; effort: KinThinkingEffort | null }) => void
 }
+
+/**
+ * Observe an element's own width. Used to drive the header's responsive
+ * "priority-plus" action bar: as the chat area narrows (window resize, side
+ * panel opening, sidebar collapse) the lowest-priority actions fold away —
+ * simple actions into a "⋯" overflow menu, passive viewers (stats / date nav)
+ * are hidden outright. Container-query CSS can't do the fold-into-menu part
+ * because the menu renders in a portal outside the `@container`, so we measure
+ * in JS and derive both the visible icons and the menu contents from one width.
+ */
+function useElementWidth<T extends HTMLElement>() {
+  const ref = useRef<T>(null)
+  const [width, setWidth] = useState<number>(Number.POSITIVE_INFINITY)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const update = () => setWidth(el.getBoundingClientRect().width)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return [ref, width] as const
+}
+
+// Header width (px) below which each action folds away, lowest priority first.
+// Tuned for icon-sized buttons (~36px incl. gap) plus the always-on context bar.
+const HIDE_DATE_NAV_BELOW = 820
+const HIDE_STATS_BELOW = 740
+const FOLD_USAGE_BELOW = 660
+const FOLD_QUICK_BELOW = 580
 
 export const ConversationHeader = memo(function ConversationHeader({
   kinId,
@@ -186,8 +215,18 @@ export const ConversationHeader = memo(function ConversationHeader({
   const currentProviderType = selectedModel?.providerType ?? null
   const cacheMultipliers = getCacheMultipliers(currentProviderType)
 
+  // Responsive action bar — see useElementWidth above.
+  const [headerRef, headerWidth] = useElementWidth<HTMLDivElement>()
+  const showDateNav = headerWidth >= HIDE_DATE_NAV_BELOW
+  const showStats = headerWidth >= HIDE_STATS_BELOW
+  const showUsageIcon = headerWidth >= FOLD_USAGE_BELOW
+  const showQuickIcon = headerWidth >= FOLD_QUICK_BELOW
+  // The "⋯" overflow only appears when at least one *foldable* action (a simple
+  // onClick — quick session, usage) couldn't fit. Stats/date-nav don't fold.
+  const hasOverflow = Boolean((onQuickSession && !showQuickIcon) || (onViewUsage && !showUsageIcon))
+
   return (
-    <div className="flex min-w-0 items-center gap-3 border-b px-4 py-2.5">
+    <div ref={headerRef} className="flex min-w-0 items-center gap-3 border-b px-4 py-2.5">
       {/* Avatar */}
       <ChatAvatar
         avatarUrl={avatarUrl}
@@ -288,28 +327,8 @@ export const ConversationHeader = memo(function ConversationHeader({
             </button>
           </PopoverTrigger>
           <PopoverContent side="bottom" align="start" className="w-72 space-y-3 p-3">
-            {/* Model picker */}
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-medium text-muted-foreground">{t('kin.create.model')}</p>
-              <ModelPicker
-                models={llmModels}
-                value={modelPickerValue(model, providerId ?? '')}
-                onValueChange={(modelId, pid) => {
-                  onModelChange(modelId, pid)
-                  setMobileInfoOpen(false)
-                }}
-                className="h-8 text-xs"
-              />
-              {onChangeThinking && (
-                <ThinkingEffortPicker
-                  enabled={thinkingEnabled}
-                  effort={thinkingEffort}
-                  onChange={onChangeThinking}
-                  className="mt-1"
-                />
-              )}
-            </div>
-            {/* Context usage — reuse ContextBar (compact) */}
+            {/* Model & effort pickers now live in the composer toolbar; this
+                popover is a context-usage summary only. */}
             <ContextBar
               kinId={kinId}
               estimatedTokens={estimatedTokens}
@@ -330,27 +349,9 @@ export const ConversationHeader = memo(function ConversationHeader({
         </Popover>
       </div>
 
-      {/* Right side: model picker + context bar (desktop only) */}
-      <div className="hidden min-w-0 items-center gap-3 sm:flex">
-        {/* Model picker (compact) */}
-        <ModelPicker
-          models={llmModels}
-          value={modelPickerValue(model, providerId ?? '')}
-          onValueChange={onModelChange}
-          className="h-7 w-auto min-w-0 max-w-[280px] shrink text-xs"
-        />
-
-        {/* Thinking effort picker */}
-        {onChangeThinking && (
-          <ThinkingEffortPicker
-            enabled={thinkingEnabled}
-            effort={thinkingEffort}
-            onChange={onChangeThinking}
-            compact
-          />
-        )}
-
-        {/* Context usage + compacting proximity */}
+      {/* Context usage + compacting proximity (desktop only — mobile shows it
+          in the name-tap popover above). Always visible; never folds. */}
+      <div className="hidden min-w-0 items-center sm:flex">
         <ContextBar
           kinId={kinId}
           estimatedTokens={estimatedTokens}
@@ -368,7 +369,7 @@ export const ConversationHeader = memo(function ConversationHeader({
         />
       </div>
 
-      {/* Tool calls toggle */}
+      {/* Tool calls toggle — always visible (highest priority) */}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -391,19 +392,7 @@ export const ConversationHeader = memo(function ConversationHeader({
         <TooltipContent side="bottom">{t('tools.viewer.title')}</TooltipContent>
       </Tooltip>
 
-      {/* Quick session button — hidden on mobile */}
-      {onQuickSession && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" onClick={onQuickSession} className="hidden sm:inline-flex">
-              <Zap className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('quickChat.open')}</TooltipContent>
-        </Tooltip>
-      )}
-
-      {/* Search button */}
+      {/* Search — always visible (high priority) */}
       {onSearch && (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -415,22 +404,20 @@ export const ConversationHeader = memo(function ConversationHeader({
         </Tooltip>
       )}
 
-      {/* Date navigator — hidden on mobile */}
-      {messages && messages.length > 0 && (
-        <span className="hidden md:inline-flex">
-          <DateNavigator messages={messages} scrollViewportRef={scrollViewportRef} />
-        </span>
+      {/* Quick session — folds into the ⋯ overflow when the header is narrow */}
+      {onQuickSession && showQuickIcon && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon-sm" onClick={onQuickSession}>
+              <Zap className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{t('quickChat.open')}</TooltipContent>
+        </Tooltip>
       )}
 
-      {/* Conversation statistics — hidden on mobile */}
-      {messages && messages.length > 0 && (
-        <span className="hidden md:inline-flex">
-          <ConversationStats messages={messages} toolCallCount={toolCallCount} />
-        </span>
-      )}
-
-      {/* Token usage button */}
-      {onViewUsage && (
+      {/* Token usage — folds into the ⋯ overflow when the header is narrow */}
+      {onViewUsage && showUsageIcon && (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="ghost" size="icon-sm" onClick={onViewUsage}>
@@ -441,39 +428,72 @@ export const ConversationHeader = memo(function ConversationHeader({
         </Tooltip>
       )}
 
-      {/* More actions dropdown */}
+      {/* Conversation statistics — passive viewer; first to hide when cramped */}
+      {messages && messages.length > 0 && showStats && (
+        <ConversationStats messages={messages} toolCallCount={toolCallCount} />
+      )}
+
+      {/* Date navigator — passive viewer; first to hide when cramped */}
+      {messages && messages.length > 0 && showDateNav && (
+        <DateNavigator messages={messages} scrollViewportRef={scrollViewportRef} />
+      )}
+
+      {/* Responsive overflow — appears only when a foldable action didn't fit */}
+      {hasOverflow && (
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-sm">
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t('chat.moreActions')}</TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="end">
+            {onQuickSession && !showQuickIcon && (
+              <DropdownMenuItem onClick={onQuickSession}>
+                <Zap className="mr-2 size-4" />
+                {t('quickChat.open')}
+              </DropdownMenuItem>
+            )}
+            {onViewUsage && !showUsageIcon && (
+              <DropdownMenuItem onClick={onViewUsage}>
+                <Coins className="mr-2 size-4" />
+                {t('chat.viewUsage')}
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+
+      {/* Settings — real cog. Holds kin + conversation actions (no standalone ⋯). */}
       <DropdownMenu>
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm">
-                <MoreVertical className="size-4" />
+              <Button variant="ghost" size="icon-sm" aria-label={t('accessibility.kinSettings')}>
+                <Settings className="size-4" />
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent side="bottom">{t('chat.moreActions')}</TooltipContent>
+          <TooltipContent side="bottom">{t('accessibility.kinSettings')}</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end">
+          {/* Edit this Kin's configuration */}
+          <DropdownMenuItem onClick={onEdit}>
+            <Pencil className="mr-2 size-4" />
+            {t('sidebar.kins.contextMenu.edit')}
+          </DropdownMenuItem>
           {/* Launch a standalone (orphan) task on this Kin — no project/ticket. */}
           {onStartTask && (
-            <>
-              <DropdownMenuItem onClick={onStartTask}>
-                <ListPlus className="mr-2 size-4" />
-                {t('orphanTask.menuAction')}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
-          )}
-          {/* Mobile-only: quick session (hidden on sm+ where it has its own button) */}
-          {onQuickSession && (
-            <DropdownMenuItem onClick={onQuickSession} className="sm:hidden">
-              <Zap className="mr-2 size-4" />
-              {t('quickChat.open')}
+            <DropdownMenuItem onClick={onStartTask}>
+              <ListPlus className="mr-2 size-4" />
+              {t('orphanTask.menuAction')}
             </DropdownMenuItem>
           )}
-          {onQuickSession && (onForceCompact || onExportMarkdown || onExportJSON) && (
-            <DropdownMenuSeparator className="sm:hidden" />
-          )}
+          {(onForceCompact || onExportMarkdown || onExportJSON) && <DropdownMenuSeparator />}
           {onForceCompact && (
             <DropdownMenuItem onClick={onForceCompact} disabled={isCompacting}>
               {isCompacting ? (
@@ -533,16 +553,6 @@ export const ConversationHeader = memo(function ConversationHeader({
           </AlertDialogContent>
         </AlertDialog>
       )}
-
-      {/* Settings button */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant="ghost" size="icon-sm" onClick={onEdit} aria-label={t('accessibility.kinSettings')}>
-            <Settings2 className="size-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">{t('accessibility.kinSettings')}</TooltipContent>
-      </Tooltip>
 
     </div>
   )

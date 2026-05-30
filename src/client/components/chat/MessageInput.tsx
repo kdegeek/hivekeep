@@ -15,6 +15,9 @@ import { getCaretCoordinates } from '@/client/lib/getCaretCoordinates'
 import { PROJECT_SLUG_REGEX } from '@/shared/constants'
 import type { MentionableUser, MentionableKin } from '@/client/hooks/useMentionables'
 import type { PendingFile } from '@/client/hooks/useFileUpload'
+import { ModelPicker, modelPickerValue } from '@/client/components/common/ModelPicker'
+import { ThinkingEffortPicker } from '@/client/components/chat/ThinkingEffortPicker'
+import type { KinThinkingEffort } from '@/shared/types'
 
 export interface MessageInputHandle {
   focus: () => void
@@ -56,6 +59,21 @@ interface MessageInputProps {
   /** Active project slug — used to short-circuit ticket mention insertion: a
    *  hit in the active project becomes `#42`, anywhere else becomes `slug#42`. */
   activeProjectSlug?: string | null
+  // ── Generation controls (relocated from the conversation header) ──
+  /** Models available for the model picker. When omitted the picker is hidden. */
+  llmModels?: { id: string; name: string; providerId: string; providerName: string; providerType: string; capability: string }[]
+  /** Currently selected model id. */
+  model?: string
+  /** Provider id backing the selected model (disambiguates same-id models). */
+  providerId?: string | null
+  /** Change the model for the next message. */
+  onModelChange?: (modelId: string, providerId: string) => void
+  /** Whether extended thinking is enabled. */
+  thinkingEnabled?: boolean
+  /** Current thinking effort level. */
+  thinkingEffort?: KinThinkingEffort | null
+  /** Change thinking enabled/effort. When omitted the effort picker is hidden. */
+  onChangeThinking?: (next: { enabled: boolean; effort: KinThinkingEffort | null }) => void
 }
 
 export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProps>(function MessageInput({
@@ -78,6 +96,13 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
   mentionableKins,
   activeProjectId,
   activeProjectSlug,
+  llmModels,
+  model,
+  providerId,
+  onModelChange,
+  thinkingEnabled = false,
+  thinkingEffort = null,
+  onChangeThinking,
 }, ref) {
   const { t } = useTranslation()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -740,8 +765,28 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
           </Button>
         </div>
 
-        {/* Character count — always rendered to avoid layout shift */}
-        <div className="mt-1 flex justify-end px-1">
+        {/* Composer toolbar: generation controls (model + effort) on the left,
+            character count on the right. Model/effort were relocated here from
+            the conversation header so they sit where you compose. */}
+        <div className="mt-1 flex items-center justify-between gap-2 px-1">
+          <div className="flex min-w-0 items-center gap-1.5">
+            {llmModels && model && onModelChange && (
+              <ModelPicker
+                models={llmModels}
+                value={modelPickerValue(model, providerId ?? '')}
+                onValueChange={onModelChange}
+                className="h-7 w-auto min-w-0 max-w-[220px] shrink text-xs"
+              />
+            )}
+            {onChangeThinking && (
+              <ThinkingEffortPicker
+                enabled={thinkingEnabled}
+                effort={thinkingEffort}
+                onChange={onChangeThinking}
+                compact
+              />
+            )}
+          </div>
           <span className={cn(
             'text-[10px] tabular-nums transition-opacity duration-150',
             value.length > 0 ? 'opacity-100' : 'opacity-0',
