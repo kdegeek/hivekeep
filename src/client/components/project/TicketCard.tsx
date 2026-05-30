@@ -142,9 +142,10 @@ export function TicketCard({ ticket, onClick, isOverlay = false, highlightQuery,
       className={cn(
         'group relative cursor-grab rounded-lg border border-border bg-card p-3 shadow-sm transition-shadow active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         isDragging && !isOverlay && 'opacity-30',
-        // Drag overlay: slight tilt + stronger shadow + ring make the floating
-        // card feel like it's been picked up off the board (Trello/Linear vibe).
-        isOverlay && 'rotate-2 shadow-xl ring-1 ring-primary/30',
+        // Drag overlay: stronger shadow + ring make the floating card feel like
+        // it's been picked up off the board (Trello/Linear vibe). No tilt — a
+        // rotation made the drag feel jittery / uncomfortable.
+        isOverlay && 'shadow-xl ring-1 ring-primary/30',
         // Awaiting-input emphasis wins over running: the user needs to act before the
         // task can resume, so we surface that more loudly with a warning-colored ring.
         hasAwaitingInput && 'ring-1 ring-warning/60 shadow-warning/10 animate-running-pulse',

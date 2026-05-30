@@ -209,8 +209,13 @@ export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
   // min-h-svh to `h-full min-h-0` so it matches its parent (the page slot below
   // AppTopBar). Without this, the wrapper overflows the viewport and the kin's
   // header gets pushed past the bottom.
+  // `transform: translateZ(0)` turns this wrapper into the containing block for
+  // the shadcn Sidebar's `position: fixed` (cf. ui/sidebar.tsx:260) so it anchors
+  // to the chat content area instead of the viewport. Scoped to ChatPage only:
+  // applying it higher (App.tsx) would also hijack @dnd-kit's DragOverlay on the
+  // Projects kanban (position: fixed) and offset the drag ghost.
   return (
-    <div className="h-full overflow-hidden">
+    <div className="h-full overflow-hidden" style={{ transform: 'translateZ(0)' }}>
     <SidebarProvider className="!min-h-0 !h-full">
       <AppSidebar
         selectedKinId={selectedKin?.id ?? null}

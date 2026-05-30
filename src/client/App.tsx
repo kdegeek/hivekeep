@@ -143,10 +143,11 @@ function AppRoot() {
 //
 // The shadcn Sidebar inside ChatPage uses `position: fixed` (cf.
 // src/client/components/ui/sidebar.tsx:260), which by default anchors to the
-// viewport. We apply `transform: translateZ(0)` on the content container so
-// it becomes a containing block for fixed-positioned descendants — the shadcn
-// sidebar then anchors to the content area (right of ActivityBar) instead of
-// the viewport, with no need to modify the shadcn component itself.
+// viewport. The containing-block trick (transform: translateZ(0)) that scopes
+// that fixed sidebar to the content area lives on ChatPage's own wrapper, NOT
+// here on the global routed-content div. Applying it globally would also turn
+// this div into the containing block for @dnd-kit's DragOverlay (also
+// position: fixed), offsetting the drag ghost on the Projects kanban.
 function AuthenticatedShell() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialSection, setSettingsInitialSection] = useState<string | undefined>()
@@ -172,10 +173,7 @@ function AuthenticatedShell() {
         />
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <ActivityBar />
-          <div
-            className="min-w-0 flex-1"
-            style={{ transform: 'translateZ(0)' }}
-          >
+          <div className="min-w-0 flex-1">
             <Suspense fallback={<PageFallback />}>
               <Routes>
                 <Route
