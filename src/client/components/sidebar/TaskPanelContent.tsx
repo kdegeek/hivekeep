@@ -648,13 +648,13 @@ export function TaskPanelContent({
                   sourceType={msg.sourceType}
                   avatarUrl={msg.role === 'assistant' ? kinAvatarUrl : undefined}
                   senderName={msg.role === 'assistant' ? kinName : undefined}
-                  timestamp={msg.createdAt ? String(msg.createdAt) : undefined}
+                  timestamp={msg.createdAt ? new Date(msg.createdAt).toISOString() : undefined}
                   toolCalls={toolCallsByMessage.get(msg.id)}
                   tokenUsage={msg.tokenUsage}
                   reasoning={msg.reasoning ?? undefined}
                 />
               ))}
-              {streamingMessage && (
+              {streamingMessage && (streamingMessage.content || streamingReasoning || toolCallsByMessage.get(streamingMessage.id)?.length) && (
                 <MessageBubble
                   key={streamingMessage.id}
                   role={streamingMessage.role}
@@ -662,7 +662,7 @@ export function TaskPanelContent({
                   sourceType={streamingMessage.sourceType}
                   avatarUrl={kinAvatarUrl}
                   senderName={kinName}
-                  timestamp={streamingMessage.createdAt ? String(streamingMessage.createdAt) : undefined}
+                  timestamp={streamingMessage.createdAt ? new Date(streamingMessage.createdAt).toISOString() : undefined}
                   toolCalls={toolCallsByMessage.get(streamingMessage.id)}
                   reasoning={streamingReasoning || undefined}
                 />

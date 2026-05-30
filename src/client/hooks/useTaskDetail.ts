@@ -570,7 +570,7 @@ export function useTaskDetail(taskId: string | null) {
             args: tc.args,
             result: tc.result,
             status: deriveStatus(tc),
-            timestamp: String(msg.createdAt),
+            timestamp: new Date(msg.createdAt).toISOString(),
             offset: tc.offset,
           })
         }
