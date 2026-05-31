@@ -1559,6 +1559,196 @@ export interface STTProvider extends ProviderUIHints {
   ): Promise<TranscribeResult>
 }
 
+// ─── Email ──────────────────────────────────────────────────────────────────
+
+/**
+ * Static capability declaration an email provider exposes so the host knows
+ * how the account authenticates and which features the tools can rely on.
+ * All flags default to false.
+ */
+export interface EmailCapabilities {
+  /** Provider authenticates via the host's generic OAuth2 flow (and declares
+   *  an `oauth` profile) rather than user-typed credentials. Gmail / Microsoft
+   *  set this; generic IMAP/SMTP providers leave it false and use `configSchema`. */
+  readonly supportsOAuth?: boolean
+  /** Server-side search (Gmail query syntax, IMAP SEARCH, Graph `$search`).
+   *  When false the host falls back to listing + client-side filtering. */
+  readonly supportsServerSearch?: boolean
+  /** Gmail-style labels (a message can carry several) vs single-folder
+   *  mailboxes. Drives how `folder` / `labels` are surfaced. */
+  readonly supportsLabels?: boolean
+  /** Conversation threading (threadId / References) — lets a reply stay in
+   *  the same thread. */
+  readonly supportsThreads?: boolean
+  /** Max attachment size accepted by `sendMessage`, in megabytes. Undefined =
+   *  unknown / provider default. */
+  readonly maxAttachmentMb?: number
+}
+
+/** An email address with an optional display name. */
+export interface EmailAddress {
+  email: string
+  name?: string
+}
+
+/** A message attachment as surfaced to the LLM. v1 exposes metadata only; the
+ *  bytes are fetched on demand by a separate tool (post-v1). */
+export interface EmailAttachment {
+  /** Provider-side attachment id, used to download the bytes later. */
+  id: string
+  filename: string
+  mimeType: string
+  /** Size in bytes when reported by the provider. */
+  size?: number
+}
+
+/**
+ * Compact message shape returned by `listMessages` / `searchMessages` — enough
+ * for the LLM to triage an inbox without pulling every body. Use `getMessage`
+ * for the full content.
+ */
+export interface EmailSummary {
+  id: string
+  threadId?: string
+  from?: EmailAddress
+  to: EmailAddress[]
+  subject: string
+  /** Short preview of the body (provider-supplied snippet). */
+  snippet?: string
+  /** Receive / send time, Unix ms. */
+  date: number
+  unread?: boolean
+  hasAttachments?: boolean
+  /** Folder or labels the message lives in (provider-dependent). */
+  labels?: string[]
+}
+
+/** Full message content returned by `getMessage`. */
+export interface EmailFull extends EmailSummary {
+  cc?: EmailAddress[]
+  bcc?: EmailAddress[]
+  /** Plain-text body. Providers convert HTML→text when there is no text part. */
+  body: string
+  /** Original HTML body when present. */
+  bodyHtml?: string
+  attachments?: EmailAttachment[]
+}
+
+/**
+ * Structured, cross-provider search filter. Each provider translates the set
+ * fields into its native query language. `raw` is a passthrough for power users
+ * who want the provider's own syntax (Gmail operators, IMAP SEARCH keys).
+ */
+export interface EmailSearchQuery {
+  from?: string
+  to?: string
+  subject?: string
+  /** Free text matched against subject + body. */
+  text?: string
+  unread?: boolean
+  hasAttachment?: boolean
+  /** Lower bound on date (Unix ms). */
+  after?: number
+  /** Upper bound on date (Unix ms). */
+  before?: number
+  /** Provider-native query passthrough. When set, providers SHOULD use it and
+   *  ignore the structured fields above. */
+  raw?: string
+}
+
+/** Options for `listMessages`. Providers MUST tolerate an empty/unknown query
+ *  (return the most recent messages). */
+export interface EmailListOptions {
+  /** Folder or label to list. Defaults to the inbox when omitted. */
+  folder?: string
+  /** Max messages to return. Provider may cap further. */
+  limit?: number
+  /** Opaque pagination cursor returned by a previous call. */
+  pageToken?: string
+  query?: EmailSearchQuery
+  signal?: AbortSignal
+}
+
+/** What `listMessages` returns — a page of summaries plus an optional cursor. */
+export interface EmailListResult {
+  messages: EmailSummary[]
+  nextPageToken?: string
+}
+
+/** Parameters for `sendMessage`. */
+export interface SendEmailParams {
+  to: EmailAddress[]
+  cc?: EmailAddress[]
+  bcc?: EmailAddress[]
+  subject: string
+  /** Plain-text body. */
+  body: string
+  /** Optional HTML body, sent as an alternative part. */
+  bodyHtml?: string
+  /** When replying, the message id to thread under (sets In-Reply-To /
+   *  References, or reuses the Gmail threadId). */
+  replyToMessageId?: string
+  signal?: AbortSignal
+}
+
+/** Result of a successful send. */
+export interface SendEmailResult {
+  /** Provider-side id of the sent message. */
+  id: string
+  threadId?: string
+}
+
+/**
+ * Descriptor for an OAuth2 authorization-code flow. The host owns a single
+ * generic OAuth2 implementation (authorize redirect, code exchange, refresh);
+ * each provider declares only its endpoints + scopes here. The client id /
+ * secret are supplied by the KinBot operator (app settings), not the provider.
+ * Leave `oauth` undefined for password / token providers (generic IMAP).
+ */
+export interface OAuthProfile {
+  /** Authorization endpoint the user's browser is redirected to. */
+  authorizeUrl: string
+  /** Token endpoint for the code→token exchange and refresh. */
+  tokenUrl: string
+  /** Scopes requested. */
+  scopes: readonly string[]
+  /** Extra params appended to the authorize URL (e.g. Google's
+   *  `access_type=offline`, `prompt=consent` to obtain a refresh token). */
+  authorizeParams?: Record<string, string>
+  /** Optional endpoint to resolve the connected account's email address after
+   *  the token exchange (e.g. Google userinfo). */
+  userInfoUrl?: string
+}
+
+/**
+ * Native email provider interface — plugins implement this directly; built-in
+ * providers (Gmail in v1; Microsoft / IMAP later) use the same shape. The host
+ * detects the family by the presence of `sendMessage` + `listMessages`.
+ *
+ * Auth is split from operations: OAuth providers declare an `oauth` profile and
+ * the host injects a fresh `accessToken` into `config` before each call;
+ * password / IMAP providers declare their fields in `configSchema`. Either way
+ * the provider just reads `config` and talks to its API.
+ */
+export interface EmailProvider extends ProviderUIHints {
+  readonly type: string
+  readonly displayName: string
+  readonly configSchema: ProviderConfigSchema
+  /** Static capabilities — drives `list_email_accounts` and how the email
+   *  tools adapt (server search vs client filter, labels vs folders, …). */
+  readonly capabilities: EmailCapabilities
+  /** OAuth2 descriptor when this provider authenticates via OAuth. Undefined
+   *  for password / IMAP providers. */
+  readonly oauth?: OAuthProfile
+
+  authenticate(config: ProviderConfig): Promise<AuthResult>
+
+  listMessages(options: EmailListOptions, config: ProviderConfig): Promise<EmailListResult>
+  getMessage(id: string, config: ProviderConfig): Promise<EmailFull>
+  searchMessages?(query: EmailSearchQuery, config: ProviderConfig): Promise<EmailSummary[]>
+  sendMessage(params: SendEmailParams, config: ProviderConfig): Promise<SendEmailResult>
+}
+
 /** Discriminated union of every native provider shape a plugin can declare. */
 export type PluginProvider =
   | LLMProvider
@@ -1567,6 +1757,7 @@ export type PluginProvider =
   | SearchProvider
   | TTSProvider
   | STTProvider
+  | EmailProvider
 
 // ════════════════════════════════════════════════════════════════════════════
 //  Hooks
