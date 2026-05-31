@@ -43,6 +43,7 @@ export const PROVIDER_META = {
   openai:             { capabilities: ['llm', 'embedding', 'image', 'tts', 'stt'], displayName: 'OpenAI', lobehubIcon: 'OpenAI', apiKeyUrl: 'https://platform.openai.com/api-keys' },
   'openai-codex':     { capabilities: ['llm'],                       displayName: 'OpenAI (Codex CLI)',     lobehubIcon: 'OpenAI',  noApiKey: true },
   gemini:             { capabilities: ['llm', 'image'],              displayName: 'Google Gemini',          lobehubIcon: 'Gemini',  apiKeyUrl: 'https://aistudio.google.com/apikey' },
+  openrouter:         { capabilities: ['llm'],                       displayName: 'OpenRouter',             lobehubIcon: 'OpenRouter', apiKeyUrl: 'https://openrouter.ai/keys' },
   'brave-search':     { capabilities: ['search'],                    displayName: 'Brave Search',           reactIcon: 'si/SiBrave', brandColor: '#FB542B', apiKeyUrl: 'https://brave.com/search/api/' },
   'serpapi':          { capabilities: ['search'],                    displayName: 'SerpAPI',                                          apiKeyUrl: 'https://serpapi.com/manage-api-key' },
   'tavily':           { capabilities: ['search'],                    displayName: 'Tavily',                 lobehubIcon: 'Tavily',    apiKeyUrl: 'https://app.tavily.com/home' },
