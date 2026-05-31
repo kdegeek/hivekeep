@@ -1017,6 +1017,7 @@ async function extractMemories(
 export async function maybeCompact(kinId: string, contextTokens?: number, contextWindow?: number): Promise<void> {
   try {
     let cycles = 0
+    let compacted = false
     const maxCycles = 5
 
     while (await shouldCompact(kinId, contextTokens, contextWindow) && cycles < maxCycles) {
@@ -1047,11 +1048,51 @@ export async function maybeCompact(kinId: string, contextTokens?: number, contex
         })
         break
       }
+      compacted = true
 
       // After the first compaction, clear the passed-in values so subsequent
       // iterations re-estimate from DB (context has changed)
       contextTokens = undefined
       contextWindow = undefined
+    }
+
+    // Compaction runs no main-model turn, so nothing else would refresh the
+    // navbar's context figure until the next user message — it would keep
+    // showing the pre-compaction estimate. Recompute once (post-settle) and
+    // broadcast the fresh calibrated estimate + effective threshold so the
+    // badge/tooltip update immediately. apiContextTokens stays cleared (no
+    // fresh provider count until the next roundtrip).
+    if (compacted) {
+      try {
+        const { buildContextPreview } = await import('@/server/services/context-preview')
+        const preview = await buildContextPreview(kinId)
+        sseManager.sendToKin(kinId, {
+          type: 'queue:update',
+          kinId,
+          data: {
+            kinId,
+            queueSize: 0,
+            isProcessing: false,
+            apiContextTokens: null,
+            contextTokens: preview.tokenEstimate.total,
+            contextWindow: preview.contextWindow,
+            contextBreakdown: {
+              systemPrompt: preview.tokenEstimate.systemPrompt,
+              messages: preview.tokenEstimate.messages,
+              tools: preview.tokenEstimate.tools,
+              summary: preview.tokenEstimate.summary,
+              cronRuns: preview.tokenEstimate.cronRuns,
+              cronLearnings: preview.tokenEstimate.cronLearnings,
+              total: preview.tokenEstimate.total,
+            },
+            ...(preview.compactingThresholdPercent != null
+              ? { compactingThresholdPercent: preview.compactingThresholdPercent }
+              : {}),
+          },
+        })
+      } catch (err) {
+        log.warn({ kinId, err }, 'post-compaction context refresh failed')
+      }
     }
 
     if (cycles > 1) {
