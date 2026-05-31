@@ -1711,6 +1711,10 @@
     "emailAccounts": {
       "title": "Email Accounts",
       "description": "Connect email accounts so your Kins can read and send email. Stored as encrypted provider accounts.",
+      "add": "Add account",
+      "addTitle": "Add an email account",
+      "addDescription": "Choose a provider and connect a mailbox.",
+      "provider": "Provider",
       "help": {
         "content": "Connect a Gmail account via OAuth. First configure a Google Cloud OAuth app (client ID + secret), then click Connect and authorize access.",
         "bullet1": "Create an OAuth app in Google Cloud Console with the Gmail scopes, and register the redirect URI shown by your KinBot host (…/api/email-accounts/oauth/callback).",

@@ -239,7 +239,10 @@ export const gmailProvider: EmailProvider = {
       'https://www.googleapis.com/auth/gmail.readonly',
       'https://www.googleapis.com/auth/gmail.send',
     ],
-    authorizeParams: { access_type: 'offline', prompt: 'consent' },
+    // `select_account` forces Google's account chooser so multiple Gmail
+    // accounts can be connected under the same OAuth app; `consent` guarantees
+    // a refresh token on every authorization.
+    authorizeParams: { access_type: 'offline', prompt: 'select_account consent' },
     userInfoUrl: 'https://www.googleapis.com/oauth2/v2/userinfo',
   },
 

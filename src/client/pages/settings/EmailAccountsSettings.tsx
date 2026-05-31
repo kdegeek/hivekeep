@@ -16,6 +16,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/client/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/client/components/ui/dialog'
 import { EmptyState } from '@/client/components/common/EmptyState'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
 import { SettingsListSkeleton } from '@/client/components/common/SettingsListSkeleton'
@@ -27,6 +34,7 @@ import type { PendingEmailSend } from '@/shared/types'
 export function EmailAccountsSettings() {
   const { t } = useTranslation()
   const { accounts, providers, isLoading, refetch } = useEmailAccounts()
+  const [addOpen, setAddOpen] = useState(false)
 
   if (isLoading) return <SettingsListSkeleton count={2} />
 
@@ -46,43 +54,102 @@ export function EmailAccountsSettings() {
         storageKey="help.emailAccounts.open"
       />
 
-      {/* Connect a new account — one card per available provider. */}
-      {providers.map((p) => (
-        <ProviderConnectCard key={p.type} provider={p} onChange={refetch} />
-      ))}
-
-      {/* Connected accounts. */}
       {accounts.length === 0 ? (
         <EmptyState
           icon={Mail}
           title={t('settings.emailAccounts.empty')}
           description={t('settings.emailAccounts.emptyDescription')}
+          actionLabel={t('settings.emailAccounts.add')}
+          onAction={() => setAddOpen(true)}
         />
       ) : (
-        accounts.map((a) => <EmailAccountCard key={a.id} account={a} onChange={refetch} />)
+        <>
+          {accounts.map((a) => (
+            <EmailAccountCard key={a.id} account={a} onChange={refetch} />
+          ))}
+          <Button variant="outline" className="w-full" onClick={() => setAddOpen(true)}>
+            <Plus className="size-4" />
+            {t('settings.emailAccounts.add')}
+          </Button>
+        </>
       )}
+
+      <AddEmailAccountDialog open={addOpen} onOpenChange={setAddOpen} providers={providers} onChange={refetch} />
     </div>
   )
 }
 
-function ProviderConnectCard({ provider, onChange }: { provider: EmailProviderInfo; onChange: () => void }) {
+function AddEmailAccountDialog({
+  open,
+  onOpenChange,
+  providers,
+  onChange,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  providers: EmailProviderInfo[]
+  onChange: () => void
+}) {
   const { t } = useTranslation()
-  const [editing, setEditing] = useState(!provider.oauthConfigured)
+  const [type, setType] = useState<string>('')
+
+  useEffect(() => {
+    if (open && providers[0]) setType((prev) => prev || providers[0]!.type)
+  }, [open, providers])
+
+  const provider = providers.find((p) => p.type === type) ?? providers[0]
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('settings.emailAccounts.addTitle')}</DialogTitle>
+          <DialogDescription>{t('settings.emailAccounts.addDescription')}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label className="text-xs">{t('settings.emailAccounts.provider')}</Label>
+            <Select value={provider?.type ?? ''} onValueChange={setType}>
+              <SelectTrigger>
+                <SelectValue placeholder={t('settings.emailAccounts.provider')} />
+              </SelectTrigger>
+              <SelectContent>
+                {providers.map((p) => (
+                  <SelectItem key={p.type} value={p.type}>
+                    {p.displayName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {provider && <ProviderConnect provider={provider} onChange={onChange} />}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** The connect step inside the Add dialog — adapts to the selected provider:
+ *  OAuth (Gmail) → app-credentials form when unconfigured, else a Connect button. */
+function ProviderConnect({ provider, onChange }: { provider: EmailProviderInfo; onChange: () => void }) {
+  const { t } = useTranslation()
+  const [editing, setEditing] = useState(false)
   const [clientId, setClientId] = useState('')
   const [clientSecret, setClientSecret] = useState('')
   const [saving, setSaving] = useState(false)
   const [connecting, setConnecting] = useState(false)
 
-  // Prefill the client id (non-secret) when opening the credentials form.
+  const showForm = editing || !provider.oauthConfigured
+
   useEffect(() => {
-    if (!editing || !provider.usesOAuth) return
+    if (!showForm || !provider.usesOAuth) return
     api
       .get<{ configured: boolean; clientId: string | null }>(`/email-accounts/oauth-config/${provider.type}`)
       .then((d) => {
         if (d.clientId) setClientId(d.clientId)
       })
       .catch(() => {})
-  }, [editing, provider.type, provider.usesOAuth])
+  }, [showForm, provider.type, provider.usesOAuth])
 
   const saveCreds = async () => {
     setSaving(true)
@@ -110,55 +177,46 @@ function ProviderConnectCard({ provider, onChange }: { provider: EmailProviderIn
     }
   }
 
-  return (
-    <Card>
-      <CardContent className="space-y-3 p-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Mail className="size-4 text-chart-4" />
-            {provider.displayName}
-          </div>
-          {provider.oauthConfigured && !editing && (
-            <Button size="sm" onClick={connect} disabled={connecting}>
-              <Plus className="size-4" />
-              {t('settings.emailAccounts.connect', { provider: provider.displayName })}
+  if (showForm) {
+    return (
+      <div className="space-y-2 rounded-md border border-border/60 p-3">
+        <p className="text-xs text-muted-foreground">{t('settings.emailAccounts.oauthHelp')}</p>
+        <div className="space-y-1">
+          <Label className="text-xs">{t('settings.emailAccounts.clientId')}</Label>
+          <Input value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="…apps.googleusercontent.com" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">{t('settings.emailAccounts.clientSecret')}</Label>
+          <PasswordInput value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} />
+        </div>
+        <div className="flex gap-2 pt-1">
+          <Button size="sm" onClick={saveCreds} disabled={saving || !clientId || !clientSecret}>
+            {t('common.save')}
+          </Button>
+          {provider.oauthConfigured && (
+            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+              {t('common.cancel')}
             </Button>
           )}
         </div>
+      </div>
+    )
+  }
 
-        {editing ? (
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">{t('settings.emailAccounts.oauthHelp')}</p>
-            <div className="space-y-1">
-              <Label className="text-xs">{t('settings.emailAccounts.clientId')}</Label>
-              <Input value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="…apps.googleusercontent.com" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">{t('settings.emailAccounts.clientSecret')}</Label>
-              <PasswordInput value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} />
-            </div>
-            <div className="flex gap-2 pt-1">
-              <Button size="sm" onClick={saveCreds} disabled={saving || !clientId || !clientSecret}>
-                {t('common.save')}
-              </Button>
-              {provider.oauthConfigured && (
-                <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
-                  {t('common.cancel')}
-                </Button>
-              )}
-            </div>
-          </div>
-        ) : (
-          <button
-            type="button"
-            className="text-xs text-muted-foreground hover:text-foreground hover:underline"
-            onClick={() => setEditing(true)}
-          >
-            {t('settings.emailAccounts.editCreds')}
-          </button>
-        )}
-      </CardContent>
-    </Card>
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <button
+        type="button"
+        className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+        onClick={() => setEditing(true)}
+      >
+        {t('settings.emailAccounts.editCreds')}
+      </button>
+      <Button size="sm" onClick={connect} disabled={connecting}>
+        <Plus className="size-4" />
+        {t('settings.emailAccounts.connect', { provider: provider.displayName })}
+      </Button>
+    </div>
   )
 }
 
