@@ -1730,7 +1730,11 @@
       "delete": "Déconnecter le compte",
       "deleteConfirm": "Déconnecter ce compte email ? Les Kins ne pourront plus l'utiliser.",
       "sendModeDirect": "Envoi direct",
-      "sendModeApproval": "Validation requise"
+      "sendModeApproval": "Validation requise",
+      "pendingTitle": "{{count}} email(s) en attente de ta validation",
+      "pendingTo": "À",
+      "approve": "Approuver & envoyer",
+      "reject": "Rejeter"
     },
     "channels": {
       "title": "Canaux",

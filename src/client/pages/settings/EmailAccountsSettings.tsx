@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Mail, Plus } from 'lucide-react'
+import { Mail, Plus, Check, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getErrorMessage } from '@/client/lib/api'
 import { cn } from '@/client/lib/utils'
@@ -21,6 +21,8 @@ import { HelpPanel } from '@/client/components/common/HelpPanel'
 import { SettingsListSkeleton } from '@/client/components/common/SettingsListSkeleton'
 import { ConfirmDeleteButton } from '@/client/components/common/ConfirmDeleteButton'
 import { useEmailAccounts, type EmailAccount, type EmailProviderInfo } from '@/client/hooks/useEmailAccounts'
+import { usePendingEmailSends } from '@/client/hooks/usePendingEmailSends'
+import type { PendingEmailSend } from '@/shared/types'
 
 export function EmailAccountsSettings() {
   const { t } = useTranslation()
@@ -31,6 +33,8 @@ export function EmailAccountsSettings() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">{t('settings.emailAccounts.description')}</p>
+
+      <PendingApprovals />
 
       <HelpPanel
         contentKey="settings.emailAccounts.help.content"
@@ -208,6 +212,73 @@ function EmailAccountCard({ account, onChange }: { account: EmailAccount; onChan
             title={t('settings.emailAccounts.delete')}
             description={t('settings.emailAccounts.deleteConfirm')}
           />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function PendingApprovals() {
+  const { t } = useTranslation()
+  const { pending, approve, reject } = usePendingEmailSends()
+  if (pending.length === 0) return null
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium text-warning">
+        {t('settings.emailAccounts.pendingTitle', { count: pending.length })}
+      </p>
+      {pending.map((p) => (
+        <PendingCard key={p.id} item={p} onApprove={approve} onReject={reject} />
+      ))}
+    </div>
+  )
+}
+
+function PendingCard({
+  item,
+  onApprove,
+  onReject,
+}: {
+  item: PendingEmailSend
+  onApprove: (id: string) => Promise<void>
+  onReject: (id: string) => Promise<void>
+}) {
+  const { t } = useTranslation()
+  const [busy, setBusy] = useState(false)
+
+  const run = async (fn: (id: string) => Promise<void>) => {
+    setBusy(true)
+    try {
+      await fn(item.id)
+    } catch (err) {
+      toast.error(getErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card className="border-warning/40">
+      <CardContent className="space-y-1.5 p-3">
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span className="truncate">
+            {item.kinName} · {item.accountEmail}
+          </span>
+        </div>
+        <p className="text-sm font-medium">{item.subject || '(no subject)'}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {t('settings.emailAccounts.pendingTo')}: {item.to.join(', ')}
+        </p>
+        <p className="line-clamp-3 whitespace-pre-wrap text-xs text-muted-foreground">{item.body}</p>
+        <div className="flex gap-2 pt-1">
+          <Button size="sm" onClick={() => void run(onApprove)} disabled={busy}>
+            <Check className="size-4" />
+            {t('settings.emailAccounts.approve')}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => void run(onReject)} disabled={busy}>
+            <X className="size-4" />
+            {t('settings.emailAccounts.reject')}
+          </Button>
         </div>
       </CardContent>
     </Card>

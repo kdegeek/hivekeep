@@ -1730,7 +1730,11 @@
       "delete": "Disconnect account",
       "deleteConfirm": "Disconnect this email account? Kins will no longer be able to use it.",
       "sendModeDirect": "Send directly",
-      "sendModeApproval": "Require approval"
+      "sendModeApproval": "Require approval",
+      "pendingTitle": "{{count}} email(s) waiting for your approval",
+      "pendingTo": "To",
+      "approve": "Approve & send",
+      "reject": "Reject"
     },
     "channels": {
       "title": "Channels",
