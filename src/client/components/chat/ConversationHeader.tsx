@@ -233,14 +233,14 @@ export const ConversationHeader = memo(function ConversationHeader({
   const hasOverflow = Boolean((onQuickSession && !showQuickIcon) || (onViewUsage && !showUsageIcon))
 
   return (
-    <div ref={headerRef} className="flex min-w-0 items-center gap-3 border-b px-4 py-2.5">
+    <div ref={headerRef} className="flex min-w-0 items-center gap-2 border-b px-3 py-2.5 sm:gap-3 sm:px-4">
       {/* Avatar */}
       <ChatAvatar
         avatarUrl={avatarUrl}
         name={name}
-        className="border border-border/50"
+        className="size-8 border border-border/50 sm:size-10"
         fallbackClassName="bg-primary/10"
-        fallbackIcon={<Bot className="size-5 text-primary" />}
+        fallbackIcon={<Bot className="size-4 text-primary sm:size-5" />}
       />
 
       {/* Name + role — desktop: static, mobile: tappable to show model & context */}
@@ -445,8 +445,10 @@ export const ConversationHeader = memo(function ConversationHeader({
         <DateNavigator messages={messages} scrollViewportRef={scrollViewportRef} />
       )}
 
-      {/* Responsive overflow — appears only when a foldable action didn't fit */}
-      {hasOverflow && (
+      {/* Responsive overflow — appears only when a foldable action didn't fit.
+          On mobile these actions move into the settings (⚙️) menu instead, so
+          we don't render a second trailing dropdown next to it. */}
+      {!isMobile && hasOverflow && (
         <DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -488,6 +490,21 @@ export const ConversationHeader = memo(function ConversationHeader({
           <TooltipContent side="bottom">{t('accessibility.kinSettings')}</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end">
+          {/* Mobile: the standalone ⋯ overflow is hidden, so its foldable
+              actions (quick session, usage) live here instead. */}
+          {isMobile && onQuickSession && (
+            <DropdownMenuItem onClick={onQuickSession}>
+              <Zap className="mr-2 size-4" />
+              {t('quickChat.open')}
+            </DropdownMenuItem>
+          )}
+          {isMobile && onViewUsage && (
+            <DropdownMenuItem onClick={onViewUsage}>
+              <Coins className="mr-2 size-4" />
+              {t('chat.viewUsage')}
+            </DropdownMenuItem>
+          )}
+          {isMobile && (onQuickSession || onViewUsage) && <DropdownMenuSeparator />}
           {/* Edit this Kin's configuration */}
           <DropdownMenuItem onClick={onEdit}>
             <Pencil className="mr-2 size-4" />
