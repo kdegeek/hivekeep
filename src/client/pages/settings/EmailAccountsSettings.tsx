@@ -109,22 +109,21 @@ function OAuthAppCard({
   onChange: () => void
 }) {
   const { t } = useTranslation()
-  const [editing, setEditing] = useState(false)
+  const [open, setOpen] = useState(false)
   const [clientId, setClientId] = useState('')
   const [clientSecret, setClientSecret] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const showForm = editing || !provider.oauthConfigured
-
+  // Load the saved client id only when the modal opens.
   useEffect(() => {
-    if (!showForm) return
+    if (!open) return
     api
       .get<{ configured: boolean; clientId: string | null }>(`/email-accounts/oauth-config/${provider.type}`)
       .then((d) => {
         if (d.clientId) setClientId(d.clientId)
       })
       .catch(() => {})
-  }, [showForm, provider.type])
+  }, [open, provider.type])
 
   const saveCreds = async () => {
     setSaving(true)
@@ -132,7 +131,7 @@ function OAuthAppCard({
       await api.put(`/email-accounts/oauth-config/${provider.type}`, { clientId, clientSecret })
       toast.success(t('settings.emailAccounts.credsSaved'))
       setClientSecret('')
-      setEditing(false)
+      setOpen(false)
       onChange()
     } catch (err) {
       toast.error(getErrorMessage(err))
@@ -150,53 +149,64 @@ function OAuthAppCard({
 
   return (
     <Card>
-      <CardContent className="space-y-3 p-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <ProviderIcon providerType={provider.type} variant="color" className="size-4 shrink-0" />
-            <span className="truncate text-sm font-medium">{provider.displayName}</span>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {provider.oauthConfigured ? (
+      <CardContent className="flex items-center justify-between gap-2 p-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <ProviderIcon providerType={provider.type} variant="color" className="size-4 shrink-0" />
+          <span className="truncate text-sm font-medium">{provider.displayName}</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {provider.oauthConfigured ? (
+            <>
               <Badge variant="secondary" className="gap-1 text-[10px]">
                 <Check className="size-3" />
                 {t('settings.emailAccounts.appConfigured')}
               </Badge>
-            ) : (
-              <Badge variant="outline" className="border-warning/40 text-[10px] text-warning">
-                {t('settings.emailAccounts.appNotConfigured')}
-              </Badge>
-            )}
-            {provider.oauthConfigured && (
               <Button
                 size="icon"
                 variant="ghost"
                 className="size-7"
                 aria-label={t('settings.emailAccounts.editApp')}
-                onClick={() => setEditing((v) => !v)}
+                onClick={() => setOpen(true)}
               >
                 <Pencil className="size-3.5" />
               </Button>
-            )}
-          </div>
+            </>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-warning/40 text-warning hover:text-warning"
+              onClick={() => setOpen(true)}
+            >
+              <Pencil className="size-3.5" />
+              {t('settings.emailAccounts.configureApp')}
+            </Button>
+          )}
         </div>
+      </CardContent>
 
-        {showForm && (
-          <div className="space-y-3 border-t border-border/50 pt-3">
-            <div className="space-y-1 text-xs text-muted-foreground">
-              <p>{t('settings.emailAccounts.oauthSetup')}</p>
-              {provider.consoleUrl && (
-                <a
-                  href={provider.consoleUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-primary hover:underline"
-                >
-                  {t('settings.emailAccounts.oauthConsoleLink', { provider: provider.displayName })}
-                  <ExternalLink className="size-3" />
-                </a>
-              )}
-            </div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ProviderIcon providerType={provider.type} variant="color" className="size-4" />
+              {t('settings.emailAccounts.oauthAppTitle', { provider: provider.displayName })}
+            </DialogTitle>
+            <DialogDescription>{t('settings.emailAccounts.oauthSetup')}</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {provider.consoleUrl && (
+              <a
+                href={provider.consoleUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+              >
+                {t('settings.emailAccounts.oauthConsoleLink', { provider: provider.displayName })}
+                <ExternalLink className="size-3" />
+              </a>
+            )}
 
             <div className="space-y-1">
               <Label className="text-xs">{t('settings.emailAccounts.redirectUri')}</Label>
@@ -222,25 +232,23 @@ function OAuthAppCard({
 
             <div className="space-y-1">
               <Label className="text-xs">{t('settings.emailAccounts.clientId')}</Label>
-              <Input value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="…apps.googleusercontent.com" />
+              <Input value={clientId} onChange={(e) => setClientId(e.target.value)} />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">{t('settings.emailAccounts.clientSecret')}</Label>
               <PasswordInput value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} />
             </div>
-            <div className="flex gap-2 pt-1">
-              <Button size="sm" onClick={saveCreds} disabled={saving || !clientId || !clientSecret}>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="ghost" onClick={() => setOpen(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button onClick={saveCreds} disabled={saving || !clientId || !clientSecret}>
                 {t('common.save')}
               </Button>
-              {provider.oauthConfigured && (
-                <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
-                  {t('common.cancel')}
-                </Button>
-              )}
             </div>
           </div>
-        )}
-      </CardContent>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
