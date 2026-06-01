@@ -99,8 +99,8 @@ contacts providers keyed by the same `type` as the email provider:
 | `gmail` | Gmail API | **Google People API** (`contacts.readonly`) |
 | `microsoft` | Graph `/messages` | **Graph `/me/contacts`** (`Contacts.Read`) |
 | `icloud` | **IMAP/SMTP** (preset, app password) | **CardDAV** (app password) |
-| `imap` | IMAP/SMTP | — |
-| `carddav` | — | **generic CardDAV** (OVH/Fastmail/Nextcloud, by URL) |
+| `imap` | IMAP/SMTP | **CardDAV** (optional `carddav_url` on the same account) |
+| `carddav` | — | **generic CardDAV** (contacts-only, by URL) |
 
 The iCloud email provider (`src/server/email/providers/icloud.ts`) reuses the
 generic IMAP provider with Apple's preset servers, and the iCloud + generic
@@ -140,6 +140,5 @@ accounts. Config connect routes to the owning family (IMAP→email, CardDAV→co
 
 ## Out of scope (fast-follows)
 
-Calendar (CalDAV / Graph events) · phone-number normalization to E.164 · CardDAV
-presets (pre-filled OVH/Fastmail server URLs) · unifying a generic IMAP + CardDAV
-account under one `imap` connection (today CardDAV is its own `carddav` account).
+Phone-number normalization to E.164 · CardDAV presets (pre-filled OVH/Fastmail
+server URLs).

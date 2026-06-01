@@ -35,7 +35,8 @@ register at boot via `registerBuiltinCalendarProviders()`.
 | `gmail` | Google Calendar API v3 | OAuth | `auth/calendar` |
 | `microsoft` | Graph `/me/events` + `/calendarView` | OAuth | `Calendars.ReadWrite` |
 | `icloud` | CalDAV (`caldav.icloud.com`) | app password | — |
-| `caldav` | generic CalDAV (OVH/Fastmail/Nextcloud) | password | server URL |
+| `imap` | CalDAV (optional `caldav_url` on the IMAP account) | password | server URL |
+| `caldav` | generic CalDAV (calendar-only) | password | server URL |
 
 Keyed by the **same `type`** as the email/contacts providers → one Google /
 Microsoft / iCloud account serves mail + contacts + calendar from a single row
