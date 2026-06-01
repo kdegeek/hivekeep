@@ -27,8 +27,8 @@ export const ICLOUD_CONFIG_SCHEMA = [
     type: 'text' as const,
     label: 'Apple ID',
     required: true,
-    placeholder: 'you@icloud.com',
-    description: 'The Apple ID email of the iCloud account.',
+    placeholder: 'you@example.com',
+    description: 'Your Apple ID (any email — used for Contacts & Calendar).',
   },
   {
     key: 'app_password',
@@ -37,6 +37,13 @@ export const ICLOUD_CONFIG_SCHEMA = [
     required: true,
     placeholder: 'xxxx-xxxx-xxxx-xxxx',
     description: 'Generate at appleid.apple.com → Sign-In and Security → App-Specific Passwords.',
+  },
+  {
+    key: 'icloud_email',
+    type: 'text' as const,
+    label: 'iCloud email (for Mail)',
+    placeholder: 'you@icloud.com',
+    description: 'Only if you enable Mail: your @icloud.com mailbox address (the IMAP login). Leave blank if your Apple ID is already an @icloud.com address.',
   },
 ]
 

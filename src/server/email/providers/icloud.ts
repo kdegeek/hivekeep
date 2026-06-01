@@ -21,7 +21,10 @@ import type { ProviderConfig, AuthResult } from '@kinbot-developer/sdk'
 /** Map the iCloud credentials onto the generic IMAP provider's config keys,
  *  with Apple's well-known mail servers. */
 function imapConfig(config: ProviderConfig): ProviderConfig {
-  const id = config.apple_id ?? config.email ?? config.email_address ?? ''
+  // iCloud Mail logs in with the @icloud.com mailbox address, which may differ
+  // from the Apple ID (e.g. a Hotmail Apple ID). Fall back to the Apple ID when
+  // the Apple ID is itself an @icloud.com address.
+  const id = config.icloud_email || config.apple_id || config.email || config.email_address || ''
   return {
     ...config,
     email: id,
@@ -43,8 +46,11 @@ export const icloudEmailProvider: EmailProvider = {
   configSchema: ICLOUD_CONFIG_SCHEMA,
   capabilities: imapProvider.capabilities,
 
-  authenticate(config: ProviderConfig): Promise<AuthResult> {
-    return imapProvider.authenticate(imapConfig(config))
+  async authenticate(config: ProviderConfig): Promise<AuthResult> {
+    // Label the account by the Apple ID (the stable identity shared with the
+    // iCloud contacts/calendar providers) so one iCloud account stays one row.
+    const result = await imapProvider.authenticate(imapConfig(config))
+    return { ...result, accountLabel: config.apple_id ?? result.accountLabel }
   },
   listMessages(options: EmailListOptions, config: ProviderConfig): Promise<EmailListResult> {
     return imapProvider.listMessages(options, imapConfig(config))
