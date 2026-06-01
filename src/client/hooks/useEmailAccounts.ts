@@ -23,6 +23,8 @@ export interface EmailProviderInfo {
   /** react-icons identifier ("si/SiGmail") + brand color for the provider logo. */
   reactIcon: string | null
   brandColor: string | null
+  /** Where the operator sets up the OAuth app (Google Cloud / Azure portal). */
+  consoleUrl: string | null
 }
 
 export function useEmailAccounts() {

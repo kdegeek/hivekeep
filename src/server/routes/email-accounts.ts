@@ -67,6 +67,7 @@ emailAccountRoutes.get('/providers', async (c) => {
       oauthConfigured: p.oauth ? !!(await getOAuthClient(p.type)) : true,
       reactIcon: p.reactIcon ?? null,
       brandColor: p.brandColor ?? null,
+      consoleUrl: p.apiKeyUrl ?? null,
     })
   }
   // The exact redirect URI the server will send — so the UI shows what to

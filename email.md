@@ -1,9 +1,9 @@
 # KinBot — Email accounts
 
 Connect email accounts so Kins can **read** (list / read / search) and **send**
-mail. v1 ships **Gmail** only, but email is a first-class, pluggable **provider
-family** — adding Microsoft / IMAP / Proton later is one `EmailProvider`
-implementation, no core refactor.
+mail. Built-ins ship **Gmail** and **Microsoft / Outlook** (both OAuth); email is
+a first-class, pluggable **provider family** — adding IMAP / Proton later is one
+`EmailProvider` implementation, no core refactor.
 
 ## Model: an email account *is* a provider row
 
@@ -12,7 +12,7 @@ An email account is a row in the `providers` table with capability `email`
 
 | Column | Email account |
 |---|---|
-| `type` | `'gmail'` (later `'microsoft'`, `'imap'`, `plugin:x:proton`) |
+| `type` | `'gmail'` / `'microsoft'` (later `'imap'`, `plugin:x:proton`) |
 | `name` | label (defaults to the address) |
 | `slug` | stable id used by tools (`gmail-perso`, `gmail-pro`) |
 | `capabilities` | `["email"]` |
@@ -65,9 +65,11 @@ scopes (`oauth` profile); the host never bakes in provider-specific OAuth.
   per account and refreshes from the durable refresh token on demand. The
   provider only ever sees a fresh `config.accessToken`.
 
-> ⚠️ **Operator setup**: create a Google Cloud OAuth app (Gmail scopes) and
-> register the redirect URI `<host>/api/email-accounts/oauth/callback`. Google
-> only allows `http` on `localhost`/loopback — a LAN IP needs `https`.
+> ⚠️ **Operator setup** (per provider): register an OAuth app and the redirect
+> URI `<host>/api/email-accounts/oauth/callback`. Gmail → Google Cloud Console
+> (Gmail scopes); Microsoft → Azure App registrations (Mail.Read / Mail.Send /
+> User.Read, `common` tenant). Google only allows `http` on `localhost`/loopback
+> — a LAN IP needs `https` (drive the public origin with `PUBLIC_URL`).
 
 ## Tools + toolbox
 
@@ -98,9 +100,11 @@ per-account allow-list against the calling Kin; injects a fresh access token.
 ## UI
 
 Settings → **Connections → Email accounts** (its own section, *not* the AI
-Providers list). Per-provider connect card (configure the Google app creds, then
-"Connect Gmail") + a card per connected account (address, status, send-mode,
-disconnect).
+Providers list). Per-provider OAuth-app card (each links to its own developer
+console via `provider.consoleUrl`, shows the redirect URI to register, and takes
+the client id / secret) + an **Add account** dialog (full-width provider select
+with logos → Connect) + a card per connected account (address, status,
+send-mode, disconnect).
 
 ## Adding a provider later
 
@@ -120,5 +124,5 @@ disconnect).
 ## Out of v1 (fast-follows)
 
 Contacts / calendar ·
-Microsoft / IMAP providers · agentic inbound (a light-model cron polling new
+generic IMAP / SMTP provider · agentic inbound (a light-model cron polling new
 mail; push when the provider supports it).

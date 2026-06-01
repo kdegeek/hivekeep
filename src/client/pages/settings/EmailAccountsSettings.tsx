@@ -185,15 +185,17 @@ function OAuthAppCard({
           <div className="space-y-3 border-t border-border/50 pt-3">
             <div className="space-y-1 text-xs text-muted-foreground">
               <p>{t('settings.emailAccounts.oauthSetup')}</p>
-              <a
-                href="https://console.cloud.google.com/apis/credentials"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-primary hover:underline"
-              >
-                {t('settings.emailAccounts.oauthConsoleLink')}
-                <ExternalLink className="size-3" />
-              </a>
+              {provider.consoleUrl && (
+                <a
+                  href={provider.consoleUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-primary hover:underline"
+                >
+                  {t('settings.emailAccounts.oauthConsoleLink', { provider: provider.displayName })}
+                  <ExternalLink className="size-3" />
+                </a>
+              )}
             </div>
 
             <div className="space-y-1">

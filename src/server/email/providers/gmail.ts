@@ -256,6 +256,7 @@ export const gmailProvider: EmailProvider = {
   // Gmail logo via the react-icons fallback, in Gmail red.
   reactIcon: 'si/SiGmail',
   brandColor: '#EA4335',
+  apiKeyUrl: 'https://console.cloud.google.com/apis/credentials',
   configSchema: [],
   capabilities: {
     supportsOAuth: true,
