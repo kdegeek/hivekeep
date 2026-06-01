@@ -13,9 +13,14 @@
  * tools never know whether the account is Gmail, IMAP, etc.
  */
 import { z } from 'zod'
+import { readFile, writeFile, mkdir, stat } from 'node:fs/promises'
+import { basename, dirname, extname } from 'node:path'
 import { tool } from '@/server/tools/tool-helper'
 import { resolveEmailProvider, listEmailAccounts } from '@/server/services/email-accounts'
-import type { EmailAddress, EmailSearchQuery } from '@/server/email/types'
+import { resolveToolWorkspace } from '@/server/tools/workspace'
+import { resolveAndValidate } from '@/server/tools/filesystem-tools'
+import type { EmailAddress, EmailSearchQuery, OutgoingAttachment } from '@/server/email/types'
+import type { ToolExecutionContext } from '@/server/tools/types'
 import { createLogger } from '@/server/logger'
 import type { ToolRegistration } from '@/server/tools/types'
 
@@ -29,6 +34,57 @@ function parseAddr(s: string): EmailAddress {
     return { name: name || undefined, email: m[1]!.trim() }
   }
   return { email: s.trim() }
+}
+
+const MIME_BY_EXT: Record<string, string> = {
+  pdf: 'application/pdf',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  txt: 'text/plain',
+  md: 'text/markdown',
+  csv: 'text/csv',
+  json: 'application/json',
+  xml: 'application/xml',
+  html: 'text/html',
+  zip: 'application/zip',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+}
+
+function guessMimeType(filename: string): string {
+  return MIME_BY_EXT[extname(filename).slice(1).toLowerCase()] ?? 'application/octet-stream'
+}
+
+/** Read the given workspace-relative paths into outgoing attachments, enforcing
+ *  the provider's total-size cap. Throws with a clear message on any failure. */
+async function readAttachments(
+  paths: string[],
+  ctx: ToolExecutionContext,
+  maxTotalMb: number,
+): Promise<OutgoingAttachment[]> {
+  const workspace = resolveToolWorkspace(ctx)
+  const out: OutgoingAttachment[] = []
+  let total = 0
+  for (const p of paths) {
+    const abs = resolveAndValidate(p, workspace)
+    const info = await stat(abs).catch(() => null)
+    if (!info || !info.isFile()) throw new Error(`Attachment not found in workspace: ${p}`)
+    total += info.size
+    if (total > maxTotalMb * 1024 * 1024) {
+      throw new Error(`Attachments exceed the ${maxTotalMb} MB limit for this account.`)
+    }
+    const bytes = await readFile(abs)
+    out.push({ filename: basename(p), mimeType: guessMimeType(p), contentBase64: bytes.toString('base64') })
+  }
+  return out
 }
 
 const accountField = z
@@ -201,6 +257,10 @@ export const sendEmailTool: ToolRegistration = {
         cc: z.array(z.string()).optional().describe('CC recipients.'),
         bcc: z.array(z.string()).optional().describe('BCC recipients.'),
         html: z.string().optional().describe('Optional HTML body (sent as an alternative part).'),
+        attachments: z
+          .array(z.string())
+          .optional()
+          .describe('Workspace-relative file paths to attach (e.g. ["report.pdf"]).'),
         reply_to_message_id: z.string().optional().describe('Reply in-thread to this message id.'),
       }),
       execute: async (args) => {
@@ -209,6 +269,9 @@ export const sendEmailTool: ToolRegistration = {
             slug: args.account,
             kinId: ctx.kinId,
           })
+          const attachments = args.attachments?.length
+            ? await readAttachments(args.attachments, ctx, provider.capabilities.maxAttachmentMb ?? 25)
+            : undefined
           const sendParams = {
             to: args.to.map(parseAddr),
             cc: args.cc?.map(parseAddr),
@@ -216,6 +279,7 @@ export const sendEmailTool: ToolRegistration = {
             subject: args.subject,
             body: args.body,
             bodyHtml: args.html,
+            attachments,
             replyToMessageId: args.reply_to_message_id,
           }
           // Approval mode (opt-in, per account): queue for human approval instead
@@ -241,6 +305,50 @@ export const sendEmailTool: ToolRegistration = {
           const sent = await provider.sendMessage(sendParams, config)
           log.info({ kinId: ctx.kinId, account: account.slug, recipients: args.to.length }, 'send_email')
           return { account: account.slug, sent: { id: sent.id, threadId: sent.threadId } }
+        } catch (err) {
+          return toErr(err)
+        }
+      },
+    }),
+}
+
+// ─── download_email_attachment ───────────────────────────────────────────────
+
+export const downloadEmailAttachmentTool: ToolRegistration = {
+  availability: ['main', 'sub-kin'],
+  create: (ctx) =>
+    tool({
+      description:
+        'Download an email attachment into the workspace so you can read or process ' +
+        'it. Get message_id and attachment_id (and the filename) from read_email. ' +
+        'Returns the saved workspace-relative path.',
+      inputSchema: z.object({
+        account: accountField,
+        message_id: z.string().min(1).describe('The email id (from read_email).'),
+        attachment_id: z.string().min(1).describe('The attachment id (from read_email).'),
+        save_as: z
+          .string()
+          .optional()
+          .describe('Workspace-relative path to save to (e.g. "invoice.pdf"). Defaults to the attachment id.'),
+      }),
+      execute: async (args) => {
+        try {
+          const { provider, config, account } = await resolveEmailProvider({ slug: args.account, kinId: ctx.kinId })
+          if (!provider.getAttachment) {
+            return { error: `Account "${account.slug}" does not support downloading attachments.` }
+          }
+          const { contentBase64 } = await provider.getAttachment(args.message_id, args.attachment_id, config)
+          const bytes = Buffer.from(contentBase64, 'base64')
+          const workspace = resolveToolWorkspace(ctx)
+          const rel = args.save_as?.trim() || `attachment-${args.attachment_id}`
+          const abs = resolveAndValidate(rel, workspace)
+          await mkdir(dirname(abs), { recursive: true })
+          await writeFile(abs, bytes)
+          log.info(
+            { kinId: ctx.kinId, account: account.slug, path: rel, bytes: bytes.length },
+            'download_email_attachment',
+          )
+          return { account: account.slug, savedPath: rel, bytes: bytes.length }
         } catch (err) {
           return toErr(err)
         }

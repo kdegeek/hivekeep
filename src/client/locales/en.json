@@ -2137,6 +2137,7 @@
       "read_email": "Read Email",
       "search_emails": "Search Emails",
       "send_email": "Send Email",
+      "download_email_attachment": "Download Email Attachment",
       "browse_url": "Browse URL",
       "extract_links": "Extract Links",
       "screenshot_url": "Screenshot URL",

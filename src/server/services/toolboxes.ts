@@ -144,6 +144,7 @@ export const BUILTIN_TOOLBOXES: readonly BuiltinToolboxDef[] = [
       'read_email',
       'search_emails',
       'send_email',
+      'download_email_attachment',
     ],
   },
 ]

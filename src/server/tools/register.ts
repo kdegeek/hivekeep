@@ -15,6 +15,7 @@ import {
   readEmailTool,
   searchEmailsTool,
   sendEmailTool,
+  downloadEmailAttachmentTool,
 } from '@/server/tools/email-tools'
 import {
   listTtsProvidersTool,
@@ -280,6 +281,7 @@ export function registerAllTools(): void {
   toolRegistry.register('read_email', readEmailTool, 'email')
   toolRegistry.register('search_emails', searchEmailsTool, 'email')
   toolRegistry.register('send_email', sendEmailTool, 'email')
+  toolRegistry.register('download_email_attachment', downloadEmailAttachmentTool, 'email')
 
   // Voice tools — TTS + STT discovery and actions. Audio bytes flow
   // through the messages-attachment files table (same path as

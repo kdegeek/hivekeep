@@ -80,7 +80,8 @@ toolbox:
 | `list_emails` | readOnly | folder listing (summaries) |
 | `read_email` | readOnly | full message by id |
 | `search_emails` | readOnly | structured filters or `raw` provider query |
-| `send_email` | destructive | send / reply in-thread |
+| `send_email` | destructive | send / reply in-thread, with attachments (workspace paths) |
+| `download_email_attachment` | — | save an attachment to the workspace |
 
 Each calls `resolveEmailProvider({ slug?, kinId })`: explicit slug → default
 (`app_settings.default_email_provider_id`) → first valid; enforces the
@@ -88,9 +89,9 @@ per-account allow-list against the calling Kin; injects a fresh access token.
 
 ## Per-account settings
 
-- **`send_mode`** (`direct` | `approval`) — v1 implements `direct`; `send_email`
-  refuses `approval` accounts (the human-approval path is a fast-follow that will
-  reuse `awaiting_human_input`).
+- **`send_mode`** (`direct` | `approval`) — `direct` sends immediately;
+  `approval` queues the message in `pending_email_sends` + a notification, and the
+  user approves (→ actually sends) or rejects it in Settings → Email accounts.
 - **`allowed_kin_ids`** — `null`/empty = global (any Kin with the `email`
   toolbox); a non-empty list restricts the account to those Kins.
 
@@ -118,6 +119,6 @@ disconnect).
 
 ## Out of v1 (fast-follows)
 
-Attachments (send + download) · `send_mode=approval` flow · contacts / calendar ·
+Contacts / calendar ·
 Microsoft / IMAP providers · agentic inbound (a light-model cron polling new
 mail; push when the provider supports it).
