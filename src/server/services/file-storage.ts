@@ -324,6 +324,29 @@ export async function getFileByName(kinId: string, name: string) {
   return file ? serializeFileMetadata(file) : null
 }
 
+/** Read a stored file's bytes by id, or by (kin-scoped) name. Returns null when
+ *  the row or its on-disk blob is missing. Used to materialize a stored file
+ *  into a workspace so the regular file tools can operate on it. */
+export async function readStoredFile(opts: {
+  id?: string
+  name?: string
+  kinId: string
+}): Promise<{ buffer: Buffer; mimeType: string; originalName: string; name: string } | null> {
+  let row: FileStorageRow | undefined
+  if (opts.id) {
+    row = await db.select().from(fileStorage).where(eq(fileStorage.id, opts.id)).get()
+  } else if (opts.name) {
+    row = await db
+      .select()
+      .from(fileStorage)
+      .where(and(eq(fileStorage.kinId, opts.kinId), eq(fileStorage.name, opts.name)))
+      .get()
+  }
+  if (!row || !existsSync(row.storedPath)) return null
+  const buffer = Buffer.from(await Bun.file(row.storedPath).arrayBuffer())
+  return { buffer, mimeType: row.mimeType, originalName: row.originalName, name: row.name }
+}
+
 // ─── List ───────────────────────────────────────────────────────────────────
 
 export async function listFiles(kinId?: string) {

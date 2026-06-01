@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { writeFile, mkdir } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import { tool } from '@/server/tools/tool-helper'
 import { createLogger } from '@/server/logger'
 import {
@@ -11,7 +13,10 @@ import {
   searchFiles,
   updateFile,
   deleteFile,
+  readStoredFile,
 } from '@/server/services/file-storage'
+import { resolveToolWorkspace } from '@/server/tools/workspace'
+import { resolveAndValidate } from '@/server/tools/filesystem-tools'
 import type { ToolRegistration } from '@/server/tools/types'
 
 const log = createLogger('tools:file-storage')
@@ -123,6 +128,39 @@ export const getStoredFileTool: ToolRegistration = {
 
         const file = await getFileByName(ctx.kinId, name!)
         return file ?? { error: 'File not found' }
+      },
+    }),
+}
+
+// ─── download_stored_file ─────────────────────────────────────────────────────
+
+export const downloadStoredFileTool: ToolRegistration = {
+  availability: ['main', 'sub-kin'],
+  create: (ctx) =>
+    tool({
+      description:
+        'Copy a stored file into the workspace so the regular file tools can use it ' +
+        '(read_file, grep, attaching to an email, …). Identify it by id or name ' +
+        '(from list_stored_files). Returns the saved workspace-relative path.',
+      inputSchema: z.object({
+        id: z.string().optional().describe('Provide either id or name.'),
+        name: z.string().optional().describe('Provide either id or name.'),
+        save_as: z
+          .string()
+          .optional()
+          .describe('Workspace-relative path to save to. Defaults to the file\'s original name.'),
+      }),
+      execute: async ({ id, name, save_as }) => {
+        if (!id && !name) return { error: 'Provide either id or name' }
+        const file = await readStoredFile({ id, name, kinId: ctx.kinId })
+        if (!file) return { error: 'File not found' }
+        const workspace = resolveToolWorkspace(ctx)
+        const rel = save_as?.trim() || file.originalName
+        const abs = resolveAndValidate(rel, workspace)
+        await mkdir(dirname(abs), { recursive: true })
+        await writeFile(abs, file.buffer)
+        log.debug({ kinId: ctx.kinId, name: file.name, path: rel, bytes: file.buffer.length }, 'download_stored_file')
+        return { savedPath: rel, bytes: file.buffer.length, mimeType: file.mimeType }
       },
     }),
 }

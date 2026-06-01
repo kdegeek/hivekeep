@@ -170,6 +170,7 @@ import {
   searchStoredFilesTool,
   updateStoredFileTool,
   deleteStoredFileTool,
+  downloadStoredFileTool,
 } from '@/server/tools/file-storage-tools'
 import {
   createKinTool,
@@ -461,6 +462,7 @@ export function registerAllTools(): void {
   // File storage tools (main only)
   toolRegistry.register('store_file', storeFileTool, 'file-storage')
   toolRegistry.register('get_stored_file', getStoredFileTool, 'file-storage')
+  toolRegistry.register('download_stored_file', downloadStoredFileTool, 'file-storage')
   toolRegistry.register('list_stored_files', listStoredFilesTool, 'file-storage')
   toolRegistry.register('search_stored_files', searchStoredFilesTool, 'file-storage')
   toolRegistry.register('update_stored_file', updateStoredFileTool, 'file-storage')

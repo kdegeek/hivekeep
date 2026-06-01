@@ -13,6 +13,7 @@ const mockFileStorage = {
   searchFiles: mock(() => Promise.resolve([] as any[])),
   updateFile: mock(() => Promise.resolve(null as any)),
   deleteFile: mock(() => Promise.resolve(false)),
+  readStoredFile: mock(() => Promise.resolve(null as any)),
 }
 
 mock.module('@/server/services/file-storage', () => mockFileStorage)

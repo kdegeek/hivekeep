@@ -2272,6 +2272,7 @@
       "list_mcp_servers": "List MCP Servers",
       "store_file": "Store File",
       "get_stored_file": "Get Stored File",
+      "download_stored_file": "Download Stored File to Workspace",
       "list_stored_files": "List Stored Files",
       "search_stored_files": "Search Stored Files",
       "update_stored_file": "Update Stored File",
