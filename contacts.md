@@ -1,9 +1,9 @@
 # KinBot — Address books (external contacts)
 
-Read-only access to **external** address books (iCloud first) so Kins can look up
-a contact — typically a phone number to hand to `send_channel_message` (e.g. an
-SMS via the Twilio channel). These contacts are **never** copied into KinBot's
-own contacts CRM; they are fetched on demand.
+Read-only access to **external** address books (iCloud, Google, Microsoft, generic
+CardDAV) so Kins can look up a contact — typically a phone number to hand to
+`send_channel_message` (e.g. an SMS via the Twilio channel). These contacts are
+**never** copied into KinBot's own contacts CRM; they are fetched on demand.
 
 > Not to be confused with KinBot's internal contacts (`contact-tools.ts`,
 > `create_contact`/`get_contact`/…) which are the Kin's own writable address
@@ -98,16 +98,29 @@ contacts providers keyed by the same `type` as the email provider:
 |---|---|---|
 | `gmail` | Gmail API | **Google People API** (`contacts.readonly`) |
 | `microsoft` | Graph `/messages` | **Graph `/me/contacts`** (`Contacts.Read`) |
-| `icloud` | (IMAP — fast-follow) | **CardDAV** (app password) |
+| `icloud` | **IMAP/SMTP** (preset, app password) | **CardDAV** (app password) |
 | `imap` | IMAP/SMTP | — |
+| `carddav` | — | **generic CardDAV** (OVH/Fastmail/Nextcloud, by URL) |
+
+The iCloud email provider (`src/server/email/providers/icloud.ts`) reuses the
+generic IMAP provider with Apple's preset servers, and the iCloud + generic
+CardDAV contacts providers share `carddav-core.ts`. So connecting iCloud once
+(Apple ID + app password) serves mail + contacts from a single row.
 
 **Capability-aware OAuth connect**: `POST /api/email-accounts/connect/:type` takes
 `{ capabilities }` and requests the **union** of the email + contacts scopes in a
 single consent; the callback writes one row with both capabilities. Token refresh
 doesn't narrow scopes, so the same access token serves both families.
 `resolveContactsProvider` reuses the account's refresh token via the email token
-manager. The read model (`connected-accounts.ts`) merges providers by type and
-lists each account once with its capability set.
+manager.
+
+**Capability-aware config connect** (non-OAuth): `POST
+/api/connected-accounts/connect-config/:type` validates **every** requested
+capability (e.g. iCloud → a live IMAP connect *and* a CardDAV connect with the
+same app password) before `createConfigAccount` writes ONE row with all of them.
+
+The read model (`connected-accounts.ts`) merges providers by type and lists each
+account once with its capability set.
 
 ## UI
 
@@ -127,5 +140,6 @@ accounts. Config connect routes to the owning family (IMAP→email, CardDAV→co
 
 ## Out of scope (fast-follows)
 
-Generic CardDAV (OVH/Fastmail presets) · Google People / Microsoft Graph
-(OAuth) · calendar (CalDAV / Graph events) · phone-number normalization to E.164.
+Calendar (CalDAV / Graph events) · phone-number normalization to E.164 · CardDAV
+presets (pre-filled OVH/Fastmail server URLs) · unifying a generic IMAP + CardDAV
+account under one `imap` connection (today CardDAV is its own `carddav` account).
