@@ -507,7 +507,7 @@ export interface ChannelAdapter {
 
 /** Capability flags a provider declares. Implemented as the union of the
  *  six native interfaces below. */
-export type ProviderCapability = 'llm' | 'embedding' | 'image' | 'search' | 'tts' | 'stt' | 'rerank' | 'email' | 'contacts'
+export type ProviderCapability = 'llm' | 'embedding' | 'image' | 'search' | 'tts' | 'stt' | 'rerank' | 'email' | 'contacts' | 'calendar'
 
 // ─── Config schema (provider-declared, UI-rendered) ─────────────────────────
 
@@ -1853,6 +1853,137 @@ export interface ContactsProvider extends ProviderUIHints {
 }
 
 /** Discriminated union of every native provider shape a plugin can declare. */
+// ─── Calendar ────────────────────────────────────────────────────────────────
+
+export interface CalendarCapabilities {
+  /** Provider authenticates via the host's OAuth2 flow (declares an `oauth`
+   *  profile) vs typed credentials (CalDAV app password). */
+  readonly supportsOAuth?: boolean
+  /** Can create / update / delete events (vs read-only). */
+  readonly supportsWrite?: boolean
+}
+
+/** A calendar (collection) within an account. */
+export interface CalendarRef {
+  id: string
+  name: string
+  /** The account's default calendar. */
+  primary?: boolean
+  /** The user cannot write to this calendar. */
+  readOnly?: boolean
+  color?: string
+}
+
+export interface EventAttendee {
+  email: string
+  name?: string
+  /** `accepted` | `declined` | `tentative` | `needsAction`. */
+  responseStatus?: string
+}
+
+/**
+ * A calendar event. Times are ISO 8601 strings: for all-day events `allDay` is
+ * true and `start`/`end` are dates (`YYYY-MM-DD`); otherwise they carry a
+ * date-time. `calendarId` identifies the owning calendar — pass it back to
+ * get / update / delete.
+ */
+export interface CalendarEvent {
+  id: string
+  calendarId: string
+  title: string
+  description?: string
+  location?: string
+  start: string
+  end: string
+  allDay?: boolean
+  timeZone?: string
+  attendees?: EventAttendee[]
+  organizer?: EventAttendee
+  /** `confirmed` | `tentative` | `cancelled`. */
+  status?: string
+  /** Web link to the event when the provider offers one. */
+  url?: string
+  /** Last modification time, Unix ms. */
+  updatedAt?: number
+}
+
+/** Options for `listEvents`. Providers MUST tolerate an empty object (return the
+ *  next upcoming events on the primary calendar). */
+export interface EventListOptions {
+  /** Calendar to list; the primary calendar when omitted. */
+  calendarId?: string
+  /** Lower time bound (ISO 8601); defaults to "now". */
+  timeMin?: string
+  /** Upper time bound (ISO 8601). */
+  timeMax?: string
+  limit?: number
+  pageToken?: string
+  /** Free-text search over event fields (provider-dependent). */
+  query?: string
+  signal?: AbortSignal
+}
+
+/** What `listEvents` returns — a page of events plus an optional cursor. */
+export interface EventListResult {
+  events: CalendarEvent[]
+  nextPageToken?: string
+}
+
+/** Fields to create an event. */
+export interface CreateEventParams {
+  /** Target calendar; the primary calendar when omitted. */
+  calendarId?: string
+  title: string
+  description?: string
+  location?: string
+  /** ISO 8601 start (date-time, or `YYYY-MM-DD` for all-day). */
+  start: string
+  /** ISO 8601 end. */
+  end: string
+  allDay?: boolean
+  timeZone?: string
+  attendees?: Array<{ email: string; name?: string }>
+}
+
+/** Fields to update an event — only set fields are changed. */
+export interface UpdateEventParams {
+  calendarId: string
+  eventId: string
+  title?: string
+  description?: string
+  location?: string
+  start?: string
+  end?: string
+  allDay?: boolean
+  timeZone?: string
+  attendees?: Array<{ email: string; name?: string }>
+}
+
+/**
+ * Native calendar provider — read + optional write. Same auth split as the
+ * other families: OAuth (Google Calendar, Microsoft Graph) declare an `oauth`
+ * profile; CalDAV (iCloud, generic) declare credentials in `configSchema`. The
+ * host detects the family by the presence of `listEvents` + `listCalendars`.
+ * The write methods are optional — read-only providers omit them and clear
+ * `capabilities.supportsWrite`.
+ */
+export interface CalendarProvider extends ProviderUIHints {
+  readonly type: string
+  readonly displayName: string
+  readonly configSchema: ProviderConfigSchema
+  readonly capabilities: CalendarCapabilities
+  readonly oauth?: OAuthProfile
+
+  authenticate(config: ProviderConfig): Promise<AuthResult>
+
+  listCalendars(config: ProviderConfig): Promise<CalendarRef[]>
+  listEvents(options: EventListOptions, config: ProviderConfig): Promise<EventListResult>
+  getEvent(calendarId: string, eventId: string, config: ProviderConfig): Promise<CalendarEvent>
+  createEvent?(params: CreateEventParams, config: ProviderConfig): Promise<CalendarEvent>
+  updateEvent?(params: UpdateEventParams, config: ProviderConfig): Promise<CalendarEvent>
+  deleteEvent?(calendarId: string, eventId: string, config: ProviderConfig): Promise<void>
+}
+
 export type PluginProvider =
   | LLMProvider
   | EmbeddingProvider
@@ -1862,6 +1993,7 @@ export type PluginProvider =
   | STTProvider
   | EmailProvider
   | ContactsProvider
+  | CalendarProvider
 
 // ════════════════════════════════════════════════════════════════════════════
 //  Hooks

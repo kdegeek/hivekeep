@@ -15,6 +15,7 @@ import { registerBuiltinTTSProviders } from '@/server/llm/tts/register'
 import { registerBuiltinSTTProviders } from '@/server/llm/stt/register'
 import { registerBuiltinEmailProviders } from '@/server/email/register'
 import { registerBuiltinContactsProviders } from '@/server/contacts/register'
+import { registerBuiltinCalendarProviders } from '@/server/calendar/register'
 import { initCronScheduler } from '@/server/services/crons'
 import { recoverPendingWakeups } from '@/server/services/wakeup-scheduler'
 import { Cron } from 'croner'
@@ -106,6 +107,7 @@ registerBuiltinTTSProviders()
 registerBuiltinSTTProviders()
 registerBuiltinEmailProviders()
 registerBuiltinContactsProviders()
+registerBuiltinCalendarProviders()
 
 // Scan and load plugins
 log.info('Scanning for plugins...')
