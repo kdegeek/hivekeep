@@ -126,64 +126,68 @@ export function ProjectsPage() {
             : []
           return (
           <div className="flex h-full flex-col">
-            <header className="flex items-start gap-3 border-b border-border px-4 py-3">
-              {/* Mobile project picker — the desktop sidebar is hidden below
-                  768px, so this Sheet drawer is how the user switches projects.
-                  Mirrors the Settings md:hidden mobile pattern. */}
-              <Sheet open={projectDrawerOpen} onOpenChange={setProjectDrawerOpen}>
-                <SheetTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="mt-0.5 shrink-0 md:hidden"
-                    aria-label={t('projects.sidebar.openDrawer', { defaultValue: 'Open projects' })}
-                    title={t('projects.sidebar.openDrawer', { defaultValue: 'Open projects' })}
-                  >
-                    <PanelLeft className="size-5" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-[85vw] max-w-sm p-0">
-                  <SheetHeader className="sr-only">
-                    <SheetTitle>{t('projects.sidebar.title')}</SheetTitle>
-                  </SheetHeader>
-                  <ProjectsSidebar
-                    variant="drawer"
-                    projects={projects}
-                    selectedId={routeProjectId ?? null}
-                    onSelect={(id) => {
-                      navigate(`/projects/${id}`)
-                      setProjectDrawerOpen(false)
-                    }}
-                    onCreate={() => {
-                      setProjectDrawerOpen(false)
-                      setCreateOpen(true)
-                    }}
-                    onEdit={(id) => {
-                      if (id !== routeProjectId) navigate(`/projects/${id}`)
-                      setProjectDrawerOpen(false)
-                      setEditProjectOpen(true)
-                    }}
-                  />
-                </SheetContent>
-              </Sheet>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2">
-                  <h1 className="truncate text-base font-semibold">{project.title}</h1>
-                  {project.slug && (
-                    <span
-                      className="shrink-0 font-mono text-[11px] text-muted-foreground"
-                      title={`Slug: ${project.slug} — use as 'projectSlug#number' to qualify tickets`}
+            <header className="flex flex-col gap-2 border-b border-border px-4 py-3 md:flex-row md:items-start md:gap-3">
+              {/* Top section: mobile drawer trigger + project title/info.
+                  Wrapping both in a flex row keeps them on the same line on
+                  mobile instead of stacking the button alone. */}
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+                {/* Mobile project picker — the desktop sidebar is hidden below
+                    768px, so this Sheet drawer is how the user switches projects.
+                    Mirrors the Settings md:hidden mobile pattern. */}
+                <Sheet open={projectDrawerOpen} onOpenChange={setProjectDrawerOpen}>
+                  <SheetTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="mt-0.5 shrink-0 md:hidden"
+                      aria-label={t('projects.sidebar.openDrawer', { defaultValue: 'Open projects' })}
+                      title={t('projects.sidebar.openDrawer', { defaultValue: 'Open projects' })}
                     >
-                      {project.slug}
-                    </span>
-                  )}
-                  {project.githubRepo && (
-                    <CloneStatusBadge
-                      status={project.cloneStatus}
-                      className="ml-1"
+                      <PanelLeft className="size-5" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="w-[85vw] max-w-sm p-0">
+                    <SheetHeader className="sr-only">
+                      <SheetTitle>{t('projects.sidebar.title')}</SheetTitle>
+                    </SheetHeader>
+                    <ProjectsSidebar
+                      variant="drawer"
+                      projects={projects}
+                      selectedId={routeProjectId ?? null}
+                      onSelect={(id) => {
+                        navigate(`/projects/${id}`)
+                        setProjectDrawerOpen(false)
+                      }}
+                      onCreate={() => {
+                        setProjectDrawerOpen(false)
+                        setCreateOpen(true)
+                      }}
+                      onEdit={(id) => {
+                        if (id !== routeProjectId) navigate(`/projects/${id}`)
+                        setProjectDrawerOpen(false)
+                        setEditProjectOpen(true)
+                      }}
                     />
-                  )}
-                </div>
+                  </SheetContent>
+                </Sheet>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2">
+                    <h1 className="truncate text-base font-semibold">{project.title}</h1>
+                    {project.slug && (
+                      <span
+                        className="shrink-0 font-mono text-[11px] text-muted-foreground"
+                        title={`Slug: ${project.slug} — use as 'projectSlug#number' to qualify tickets`}
+                      >
+                        {project.slug}
+                      </span>
+                    )}
+                    {project.githubRepo && (
+                      <CloneStatusBadge
+                        status={project.cloneStatus}
+                        className="ml-1"
+                      />
+                    )}
+                  </div>
 {(() => {
                   // Header is a plain-text zone: we don't render markdown here
                   // (could produce weird layout), but raw markdown syntax looks
@@ -198,33 +202,37 @@ export function ProjectsPage() {
                     </p>
                   ) : null
                 })()}
-                {/* Stacked segmented progress — shows ticket distribution across all
-                    five statuses, not just done/total. Reads as a mini-map of the
-                    kanban below since it reuses the same status accent colors. */}
-                <div className="mt-2 flex max-w-md items-center gap-2">
-                  <div
-                    className="flex h-1 flex-1 overflow-hidden rounded-full bg-muted"
-                    role="progressbar"
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={percent}
-                  >
-                    {segments.map((seg) => (
-                      <div
-                        key={seg.status}
-                        className={cn('h-full transition-[width] duration-300', seg.color)}
-                        style={{ width: `${(seg.count / total) * 100}%` }}
-                        title={`${t(`projects.status.${seg.status}`)}: ${seg.count}`}
-                      />
-                    ))}
+                  {/* Stacked segmented progress — shows ticket distribution across all
+                      five statuses, not just done/total. Reads as a mini-map of the
+                      kanban below since it reuses the same status accent colors. */}
+                  <div className="mt-2 flex max-w-md items-center gap-2">
+                    <div
+                      className="flex h-1 flex-1 overflow-hidden rounded-full bg-muted"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={percent}
+                    >
+                      {segments.map((seg) => (
+                        <div
+                          key={seg.status}
+                          className={cn('h-full transition-[width] duration-300', seg.color)}
+                          style={{ width: `${(seg.count / total) * 100}%` }}
+                          title={`${t(`projects.status.${seg.status}`)}: ${seg.count}`}
+                        />
+                      ))}
+                    </div>
+                    <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                      {total === 0
+                        ? t('projects.kanban.progressEmpty')
+                        : `${t('projects.kanban.progress', { done, total })} · ${percent}%`}
+                    </span>
                   </div>
-                  <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                    {total === 0
-                      ? t('projects.kanban.progressEmpty')
-                      : `${t('projects.kanban.progress', { done, total })} · ${percent}%`}
-                  </span>
                 </div>
               </div>
+              {/* Controls: view switcher tabs + active kins indicator.
+                  On mobile this wraps to a second row (full-width); on md+ it
+                  sits inline to the right of the project info block. */}
               <div className="flex shrink-0 items-center gap-2">
                 <Tabs value={view} onValueChange={(v) => setView(v as ProjectView)}>
                   <TabsList>
