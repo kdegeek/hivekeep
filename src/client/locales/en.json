@@ -279,6 +279,7 @@
       "emptyDescription": "Tasks will appear here when Kins are working",
       "activeLabel": "Active",
       "queuedLabel": "Queued",
+      "historyLabel": "History",
       "queueFilter": {
         "all": "All queues"
       },
@@ -2744,7 +2745,10 @@
   },
   "activityBar": {
     "kins": "Kins",
-    "projects": "Projects"
+    "projects": "Projects",
+    "tasks": "Tasks",
+    "crons": "Scheduled Tasks",
+    "apps": "Mini-Apps"
   },
   "orphanTask": {
     "menuAction": "Start a task",

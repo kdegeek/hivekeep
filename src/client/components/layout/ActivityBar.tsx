@@ -1,32 +1,49 @@
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Home, FolderKanban } from 'lucide-react'
+import { Home, FolderKanban, ListTodo, CalendarClock, Blocks } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
+import { useTasksContext } from '@/client/contexts/TasksContext'
 
 interface ActivityBarItem {
-  /** URL prefix that activates this item. The first matching item wins. */
+  /** URL prefix that activates this item. */
   matchPrefix: string
   /** Path to navigate to on click. */
   navigateTo: string
   icon: typeof Home
   labelKey: string
+  /** When true, shows the active-task badge. */
+  badge?: boolean
 }
 
+// Order: Kins first (default landing), then the dedicated section pages.
 const ITEMS: ActivityBarItem[] = [
   { matchPrefix: '/projects', navigateTo: '/projects', icon: FolderKanban, labelKey: 'activityBar.projects' },
-  // Fallback default — "Kins" matches any non-Projects path
+  { matchPrefix: '/tasks', navigateTo: '/tasks', icon: ListTodo, labelKey: 'activityBar.tasks', badge: true },
+  { matchPrefix: '/crons', navigateTo: '/crons', icon: CalendarClock, labelKey: 'activityBar.crons' },
+  { matchPrefix: '/mini-apps', navigateTo: '/mini-apps', icon: Blocks, labelKey: 'activityBar.apps' },
+  // Fallback default — "Kins" matches any path not claimed by a section above.
   { matchPrefix: '/', navigateTo: '/', icon: Home, labelKey: 'activityBar.kins' },
 ]
+
+const SECTION_PREFIXES = ['/projects', '/tasks', '/crons', '/mini-apps']
 
 export function ActivityBar() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
+  const { activeTasks } = useTasksContext()
+
+  const activeCount = activeTasks.length
+  const hasAwaiting = activeTasks.some(
+    (task) => task.status === 'awaiting_human_input' || task.status === 'awaiting_kin_response',
+  )
 
   function isActive(item: ActivityBarItem): boolean {
-    if (item.matchPrefix === '/projects') return location.pathname.startsWith('/projects')
-    // Default ('Kins'): active iff no other item matched
-    return !location.pathname.startsWith('/projects')
+    if (item.matchPrefix === '/') {
+      // "Kins" — active iff no dedicated section claims the path.
+      return !SECTION_PREFIXES.some((p) => location.pathname.startsWith(p))
+    }
+    return location.pathname.startsWith(item.matchPrefix)
   }
 
   return (
@@ -59,6 +76,18 @@ export function ActivityBar() {
               />
             )}
             <Icon className="size-4.5" strokeWidth={1.75} />
+            {item.badge && activeCount > 0 && (
+              <span
+                className={cn(
+                  'absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-semibold leading-none',
+                  hasAwaiting
+                    ? 'animate-pulse bg-warning text-warning-foreground'
+                    : 'bg-primary text-primary-foreground',
+                )}
+              >
+                {activeCount}
+              </span>
+            )}
           </button>
         )
       })}

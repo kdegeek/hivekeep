@@ -1,8 +1,9 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Home, FolderKanban } from 'lucide-react'
+import { Home, FolderKanban, ListTodo, CalendarClock, Blocks } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 import { useAuth } from '@/client/hooks/useAuth'
+import { useTasksContext } from '@/client/contexts/TasksContext'
 import { ThemeToggle } from '@/client/components/common/ThemeToggle'
 import { PaletteToggle } from '@/client/components/common/PaletteToggle'
 import { UserMenu } from '@/client/components/common/UserMenu'
@@ -34,14 +35,24 @@ export function AppTopBar({ onOpenSettings, onOpenAccount }: AppTopBarProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const { t } = useTranslation()
+  const { activeTasks } = useTasksContext()
+  const activeTaskCount = activeTasks.length
+  const hasAwaitingTask = activeTasks.some(
+    (task) => task.status === 'awaiting_human_input' || task.status === 'awaiting_kin_response',
+  )
 
   // Mobile mode switch — the left ActivityBar rail is hidden below md, so the
-  // Kins/Projects switch moves into this always-present top bar as a compact
-  // segmented control. Keeps navigation reachable without wasting a full column.
-  const isProjects = location.pathname.startsWith('/projects')
+  // section nav moves into this always-present top bar as a compact icon-only
+  // segmented control mirroring the ActivityBar destinations.
+  const path = location.pathname
+  const sectionPrefixes = ['/projects', '/tasks', '/crons', '/mini-apps']
+  const isSection = (prefix: string) => path.startsWith(prefix)
   const modeItems = [
-    { key: 'kins', to: '/', icon: Home, active: !isProjects, label: t('activityBar.kins') },
-    { key: 'projects', to: '/projects', icon: FolderKanban, active: isProjects, label: t('activityBar.projects') },
+    { key: 'kins', to: '/', icon: Home, active: !sectionPrefixes.some(isSection), label: t('activityBar.kins'), badge: false },
+    { key: 'projects', to: '/projects', icon: FolderKanban, active: isSection('/projects'), label: t('activityBar.projects'), badge: false },
+    { key: 'tasks', to: '/tasks', icon: ListTodo, active: isSection('/tasks'), label: t('activityBar.tasks'), badge: true },
+    { key: 'crons', to: '/crons', icon: CalendarClock, active: isSection('/crons'), label: t('activityBar.crons'), badge: false },
+    { key: 'apps', to: '/mini-apps', icon: Blocks, active: isSection('/mini-apps'), label: t('activityBar.apps'), badge: false },
   ] as const
 
   return (
@@ -76,13 +87,25 @@ export function AppTopBar({ onOpenSettings, onOpenAccount }: AppTopBarProps) {
               aria-label={item.label}
               aria-current={item.active ? 'page' : undefined}
               className={cn(
-                'flex size-8 items-center justify-center rounded-md transition-colors',
+                'relative flex size-8 items-center justify-center rounded-md transition-colors',
                 item.active
                   ? 'bg-background text-primary shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
               <Icon className="size-4" strokeWidth={1.75} />
+              {item.badge && activeTaskCount > 0 && (
+                <span
+                  className={cn(
+                    'absolute -right-1 -top-1 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[8px] font-semibold leading-none',
+                    hasAwaitingTask
+                      ? 'animate-pulse bg-warning text-warning-foreground'
+                      : 'bg-primary text-primary-foreground',
+                  )}
+                >
+                  {activeTaskCount}
+                </span>
+              )}
             </button>
           )
         })}

@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { toast } from 'sonner'
 import { api } from '@/client/lib/api'
 import { SidePanelProvider } from '@/client/contexts/SidePanelContext'
+import { TasksProvider } from '@/client/contexts/TasksContext'
 import { TicketMentionShell } from '@/client/contexts/TicketMentionShell'
 import { ActivityBar } from '@/client/components/layout/ActivityBar'
 import { AppTopBar } from '@/client/components/layout/AppTopBar'
@@ -14,6 +15,9 @@ import { TooltipProvider } from '@/client/components/ui/tooltip'
 // Lazy-loaded pages for code splitting
 const ChatPage = lazy(() => import('@/client/pages/chat/ChatPage').then(m => ({ default: m.ChatPage })))
 const ProjectsPage = lazy(() => import('@/client/pages/projects/ProjectsPage').then(m => ({ default: m.ProjectsPage })))
+const TasksPage = lazy(() => import('@/client/pages/tasks/TasksPage').then(m => ({ default: m.TasksPage })))
+const CronsPage = lazy(() => import('@/client/pages/crons/CronsPage').then(m => ({ default: m.CronsPage })))
+const MiniAppsPage = lazy(() => import('@/client/pages/mini-apps/MiniAppsPage').then(m => ({ default: m.MiniAppsPage })))
 const LoginPage = lazy(() => import('@/client/pages/login/LoginPage').then(m => ({ default: m.LoginPage })))
 const OnboardingPage = lazy(() => import('@/client/pages/onboarding/OnboardingPage').then(m => ({ default: m.OnboardingPage })))
 const DesignSystemPage = lazy(() => import('@/client/pages/design-system/DesignSystemPage').then(m => ({ default: m.DesignSystemPage })))
@@ -184,6 +188,7 @@ function AuthenticatedShell() {
   return (
     <TooltipProvider delayDuration={0}>
     <SidePanelProvider>
+    <TasksProvider>
     <TicketMentionShell>
       <div className="flex h-dvh w-screen flex-col overflow-hidden">
         <AppTopBar
@@ -203,6 +208,9 @@ function AuthenticatedShell() {
                   path="/projects/:projectId"
                   element={<ProjectsPage />}
                 />
+                <Route path="/tasks" element={<TasksPage />} />
+                <Route path="/crons" element={<CronsPage />} />
+                <Route path="/mini-apps" element={<MiniAppsPage />} />
                 <Route
                   path="*"
                   element={
@@ -234,6 +242,7 @@ function AuthenticatedShell() {
         </Suspense>
       </div>
     </TicketMentionShell>
+    </TasksProvider>
     </SidePanelProvider>
     </TooltipProvider>
   )

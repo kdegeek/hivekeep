@@ -279,6 +279,7 @@
       "emptyDescription": "Les tâches apparaîtront ici quand vos Kins travaillent",
       "activeLabel": "En cours",
       "queuedLabel": "En file d'attente",
+      "historyLabel": "Historique",
       "queueFilter": {
         "all": "Toutes les files"
       },
@@ -2744,7 +2745,10 @@
   },
   "activityBar": {
     "kins": "Kins",
-    "projects": "Projets"
+    "projects": "Projets",
+    "tasks": "Tâches",
+    "crons": "Tâches planifiées",
+    "apps": "Mini-apps"
   },
   "orphanTask": {
     "menuAction": "Lancer une tâche",

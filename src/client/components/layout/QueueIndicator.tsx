@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useTasks } from '@/client/hooks/useTasks'
+import { useTasksContext } from '@/client/contexts/TasksContext'
 import { useTaskLimits } from '@/client/hooks/useTaskLimits'
 import { useSidePanel } from '@/client/contexts/SidePanelContext'
 import { TaskStatusDot } from '@/client/components/common/TaskStatusDot'
@@ -33,7 +33,7 @@ import type { TaskSummary } from '@/shared/types'
  */
 export function QueueIndicator() {
   const { t } = useTranslation()
-  const { activeTasks, queuedTasks } = useTasks()
+  const { activeTasks, queuedTasks } = useTasksContext()
   const { maxConcurrent } = useTaskLimits()
   const { openTask } = useSidePanel()
 
