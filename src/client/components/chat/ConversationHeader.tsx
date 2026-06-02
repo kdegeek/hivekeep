@@ -87,6 +87,10 @@ interface ConversationHeaderProps {
   thinkingEnabled?: boolean
   thinkingEffort?: KinThinkingEffort | null
   onChangeThinking?: (next: { enabled: boolean; effort: KinThinkingEffort | null }) => void
+  /** Optional leading element (e.g. the mobile sidebar trigger). Rendered at the
+   *  very start of the header so we can collapse the separate trigger bar on
+   *  mobile and reclaim that vertical space. */
+  leading?: React.ReactNode
 }
 
 /**
@@ -161,6 +165,7 @@ export const ConversationHeader = memo(function ConversationHeader({
   thinkingEnabled = false,
   thinkingEffort = null,
   onChangeThinking,
+  leading,
 }: ConversationHeaderProps) {
   const { t } = useTranslation()
 
@@ -234,6 +239,10 @@ export const ConversationHeader = memo(function ConversationHeader({
 
   return (
     <div ref={headerRef} className="flex min-w-0 items-center gap-2 border-b px-3 py-2.5 sm:gap-3 sm:px-4">
+      {/* Leading slot (mobile sidebar trigger) — collapses the standalone
+          trigger bar into this header on mobile to save vertical space. */}
+      {leading}
+
       {/* Avatar */}
       <ChatAvatar
         avatarUrl={avatarUrl}

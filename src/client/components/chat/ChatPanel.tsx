@@ -13,6 +13,7 @@ import { TaskResultCard } from '@/client/components/chat/TaskResultCard'
 import { CompactingCard } from '@/client/components/chat/CompactingCard'
 import { HumanPromptCard } from '@/client/components/chat/HumanPromptCard'
 import { Sheet, SheetContent, SheetTitle } from '@/client/components/ui/sheet'
+import { SidebarTrigger } from '@/client/components/ui/sidebar'
 const QuickChatPanel = lazy(() => import('@/client/components/chat/QuickChatPanel').then(m => ({ default: m.QuickChatPanel })))
 const QuickSessionHistory = lazy(() => import('@/client/components/chat/QuickSessionHistory').then(m => ({ default: m.QuickSessionHistory })))
 import { useChat, type LiveTask } from '@/client/hooks/useChat'
@@ -852,6 +853,7 @@ export function ChatPanel({ kin, llmModels, modelUnavailable = false, queueState
         thinkingEffort={thinkingEffort}
         onChangeThinking={updateThinking}
         onViewUsage={onOpenSettings ? () => onOpenSettings('tokenUsage', { kinId: kin.id }) : undefined}
+        leading={<SidebarTrigger className="-ml-1 shrink-0 md:hidden" />}
       />
 
       {/* Search bar */}

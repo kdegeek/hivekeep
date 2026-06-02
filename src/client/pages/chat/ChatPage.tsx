@@ -244,8 +244,11 @@ export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
           {/* Thin local bar — only hosts the SidebarTrigger which depends on
               SidebarProvider context (scoped to this page). Global actions
               (brand, SSE, palette, theme, notifications, user menu) live in
-              <AppTopBar /> at App.tsx root. */}
-          <div className="flex h-10 shrink-0 items-center border-b px-2">
+              <AppTopBar /> at App.tsx root.
+              Desktop only: on mobile the trigger is folded into the
+              ConversationHeader (and the placeholder below) so we don't burn a
+              whole 40px row of chrome above the chat. */}
+          <div className="hidden h-10 shrink-0 items-center border-b px-2 md:flex">
             <SidebarTrigger />
           </div>
 
@@ -289,7 +292,13 @@ export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
                      parent's `overflow-y-auto` lets the user scroll. Using
                      `justify-center` here would clip the top of overflowing
                      content (no way to scroll up). */
-                  <div className="surface-chat flex flex-1 flex-col items-center overflow-y-auto p-6">
+                  <div className="surface-chat relative flex flex-1 flex-col items-center overflow-y-auto p-6">
+                    {/* Mobile sidebar trigger — the standalone trigger bar is
+                        hidden on mobile, so without this the user has no way to
+                        open the sidebar and pick a Kin from the placeholder. */}
+                    <div className="absolute left-2 top-2 md:hidden">
+                      <SidebarTrigger />
+                    </div>
                     {!initialDataLoaded ? (
                       /* Still loading kins/models — render nothing rather than
                          flashing the onboarding checklist for a few hundred ms. */
