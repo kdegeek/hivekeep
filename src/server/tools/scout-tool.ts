@@ -2,7 +2,7 @@ import { tool } from '@/server/tools/tool-helper'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { db } from '@/server/db/index'
-import { tickets } from '@/server/db/schema'
+import { tickets, kins } from '@/server/db/schema'
 import { spawnTask, suspendTaskForChild } from '@/server/services/tasks'
 import { resolveScoutModel } from '@/server/llm/core/resolve-scout'
 import { createLogger } from '@/server/logger'
@@ -83,8 +83,15 @@ export const scoutTool: ToolRegistration = {
           }
         }
 
-        // Resolve the project context (for the project tier of the scout chain)
-        // from the calling task's ticket, when present.
+        // Resolve the project context (for the project tier of the scout chain).
+        // Priority: the calling task's ticket project (ticket tasks), then the
+        // Kin's persistent active project (main sessions and non-ticket tasks).
+        //
+        // Without the active-project fallback the project scout tier was only
+        // ever consulted for ticket-bound tasks: a scout dispatched from a main
+        // session (or a plain spawn) on a Kin with an active project silently
+        // skipped the project's scout_model and fell through to the Kin's own
+        // main model (e.g. Opus instead of the project's configured Haiku).
         let projectId: string | null = null
         if (ctx.ticketId) {
           const ticketRow = await db
@@ -93,6 +100,14 @@ export const scoutTool: ToolRegistration = {
             .where(eq(tickets.id, ctx.ticketId))
             .get()
           projectId = ticketRow?.projectId ?? null
+        }
+        if (!projectId) {
+          const kinRow = await db
+            .select({ activeProjectId: kins.activeProjectId })
+            .from(kins)
+            .where(eq(kins.id, ctx.kinId))
+            .get()
+          projectId = kinRow?.activeProjectId ?? null
         }
 
         // Resolve the cheap scout model via the fallback chain.
