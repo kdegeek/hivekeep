@@ -139,7 +139,7 @@ export type QueueItemPriority = 'user' | 'kin' | 'task'
 
 export type McpServerStatus = 'active' | 'pending_approval'
 
-export type PaletteId = 'aurora' | 'ocean' | 'forest' | 'sunset' | 'monochrome' | 'sakura' | 'neon' | 'lavender'
+export type PaletteId = 'aurora' | 'ocean' | 'forest' | 'sunset' | 'monochrome' | 'sakura' | 'neon' | 'lavender' | 'midnight' | 'copper' | 'jade' | 'crimson' | 'galaxy' | 'amber' | 'slate' | 'rose' | 'mint' | 'citrus'
 
 export interface ApiError {
   error: {

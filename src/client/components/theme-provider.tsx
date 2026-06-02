@@ -64,6 +64,66 @@ export const PALETTES: PaletteInfo[] = [
     description: 'Violet \u2192 Periwinkle \u2192 Mauve',
     colors: ['oklch(0.55 0.18 280)', 'oklch(0.62 0.14 265)', 'oklch(0.72 0.10 310)'],
   },
+  {
+    id: 'midnight',
+    name: 'Midnight',
+    description: 'Indigo \u2192 Blue Violet \u2192 Periwinkle',
+    colors: ['oklch(0.45 0.22 250)', 'oklch(0.55 0.18 265)', 'oklch(0.65 0.14 280)'],
+  },
+  {
+    id: 'copper',
+    name: 'Copper',
+    description: 'Copper \u2192 Bronze \u2192 Gold',
+    colors: ['oklch(0.52 0.18 35)', 'oklch(0.62 0.16 50)', 'oklch(0.72 0.12 65)'],
+  },
+  {
+    id: 'jade',
+    name: 'Jade',
+    description: 'Jade \u2192 Teal \u2192 Seafoam',
+    colors: ['oklch(0.50 0.16 168)', 'oklch(0.56 0.14 178)', 'oklch(0.62 0.12 190)'],
+  },
+  {
+    id: 'crimson',
+    name: 'Crimson',
+    description: 'Crimson \u2192 Ruby \u2192 Scarlet',
+    colors: ['oklch(0.52 0.22 20)', 'oklch(0.58 0.20 10)', 'oklch(0.64 0.16 355)'],
+  },
+  {
+    id: 'galaxy',
+    name: 'Galaxy',
+    description: 'Deep Violet \u2192 Cosmic Blue \u2192 Nebula',
+    colors: ['oklch(0.48 0.24 275)', 'oklch(0.55 0.22 255)', 'oklch(0.62 0.18 230)'],
+  },
+  {
+    id: 'amber',
+    name: 'Amber',
+    description: 'Amber \u2192 Honey \u2192 Gold',
+    colors: ['oklch(0.60 0.18 72)', 'oklch(0.70 0.16 82)', 'oklch(0.78 0.14 90)'],
+  },
+  {
+    id: 'slate',
+    name: 'Slate',
+    description: 'Steel \u2192 Slate \u2192 Silver',
+    colors: ['oklch(0.45 0.08 220)', 'oklch(0.55 0.06 220)', 'oklch(0.68 0.04 220)'],
+  },
+  {
+    id: 'rose',
+    name: 'Rose',
+    description: 'Rose \u2192 Blush \u2192 Sand',
+    colors: ['oklch(0.55 0.16 5)', 'oklch(0.68 0.12 15)', 'oklch(0.78 0.08 30)'],
+  },
+  {
+    id: 'mint',
+    name: 'Mint',
+    description: 'Mint \u2192 Aqua \u2192 Seafoam',
+    colors: ['oklch(0.50 0.16 175)', 'oklch(0.58 0.14 190)', 'oklch(0.66 0.12 205)'],
+  },
+  {
+    id: 'citrus',
+    name: 'Citrus',
+    description: 'Lime \u2192 Chartreuse \u2192 Gold',
+    colors: ['oklch(0.55 0.20 130)', 'oklch(0.68 0.18 100)', 'oklch(0.80 0.14 75)'],
+  },
 ]
 
 interface PaletteContextValue {
