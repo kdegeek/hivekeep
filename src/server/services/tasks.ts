@@ -19,7 +19,7 @@ import { getGlobalPrompt, getMaxConcurrentTasks, getMaxQueuedTasks } from '@/ser
 import { wrapToolsWithSpill } from '@/server/services/tool-output-spill'
 import { executeToolBatch } from '@/server/services/tool-executor'
 import { recordUsage, aggregateUsages, getTaskTotals } from '@/server/services/token-usage'
-import { runStreamStep } from '@/server/services/stream-runner'
+import { runStreamStep, type ReasoningSegment } from '@/server/services/stream-runner'
 import type { TaskStatus, TaskMode, KinThinkingConfig } from '@/shared/types'
 
 const log = createLogger('tasks')
@@ -166,7 +166,7 @@ export interface ActiveTaskStreamSnapshot {
   messageId: string
   content: string
   toolCalls: Array<{ id: string; name: string; args: unknown; result?: unknown; offset: number }>
-  reasoning: Array<{ offset: number; text: string }>
+  reasoning: ReasoningSegment[]
   /** Running sum of output tokens reported so far this turn (one increment per
    *  completed step). Drives the live token counter in the thinking bubble,
    *  mirroring ActiveKinStreamSnapshot.outputTokens on the main thread. */
@@ -1442,7 +1442,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
     // Execute LLM with streaming (same pattern as kin-engine)
     const assistantMessageId = uuid()
     let fullContent = ''
-    const reasoningSegments: Array<{ offset: number; text: string }> = []
+    const reasoningSegments: ReasoningSegment[] = []
     const toolCallsLog: Array<{ id: string; name: string; args: unknown; result?: unknown; offset: number }> = []
     let streamError: Error | null = null
 
@@ -1600,8 +1600,19 @@ async function executeSubKin(taskId: string, isNudge = false) {
         break
       }
 
-      // Build assistant content for history
+      // Build assistant content for history. Thinking blocks come FIRST
+      // (Anthropic requires them to lead the assistant turn) so the model's
+      // signed reasoning carries across steps — the core of why autonomous
+      // tasks kept re-deriving context every step. Prepending ALL thinking
+      // before ALL tool_use preserves true stream order because one step = one
+      // provider.chat() = one Anthropic response, in which thinking always
+      // precedes tool_use (tool results are external — the model can't reason
+      // past a tool_use until the next step). Unsigned blocks are skipped: the
+      // API drops them anyway, and non-Anthropic providers ignore them.
       const assistantBlocks: KinbotMessageBlock[] = []
+      for (const tb of outcome.stepThinking) {
+        if (tb.signature) assistantBlocks.push({ type: 'thinking', text: tb.text, signature: tb.signature })
+      }
       if (stepText) assistantBlocks.push({ type: 'text', text: stepText })
       for (const tc of stepToolCalls) {
         assistantBlocks.push({ type: 'tool-use', id: tc.id, name: tc.name, args: tc.args })
@@ -1631,29 +1642,36 @@ async function executeSubKin(taskId: string, isNudge = false) {
 
       if (batch.wasAborted) break
 
-      // Suspension check: a tool in this batch may have transitioned the
-      // task into an awaiting state (request_input → awaiting_human_input,
-      // send_message request → awaiting_kin_response). Stop the multi-step
-      // loop NOW so the LLM doesn't run another step on a task that's
-      // logically paused. The sub-Kin resumes via resumeSubKin() once the
-      // response arrives (respondToHumanPrompt / respondToInterKinRequest).
-      // Without this, the LLM happily emits more tool calls — observed on
-      // prod task `4e4f1760` (ticket #22) where the agent kept going for 40+
-      // calls after request_input, including a `git commit --no-verify` that
-      // only stopped because the hook-bypass guard refused it.
-      const suspendedCheck = await db
+      // Status check: a tool in this batch may have transitioned the task into
+      // a terminal or awaiting state. Stop the multi-step loop NOW so the LLM
+      // doesn't run another step on a task that's already done or paused.
+      //   - awaiting_* (request_input → awaiting_human_input, send_message
+      //     request → awaiting_kin_response, scout → awaiting_subtask): the
+      //     sub-Kin resumes via resumeSubKin() once the response arrives.
+      //     Without this the LLM kept emitting tool calls — observed on prod
+      //     task `4e4f1760` (ticket #22): 40+ calls after request_input,
+      //     incl. a `git commit --no-verify` only stopped by the hook guard.
+      //   - completed/failed (update_task_status): resolveTask already ran
+      //     inside the batch and does NOT abort the stream, so without this
+      //     break the loop issued one more FULL provider.chat() round-trip on
+      //     an already-resolved task (the wasted step that produced the
+      //     silent-stop fallback). Breaking here drops that round-trip.
+      const statusCheck = await db
         .select({ status: tasks.status })
         .from(tasks)
         .where(eq(tasks.id, taskId))
         .get()
       if (
-        suspendedCheck?.status === 'awaiting_human_input' ||
-        suspendedCheck?.status === 'awaiting_kin_response' ||
-        suspendedCheck?.status === 'awaiting_subtask'
+        statusCheck?.status === 'awaiting_human_input' ||
+        statusCheck?.status === 'awaiting_kin_response' ||
+        statusCheck?.status === 'awaiting_subtask' ||
+        statusCheck?.status === 'completed' ||
+        statusCheck?.status === 'failed' ||
+        statusCheck?.status === 'cancelled'
       ) {
         log.info(
-          { taskId, status: suspendedCheck.status },
-          'Sub-Kin step suspended task — breaking multi-step loop',
+          { taskId, status: statusCheck.status },
+          'Sub-Kin step reached terminal/awaiting status — breaking multi-step loop',
         )
         break
       }

@@ -34,6 +34,26 @@ export interface StreamStepToolCall {
   offset: number
 }
 
+/** One captured thinking block from a single stream step. `signature` is the
+ *  Anthropic cryptographic signature emitted on `signature_delta`; it is
+ *  REQUIRED to replay the block on a subsequent step (the API drops unsigned
+ *  thinking blocks). Absent for providers that don't sign thinking. */
+export interface StreamStepThinking {
+  text: string
+  signature?: string
+}
+
+/** A persisted reasoning segment: `offset` indexes into the committed message
+ *  content (for client-side interleaving of reasoning + tool bubbles). The
+ *  optional `signature` rides along so a FUTURE resume path can rebuild a
+ *  replayable thinking block (not wired yet — resume still strips thinking);
+ *  the client ignores it. */
+export interface ReasoningSegment {
+  offset: number
+  text: string
+  signature?: string
+}
+
 /**
  * Coerce a tool_use `input` value into a plain object. The Anthropic API
  * requires `input` to be a JSON object — anything else makes the next turn
@@ -78,6 +98,12 @@ export interface StreamStepOutcome {
   /** Tool-call intents collected during this step. Forwarded to SSE as they
    *  arrived; returned here so the caller can run them via `executeToolBatch`. */
   stepToolCalls: StreamStepToolCall[]
+  /** Thinking blocks emitted during this step, in stream order, each paired
+   *  with its own signature. Returned on EVERY path (incl. tool-call steps) so
+   *  the caller can re-inject signed thinking blocks into the next step's
+   *  assistant turn — restoring reasoning continuity across the tool loop.
+   *  Empty when the step produced no thinking (or the provider doesn't sign). */
+  stepThinking: StreamStepThinking[]
   /** `finishReason` from the provider. `undefined` if the stream ended
    *  without emitting one (error, abort, or unfinished). */
   finishReason: FinishReason | undefined
@@ -113,7 +139,7 @@ export interface StreamStepContext {
    *  correct attribution from the first frame. */
   firstTokenAttribution?: StreamStepAttribution
   /** Mutated in place when a thinking block ends (one entry per segment). */
-  reasoningSegments?: Array<{ offset: number; text: string }>
+  reasoningSegments?: ReasoningSegment[]
   /** Live snapshot whose `.content` field is updated on each committed text
    *  flush. The in-flight buffer is NEVER written here. `outputTokens` holds
    *  the real provider-reported total from completed prior steps — used as the
@@ -144,9 +170,13 @@ export async function runStreamStep(
   const prevContentLen = ctx.contentSnapshot?.content.length ?? 0
   let buffered = ''
   const stepToolCalls: StreamStepToolCall[] = []
+  const stepThinking: StreamStepThinking[] = []
   let finishReason: FinishReason | undefined
   let usage: Usage | undefined
   let currentReasoning = ''
+  /** Signature of the in-flight thinking block, set when its `signature_delta`
+   *  arrives, consumed (and reset) by `closeReasoning`. */
+  let currentSignature: string | undefined
   let inReasoning = false
   /** True once any tool-use is seen this step. */
   let sawCommittedSignal = false
@@ -169,13 +199,22 @@ export async function runStreamStep(
   /** Close out an open reasoning block: push the segment and emit reasoning-done. */
   const closeReasoning = () => {
     if (!inReasoning) return
-    if (currentReasoning && ctx.reasoningSegments) {
-      ctx.reasoningSegments.push({
-        offset: prevContentLen + buffered.length,
-        text: currentReasoning,
-      })
+    if (currentReasoning) {
+      if (ctx.reasoningSegments) {
+        ctx.reasoningSegments.push({
+          offset: prevContentLen + buffered.length,
+          text: currentReasoning,
+          ...(currentSignature ? { signature: currentSignature } : {}),
+        })
+      }
+      // Capture for cross-step re-injection. One entry per block so each keeps
+      // its OWN signature — never merge blocks (the API rejects mis-paired
+      // signatures). Unsigned blocks (non-Anthropic, or interrupted before the
+      // signature arrives) are kept here but skipped by callers on replay.
+      stepThinking.push({ text: currentReasoning, signature: currentSignature })
     }
     currentReasoning = ''
+    currentSignature = undefined
     inReasoning = false
     send('chat:reasoning-done', { messageId: ctx.assistantMessageId })
   }
@@ -216,7 +255,9 @@ export async function runStreamStep(
           break
         }
         case 'thinking-signature': {
-          // Signature marks the end of a thinking block.
+          // Signature marks the end of a thinking block. Capture it BEFORE
+          // closing so the segment + step-thinking entry carry the signature.
+          currentSignature = chunk.signature
           closeReasoning()
           break
         }
@@ -273,6 +314,7 @@ export async function runStreamStep(
       return {
         stepText: '',
         stepToolCalls,
+        stepThinking,
         finishReason,
         usage,
         wasAborted: true,
@@ -284,6 +326,7 @@ export async function runStreamStep(
     return {
       stepText: '',
       stepToolCalls,
+      stepThinking,
       finishReason,
       usage,
       wasAborted: false,
@@ -315,6 +358,7 @@ export async function runStreamStep(
     return {
       stepText: buffered,
       stepToolCalls: [],
+      stepThinking,
       finishReason,
       usage,
       wasAborted: false,
@@ -328,6 +372,7 @@ export async function runStreamStep(
   return {
     stepText: '',
     stepToolCalls,
+    stepThinking,
     finishReason,
     usage,
     wasAborted: false,

@@ -46,7 +46,7 @@ import { getGlobalPrompt, getSetting, setSetting } from '@/server/services/app-s
 import { wrapToolsWithSpill } from '@/server/services/tool-output-spill'
 import { executeToolBatch } from '@/server/services/tool-executor'
 import { recordUsage, aggregateUsages } from '@/server/services/token-usage'
-import { runStreamStep, normalizeToolUseInput } from '@/server/services/stream-runner'
+import { runStreamStep, normalizeToolUseInput, type ReasoningSegment } from '@/server/services/stream-runner'
 import { channelAdapters } from '@/server/channels/index'
 import { getModelContextWindow } from '@/shared/model-context-windows'
 
@@ -226,7 +226,7 @@ export interface ActiveKinStreamSnapshot {
   kinId: string
   messageId: string
   content: string
-  reasoning: Array<{ offset: number; text: string }>
+  reasoning: ReasoningSegment[]
   toolCalls: Array<{ id: string; name: string; args: unknown; result?: unknown; offset: number }>
   /** Running sum of output tokens reported so far this turn (one increment per
    *  completed step). Drives the live token counter in the thinking bubble. */
@@ -1516,7 +1516,7 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
     // results back to the LLM.
     const assistantMessageId = uuid()
     let fullContent = ''
-    const reasoningSegments: Array<{ offset: number; text: string }> = []
+    const reasoningSegments: ReasoningSegment[] = []
     const toolCallsLog: Array<{ id: string; name: string; args: unknown; result?: unknown; offset: number }> = []
 
     // In-memory snapshot for clients that mount mid-stream (see activeKinStreams
@@ -1636,8 +1636,18 @@ export async function processNextMessage(kinId: string): Promise<boolean> {
         break
       }
 
-      // Build assistant content for history
+      // Build assistant content for history. Thinking blocks come FIRST
+      // (Anthropic requires them to lead the assistant turn) so the model's
+      // signed reasoning carries across steps. Prepending ALL thinking before
+      // ALL tool_use preserves true stream order because one step = one
+      // provider.chat() = one Anthropic response, in which thinking always
+      // precedes tool_use (tool results are external — the model can't reason
+      // past a tool_use until the next step). Unsigned blocks are skipped: the
+      // API drops them anyway, and non-Anthropic providers ignore them.
       const assistantBlocks: KinbotMessageBlock[] = []
+      for (const tb of outcome.stepThinking) {
+        if (tb.signature) assistantBlocks.push({ type: 'thinking', text: tb.text, signature: tb.signature })
+      }
       if (stepText) assistantBlocks.push({ type: 'text', text: stepText })
       for (const tc of stepToolCalls) {
         assistantBlocks.push({ type: 'tool-use', id: tc.id, name: tc.name, args: tc.args })
@@ -2221,7 +2231,7 @@ export async function processQuickMessage(kinId: string): Promise<boolean> {
     // Stream LLM response — custom single-step loop (same pattern as processKinQueue)
     const assistantMessageId = uuid()
     let fullContent = ''
-    const reasoningSegments: Array<{ offset: number; text: string }> = []
+    const reasoningSegments: ReasoningSegment[] = []
     const toolCallsLog: Array<{ id: string; name: string; args: unknown; result?: unknown; offset: number }> = []
 
     const abortController = new AbortController()
@@ -2300,8 +2310,18 @@ export async function processQuickMessage(kinId: string): Promise<boolean> {
         break
       }
 
-      // Build assistant content for history
+      // Build assistant content for history. Thinking blocks come FIRST
+      // (Anthropic requires them to lead the assistant turn) so the model's
+      // signed reasoning carries across steps. Prepending ALL thinking before
+      // ALL tool_use preserves true stream order because one step = one
+      // provider.chat() = one Anthropic response, in which thinking always
+      // precedes tool_use (tool results are external — the model can't reason
+      // past a tool_use until the next step). Unsigned blocks are skipped: the
+      // API drops them anyway, and non-Anthropic providers ignore them.
       const assistantBlocks: KinbotMessageBlock[] = []
+      for (const tb of outcome.stepThinking) {
+        if (tb.signature) assistantBlocks.push({ type: 'thinking', text: tb.text, signature: tb.signature })
+      }
       if (stepText) assistantBlocks.push({ type: 'text', text: stepText })
       for (const tc of stepToolCalls) {
         assistantBlocks.push({ type: 'tool-use', id: tc.id, name: tc.name, args: tc.args })
