@@ -878,6 +878,42 @@ Approuve un cron créé par un Kin (qui nécessite validation).
 
 ---
 
+## Custom Tools & Tool Domains
+
+Outils custom **globaux** (scripts authored via l'UI ou les Kins) et domaines dynamiques. Voir `idea.md` / `schema.md`.
+
+### `GET /api/tools/catalog`
+Catalogue agnostique de tous les outils grantables (native / plugin / mcp / custom). Les entrées custom sont globales (`custom_<slug>`, `domain` = leur `domain_slug`, `enabled`).
+
+### `GET /api/tools/domains`
+Map `name → domain` (registry + `custom_<slug> → domain_slug`), pour colorer les badges de tool-call.
+
+### `GET /api/tools/domain-meta`
+`{ domains: [{ slug, icon, bg, text, border, builtin, labelKey, label }] }` — métadonnées de rendu (built-in + custom) hydratées par le client.
+
+### `GET /api/tools/custom-tool-names`
+`{ "custom_<slug>": { "name": "<nom localisé>", "hasRenderer": <bool> } }` — par outil custom : nom d'affichage résolu pour la langue UI de l'utilisateur courant (`user_profiles.language`) + présence d'un renderer de résultat (fichier `renderer.tsx`/`.jsx`/`.js`, détecté sur disque). UI-only (best-effort) : le client l'hydrate au boot pour afficher un nom humain dans les tool-calls du chat au lieu du `custom_<slug>` brut, et pour décider de charger ou non le renderer.
+
+### `GET|POST|PATCH|DELETE /api/tool-domains[/:slug]`
+CRUD des domaines d'outils. Built-in read-only ; suppression bloquée si le domaine est utilisé (`TOOL_DOMAIN_IN_USE`).
+
+### `GET|POST|PATCH|DELETE /api/custom-tools[/:slug]`
+CRUD des outils custom globaux. Création via l'UI → `created_by='user'`, actif immédiatement. POST/PATCH acceptent `translations` (objet localisé `{ "<locale>": { name?, description?, parameters?: { "<param>": { label?, description? } } } }`) ; GET le renvoie (parsé). UI-only : les traductions n'affectent jamais la définition d'outil envoyée au LLM.
+
+### `GET /api/custom-tools/:slug/file?path=…` · `PUT /api/custom-tools/:slug/files`
+Lire / écrire un fichier dans le dossier géré de l'outil (`{ path, content }`).
+
+### `GET /api/custom-tools/:slug/renderer.js`
+Module ESM bundlé côté serveur du **renderer de résultat** optionnel de l'outil (export par défaut = composant React). Source : `renderer.tsx` (fallback `renderer.jsx`/`renderer.js`) dans le dossier de l'outil, bundlé via Bun (JSX classique, react/react-dom mappés sur l'instance React de l'hôte `window.__KINBOT_REACT__`). Le client le charge à la volée (`React.lazy(import(url))`) dans la vue détaillée du tool-call. Cache mémoire côté serveur (clé slug + mtime) ; réponse avec `ETag` (revalidation `304`). `404 NO_RENDERER` si l'outil n'a pas de renderer ; `500` (module qui throw au chargement, avec le message de build) en cas d'échec de bundling — le client retombe alors sur l'affichage JSON via son ErrorBoundary. Authentifié comme toutes les routes `/api/*`. Contexte hôte (privilèges complets, pas d'isolation) : acceptable car les outils custom sont de confiance (self-hosted) et le renderer ne sert qu'à l'affichage.
+
+### `POST /api/custom-tools/:slug/setup`
+Installe les dépendances (`requirements.txt` → `.venv` + pip ; `package.json` → `bun install`).
+
+### `POST /api/custom-tools/:slug/test`
+Exécute l'outil avec des args de test (`{ args }`) → `{ success, output, error, exitCode, executionTime }`.
+
+---
+
 ## Vault
 
 ### `GET /api/vault`

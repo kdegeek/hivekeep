@@ -223,6 +223,40 @@ Internal instructions the Kin must not repeat to the user. They drive automatic 
   stale state after a task returns.
 - start_ticket_task always runs in await mode — you will get a turn when it
   finishes. Do not assume async/fire-and-forget for ticket-linked work.
+
+### Reusable custom tools
+- When you build/automate something reusable (an API call, transform, scrape,
+  calculation, formatter) that could help OTHER Kins or your future self, turn it
+  into a GLOBAL custom tool via create_custom_tool — it is then grantable to any
+  Kin via toolboxes (like MCP). Skip this for true one-shot tasks.
+- ALWAYS provide human `translations` (UI display name, description, and a
+  label + description per parameter) for at least en and fr (es/de welcome).
+  This is UI-only — it never changes the tool definition the LLM sees — but
+  without it the app shows the raw `custom_<slug>` instead of a proper localized
+  name. Use update_custom_tool to backfill translations on an existing tool.
+- ALSO create a fitting tool domain (create_tool_domain) and group related
+  custom tools under it: pick a clear Lucide icon name + a color token, then set
+  each tool's domain to its slug. A tool left on the default `custom` domain
+  shows the generic Puzzle icon and the bland "custom" category; a dedicated
+  domain (e.g. a "weather" domain with a CloudSun icon) gives the group a clear
+  visual identity in the toolbox and the tool picker. Use list_tool_domains to
+  reuse an existing domain before creating a near-duplicate.
+- SHIP a result renderer by default: whenever a custom tool returns structured
+  data (an object, a list, metrics — richer than a short string), write a
+  `renderer.tsx` (via write_custom_tool_file) so its result shows as a clean
+  visual card in the EXPANDED chat tool-call view instead of raw JSON. Treat it as
+  part of finishing a quality tool — alongside translations and a domain — not an
+  optional afterthought. Skip it ONLY for trivial single-value results. No
+  renderer → the result shows as JSON (nothing breaks, but it looks raw). Contract:
+  `export default function Renderer({ result, args, ui }) { … }` — `result` is
+  the tool's return value (your data is usually under `result.output`), `args`
+  the call args, `ui` a themed component kit. Style ONLY with the `ui` primitives
+  (Card, Section, Header, Row, Stack, Badge, Stat, KeyValues, Table, Code) or
+  inline `style={{ color: 'var(--color-foreground)', … }}` design tokens —
+  Tailwind utility classes do NOT apply. It auto-themes (dark/light + palette)
+  via the `--color-*` variables. Hooks and local imports are fine; never import
+  from the host app. The module is bundled server-side and shares the host's
+  React instance.
 ```
 
 ### [6.75] Current speaker profile
@@ -429,7 +463,8 @@ Available tools depend on the **context**:
 | **Crons** | `create_cron`, `update_cron`, `delete_cron`, `list_crons` |
 | **Projects** | `list_projects`, `get_project`, `create_project`, `update_project`, `update_project_description`, `append_project_description`, `patch_project_description`, `delete_project`, `set_active_project`, `create_tag`, `update_tag`, `delete_tag`, `list_tickets`, `get_ticket`, `create_ticket`, `update_ticket`, `add_ticket_tag`, `remove_ticket_tag`, `delete_ticket`, `start_ticket_task` (see `projects.md`) |
 | **Vault** | `get_secret`, `redact_message` |
-| **Custom tools** | `register_tool`, `run_custom_tool`, `list_custom_tools` |
+| **Custom tools (authoring)** | `create_custom_tool`, `write_custom_tool_file`, `run_custom_tool_setup`, `test_custom_tool`, `update_custom_tool`, `delete_custom_tool`, `list_custom_tools`, `create_tool_domain`, `list_tool_domains`, `update_tool_domain`, `delete_tool_domain` (main only) |
+| **Custom tools (the tools themselves)** | Global, exposed as `custom_<slug>`, granted via toolboxes like MCP (resolved separately, not in the registry). Carry UI-only localized `translations` (name/description/param labels) that NEVER change the LLM tool definition — see the *Reusable custom tools* guidance below. |
 | **Image** | `generate_image` (if image provider configured) |
 | **MCP** | Tools exposed by MCP servers assigned to the Kin |
 

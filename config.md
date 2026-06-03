@@ -80,8 +80,11 @@ Toutes les valeurs configurables de la plateforme, regroupées par domaine. Ces 
 
 | Clé | Env var | Default | Description |
 |---|---|---|---|
-| — | `KINBOT_CUSTOM_TOOL_TIMEOUT` | `30000` | Timeout par défaut pour l'exécution d'un custom tool (ms) |
-| — | `KINBOT_CUSTOM_TOOL_MAX_TIMEOUT` | `300000` | Timeout maximum autorisé pour un custom tool (ms). Les valeurs passées par le Kin sont plafonnées à cette limite |
+| `customTools.baseDir` | `KINBOT_CUSTOM_TOOLS_DIR` | `${dataDir}/custom-tools` | Répertoire racine des outils custom globaux (`<baseDir>/<slug>/` = entrypoint + deps) |
+| `customTools.defaultTimeoutMs` | `KINBOT_CUSTOM_TOOL_TIMEOUT` | `30000` | Timeout par défaut pour l'exécution d'un custom tool (ms) |
+| `customTools.maxTimeoutMs` | `KINBOT_CUSTOM_TOOL_MAX_TIMEOUT` | `300000` | Timeout maximum autorisé pour un custom tool (ms). Les valeurs sont plafonnées à cette limite |
+| `customTools.maxOutputBytes` | `KINBOT_CUSTOM_TOOL_MAX_OUTPUT_BYTES` | `262144` | Plafond de la sortie capturée (stdout+stderr) d'un custom tool, pour protéger la fenêtre de contexte |
+| `customTools.setupTimeoutMs` | `KINBOT_CUSTOM_TOOL_SETUP_TIMEOUT` | `600000` | Timeout pour l'installation des dépendances (`pip`/`bun install`) (ms) |
 
 ---
 

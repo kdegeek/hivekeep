@@ -197,18 +197,19 @@ Pour accéder aux détails d'un contact, le Kin dispose d'outils dédiés :
 
 #### Outils auto-générés
 
-En plus des **outils MCP** assignés au Kin par l'utilisateur (voir "Attributs configurables"), le Kin peut créer ses propres outils pour enrichir sa boîte a outils au fil du temps.
+En plus des **outils MCP** assignés au Kin par l'utilisateur (voir "Attributs configurables"), l'utilisateur **et** les Kins peuvent créer de **vrais outils custom**, **globaux** et intégrés comme les outils natifs/MCP, pour étendre KinBot. Ils sont organisés dans des **domaines** (catégories icône/couleur/label, dont des domaines personnalisés créables) et accordés aux Kins via le système de **toolboxes**.
 
 | Aspect | Description |
 |---|---|
-| **Création** | Le Kin génère un script ou un binaire dans son workspace (ex: `tools/scrape_url.sh`, `tools/convert_pdf.py`) |
-| **Enregistrement** | Le Kin enregistre l'outil dans son attribut `tools` via un outil dédié `register_tool(name, description, parameters, path)`. Cet attribut est persisté en DB |
-| **Disponibilité** | La liste des outils custom est injectée dans le prompt système au début de chaque appel LLM, aux côtés des outils MCP et des outils natifs de la plateforme |
-| **Exécution** | Quand le Kin souhaite utiliser un outil custom, il appelle `run_custom_tool(tool_name, args)` qui exécute le script correspondant dans le workspace |
-| **Confinement** | L'exécution d'un outil custom est restreinte au workspace du Kin (path validation). Le script ne peut pas accéder a des fichiers en dehors de son workspace |
-| **Gestion** | Le Kin peut lister (`list_custom_tools()`), modifier et supprimer ses outils custom |
+| **Portée** | **Globale** (platform-wide), plus de scope per-Kin. Un outil custom est exposé sous le nom `custom_<slug>` et accordé à un Kin/une tâche dès qu'une toolbox le liste (comme MCP). Le wildcard `*` couvre désormais le natif **+ tous les outils custom activés** ; les outils MCP et plugin restent à lister explicitement par nom. |
+| **Création** | Via une page Settings (« Custom Tools ») **ou** par un Kin via des outils dédiés (`create_custom_tool`, `write_custom_tool_file`, `run_custom_tool_setup`, `test_custom_tool`, `update_custom_tool`, `delete_custom_tool`, `list_custom_tools`). Pas d'approbation : un outil est actif dès sa création (toggle activer/désactiver). |
+| **Stockage** | Chaque outil = un dossier géré `data/custom-tools/<slug>/` (entrypoint + dépendances : `requirements.txt`/`package.json`, venv/node_modules). La DB ne stocke que les métadonnées. |
+| **Langage & deps** | N'importe quel langage. `run_custom_tool_setup` installe les dépendances (pip dans un `.venv`, `bun install`). |
+| **Binding runtime** | Interpréteur résolu via `language` → shebang → extension → bun. Args = objet JSON sur **stdin** (+ env `CUSTOM_TOOL_ARGS`) ; cwd = dossier de l'outil ; résultat = stdout (JSON parsé si possible) ; exit≠0 → échec ; timeout (arbre de process tué) ; sortie plafonnée. |
+| **Domaines** | `create_tool_domain` / `list_tool_domains` / `update_tool_domain` / `delete_tool_domain` (UI dédiée aussi). 26 domaines built-in read-only + domaines custom. |
+| **Renderer de résultat (optionnel)** | Un outil custom peut embarquer un `renderer.tsx` (composant React) qui met en forme son résultat dans la vue détaillée du tool-call ; bundlé côté serveur, chargé à la volée, auto-thémé via les tokens `--color-*`. Absent → le résultat s'affiche en JSON comme aujourd'hui. |
 
-**Distinction MCP vs custom** : les outils MCP sont des serveurs externes configurés par l'utilisateur au niveau de la plateforme. Les outils custom sont des scripts créés par le Kin lui-même, stockés localement et exécutés dans son workspace. Les deux types coexistent dans la boîte a outils du Kin.
+**Distinction MCP vs custom** : les outils MCP sont des serveurs externes configurés au niveau de la plateforme. Les outils custom sont des scripts globaux (n'importe quel langage) authored via l'UI ou les Kins, exécutés par l'hôte, et accordés via les toolboxes. **Sécurité** : un outil custom exécute du code arbitraire avec les privilèges du process KinBot (plateforme self-hosted) — garde-fous : toggle désactiver, sortie plafonnée, kill de l'arbre de process, accès filtré par toolbox.
 
 #### Workspace
 

@@ -351,20 +351,46 @@ Notes des Kins sur les contacts (privées ou globales).
 
 ### `custom_tools`
 
-Outils auto-générés par les Kins.
+Outils custom **globaux** (platform-wide, plus de scope per-Kin). L'accès est filtré par les toolboxes (une toolbox liste `custom_<slug>` par son nom), exactement comme les outils MCP. Le script exécutable + ses dépendances vivent sur disque sous `config.customTools.baseDir/<slug>/` ; cette table ne stocke que les métadonnées.
 
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
 | `id` | text PK | UUID | |
-| `kin_id` | text | FK → kins.id, NOT NULL | |
-| `name` | text | NOT NULL | Nom de l'outil |
+| `slug` | text | NOT NULL, UNIQUE | → nom d'outil `custom_<slug>`. Immuable |
+| `name` | text | NOT NULL | Nom lisible |
 | `description` | text | NOT NULL | Description pour le LLM |
 | `parameters` | text | NOT NULL | JSON Schema des paramètres |
-| `script_path` | text | NOT NULL | Chemin relatif dans le workspace |
+| `entrypoint` | text | NOT NULL | Chemin relatif du script dans le dir géré |
+| `translations` | text | | **UI-only** : overrides localisés (JSON keyé par locale : `{ "<locale>": { name?, description?, parameters?: { "<param>": { label?, description? } } } }`). N'altère JAMAIS la définition d'outil vue par le LLM (le `name`/`description` de base + le JSON-Schema brut restent verbatim) — voir `resolveCustomToolDisplay()` |
+| `language` | text | | Interpréteur explicite (`python`/`node`/`bun`/`bash`/…) ; sinon déduit du shebang/extension |
+| `domain_slug` | text | NOT NULL, défaut `'custom'`, FK → tool_domains.slug | Domaine de regroupement |
+| `timeout_ms` | integer | | Timeout d'exécution par outil (plafonné) |
+| `enabled` | integer (bool) | NOT NULL, défaut 1 | Désactivé → listé mais jamais résolu dans un toolset |
+| `created_by` | text | NOT NULL, défaut `'user'` | `'user'` (UI) ou `'kin'` |
 | `created_at` | integer | NOT NULL | |
 | `updated_at` | integer | NOT NULL | |
 
-**Contrainte UNIQUE** : (`kin_id`, `name`)
+**Contrainte UNIQUE** : (`slug`)
+
+---
+
+### `tool_domains`
+
+Domaines d'outils dynamiques (catégories icône + couleur + label pour regrouper les outils dans l'UI). Les 26 domaines built-in sont seedés idempotemment au boot depuis `TOOL_DOMAIN_META` (`builtin=1`, read-only) ; l'utilisateur/les Kins peuvent créer des domaines custom. Le `slug` est référencé par `custom_tools.domain_slug` et par la map name→domain du registry.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `slug` | text PK | | Identifiant stable (`^[a-z][a-z0-9-]*$`) |
+| `label` | text | | Label littéral (domaines custom) |
+| `label_key` | text | | Clé i18n `tools.domains.*` (domaines built-in) |
+| `icon` | text | NOT NULL | Nom d'icône Lucide |
+| `color` | text | | Token de couleur curé (domaines custom ; voir `DOMAIN_COLOR_TOKENS`) |
+| `description` | text | | |
+| `builtin` | integer (bool) | NOT NULL, défaut 0 | Built-in → read-only, suppression interdite si utilisé |
+| `created_at` | integer | NOT NULL | |
+| `updated_at` | integer | NOT NULL | |
+
+Rendu visuel : built-in → triple Tailwind `{bg,text,border}` + `labelKey` depuis `TOOL_DOMAIN_META` ; custom → triple depuis le token `color`, label littéral.
 
 ---
 
