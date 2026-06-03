@@ -10,6 +10,7 @@ import {
   runToolSetup,
   executeCustomTool,
 } from '@/server/services/custom-tools'
+import { customToolHasRenderer, validateCustomToolRenderer } from '@/server/services/custom-tool-renderer'
 import {
   createToolDomain,
   listToolDomains,
@@ -170,14 +171,28 @@ export const testCustomToolTool: ToolRegistration = {
   availability: ['main'],
   create: () =>
     tool({
-      description: 'Execute a custom tool with sample args to test it (does not require the tool to be in a toolbox). Returns its output.',
+      description:
+        'Execute a custom tool with sample args to test it (does not require the tool to be in a toolbox). Returns its output. If the tool ships a renderer.tsx, ALSO validates the renderer server-side (builds it + does an initial SSR render) and reports the result under `renderer`: { ok } on success, or { ok:false, phase:"build"|"render", error } when it is broken. Always check `renderer.ok` after writing a renderer — a renderer error is otherwise invisible (it runs in the user\'s browser). Note: validation runs the INITIAL render only — useEffect/handlers do not fire.',
       inputSchema: z.object({
         slug: z.string(),
         args: z.record(z.string(), z.unknown()).optional(),
         timeout: z.number().int().positive().optional(),
       }),
       execute: async ({ slug, args, timeout }) => {
-        return executeCustomTool(slug, args ?? {}, timeout)
+        const callArgs = args ?? {}
+        const result = await executeCustomTool(slug, callArgs, timeout)
+        // When the tool ships a renderer, validate it in the SAME test so the Kin
+        // sees front-end renderer health alongside the script output. Best-effort:
+        // a validator-internal failure must not break the execution report.
+        if (customToolHasRenderer(slug)) {
+          try {
+            const renderer = await validateCustomToolRenderer(slug, result, callArgs)
+            return { ...result, renderer }
+          } catch (err) {
+            return { ...result, renderer: { ok: false, error: errMsg(err) } }
+          }
+        }
+        return result
       },
     }),
 }

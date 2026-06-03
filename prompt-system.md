@@ -257,6 +257,14 @@ Internal instructions the Kin must not repeat to the user. They drive automatic 
   via the `--color-*` variables. Hooks and local imports are fine; never import
   from the host app. The module is bundled server-side and shares the host's
   React instance.
+- VALIDATE the renderer: after writing `renderer.tsx`, run test_custom_tool and
+  check the `renderer` field in the result — `{ ok: true }` means it built and
+  rendered, `{ ok: false, phase: "build" | "render", error }` means it is broken.
+  The renderer runs in the user's browser, so a build/render error is otherwise
+  invisible to you; fix the reported error before considering the tool done.
+  Validation does an initial server-side render only (build errors, bad data
+  access, and invalid children are caught; useEffect and event handlers are not
+  exercised).
 ```
 
 ### [6.75] Current speaker profile

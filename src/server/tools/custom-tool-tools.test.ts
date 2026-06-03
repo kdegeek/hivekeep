@@ -49,6 +49,15 @@ mock.module('@/server/services/tool-domains', () => ({
   deleteToolDomain: mockDeleteToolDomain,
 }))
 
+// Stub the renderer service so test_custom_tool's renderer-validation branch is
+// deterministic and these unit tests don't pull in react-dom/server + the UI kit.
+const mockCustomToolHasRenderer = mock(() => false)
+const mockValidateCustomToolRenderer = mock(() => Promise.resolve({ ok: true }))
+mock.module('@/server/services/custom-tool-renderer', () => ({
+  customToolHasRenderer: mockCustomToolHasRenderer,
+  validateCustomToolRenderer: mockValidateCustomToolRenderer,
+}))
+
 mock.module('@/server/logger', () => ({
   createLogger: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }),
 }))
@@ -139,10 +148,43 @@ describe('custom-tool-tools (global)', () => {
   })
 
   describe('test_custom_tool', () => {
+    beforeEach(() => {
+      mockCustomToolHasRenderer.mockClear()
+      mockValidateCustomToolRenderer.mockClear()
+      mockCustomToolHasRenderer.mockImplementation(() => false)
+      mockValidateCustomToolRenderer.mockImplementation(() => Promise.resolve({ ok: true }))
+    })
+
     it('executes by slug', async () => {
       const result = await execute(testCustomToolTool, { slug: 'scrape', args: { url: 'x' } })
       expect(result.success).toBe(true)
       expect(mockExecuteCustomTool).toHaveBeenCalledWith('scrape', { url: 'x' }, undefined)
+    })
+
+    it('omits the renderer field when the tool ships no renderer', async () => {
+      mockCustomToolHasRenderer.mockImplementation(() => false)
+      const result = await execute(testCustomToolTool, { slug: 'scrape' })
+      expect(result.renderer).toBeUndefined()
+      expect(mockValidateCustomToolRenderer).not.toHaveBeenCalled()
+    })
+
+    it('includes the renderer validation result when a renderer exists', async () => {
+      mockCustomToolHasRenderer.mockImplementation(() => true)
+      mockValidateCustomToolRenderer.mockImplementation(() =>
+        Promise.resolve({ ok: false, phase: 'render', error: 'boom' }),
+      )
+      const result = await execute(testCustomToolTool, { slug: 'scrape', args: { url: 'x' } })
+      expect(result.success).toBe(true) // execution output preserved
+      expect(result.renderer).toEqual({ ok: false, phase: 'render', error: 'boom' })
+      expect(mockValidateCustomToolRenderer).toHaveBeenCalledWith('scrape', expect.anything(), { url: 'x' })
+    })
+
+    it('does not fail the test when the validator throws internally', async () => {
+      mockCustomToolHasRenderer.mockImplementation(() => true)
+      mockValidateCustomToolRenderer.mockImplementation(() => Promise.reject(new Error('validator exploded')))
+      const result = await execute(testCustomToolTool, { slug: 'scrape' })
+      expect(result.success).toBe(true)
+      expect(result.renderer).toEqual({ ok: false, error: 'validator exploded' })
     })
   })
 

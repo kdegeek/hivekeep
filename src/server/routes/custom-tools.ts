@@ -13,7 +13,11 @@ import {
   executeCustomTool,
   toCustomToolDTO,
 } from '@/server/services/custom-tools'
-import { buildCustomToolRenderer } from '@/server/services/custom-tool-renderer'
+import {
+  buildCustomToolRenderer,
+  customToolHasRenderer,
+  validateCustomToolRenderer,
+} from '@/server/services/custom-tool-renderer'
 import type { CustomToolTranslations } from '@/shared/types'
 import { createLogger } from '@/server/logger'
 import type { AppVariables } from '@/server/app'
@@ -57,6 +61,13 @@ customToolRoutes.get('/:slug', async (c) => {
 // renderer file; 500 (with the build error message) when bundling fails. Served
 // as ESM with an mtime-derived ETag so the browser can revalidate cheaply.
 //
+// Caching: when the request carries a `?v=` query (the version-addressed URL the
+// client builds from the renderer file's mtime), the response is immutable —
+// `Cache-Control: public, max-age=31536000, immutable` — so the browser caches it
+// forever and never refetches (instant cross-session). A renderer edit changes the
+// mtime → a NEW `?v=` URL → a fresh fetch, so this is always correct. Without a
+// `?v=`, the legacy ETag/no-cache revalidation path is kept.
+//
 // Host-context: the module shares the page's React instance (window.__KINBOT_REACT__)
 // and renders with full host privileges. Trusted-by-design (custom tools are
 // user/Kin-authored on a self-hosted instance) and authed like every /api/* route.
@@ -81,8 +92,20 @@ customToolRoutes.get('/:slug/renderer.js', async (c) => {
   if (js === null) {
     return c.json({ error: { code: 'NO_RENDERER', message: 'This tool has no renderer' } }, 404)
   }
-  // Weak ETag over the built bytes — small + stable, lets the browser 304 on
-  // repeat opens. The build itself is mtime-cached server-side.
+  // Version-addressed request (`?v=<mtime>`): the URL is content-addressed, so the
+  // module can be cached forever — an edit yields a new mtime → a new URL → a fresh
+  // fetch. Serve immutable so repeat/cross-session opens are instant (no revalidate).
+  if (c.req.query('v') !== undefined) {
+    return new Response(js, {
+      headers: {
+        'Content-Type': 'text/javascript; charset=utf-8',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    })
+  }
+  // Unversioned request: weak ETag over the built bytes — small + stable, lets the
+  // browser 304 on repeat opens. The build itself is mtime-cached server-side.
   const etag = `W/"${js.length.toString(16)}-${Bun.hash(js).toString(16)}"`
   if (c.req.header('If-None-Match') === etag) {
     return new Response(null, { status: 304, headers: { ETag: etag } })
@@ -204,10 +227,25 @@ customToolRoutes.post('/:slug/setup', async (c) => {
   }
 })
 
-// POST /api/custom-tools/:slug/test — run with sample args.
+// POST /api/custom-tools/:slug/test — run with sample args. When the tool ships
+// a renderer.tsx, also validate it server-side (build + initial SSR render) and
+// include the outcome under `renderer` so the Settings modal can surface renderer
+// health alongside the execution output. Best-effort: a validator-internal error
+// never fails the whole test.
 customToolRoutes.post('/:slug/test', async (c) => {
   const slug = c.req.param('slug')
   const body = (await c.req.json().catch(() => ({}))) as { args?: Record<string, unknown>; timeout?: number }
-  const result = await executeCustomTool(slug, body.args ?? {}, body.timeout)
+  const args = body.args ?? {}
+  const result = await executeCustomTool(slug, args, body.timeout)
+  if (customToolHasRenderer(slug)) {
+    try {
+      const renderer = await validateCustomToolRenderer(slug, result, args)
+      return c.json({ ...result, renderer })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Renderer validation failed'
+      log.warn({ slug, message }, 'custom-tool renderer validation error')
+      return c.json({ ...result, renderer: { ok: false, error: message } })
+    }
+  }
   return c.json(result)
 })

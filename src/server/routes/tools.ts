@@ -4,7 +4,7 @@ import { toolRegistry } from '@/server/tools/index'
 import { HARD_EXCLUDED_FROM_SUBKIN } from '@/server/services/tasks'
 import { listAllMCPCatalogTools } from '@/server/services/mcp'
 import { listCustomTools, resolveCustomToolDisplay } from '@/server/services/custom-tools'
-import { customToolHasRenderer } from '@/server/services/custom-tool-renderer'
+import { customToolHasRenderer, customToolRendererVersion } from '@/server/services/custom-tool-renderer'
 import { resolveDomainMeta } from '@/server/services/tool-domains'
 import { db } from '@/server/db/index'
 import { userProfiles } from '@/server/db/schema'
@@ -72,14 +72,19 @@ function currentUserLocale(c: { get: (k: 'user') => { id: string } | undefined }
 // it only fetches /renderer.js for tools that actually ship one).
 // `name` is UI-ONLY — translations never alter the tool definition seen by the LLM.
 // `hasRenderer` is a cheap on-disk file-presence check (renderer.tsx/.jsx/.js).
+// `rendererVersion` is the renderer file's mtimeMs (null when none): the client
+// folds it into the versioned, immutable `/renderer.js?v=<version>` URL so the
+// module is cached forever cross-session AND an edit (new mtime) busts the cache.
 toolsRoutes.get('/custom-tool-names', (c) => {
   try {
     const locale = currentUserLocale(c)
-    const map: Record<string, { name: string; hasRenderer: boolean }> = {}
+    const map: Record<string, { name: string; hasRenderer: boolean; rendererVersion: number | null }> = {}
     for (const ct of listCustomTools()) {
+      const rendererVersion = customToolRendererVersion(ct.slug)
       map[`custom_${ct.slug}`] = {
         name: resolveCustomToolDisplay(ct, locale).name,
-        hasRenderer: customToolHasRenderer(ct.slug),
+        hasRenderer: rendererVersion !== null,
+        rendererVersion,
       }
     }
     return c.json(map)

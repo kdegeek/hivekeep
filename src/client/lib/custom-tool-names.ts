@@ -6,7 +6,7 @@ import { api } from '@/client/lib/api'
  *
  * A snapshot is fetched from the server (the source of truth, resolved for the
  * current user's UI language):
- *   `custom_<slug>` → { name, hasRenderer }   (GET /api/tools/custom-tool-names)
+ *   `custom_<slug>` → { name, hasRenderer, rendererVersion }   (GET /api/tools/custom-tool-names)
  *
  * Two consumers:
  *   - chat tool-call components show the localized `name` instead of the raw
@@ -32,6 +32,10 @@ import { api } from '@/client/lib/api'
 interface CustomToolEntry {
   name: string
   hasRenderer: boolean
+  /** Renderer file mtimeMs (null when the tool ships no renderer). Folded into the
+   *  versioned, immutable `/renderer.js?v=<version>` URL: stable → cached/instant,
+   *  and an edit (new mtime) → new key → fresh load. */
+  rendererVersion: number | null
 }
 
 let cache: Record<string, CustomToolEntry> | null = null
@@ -51,8 +55,9 @@ const listeners = new Set<() => void>()
 interface ToolMeta {
   name: string | null
   hasRenderer: boolean
+  rendererVersion: number | null
 }
-const COLD: ToolMeta = { name: null, hasRenderer: false }
+const COLD: ToolMeta = { name: null, hasRenderer: false, rendererVersion: null }
 const snapshots = new Map<string, ToolMeta>()
 
 function emit(): void {
@@ -63,8 +68,13 @@ function emit(): void {
     const entry = cache?.[toolName]
     const name = entry?.name ?? null
     const hasRenderer = entry?.hasRenderer ?? false
-    if (prev.name !== name || prev.hasRenderer !== hasRenderer) {
-      snapshots.set(toolName, { name, hasRenderer })
+    const rendererVersion = entry?.rendererVersion ?? null
+    if (
+      prev.name !== name ||
+      prev.hasRenderer !== hasRenderer ||
+      prev.rendererVersion !== rendererVersion
+    ) {
+      snapshots.set(toolName, { name, hasRenderer, rendererVersion })
     }
   }
   for (const listener of listeners) listener()
@@ -88,7 +98,11 @@ function getSnapshot(toolName: string): ToolMeta {
     snapshots.set(toolName, COLD)
     return COLD
   }
-  const snap: ToolMeta = { name: entry.name, hasRenderer: entry.hasRenderer }
+  const snap: ToolMeta = {
+    name: entry.name,
+    hasRenderer: entry.hasRenderer,
+    rendererVersion: entry.rendererVersion ?? null,
+  }
   snapshots.set(toolName, snap)
   return snap
 }
@@ -102,6 +116,9 @@ export async function loadCustomToolNames(): Promise<void> {
       cache = map
       missAttempted.clear()
       emit()
+      // Warm every renderer module + the shared lazy cache now, off the critical
+      // path, so the first tool-call renders instantly (no cold-load spinner).
+      prefetchCustomToolRenderers()
     })
     .catch(() => {
       // Leave cache null so subsequent calls retry. Falling back to the i18n
@@ -122,12 +139,50 @@ function refetch(): void {
       cache = map
       missAttempted.clear()
       emit()
+      // A save may have added/edited a renderer → warm the new version(s) too.
+      prefetchCustomToolRenderers()
     })
     .catch(() => {
       // Keep the previous cache on failure; subscribers stay on last good data.
     })
     .finally(() => {
       pending = null
+    })
+}
+
+// Slugs already prefetched at a given version, so we never re-warm the same
+// slug:version twice (and a new mtime after an edit warms exactly once more).
+const prefetched = new Set<string>()
+
+/**
+ * Fire-and-forget warm-up of every custom-tool renderer that ships one. For each
+ * `hasRenderer` entry it primes the SAME shared lazy cache used by the chat (via
+ * CustomToolRenderer.prefetchRenderer) AND triggers the underlying module import,
+ * so by the time a tool-call streams in, its renderer module + the shared lazy are
+ * already warm → instant render, no Suspense spinner flash.
+ *
+ * Non-blocking, best-effort, deduped by `slug:version`. The dynamic import of
+ * CustomToolRenderer breaks what would otherwise be a static import cycle.
+ */
+export function prefetchCustomToolRenderers(): void {
+  if (!cache) return
+  const targets: Array<{ slug: string; version: number }> = []
+  for (const [toolName, entry] of Object.entries(cache)) {
+    if (!entry.hasRenderer || entry.rendererVersion === null) continue
+    const slug = toolName.startsWith('custom_') ? toolName.slice('custom_'.length) : toolName
+    const key = `${slug}:${entry.rendererVersion}`
+    if (prefetched.has(key)) continue
+    prefetched.add(key)
+    targets.push({ slug, version: entry.rendererVersion })
+  }
+  if (targets.length === 0) return
+  void import('@/client/components/chat/CustomToolRenderer')
+    .then((m) => {
+      for (const { slug, version } of targets) m.prefetchRenderer(slug, version)
+    })
+    .catch(() => {
+      // Swallow: prefetch is a pure optimization; the chat still loads renderers
+      // lazily on demand if this fails.
     })
 }
 
@@ -206,4 +261,5 @@ export function _resetCustomToolNameCache(): void {
   missAttempted.clear()
   snapshots.clear()
   listeners.clear()
+  prefetched.clear()
 }
