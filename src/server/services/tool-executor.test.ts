@@ -157,3 +157,31 @@ describe('executeSingleTool — unavailable tool classification', () => {
     expect(result.error).toContain('internal bug')
   })
 })
+
+describe('executeSingleTool — abort race', () => {
+  // A tool that NEVER settles and ignores its abortSignal — simulates a stuck
+  // or genuinely long-running tool that doesn't honour cancellation.
+  const hangingTool = (): Tool<any, any> =>
+    ({ description: '', inputSchema: undefined as any, execute: () => new Promise(() => {}) } as unknown as Tool<any, any>)
+
+  it('unwinds with an abort error when the signal fires mid-execution, even if the tool ignores it', async () => {
+    const controller = new AbortController()
+    const start = Date.now()
+    const p = executeSingleTool({ id: 'x', name: 'hang', args: {}, offset: 0 }, { hang: hangingTool() }, controller)
+    setTimeout(() => controller.abort(), 100)
+    const result = (await p) as { error: string }
+    expect(result.error).toContain('aborted')
+    expect(Date.now() - start).toBeLessThan(3000)
+  })
+
+  it('returns an abort error immediately when already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const result = (await executeSingleTool(
+      { id: 'x', name: 'hang', args: {}, offset: 0 },
+      { hang: hangingTool() },
+      controller,
+    )) as { error: string }
+    expect(result.error).toContain('aborted')
+  })
+})

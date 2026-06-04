@@ -164,6 +164,39 @@ describe('runShellTool', () => {
     })
   })
 
+  describe('abort handling', () => {
+    it('kills a running command when the turn is aborted (Stop button)', async () => {
+      const controller = new AbortController()
+      const t = createTool()
+      // Long-running command (well under its own timeout) that we cancel early.
+      const start = Date.now()
+      const resultPromise = (t as any).execute(
+        { command: 'sleep 30', timeout: 60_000 },
+        { abortSignal: controller.signal },
+      )
+      setTimeout(() => controller.abort(), 200)
+      const result = await resultPromise
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('abort')
+      expect(result.exitCode).toBe(-1)
+      // Must unwind promptly, not wait out the 60s command timeout.
+      expect(Date.now() - start).toBeLessThan(5000)
+    })
+
+    it('does not spawn if the signal is already aborted', async () => {
+      const controller = new AbortController()
+      controller.abort()
+      const t = createTool()
+      const result = await (t as any).execute(
+        { command: 'echo should-not-run', timeout: 5000 },
+        { abortSignal: controller.signal },
+      )
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('abort')
+      expect(result.output).toBe('')
+    })
+  })
+
   describe('edge cases', () => {
     it('handles empty output', async () => {
       const result = await execute({ command: 'true' })

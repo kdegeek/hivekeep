@@ -241,7 +241,8 @@ export const runShellTool: ToolRegistration = {
           .optional()
           .describe(`Ms. Default: ${DEFAULT_TIMEOUT}, max: ${MAX_TIMEOUT}`),
       }),
-      execute: async ({ command, cwd, timeout }) => {
+      execute: async ({ command, cwd, timeout }, options) => {
+        const abortSignal = (options as { abortSignal?: AbortSignal } | undefined)?.abortSignal
         const workspace = resolveToolWorkspace(ctx)
         const effectiveCwd = cwd ?? workspace
         const effectiveTimeout = timeout ?? DEFAULT_TIMEOUT
@@ -292,6 +293,14 @@ export const runShellTool: ToolRegistration = {
           }
         }
 
+        // The turn was already cancelled before we got here — don't spawn.
+        if (abortSignal?.aborted) {
+          return { success: false, output: '', error: 'Execution aborted', exitCode: -1, executionTime: 0 }
+        }
+
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+        let onAbort: (() => void) | undefined
+        let abortSignalRef: AbortSignal | undefined
         try {
           const proc = Bun.spawn(['bash', '-c', command], {
             cwd: effectiveCwd,
@@ -307,14 +316,28 @@ export const runShellTool: ToolRegistration = {
             }),
           })
 
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => {
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            timeoutHandle = setTimeout(() => {
               proc.kill()
               reject(new Error('Execution timeout'))
-            }, effectiveTimeout),
-          )
+            }, effectiveTimeout)
+          })
 
-          const exitCode = await Promise.race([proc.exited, timeoutPromise])
+          // Clicking Stop aborts the turn — kill the running process so the turn
+          // can unwind immediately instead of waiting out the command's own
+          // timeout. Without this a long command (e.g. `timeout 90 ... & wait`)
+          // holds the whole turn hostage until it finishes on its own.
+          const abortPromise = new Promise<never>((_, reject) => {
+            if (!abortSignal) return
+            abortSignalRef = abortSignal
+            onAbort = () => {
+              proc.kill()
+              reject(new Error('Execution aborted'))
+            }
+            abortSignal.addEventListener('abort', onAbort, { once: true })
+          })
+
+          const exitCode = await Promise.race([proc.exited, timeoutPromise, abortPromise])
           const stdoutRaw = await new Response(proc.stdout).text()
           const stderrRaw = await new Response(proc.stderr).text()
           const executionTime = Date.now() - start
@@ -351,7 +374,10 @@ export const runShellTool: ToolRegistration = {
           }
         } catch (err) {
           const executionTime = Date.now() - start
-          log.error({ kinId: ctx.kinId, command, err }, 'Shell command execution failed')
+          const aborted = err instanceof Error && err.message === 'Execution aborted'
+          if (!aborted) {
+            log.error({ kinId: ctx.kinId, command, err }, 'Shell command execution failed')
+          }
 
           return {
             success: false,
@@ -360,6 +386,9 @@ export const runShellTool: ToolRegistration = {
             exitCode: -1,
             executionTime,
           }
+        } finally {
+          if (timeoutHandle) clearTimeout(timeoutHandle)
+          if (onAbort && abortSignalRef) abortSignalRef.removeEventListener('abort', onAbort)
         }
       },
     }),

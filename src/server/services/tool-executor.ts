@@ -220,10 +220,33 @@ export async function executeSingleTool(
   if (!('execute' in toolDef) || typeof toolDef.execute !== 'function') {
     return { error: `Tool "${tc.name}" is misconfigured (no execute function) — this is an internal bug, not a mistake on your part.` }
   }
+  if (abortController.signal.aborted) {
+    return { error: 'Tool execution was aborted' }
+  }
+
+  const execPromise = (async () => {
+    try {
+      return await (toolDef.execute as Function)(tc.args, { abortSignal: abortController.signal })
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) }
+    }
+  })()
+
+  // Race the tool against the abort signal so that a tool which doesn't honour
+  // `abortSignal` (or is genuinely stuck) can't keep the turn from unwinding
+  // when the user clicks Stop. The abandoned tool promise is allowed to settle
+  // in the background (its result discarded); tools like run_shell additionally
+  // kill their child process on abort so no work is left running.
+  let onAbort: (() => void) | undefined
+  const abortPromise = new Promise<unknown>((resolve) => {
+    onAbort = () => resolve({ error: 'Tool execution was aborted' })
+    abortController.signal.addEventListener('abort', onAbort, { once: true })
+  })
   try {
-    return await (toolDef.execute as Function)(tc.args, { abortSignal: abortController.signal })
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : String(err) }
+    return await Promise.race([execPromise, abortPromise])
+  } finally {
+    if (onAbort) abortController.signal.removeEventListener('abort', onAbort)
+    execPromise.catch(() => {}) // swallow late rejection from the abandoned tool
   }
 }
 
