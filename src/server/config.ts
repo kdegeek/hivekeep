@@ -434,6 +434,15 @@ export const config = {
     ),
   },
 
+  // Native run_shell tool. The per-call `timeout` arg lets a Kin extend a slow
+  // command (long test suites, builds, migrations) up to maxTimeoutMs; omitted
+  // → defaultTimeoutMs. Raise maxTimeoutMs via env when tasks legitimately need
+  // commands longer than the 10-minute default ceiling.
+  shell: {
+    defaultTimeoutMs: Number(process.env.KINBOT_SHELL_TIMEOUT ?? 30_000),
+    maxTimeoutMs: Number(process.env.KINBOT_SHELL_MAX_TIMEOUT ?? 600_000),
+  },
+
   toolOutputs: {
     spillThreshold: Number(process.env.TOOL_OUTPUT_SPILL_THRESHOLD ?? 10000), // bytes before spilling to file
     previewLines: Number(process.env.TOOL_OUTPUT_PREVIEW_LINES ?? 200),       // lines to include in preview

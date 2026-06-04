@@ -73,6 +73,8 @@ Toutes les valeurs configurables de la plateforme, regroupées par domaine. Ces 
 |---|---|---|---|
 | `tools.maxSteps` | `TOOLS_MAX_STEPS` | `0` | Nombre max d'étapes de tool-calling par tour LLM. 0 = illimité (plafonné a 100 en interne) |
 | `tools.concurrencyCap` | `TOOLS_CONCURRENCY_CAP` | `5` | Nombre max d'exécutions parallèles d'outils en lecture seule. Quand toutes les tool calls d'un step sont read-only, elles s'exécutent en parallèle (limité a cette valeur). Les batches mixtes avec au moins un outil mutant restent séquentiels |
+| `shell.defaultTimeoutMs` | `KINBOT_SHELL_TIMEOUT` | `30000` | Timeout par défaut d'une commande `run_shell` (ms), utilisé quand le Kin ne fournit pas de `timeout` |
+| `shell.maxTimeoutMs` | `KINBOT_SHELL_MAX_TIMEOUT` | `600000` | Timeout maximum qu'un Kin peut demander par appel `run_shell` (ms). Le paramètre `timeout` de l'outil est plafonné à cette valeur (10 min par défaut, à relever pour des suites de tests/builds plus longs) |
 
 ---
 

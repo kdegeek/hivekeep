@@ -4,11 +4,16 @@ import { createLogger } from '@/server/logger'
 import { recordGuardFire } from '@/server/services/tool-call-tracker'
 import type { ToolRegistration } from '@/server/tools/types'
 import { resolveToolWorkspace, resolveToolEnv } from '@/server/tools/workspace'
+import { config } from '@/server/config'
 
 const log = createLogger('shell-tools')
 
-const DEFAULT_TIMEOUT = 30_000
-const MAX_TIMEOUT = 120_000
+// Sourced from config so operators can raise the ceiling for tasks that run
+// genuinely long commands (large test suites, builds). Env: KINBOT_SHELL_TIMEOUT
+// (default 30s) and KINBOT_SHELL_MAX_TIMEOUT (default 10min). The Kin picks any
+// value up to MAX_TIMEOUT per call via the `timeout` arg.
+const DEFAULT_TIMEOUT = config.shell.defaultTimeoutMs
+const MAX_TIMEOUT = config.shell.maxTimeoutMs
 
 // Cap the rendered stdout/stderr at 30 KB so a one-off `tree`, `npm install
 // --verbose`, or `bun test --verbose` doesn't flood the model's context with
@@ -239,7 +244,7 @@ export const runShellTool: ToolRegistration = {
           .min(1000)
           .max(MAX_TIMEOUT)
           .optional()
-          .describe(`Ms. Default: ${DEFAULT_TIMEOUT}, max: ${MAX_TIMEOUT}`),
+          .describe(`Ms. Default: ${DEFAULT_TIMEOUT}, max: ${MAX_TIMEOUT}. Raise it for slow commands (large test suites, builds, migrations) so they aren't killed mid-run.`),
       }),
       execute: async ({ command, cwd, timeout }, options) => {
         const abortSignal = (options as { abortSignal?: AbortSignal } | undefined)?.abortSignal

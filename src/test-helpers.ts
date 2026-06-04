@@ -72,6 +72,7 @@ export const fullMockConfig = {
   tasks: { maxDepth: 3, maxRequestInput: 3, maxConcurrent: 10 },
   crons: { maxActive: 50, maxConcurrentExecutions: 5 },
   tools: { maxSteps: 0 },
+  shell: { defaultTimeoutMs: 30_000, maxTimeoutMs: 600_000 },
   humanPrompts: { maxPendingPerKin: 5 },
   interKin: { maxChainDepth: 5, rateLimitPerMinute: 20 },
   mcp: { requireApproval: true },
