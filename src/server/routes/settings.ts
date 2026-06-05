@@ -7,6 +7,10 @@ import {
   setGlobalPrompt,
   getAvatarStylePrompt,
   setAvatarStylePrompt,
+  getAvatarSubject,
+  setAvatarSubject,
+  isAvatarBaseEnabled,
+  setAvatarBaseEnabled,
   deleteSetting,
   getExtractionModel,
   setExtractionModel,
@@ -46,6 +50,11 @@ import {
   getMaxQueuedTasks,
   setMaxQueuedTasks,
 } from '@/server/services/app-settings'
+import {
+  generateNeutralAvatarBase,
+  setCustomBaseAvatar,
+  clearCustomBaseAvatar,
+} from '@/server/services/image-generation'
 import { sseManager } from '@/server/sse/index'
 import type { AppVariables } from '@/server/app'
 import { createLogger } from '@/server/logger'
@@ -142,6 +151,80 @@ settingsRoutes.put('/avatar-style', async (c) => {
   await setAvatarStylePrompt(trimmed)
   log.info('Avatar style updated')
   return c.json({ avatarStyle: trimmed })
+})
+
+// PUT /api/settings/avatar-subject — global avatar SUBJECT/type (axis B)
+settingsRoutes.put('/avatar-subject', async (c) => {
+  const body = await c.req.json()
+  const { avatarSubject } = body as { avatarSubject: string }
+  if (typeof avatarSubject !== 'string') {
+    return c.json({ error: { code: 'INVALID_BODY', message: 'avatarSubject must be a string' } }, 400)
+  }
+  const trimmed = avatarSubject.trim()
+  if (trimmed.length > 2000) {
+    return c.json({ error: { code: 'INVALID_BODY', message: 'Avatar subject must be under 2,000 characters' } }, 400)
+  }
+  await setAvatarSubject(trimmed)
+  log.info('Avatar subject updated')
+  return c.json({ avatarSubject: trimmed })
+})
+
+// PUT /api/settings/avatar-base-enabled — toggle the img2img base reference
+settingsRoutes.put('/avatar-base-enabled', async (c) => {
+  const body = await c.req.json()
+  const { enabled } = body as { enabled: boolean }
+  if (typeof enabled !== 'boolean') {
+    return c.json({ error: { code: 'INVALID_BODY', message: 'enabled must be a boolean' } }, 400)
+  }
+  await setAvatarBaseEnabled(enabled)
+  log.info({ enabled }, 'Avatar base reference toggled')
+  return c.json({ baseEnabled: enabled })
+})
+
+// POST /api/settings/avatar-base/generate — generate a neutral base image in the
+// current (or given) style + subject and lock it in as the img2img reference.
+settingsRoutes.post('/avatar-base/generate', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const { providerId, modelId } = body as { providerId?: string; modelId?: string }
+  try {
+    const result = await generateNeutralAvatarBase({
+      ...(providerId ? { providerId } : {}),
+      ...(modelId ? { modelId } : {}),
+    })
+    const ext = result.mediaType.includes('webp') ? 'webp' : 'png'
+    log.info('Neutral avatar base generated')
+    return c.json({ baseImageUrl: `/api/kins/avatar-base/image?v=${Date.now()}`, ext })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Base avatar generation failed'
+    log.error({ err }, 'Failed to generate neutral avatar base')
+    return c.json({ error: { code: 'BASE_GENERATION_FAILED', message } }, 502)
+  }
+})
+
+// POST /api/settings/avatar-base/upload — upload a custom base reference image.
+settingsRoutes.post('/avatar-base/upload', async (c) => {
+  const formData = await c.req.formData()
+  const file = formData.get('file')
+  if (!file || !(file instanceof File)) {
+    return c.json({ error: { code: 'INVALID_FILE', message: 'No file provided' } }, 400)
+  }
+  const MAX_BASE_SIZE = 10 * 1024 * 1024
+  if (file.size > MAX_BASE_SIZE) {
+    return c.json({ error: { code: 'FILE_TOO_LARGE', message: 'Base image must be under 10MB' } }, 400)
+  }
+  const rawExt = (file.name.split('.').pop() ?? 'png').toLowerCase()
+  const ext = ['png', 'webp', 'jpg', 'jpeg'].includes(rawExt) ? rawExt : 'png'
+  const bytes = Buffer.from(await file.arrayBuffer())
+  await setCustomBaseAvatar(bytes, ext)
+  log.info({ ext }, 'Custom avatar base uploaded')
+  return c.json({ baseImageUrl: `/api/kins/avatar-base/image?v=${Date.now()}`, hasCustomBase: true })
+})
+
+// DELETE /api/settings/avatar-base — drop the custom base, fall back to bundled.
+settingsRoutes.delete('/avatar-base', async (c) => {
+  clearCustomBaseAvatar()
+  log.info('Custom avatar base cleared')
+  return c.json({ baseImageUrl: `/api/kins/avatar-base/image?v=${Date.now()}`, hasCustomBase: false })
 })
 
 // GET /api/settings/models — legacy endpoint (extraction + embedding only)

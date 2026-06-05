@@ -13,7 +13,9 @@ import {
   resolveImageTarget,
   getMaxImageInputs,
   getBaseAvatarBytes,
+  hasCustomBaseAvatar,
 } from '@/server/services/image-generation'
+import { DEFAULT_AVATAR_STYLE, DEFAULT_AVATAR_SUBJECT } from '@/shared/constants'
 import { loadProviderConfig } from '@/server/services/provider-config'
 import { deleteMemory, createMemory, updateMemory } from '@/server/services/memory'
 import type { KinThinkingConfig, KinThinkingEffort, MemoryCategory, MemoryScope } from '@/shared/types'
@@ -27,7 +29,13 @@ import {
 } from '@/server/services/kins'
 import { markKinAsRead } from '@/server/services/kin-read-state'
 import { kinAvatarUrl, validateKinFields } from '@/server/services/field-validator'
-import { getDefaultLlmModel, getDefaultLlmProviderId } from '@/server/services/app-settings'
+import {
+  getDefaultLlmModel,
+  getDefaultLlmProviderId,
+  getAvatarStylePrompt,
+  getAvatarSubject,
+  isAvatarBaseEnabled,
+} from '@/server/services/app-settings'
 import { listModelsForProvider } from '@/server/providers/index'
 import type { AppVariables } from '@/server/app'
 import { createLogger } from '@/server/logger'
@@ -318,6 +326,49 @@ kinRoutes.post('/avatar/preview', async (c) => {
       { error: { code: 'AVATAR_GENERATION_FAILED', message } },
       502,
     )
+  }
+})
+
+// GET /api/kins/avatar-config — read-only effective avatar axes (style A,
+// subject B) + base reference state. Non-admin (any user creating a Kin needs
+// the pre-fills in the avatar modal); writing the global config stays admin-only
+// under /api/settings.
+kinRoutes.get('/avatar-config', async (c) => {
+  const [style, subject, baseEnabled, hasCustomBase] = await Promise.all([
+    getAvatarStylePrompt(),
+    getAvatarSubject(),
+    isAvatarBaseEnabled(),
+    hasCustomBaseAvatar(),
+  ])
+  return c.json({
+    // Effective values (empty stored value → the built-in default), so the
+    // modal/settings can pre-fill and highlight the matching preset directly.
+    style: style?.trim() || DEFAULT_AVATAR_STYLE,
+    subject: subject?.trim() || DEFAULT_AVATAR_SUBJECT,
+    baseEnabled,
+    hasCustomBase,
+  })
+})
+
+// GET /api/kins/avatar-base/image — serve the current img2img base reference
+// (custom upload/generation if present, else the bundled default). Non-admin so
+// the avatar modal preview works for every user. Append ?v=… to bust the cache
+// after a change.
+kinRoutes.get('/avatar-base/image', async (c) => {
+  try {
+    const bytes = await getBaseAvatarBytes()
+    // Sniff the container so the <img> gets a correct content-type.
+    let mediaType = 'image/png'
+    if (bytes[0] === 0xff && bytes[1] === 0xd8) mediaType = 'image/jpeg'
+    else if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[8] === 0x57 && bytes[9] === 0x45) mediaType = 'image/webp'
+    return new Response(new Uint8Array(bytes), {
+      headers: {
+        'Content-Type': mediaType,
+        'Cache-Control': 'no-cache',
+      },
+    })
+  } catch {
+    return c.json({ error: { code: 'BASE_AVATAR_MISSING', message: 'Base avatar not available' } }, 404)
   }
 })
 
@@ -854,31 +905,58 @@ kinRoutes.post('/:id/avatar/generate', async (c) => {
 
   try {
     // Resolve the chosen image target so we know whether image-to-image is on the table.
-    // In "auto" mode this drives the LLM prompt style and whether we attach the base
-    // robot reference image. In "prompt" mode the user is in full control: their prompt
-    // is sent verbatim, with no base image and no robot wrapping.
+    // - "auto":   the prompt-writer derives everything from the Kin identity, guided by
+    //             the GLOBAL style/subject; the base reference is attached when supported.
+    // - "manual": same writer, but the user supplies the axes for this one shot — style (A),
+    //             subject (B), extra art direction (C) — and decides whether to attach the
+    //             base image (useBase). Nothing is persisted to the global settings.
+    // - "prompt": legacy fully-manual mode — the user's prompt is sent verbatim, no base.
     const target = await resolveImageTarget({
       providerId: body.imageProviderId,
       modelId: body.imageModel,
     })
-    const autoMaxImageInputs = await getMaxImageInputs(target.providerId, target.modelId)
-    const supportsEdit =
-      mode === 'auto'
-      && autoMaxImageInputs > 0
-      && (await isImg2imgEnabled())
+    const targetMaxImageInputs = await getMaxImageInputs(target.providerId, target.modelId)
 
-    const prompt =
-      mode === 'auto'
-        ? await buildAvatarPrompt(
-            {
-              name: existing.name,
-              role: existing.role,
-              character: existing.character ?? '',
-              expertise: existing.expertise ?? '',
-            },
-            supportsEdit ? 'edit' : 'generate',
-          )
-        : body.prompt
+    // Whether to attach the img2img base reference for this generation.
+    //   auto   → global img2img setting + model support
+    //   manual → user's useBase toggle + model support (the global setting only
+    //            seeds the toggle's default on the client)
+    const supportsEdit =
+      (mode === 'auto' && targetMaxImageInputs > 0 && (await isImg2imgEnabled())) ||
+      (mode === 'manual' && body.useBase === true && targetMaxImageInputs > 0)
+
+    let prompt: string
+    if (mode === 'auto') {
+      prompt = await buildAvatarPrompt(
+        {
+          name: existing.name,
+          role: existing.role,
+          character: existing.character ?? '',
+          expertise: existing.expertise ?? '',
+        },
+        supportsEdit ? 'edit' : 'generate',
+        { targetModelId: target.modelId, maxImageInputs: targetMaxImageInputs },
+      )
+    } else if (mode === 'manual') {
+      prompt = await buildAvatarPrompt(
+        {
+          name: existing.name,
+          role: existing.role,
+          character: existing.character ?? '',
+          expertise: existing.expertise ?? '',
+        },
+        supportsEdit ? 'edit' : 'generate',
+        {
+          ...(typeof body.style === 'string' ? { style: body.style } : {}),
+          ...(typeof body.subject === 'string' ? { subject: body.subject } : {}),
+          ...(typeof body.character === 'string' ? { extraGuidance: body.character } : {}),
+          targetModelId: target.modelId,
+          maxImageInputs: targetMaxImageInputs,
+        },
+      )
+    } else {
+      prompt = body.prompt
+    }
 
     const result = await generateAvatarImage(prompt, {
       providerId: target.providerId,

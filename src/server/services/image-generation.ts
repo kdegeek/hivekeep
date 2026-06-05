@@ -460,6 +460,11 @@ export interface BuildAvatarPromptOptions {
   subject?: string | null
   /** Override the global art style (axis A) — used for one-shot manual gen. */
   style?: string | null
+  /** Extra per-shot art direction (axis C) supplied by the user in the manual
+   *  avatar modal. Appended to the Kin identity given to the prompt-writer and
+   *  flagged as high-priority. Empty/undefined → the writer derives axis C from
+   *  the Kin's identity alone (the default behavior). */
+  extraGuidance?: string | null
   /** The image model that will render the result — given to the prompt-writer
    *  so it can tailor the prompt to that model's strengths. */
   targetModelId?: string
@@ -511,13 +516,21 @@ export async function buildAvatarPrompt(
     ? `\n\nThe generated prompt will be rendered by the image model "${opts.targetModelId}"${typeof opts.maxImageInputs === 'number' ? ` (${opts.maxImageInputs > 0 ? 'supports image-to-image' : 'text-to-image only'})` : ''}. Write the prompt to play to that model's strengths.`
     : ''
 
+  // Axis C: explicit per-shot art direction from the user (manual modal). Given
+  // top priority over the inferred character so "make it wear round glasses,
+  // teal palette" actually lands.
+  const guidance = opts?.extraGuidance?.trim()
+  const guidanceHint = guidance
+    ? `\n\nAdditional art direction from the user (PRIORITIZE this, it overrides inferences from the identity above): ${guidance.slice(0, 400)}`
+    : ''
+
   const avatarResult = await runOneShot(resolved, {
     system: [{ type: 'text', text: systemText }],
     messages: [{
       role: 'user',
       content: [{
         type: 'text',
-        text: `Name: ${kin.name}\nRole: ${kin.role}\nPersonality: ${charSnippet}\nExpertise: ${expertSnippet}${modelHint}`,
+        text: `Name: ${kin.name}\nRole: ${kin.role}\nPersonality: ${charSnippet}\nExpertise: ${expertSnippet}${guidanceHint}${modelHint}`,
       }],
     }],
     maxOutputTokens: 200,
