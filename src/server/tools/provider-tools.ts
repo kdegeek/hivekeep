@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { db } from '@/server/db/index'
 import { providers } from '@/server/db/schema'
 import { listModelsForProvider } from '@/server/providers/index'
-import { decrypt } from '@/server/services/encryption'
+import { loadProviderConfig } from '@/server/services/provider-config'
 import { createLogger } from '@/server/logger'
 import type { ToolRegistration } from '@/server/tools/types'
 
@@ -79,7 +79,7 @@ export const listModelsTool: ToolRegistration = {
         for (const p of allProviders) {
           if (!p.isValid) continue
           try {
-            const providerConfig = JSON.parse(await decrypt(p.configEncrypted))
+            const providerConfig = await loadProviderConfig(p)
             const caps = JSON.parse(p.capabilities) as string[]
             // If the tool caller asked for a specific capability, only
             // hit that family's registry; otherwise iterate every

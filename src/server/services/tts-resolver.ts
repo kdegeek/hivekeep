@@ -17,8 +17,8 @@
 import { eq } from 'drizzle-orm'
 import { db } from '@/server/db/index'
 import { providers as providersTable } from '@/server/db/schema'
-import { decrypt } from '@/server/services/encryption'
 import { getDefaultTtsProviderId } from '@/server/services/app-settings'
+import { loadProviderConfig } from '@/server/services/provider-config'
 import { getTTSProvider } from '@/server/llm/tts/registry'
 import type { TTSProvider } from '@/server/llm/tts/types'
 import type { ProviderConfig } from '@/server/llm/core/types'
@@ -68,7 +68,7 @@ async function loadFromRow(row: ProviderRow): Promise<ResolvedTTSProvider> {
       `TTS provider type "${row.type}" is not currently loaded (the contributing plugin may be disabled or uninstalled).`,
     )
   }
-  const cfg = JSON.parse(await decrypt(row.configEncrypted)) as ProviderConfig
+  const cfg = await loadProviderConfig(row)
   return { row, config: cfg, provider }
 }
 

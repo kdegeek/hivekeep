@@ -3,7 +3,7 @@ import { join } from 'path'
 import { db } from '@/server/db/index'
 import { createLogger } from '@/server/logger'
 import { providers } from '@/server/db/schema'
-import { decrypt } from '@/server/services/encryption'
+import { loadProviderConfig } from '@/server/services/provider-config'
 import { getDefaultImageModel, getDefaultImageProviderId } from '@/server/services/app-settings'
 import { listModelsForProvider, lookupImageModel } from '@/server/providers/index'
 import { getImageProvider } from '@/server/llm/image/registry'
@@ -45,7 +45,7 @@ export async function getMaxImageInputs(
   if (!modelId) return 0
   const p = await db.select().from(providers).where(eq(providers.id, providerId)).get()
   if (!p || !p.isValid) return 0
-  const cfg = JSON.parse(await decrypt(p.configEncrypted)) as ProviderConfig
+  const cfg = await loadProviderConfig(p)
   const model = await lookupImageModel(p.type, modelId, cfg)
   return model?.maxImageInputs ?? 0
 }
@@ -114,10 +114,7 @@ export async function resolveImageTarget(
   }
 
   if (!effectiveModelId) {
-    const providerConfig = JSON.parse(await decrypt(provider.configEncrypted)) as {
-      apiKey: string
-      baseUrl?: string
-    }
+    const providerConfig = await loadProviderConfig(provider)
     try {
       const models = await listModelsForProvider(provider.type, providerConfig, 'image')
       const first = models.find((m) => m.capability === 'image')
@@ -170,10 +167,7 @@ export async function generateImage(
   }
   const effectiveModelId = target.modelId
 
-  const providerConfig = JSON.parse(await decrypt(provider.configEncrypted)) as {
-    apiKey: string
-    baseUrl?: string
-  }
+  const providerConfig = await loadProviderConfig(provider)
 
   // Resolve image inputs if provided. Caller can pass either pre-decoded
   // bytes or URLs (internal or external) — URLs are fetched / read here

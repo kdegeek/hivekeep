@@ -8,7 +8,7 @@ import { db } from '@/server/db/index'
 import { files, providers } from '@/server/db/schema'
 import { generateImage, hasImageCapability } from '@/server/services/image-generation'
 import { listModelsForProvider, describeImageModel } from '@/server/providers/index'
-import { decrypt } from '@/server/services/encryption'
+import { loadProviderConfig } from '@/server/services/provider-config'
 import { config } from '@/server/config'
 import { createLogger } from '@/server/logger'
 import type { ToolRegistration } from '@/server/tools/types'
@@ -47,7 +47,7 @@ export const listImageModelsTool: ToolRegistration = {
           const caps = JSON.parse(p.capabilities) as string[]
           if (!caps.includes('image')) continue
           try {
-            const providerConfig = JSON.parse(await decrypt(p.configEncrypted))
+            const providerConfig = await loadProviderConfig(p)
             const providerModels = await listModelsForProvider(
               p.type,
               providerConfig,
@@ -113,7 +113,7 @@ export const describeImageModelTool: ToolRegistration = {
         }
 
         try {
-          const providerConfig = JSON.parse(await decrypt(p.configEncrypted))
+          const providerConfig = await loadProviderConfig(p)
           const schema = await describeImageModel(p.type, modelId, providerConfig)
           if (!schema) {
             return { error: `Provider type ${p.type} doesn't support image-model description.` }

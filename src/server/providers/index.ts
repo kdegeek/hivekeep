@@ -23,6 +23,7 @@
 
 import type { ProviderConfig as KinbotProviderConfig } from '@/server/llm/core/types'
 import type { ProviderCapability } from '@/shared/types'
+import type { ConfigField } from '@kinbot-developer/sdk'
 import { PROVIDER_META, type ProviderType, type ProviderMeta } from '@/shared/provider-metadata'
 import { createLogger } from '@/server/logger'
 import { getLLMProvider, listLLMProviders } from '@/server/llm/llm/registry'
@@ -144,6 +145,31 @@ export function getPluginProviderMeta(): Record<string, ProviderMeta> {
 
 export function getCapabilitiesForType(type: string): ProviderCapability[] {
   return [...(metaForType(type)?.capabilities ?? [])]
+}
+
+/**
+ * The `configSchema` (config field descriptors) for a provider type, read from
+ * whichever native registry holds it. Drives the dynamic config form and,
+ * crucially, secret-field detection for vaulting (see provider-config.ts).
+ * Empty when the type is unknown / a plugin is not loaded.
+ */
+export function getConfigSchemaForType(type: string): readonly ConfigField[] {
+  const provider =
+    getLLMProvider(type) ??
+    getEmbeddingProvider(type) ??
+    getImageProvider(type) ??
+    getSearchProvider(type) ??
+    getTTSProvider(type) ??
+    getSTTProvider(type)
+  return provider?.configSchema ?? []
+}
+
+/** Keys of every `secret`-typed config field for a provider type. Used to
+ *  decide which fields move into the vault. */
+export function getSecretFieldKeys(type: string): string[] {
+  return getConfigSchemaForType(type)
+    .filter((f) => f.type === 'secret')
+    .map((f) => f.key)
 }
 
 // ─── Dispatcher helpers ──────────────────────────────────────────────────────

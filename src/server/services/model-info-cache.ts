@@ -13,7 +13,7 @@
 import { Cron } from 'croner'
 import { db } from '@/server/db/index'
 import { providers as providersTable } from '@/server/db/schema'
-import { decrypt } from '@/server/services/encryption'
+import { loadProviderConfig } from '@/server/services/provider-config'
 import { listModelsForProvider, getCapabilitiesForType } from '@/server/providers/index'
 import { createLogger } from '@/server/logger'
 import { setModelInfoLookup } from '@/shared/model-context-windows'
@@ -115,7 +115,7 @@ export async function refreshAllProviderModels(): Promise<void> {
       })
       .map(async (p) => {
         try {
-          const cfg = JSON.parse(await decrypt(p.configEncrypted))
+          const cfg = await loadProviderConfig(p)
           const caps = JSON.parse(p.capabilities) as string[]
           // Hit listModels once per family the row serves so the cache
           // is populated for every model surface (not just LLM). Search

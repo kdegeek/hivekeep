@@ -88,6 +88,11 @@ await migrateModelProviders()
 import { backfillProviderSlugs } from '@/server/services/provider-slug'
 await backfillProviderSlugs()
 
+// Move any inline provider secrets into the vault, rewriting config to
+// $vault: references (idempotent — already-migrated rows are skipped).
+import { migrateProviderConfigsToVault } from '@/server/services/provider-config'
+await migrateProviderConfigsToVault()
+
 // Register native tools
 log.info('Registering native tools...')
 registerAllTools()

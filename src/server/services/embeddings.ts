@@ -3,10 +3,9 @@ import { createLogger } from '@/server/logger'
 import { providers } from '@/server/db/schema'
 import { config } from '@/server/config'
 import { getEmbeddingModel } from '@/server/services/app-settings'
-import { decrypt } from '@/server/services/encryption'
+import { loadProviderConfig } from '@/server/services/provider-config'
 import { recordUsage } from '@/server/services/token-usage'
 import { getEmbeddingProvider } from '@/server/llm/embedding/registry'
-import type { ProviderConfig } from '@/server/llm/core/types'
 
 const log = createLogger('embeddings')
 
@@ -24,7 +23,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     throw new Error('No embedding provider configured')
   }
 
-  const providerConfig = JSON.parse(await decrypt(provider.configEncrypted)) as ProviderConfig
+  const providerConfig = await loadProviderConfig(provider)
   const embeddingModelId = (await getEmbeddingModel()) ?? config.memory.embeddingModel
 
   const embeddingProvider = getEmbeddingProvider(provider.type)

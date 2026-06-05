@@ -10,7 +10,7 @@
 import { eq, or } from 'drizzle-orm'
 import { db } from '@/server/db/index'
 import { providers } from '@/server/db/schema'
-import { decrypt } from '@/server/services/encryption'
+import { loadProviderConfig } from '@/server/services/provider-config'
 import { getLLMProvider } from '@/server/llm/llm/registry'
 import { listModelsForProvider } from '@/server/providers/index'
 import { providerPriority } from '@/server/llm/core/provider-priority'
@@ -38,18 +38,8 @@ interface ResolveOptions {
 async function readProviderConfig(
   row: typeof providers.$inferSelect,
 ): Promise<ProviderConfig> {
-  if (!row.configEncrypted) return {}
-  const raw = await decrypt(row.configEncrypted)
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>
-    const out: ProviderConfig = {}
-    for (const [k, v] of Object.entries(parsed)) {
-      if (typeof v === 'string') out[k] = v
-    }
-    return out
-  } catch {
-    return {}
-  }
+  // Delegates to the shared chokepoint: decrypt + parse + hydrate $vault: refs.
+  return loadProviderConfig(row)
 }
 
 async function findModelInProvider(

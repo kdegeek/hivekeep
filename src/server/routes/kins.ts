@@ -13,7 +13,7 @@ import {
   getMaxImageInputs,
   getBaseAvatarBytes,
 } from '@/server/services/image-generation'
-import { decrypt } from '@/server/services/encryption'
+import { loadProviderConfig } from '@/server/services/provider-config'
 import { deleteMemory, createMemory, updateMemory } from '@/server/services/memory'
 import type { KinThinkingConfig, KinThinkingEffort, MemoryCategory, MemoryScope } from '@/shared/types'
 import { sseManager } from '@/server/sse/index'
@@ -162,7 +162,7 @@ kinRoutes.post('/generate-config', async (c) => {
     const caps = JSON.parse(p.capabilities) as string[]
     if (!caps.includes('llm')) continue
     try {
-      const pConfig = JSON.parse(await decrypt(p.configEncrypted))
+      const pConfig = await loadProviderConfig(p)
       const pModels = await listModelsForProvider(p.type, pConfig, 'llm')
       for (const m of pModels) {
         if (m.capability === 'llm' && !availableModels.includes(m.id)) {
@@ -1362,7 +1362,7 @@ kinRoutes.post('/import', async (c) => {
   for (const p of allProviders) {
     if (!p.isValid) continue
     try {
-      const pConfig = JSON.parse(await decrypt(p.configEncrypted))
+      const pConfig = await loadProviderConfig(p)
       const caps = JSON.parse(p.capabilities) as string[]
       // Search the model across every family this row serves — the
       // requested model could be LLM, embedding, or image.

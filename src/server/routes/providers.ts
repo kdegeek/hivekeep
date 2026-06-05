@@ -11,6 +11,11 @@ import {
   listVoicesForProvider,
   getPluginProviderMeta,
 } from '@/server/providers/index'
+import {
+  loadProviderConfig,
+  vaultifyProviderConfig,
+  deleteProviderVaultSecrets,
+} from '@/server/services/provider-config'
 import { getLLMProvider } from '@/server/llm/llm/registry'
 import { getEmbeddingProvider } from '@/server/llm/embedding/registry'
 import { getImageProvider } from '@/server/llm/image/registry'
@@ -167,8 +172,11 @@ providerRoutes.post('/', async (c) => {
     )
   }
 
-  const configEncrypted = await encrypt(JSON.stringify(providerConfig))
   const id = uuid()
+  // Move secret fields into the vault; the stored config holds $vault: refs.
+  // (Test above ran against the raw config, before vaultification.)
+  const vaultedConfig = await vaultifyProviderConfig(type, id, providerConfig as Record<string, unknown>)
+  const configEncrypted = await encrypt(JSON.stringify(vaultedConfig))
   const slug = generateProviderSlug(name)
 
   await db.insert(providers).values({
@@ -230,9 +238,10 @@ providerRoutes.patch('/:id', async (c) => {
   }
 
   if (body.config) {
-    const existingConfig = JSON.parse(await decrypt(existing.configEncrypted))
+    // Hydrate the stored config (resolves $vault: refs to real secrets) so the
+    // merge + test see actual credentials, not reference strings.
+    const existingConfig = await loadProviderConfig(existing)
     const mergedConfig = { ...existingConfig, ...body.config }
-    updates.configEncrypted = await encrypt(JSON.stringify(mergedConfig))
 
     // Re-test connection — unless the client already validated. Authenticate
     // is family-invariant (same creds regardless of which family is queried)
@@ -243,6 +252,11 @@ providerRoutes.patch('/:id', async (c) => {
       : await testProviderConnection(existing.type, mergedConfig)
     updates.isValid = testResult.valid
     updates.lastError = testResult.valid ? null : (testResult.error ?? null)
+
+    // Re-vaultify before storing: changed secret fields update their vault
+    // entry in place (deterministic key), so a key rotation never duplicates.
+    const vaultedConfig = await vaultifyProviderConfig(existing.type, existing.id, mergedConfig)
+    updates.configEncrypted = await encrypt(JSON.stringify(vaultedConfig))
     // When the user didn't explicitly send `families`, preserve whatever
     // was stored before. The previous behavior auto-reset to "all caps
     // the type supports", which silently undid any opt-out the user had
@@ -319,6 +333,9 @@ providerRoutes.delete('/:id', async (c) => {
   const affectedKins = db.select({ id: kins.id, slug: kins.slug, name: kins.name, role: kins.role, avatarPath: kins.avatarPath, updatedAt: kins.updatedAt })
     .from(kins).where(eq(kins.providerId, id)).all()
 
+  // Remove the provider's vault-backed secrets so they don't dangle.
+  await deleteProviderVaultSecrets(existing)
+
   await db.delete(providers).where(eq(providers.id, id))
   log.info({ providerId: id, name: existing.name, type: existing.type }, 'Provider deleted')
 
@@ -372,17 +389,17 @@ providerRoutes.post('/:id/test', async (c) => {
   }
 
   // Body is optional — `c.req.json()` throws on empty body, so guard.
-  let patch: Record<string, unknown> | undefined
+  let patch: Record<string, string | undefined> | undefined
   try {
     const body = await c.req.json().catch(() => null)
     if (body && typeof body === 'object' && body !== null && 'config' in body) {
-      patch = (body as { config?: Record<string, unknown> }).config
+      patch = (body as { config?: Record<string, string | undefined> }).config
     }
   } catch {
     // No body / not JSON — fall through, test against stored config as-is.
   }
 
-  const storedConfig = JSON.parse(await decrypt(existing.configEncrypted))
+  const storedConfig = await loadProviderConfig(existing)
   const providerConfig = patch ? { ...storedConfig, ...patch } : storedConfig
   // Authenticate is family-invariant (same creds across families) — no
   // hint needed; the dispatcher hits whichever family is registered.
@@ -454,7 +471,7 @@ providerRoutes.get('/models', async (c) => {
     .filter((p) => p.isValid)
     .map(async (p): Promise<ModelEntry[]> => {
       try {
-        const providerConfig = JSON.parse(await decrypt(p.configEncrypted))
+        const providerConfig = await loadProviderConfig(p)
         const rowCaps = JSON.parse(p.capabilities) as string[]
         const families = rowCaps.filter(
           (f): f is 'llm' | 'embedding' | 'image' =>
@@ -526,7 +543,7 @@ providerRoutes.get('/:id/models', async (c) => {
     })
   }
 
-  const providerConfig = JSON.parse(await decrypt(existing.configEncrypted))
+  const providerConfig = await loadProviderConfig(existing)
   const models: Array<{
     id: string
     name: string
@@ -597,7 +614,7 @@ providerRoutes.get('/:id/voices', async (c) => {
     })
   }
 
-  const providerConfig = JSON.parse(await decrypt(existing.configEncrypted))
+  const providerConfig = await loadProviderConfig(existing)
   try {
     const voices = await listVoicesForProvider(existing.type, providerConfig)
     return c.json({

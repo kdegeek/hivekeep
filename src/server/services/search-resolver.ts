@@ -23,7 +23,7 @@
 import { eq } from 'drizzle-orm'
 import { db } from '@/server/db/index'
 import { providers as providersTable } from '@/server/db/schema'
-import { decrypt } from '@/server/services/encryption'
+import { loadProviderConfig } from '@/server/services/provider-config'
 import { getDefaultSearchProviderId } from '@/server/services/app-settings'
 import { getSearchProvider } from '@/server/llm/search/registry'
 import type { SearchProvider } from '@/server/llm/search/types'
@@ -74,7 +74,7 @@ async function loadFromRow(row: ProviderRow): Promise<ResolvedSearchProvider> {
       `Search provider type "${row.type}" is not currently loaded (the contributing plugin may be disabled or uninstalled).`,
     )
   }
-  const cfg = JSON.parse(await decrypt(row.configEncrypted)) as ProviderConfig
+  const cfg = await loadProviderConfig(row)
   return { row, config: cfg, provider }
 }
 

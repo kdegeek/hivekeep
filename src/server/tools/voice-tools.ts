@@ -28,7 +28,7 @@ import { mkdir } from 'fs/promises'
 import { tool } from '@/server/tools/tool-helper'
 import { db } from '@/server/db/index'
 import { providers as providersTable, files } from '@/server/db/schema'
-import { decrypt } from '@/server/services/encryption'
+import { loadProviderConfig } from '@/server/services/provider-config'
 import { getTTSProvider, listTTSProviders } from '@/server/llm/tts/registry'
 import { getSTTProvider, listSTTProviders } from '@/server/llm/stt/registry'
 import {
@@ -155,7 +155,7 @@ export const listVoicesTool: ToolRegistration = {
               const caps = JSON.parse(p.capabilities) as string[]
               if (!caps.includes('tts')) continue
               if (!getTTSProvider(p.type)) continue  // plugin not loaded
-              const cfg = JSON.parse(await decrypt(p.configEncrypted)) as ProviderConfig
+              const cfg = await loadProviderConfig(p)
               candidates.push({ slug: p.slug, type: p.type, config: cfg })
             } catch {
               // Skip rows whose config can't be decrypted or capabilities parsed.
@@ -466,7 +466,7 @@ export const listSttModelsTool: ToolRegistration = {
               const caps = JSON.parse(p.capabilities) as string[]
               if (!caps.includes('stt')) continue
               if (!getSTTProvider(p.type)) continue
-              const cfg = JSON.parse(await decrypt(p.configEncrypted)) as ProviderConfig
+              const cfg = await loadProviderConfig(p)
               candidates.push({ slug: p.slug, type: p.type, config: cfg })
             } catch {
               // Skip unreadable rows.
