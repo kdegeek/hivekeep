@@ -113,6 +113,19 @@
     "title": "Welcome to KinBot",
     "subtitle": "Let's set up your workspace",
     "step": "Step {{current}} of {{total}}",
+    "bootstrap": {
+      "title": "Connect your AI",
+      "description": "To bring your assistant to life, connect one AI provider. Pick a built-in one to start — you can add more later, including plugins for other providers.",
+      "connect": "Connect a provider",
+      "seeding": "Bringing your assistant to life…",
+      "noLlm": "No LLM provider found — please connect one."
+    },
+    "modal": {
+      "stopTitle": "Stop the guided setup?",
+      "stopBody": "You can pick up any time by chatting with Sherpa in your Kin list — your conversation is saved.",
+      "keepGoing": "Keep going",
+      "stop": "Stop for now"
+    },
     "identity": {
       "title": "Your identity",
       "subtitle": "Tell us about yourself",

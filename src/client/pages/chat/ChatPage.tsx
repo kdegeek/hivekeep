@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/client/components/ui/sidebar'
 import { AppSidebar } from '@/client/components/sidebar/AppSidebar'
 import { ChatPanel } from '@/client/components/chat/ChatPanel'
+import { OnboardingChatModal } from '@/client/components/chat/OnboardingChatModal'
 
 // Lazy-load modals — not needed on initial render
 const KinFormModal = lazy(() => import('@/client/components/kin/KinFormModal').then(m => ({ default: m.KinFormModal })))
@@ -78,17 +79,24 @@ export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
     navigate(`/kin/${stored}`, { replace: true })
   }, [selectedKinSlug, kinsLoading, kins, location.pathname, navigate])
 
-  // First-run onboarding: land the user directly in the configurator Kin
-  // (Sherpa) — who has already greeted them — so setup happens through chat,
-  // until they create their first real Kin. Distraction-light: on a fresh
-  // install the sidebar holds only Sherpa.
-  useEffect(() => {
-    if (selectedKinSlug || kinsLoading || kins.length === 0) return
-    if (location.pathname !== '/') return
-    if (kins.some((k) => k.kind !== 'configurator')) return // a real Kin exists → normal behavior
-    const configurator = kins.find((k) => k.kind === 'configurator')
-    if (configurator?.slug) navigate(`/kin/${configurator.slug}`, { replace: true })
-  }, [selectedKinSlug, kinsLoading, kins, location.pathname, navigate])
+  // First-run onboarding modal: a distraction-less Dialog wrapping the chat
+  // with the configurator Kin (Sherpa), shown until the user creates their
+  // first real Kin or dismisses it. The conversation IS Sherpa's main thread,
+  // so it persists in the Kin list afterward.
+  const configuratorKin = kins.find((k) => k.kind === 'configurator')
+  const [onboardingModalDismissed, setOnboardingModalDismissed] = useState(() => {
+    try { return localStorage.getItem('kinbot:onboardingModalDismissed') === 'true' } catch { return false }
+  })
+  const dismissOnboardingModal = useCallback(() => {
+    try { localStorage.setItem('kinbot:onboardingModalDismissed', 'true') } catch { /* ignore */ }
+    setOnboardingModalDismissed(true)
+  }, [])
+  const showOnboardingModal =
+    !!configuratorKin &&
+    !onboardingModalDismissed &&
+    !kinsLoading &&
+    // Only while it's the user's sole Kin (i.e. they haven't created a real one yet).
+    !kins.some((k) => k.kind !== 'configurator')
 
   // Detect kins whose model is no longer served by any provider
   const unavailableKinIds = useMemo(() => {
@@ -419,6 +427,29 @@ export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
 
       {/* Real-time status change notifications */}
       <StatusNotifications />
+
+      {/* First-run conversational onboarding (distraction-less chat with Sherpa) */}
+      {showOnboardingModal && configuratorKin && (
+        <OnboardingChatModal
+          open={showOnboardingModal}
+          onDismiss={dismissOnboardingModal}
+          kin={{
+            id: configuratorKin.id,
+            name: configuratorKin.name,
+            role: configuratorKin.role,
+            model: configuratorKin.model,
+            providerId: configuratorKin.providerId ?? null,
+            avatarUrl: configuratorKin.avatarUrl,
+            activeProjectId: configuratorKin.activeProjectId,
+            thinkingEnabled: configuratorKin.thinkingEnabled,
+            thinkingEffort: configuratorKin.thinkingEffort,
+          }}
+          llmModels={llmModels}
+          queueState={kinQueueState.get(configuratorKin.id)}
+          onModelChange={(modelId, providerId) => handleModelChange(configuratorKin.id, modelId, providerId)}
+          onOpenSettings={handleOpenSettings}
+        />
+      )}
     </SidebarProvider>
     </div>
   )

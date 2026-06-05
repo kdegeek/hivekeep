@@ -113,6 +113,19 @@
     "title": "Bienvenue sur KinBot",
     "subtitle": "Configurons votre espace",
     "step": "Étape {{current}} sur {{total}}",
+    "bootstrap": {
+      "title": "Connecte ton IA",
+      "description": "Pour donner vie à ton assistant, connecte un fournisseur d'IA. Commence par un fournisseur intégré — tu pourras en ajouter d'autres plus tard, et des plugins pour encore plus de fournisseurs.",
+      "connect": "Connecter un fournisseur",
+      "seeding": "On donne vie à ton assistant…",
+      "noLlm": "Aucun fournisseur LLM trouvé — connecte-en un."
+    },
+    "modal": {
+      "stopTitle": "Arrêter la configuration guidée ?",
+      "stopBody": "Tu pourras reprendre à tout moment en parlant à Sherpa dans ta liste de Kins — ta conversation est sauvegardée.",
+      "keepGoing": "Continuer",
+      "stop": "Arrêter pour l'instant"
+    },
     "identity": {
       "title": "Votre identité",
       "subtitle": "Parlez-nous de vous",

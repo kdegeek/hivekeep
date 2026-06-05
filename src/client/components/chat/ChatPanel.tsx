@@ -40,7 +40,7 @@ import { useMentionables } from '@/client/hooks/useMentionables'
 import { useProject } from '@/client/hooks/useProjects'
 import { cn, getUserInitials } from '@/client/lib/utils'
 import { useSidePanel } from '@/client/contexts/SidePanelContext'
-import { ArrowDown, ArrowUp, Upload, Pin, PinOff, AlertTriangle } from 'lucide-react'
+import { ArrowDown, ArrowUp, Upload, Pin, PinOff, AlertTriangle, Bot, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/client/lib/api'
 
@@ -73,9 +73,14 @@ interface ChatPanelProps {
   onModelChange: (modelId: string, providerId: string) => void
   onEditKin: () => void
   onOpenSettings?: (section?: string, filters?: { kinId?: string }) => void
+  /** Distraction-less variant (used by the onboarding modal): renders a minimal
+   *  header (avatar + name only, no model picker / actions toolbar) and drops the
+   *  desktop sidebar trigger. Everything else (messages, input, prompts, secure
+   *  input) is unchanged. */
+  compact?: boolean
 }
 
-export function ChatPanel({ kin, llmModels, modelUnavailable = false, queueState, onModelChange, onEditKin, onOpenSettings }: ChatPanelProps) {
+export function ChatPanel({ kin, llmModels, modelUnavailable = false, queueState, onModelChange, onEditKin, onOpenSettings, compact = false }: ChatPanelProps) {
   const { t } = useTranslation()
   // Used by TokenUsageIndicator and the cache chip to apply provider-specific
   // cache pricing multipliers. Best-effort: derived from the Kin's CURRENT
@@ -812,7 +817,23 @@ export function ChatPanel({ kin, llmModels, modelUnavailable = false, queueState
         </div>
       )}
 
-      {/* Conversation header */}
+      {/* Conversation header — minimal in compact (onboarding modal) mode */}
+      {compact ? (
+        <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
+          {kin.avatarUrl ? (
+            <img src={kin.avatarUrl} alt={kin.name} className="size-9 rounded-full object-cover" />
+          ) : (
+            <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Bot className="size-5" />
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{kin.name}</p>
+            <p className="truncate text-xs text-muted-foreground">{kin.role}</p>
+          </div>
+          {queueState?.isProcessing && <Loader2 className="ml-auto size-4 animate-spin text-muted-foreground" />}
+        </div>
+      ) : (
       <ConversationHeader
         kinId={kin.id}
         name={kin.name}
@@ -856,6 +877,7 @@ export function ChatPanel({ kin, llmModels, modelUnavailable = false, queueState
         onViewUsage={onOpenSettings ? () => onOpenSettings('tokenUsage', { kinId: kin.id }) : undefined}
         leading={<SidebarTrigger className="-ml-1 shrink-0 md:hidden" />}
       />
+      )}
 
       {/* Search bar */}
       {isSearchOpen && (
