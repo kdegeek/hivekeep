@@ -9,6 +9,7 @@ import { Skeleton } from '@/client/components/ui/skeleton'
 import { Avatar, AvatarFallback, AvatarImage } from '@/client/components/ui/avatar'
 import { ModelPicker, modelPickerValue } from '@/client/components/common/ModelPicker'
 import { InfoTip } from '@/client/components/common/InfoTip'
+import { FormField } from '@/client/components/common/FormField'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
 import { api, getErrorMessage, toastError } from '@/client/lib/api'
 import { useModels } from '@/client/hooks/useModels'
@@ -216,7 +217,7 @@ export function AvatarsSettings() {
           <InfoTip content={t('settings.avatars.base.tip')} />
         </Label>
 
-        <div className="flex items-center gap-4 rounded-lg border border-border bg-muted/30 p-4">
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:gap-4">
           <Avatar className="size-20 rounded-lg ring-1 ring-border">
             <AvatarImage
               src={`/api/kins/avatar-base/image?v=${baseVersion}`}
@@ -298,11 +299,13 @@ export function AvatarsSettings() {
       </div>
 
       {/* ─── Axis A — art style ─────────────────────────────────────────── */}
-      <div className="space-y-2 border-t border-border/60 pt-6">
-        <Label htmlFor="avatar-style" className="inline-flex items-center gap-1.5">
-          {t('settings.avatars.style.title')}
-          <InfoTip content={t('settings.avatars.style.tip')} />
-        </Label>
+      <FormField
+        className="border-t border-border/60 pt-6"
+        label={t('settings.avatars.style.title')}
+        htmlFor="avatar-style"
+        tip={t('settings.avatars.style.tip')}
+        hint={t('settings.avatars.style.hint')}
+      >
         <div className="flex flex-wrap gap-1.5">
           {AVATAR_STYLE_PRESETS.map((preset) => (
             <Button
@@ -326,15 +329,15 @@ export function AvatarsSettings() {
           rows={2}
           className="resize-y"
         />
-        <p className="text-xs text-muted-foreground">{t('settings.avatars.style.hint')}</p>
-      </div>
+      </FormField>
 
       {/* ─── Axis B — subject / type ────────────────────────────────────── */}
-      <div className="space-y-2">
-        <Label htmlFor="avatar-subject" className="inline-flex items-center gap-1.5">
-          {t('settings.avatars.subject.title')}
-          <InfoTip content={t('settings.avatars.subject.tip')} />
-        </Label>
+      <FormField
+        label={t('settings.avatars.subject.title')}
+        htmlFor="avatar-subject"
+        tip={t('settings.avatars.subject.tip')}
+        hint={t('settings.avatars.subject.hint')}
+      >
         <div className="flex flex-wrap gap-1.5">
           {AVATAR_SUBJECT_PRESETS.map((preset) => (
             <Button
@@ -358,8 +361,7 @@ export function AvatarsSettings() {
           rows={2}
           className="resize-y"
         />
-        <p className="text-xs text-muted-foreground">{t('settings.avatars.subject.hint')}</p>
-      </div>
+      </FormField>
 
       <div className="flex items-center gap-2">
         <Button onClick={handleSave} disabled={!hasChanges || saving}>

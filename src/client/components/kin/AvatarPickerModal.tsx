@@ -316,18 +316,19 @@ export function AvatarPickerModal({
               size="default"
               value={mode}
               onValueChange={(v) => v && setMode(v as AvatarMode)}
+              className="w-full"
             >
-              <ToggleGroupItem value="upload">
-                <Upload className="size-4" />
-                {t('kin.avatar.upload')}
+              <ToggleGroupItem value="upload" className="flex-1 min-w-0">
+                <Upload className="size-4 shrink-0" />
+                <span className="truncate">{t('kin.avatar.upload')}</span>
               </ToggleGroupItem>
-              <ToggleGroupItem value="auto" disabled={!hasImageCapability}>
-                <Sparkles className="size-4" />
-                {t('kin.avatar.auto')}
+              <ToggleGroupItem value="auto" disabled={!hasImageCapability} className="flex-1 min-w-0">
+                <Sparkles className="size-4 shrink-0" />
+                <span className="truncate">{t('kin.avatar.auto')}</span>
               </ToggleGroupItem>
-              <ToggleGroupItem value="manual" disabled={!hasImageCapability}>
-                <SlidersHorizontal className="size-4" />
-                {t('kin.avatar.manual')}
+              <ToggleGroupItem value="manual" disabled={!hasImageCapability} className="flex-1 min-w-0">
+                <SlidersHorizontal className="size-4 shrink-0" />
+                <span className="truncate">{t('kin.avatar.manual')}</span>
               </ToggleGroupItem>
             </ToggleGroup>
 
