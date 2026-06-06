@@ -82,11 +82,6 @@ interface ChatPanelProps {
 
 export function ChatPanel({ kin, llmModels, modelUnavailable = false, queueState, onModelChange, onEditKin, onOpenSettings, compact = false }: ChatPanelProps) {
   const { t } = useTranslation()
-  // Used by TokenUsageIndicator and the cache chip to apply provider-specific
-  // cache pricing multipliers. Best-effort: derived from the Kin's CURRENT
-  // model, so messages from a previous model are evaluated with the new
-  // model's multipliers (rare in practice).
-  const currentProviderType = llmModels.find((m) => m.id === kin.model)?.providerType ?? null
   const { user } = useAuth()
   const userInitials = user ? getUserInitials(user) : 'U'
   const { messages, streamingMessage, streamingReasoning, streamingOutputTokens, liveTasks, liveCompacting, isLoading, isStreaming, hasMore, isLoadingMore, tokenStalled, sendMessage, stopStreaming, clearConversation, fetchOlderMessages } = useChat(kin.id)
@@ -1050,7 +1045,6 @@ export function ChatPanel({ kin, llmModels, modelUnavailable = false, queueState
                       onEditResend={handleEditResend}
                       onRegenerate={msg.id === lastAssistantMsgId && !isStreaming && !isProcessing ? handleRegenerate : undefined}
                       tokenUsage={msg.tokenUsage}
-                      providerType={currentProviderType}
                       reasoning={streamingMessage && msg.id === streamingMessage.id ? streamingReasoning : msg.reasoning ?? undefined}
                       channelContextLine={msg.channelContextLine}
                       channelBrandColor={msg.channelMeta?.brandColor ?? null}

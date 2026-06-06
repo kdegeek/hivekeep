@@ -79,8 +79,6 @@ interface LastTurnCache {
   cacheWriteTokens: number
   freshInputTokens: number
   hitRate: number
-  costSavingsPercent: number
-  multipliers: { read: number; write: number }
   turnAt: string
 }
 
@@ -201,22 +199,17 @@ function LastTurnCachePanel({ cache }: { cache: LastTurnCache }) {
         </div>
         <div className="flex items-center gap-3 text-[11px]">
           <span className="font-semibold text-chart-2">{hitPct}% {t('chat.contextViewer.cache.hit')}</span>
-          {cache.costSavingsPercent > 0 && (
-            <span className="rounded-full bg-chart-2/15 px-2 py-0.5 text-chart-2">
-              −{cache.costSavingsPercent.toFixed(0)}% {t('chat.contextViewer.cache.cost')}
-            </span>
-          )}
         </div>
       </div>
       <div className="mb-2 flex h-2 overflow-hidden rounded-full bg-muted">
         {readPct > 0 && (
-          <div className="h-full bg-chart-2/70" style={{ width: `${readPct}%` }} title={`${formatTokenCount(cache.cacheReadTokens)} read (×${cache.multipliers.read})`} />
+          <div className="h-full bg-chart-2/70" style={{ width: `${readPct}%` }} title={`${formatTokenCount(cache.cacheReadTokens)} read`} />
         )}
         {writePct > 0 && (
-          <div className="h-full bg-chart-4/70" style={{ width: `${writePct}%` }} title={`${formatTokenCount(cache.cacheWriteTokens)} written (×${cache.multipliers.write})`} />
+          <div className="h-full bg-chart-4/70" style={{ width: `${writePct}%` }} title={`${formatTokenCount(cache.cacheWriteTokens)} written`} />
         )}
         {freshPct > 0 && (
-          <div className="h-full bg-chart-1/70" style={{ width: `${freshPct}%` }} title={`${formatTokenCount(cache.freshInputTokens)} fresh (×1.0)`} />
+          <div className="h-full bg-chart-1/70" style={{ width: `${freshPct}%` }} title={`${formatTokenCount(cache.freshInputTokens)} fresh`} />
         )}
       </div>
       <div className="grid grid-cols-3 gap-2 text-[11px]">
@@ -225,21 +218,21 @@ function LastTurnCachePanel({ cache }: { cache: LastTurnCache }) {
             <span className="inline-block size-2 rounded-full bg-chart-2/70" />
             {t('chat.contextViewer.cache.read')}
           </span>
-          <span className="font-medium">{formatTokenCount(cache.cacheReadTokens)} <span className="text-muted-foreground">×{cache.multipliers.read}</span></span>
+          <span className="font-medium">{formatTokenCount(cache.cacheReadTokens)}</span>
         </div>
         <div className="flex flex-col items-start">
           <span className="flex items-center gap-1 text-muted-foreground">
             <span className="inline-block size-2 rounded-full bg-chart-4/70" />
             {t('chat.contextViewer.cache.write')}
           </span>
-          <span className="font-medium">{formatTokenCount(cache.cacheWriteTokens)} <span className="text-muted-foreground">×{cache.multipliers.write}</span></span>
+          <span className="font-medium">{formatTokenCount(cache.cacheWriteTokens)}</span>
         </div>
         <div className="flex flex-col items-start">
           <span className="flex items-center gap-1 text-muted-foreground">
             <span className="inline-block size-2 rounded-full bg-chart-1/70" />
             {t('chat.contextViewer.cache.fresh')}
           </span>
-          <span className="font-medium">{formatTokenCount(cache.freshInputTokens)} <span className="text-muted-foreground">×1.0</span></span>
+          <span className="font-medium">{formatTokenCount(cache.freshInputTokens)}</span>
         </div>
       </div>
     </div>

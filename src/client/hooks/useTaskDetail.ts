@@ -15,8 +15,7 @@ interface TaskDetail {
   mode: string
   model: string | null
   /** Provider family ("anthropic", "openai", ...) resolved server-side from
-   *  the effective model. Used by `TokenUsageIndicator` to apply the correct
-   *  cache multipliers in the popover breakdown. */
+   *  the effective model. Surfaced as a label on the token usage tooltip. */
   providerType?: string | null
   thinkingEnabled?: boolean
   thinkingEffort?: KinThinkingEffort | null

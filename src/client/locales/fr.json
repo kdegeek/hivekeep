@@ -719,14 +719,14 @@
       "cacheWrite": "Cache écrit",
       "reasoning": "Raisonnement",
       "steps": "{{count}} étapes",
-      "billableTitle": "Équivalent facturé",
-      "billableHint": "Le cache lu coûte 10% et le cache écrit 125% du tarif input frais — ce chiffre en tient compte.",
-      "billableHintDynamic": "Sur ce provider, le cache lu coûte {{readPct}}% et le cache écrit {{writePct}}% du tarif input frais — ce chiffre en tient compte.",
+      "usageTitle": "Consommation de tokens",
+      "cacheHitInput": "Cache hit",
+      "nonCacheInput": "Sans cache",
       "rawBreakdown": "Détail brut",
       "inputGross": "Entrée brute",
       "fresh": "frais",
       "cacheHit": "Cache hit",
-      "headlineHint": "≈ équivalent tokens facturé. Cliquer pour le détail complet."
+      "headlineHint": "Nombres de tokens réels. Cliquer pour le détail complet."
     },
     "contextSource": {
       "estimateHint": "Estimation locale (tokenizer BPE). Le bandeau du chat affiche la valeur retournée par le provider quand elle est disponible.",
@@ -744,9 +744,8 @@
     "cacheChip": {
       "aria": "État du cache au dernier tour",
       "title": "Cache (dernier tour)",
-      "hint": "{{hit}}% de l'input venait du cache (×0.1). Le cache est encore chaud — ta prochaine requête devrait être peu chère sauf si le préfixe change beaucoup.",
-      "hintDynamic": "{{hit}}% de l'input venait du cache (×{{readMult}} sur ce provider). Le cache est encore chaud — ta prochaine requête devrait être peu chère sauf si le préfixe change beaucoup.",
-      "hintColdDynamic": "{{hit}}% de l'input venait du cache (×{{readMult}}) au dernier tour — mais c'était il y a {{ago}}, au-delà du TTL éphémère de ~5min d'Anthropic. Le préfixe est froid ; ta prochaine requête paiera une écriture cache complète (×{{writeMult}})."
+      "hint": "{{hit}}% de l'input venait du cache. Le cache est encore chaud — ta prochaine requête devrait être peu chère sauf si le préfixe change beaucoup.",
+      "hintCold": "{{hit}}% de l'input venait du cache au dernier tour — mais c'était il y a {{ago}}, au-delà du TTL éphémère de ~5min d'Anthropic. Le préfixe est froid ; ta prochaine requête réécrit le préfixe."
     },
     "forceCompact": "Forcer la compaction",
     "tooltipContext": "Fenêtre de contexte",
@@ -798,7 +797,6 @@
       "cache": {
         "title": "Cache du dernier tour",
         "hit": "hit rate",
-        "cost": "coût",
         "read": "Lus du cache",
         "write": "Écrits dans le cache",
         "fresh": "Input frais",
@@ -2254,14 +2252,15 @@
       "columnOutput": "Sortie",
       "columnTotal": "Total",
       "columnCalls": "Appels",
-      "columnInputBillable": "≈ Entrée fact.",
+      "columnCacheHit": "Cache hit",
+      "columnNonCache": "Sans cache",
       "columnCacheHitFull": "Taux de cache hit",
-      "billableTotal": "≈ Équiv. facturé",
-      "inputBillable": "≈ Entrée facturée",
+      "cacheHitInput": "Cache hit",
+      "nonCacheInput": "Sans cache",
       "cacheHit": "cache hit",
       "noData": "Aucune donnée pour cette période",
       "dailyTrend": "Tendance journalière",
-      "legendInput": "Entrée (facturable)",
+      "legendInput": "Entrée",
       "legendOutput": "Sortie",
       "filters": "Filtres",
       "detailTitle": "Journal des requêtes",

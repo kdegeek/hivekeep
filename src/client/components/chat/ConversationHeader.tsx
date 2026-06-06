@@ -6,7 +6,7 @@ import { Button } from '@/client/components/ui/button'
 import { Badge } from '@/client/components/ui/badge'
 import { Progress } from '@/client/components/ui/progress'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/client/components/ui/tooltip'
-import { computeCacheHitRate, computeFreshInput, getCacheMultipliers } from '@/shared/billing'
+import { computeCacheHitRate, computeFreshInput } from '@/shared/billing'
 import type { MessageTokenUsage, KinThinkingEffort } from '@/shared/types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/client/components/ui/popover'
 import {
@@ -202,9 +202,9 @@ export const ConversationHeader = memo(function ConversationHeader({
   }, [messages])
 
   // Anthropic's default ephemeral cache TTL is 5 minutes from the last hit.
-  // After that, the prefix has to be re-written on the next request, which
-  // costs ×1.25 instead of ×0.1 — the exact opposite of "still cheap". The
-  // chip would otherwise lie when the last turn is hours old.
+  // After that, the prefix has to be re-written on the next request, so the
+  // next turn is no longer cheap. The chip would otherwise lie when the last
+  // turn is hours old.
   const ANTHROPIC_CACHE_TTL_MS = 5 * 60 * 1000
   const cacheAgeMs = lastTurnCache ? Date.now() - new Date(lastTurnCache.turnAt).getTime() : 0
   const cacheExpired = lastTurnCache != null && cacheAgeMs > ANTHROPIC_CACHE_TTL_MS
@@ -218,8 +218,6 @@ export const ConversationHeader = memo(function ConversationHeader({
 
   const selectedModel = llmModels.find((m) => m.id === model)
   const selectedModelName = selectedModel?.name ?? model
-  const currentProviderType = selectedModel?.providerType ?? null
-  const cacheMultipliers = getCacheMultipliers(currentProviderType)
 
   // Responsive action bar — see useElementWidth above.
   const isMobile = useIsMobile()
@@ -300,17 +298,14 @@ export const ConversationHeader = memo(function ConversationHeader({
                   </div>
                   <p className="text-muted-foreground leading-snug">
                     {cacheExpired
-                      ? t('chat.cacheChip.hintColdDynamic', {
-                          defaultValue: '{{hit}}% of input was served from cache (×{{readMult}}) on the last turn — but that was {{ago}} ago, past Anthropic\'s ~5min ephemeral TTL. The prefix is cold; the next request pays a full cache write (×{{writeMult}}).',
+                      ? t('chat.cacheChip.hintCold', {
+                          defaultValue: '{{hit}}% of input was served from cache on the last turn — but that was {{ago}} ago, past Anthropic\'s ~5min ephemeral TTL. The prefix is cold; the next request re-writes it.',
                           hit: Math.round(lastTurnCache.hitRate * 100),
-                          readMult: cacheMultipliers.read,
-                          writeMult: cacheMultipliers.write,
                           ago: cacheAgeLabel,
                         })
-                      : t('chat.cacheChip.hintDynamic', {
-                          defaultValue: '{{hit}}% of input was served from cache (×{{readMult}} cost on this provider). The cache is warm — your next message should be cheap unless the prefix changes significantly.',
+                      : t('chat.cacheChip.hint', {
+                          defaultValue: '{{hit}}% of input was served from cache. The cache is warm — your next message should be cheap unless the prefix changes significantly.',
                           hit: Math.round(lastTurnCache.hitRate * 100),
-                          readMult: cacheMultipliers.read,
                         })}
                   </p>
                 </div>

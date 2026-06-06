@@ -342,8 +342,8 @@ export interface TaskSummary {
   status: TaskStatus
   mode: string
   model: string | null
-  /** Provider family resolved from the effective model — needed by the token
-   *  chip to pick the right cache multipliers. */
+  /** Provider family resolved from the effective model — surfaced as a label
+   *  on the token usage tooltip. */
   providerType?: string | null
   providerId: string | null
   cronId: string | null
@@ -853,13 +853,9 @@ export interface MessageTokenUsage {
  *  the task panel can surface a running total without polling.
  *
  *  The shape extends `MessageTokenUsage` so the existing `TokenUsageIndicator`
- *  popover can render it without changes; `billableInputTokens` and
- *  `callCount` are task-specific extras (the indicator ignores them when
- *  unused). */
+ *  popover can render it without changes; `callCount` is a task-specific extra
+ *  (the indicator ignores it when unused). */
 export interface TaskTokenUsage extends MessageTokenUsage {
-  /** Provider-aware billable input equivalent (cache reads / writes weighted
-   *  by `PROVIDER_CACHE_MULTIPLIERS`). Mirrors what the dashboard surfaces. */
-  billableInputTokens: number
   /** Number of `llm_usage` rows aggregated. Useful when the user wants to know
    *  "how many LLM round-trips did this task make?". */
   callCount: number
@@ -872,8 +868,6 @@ export interface UsageSummaryRow {
   totalTokens: number
   cacheReadTokens: number
   cacheWriteTokens: number
-  /** Provider-aware billable input equivalent (sum of per-row CASE WHEN). */
-  billableInputTokens: number
   count: number
 }
 

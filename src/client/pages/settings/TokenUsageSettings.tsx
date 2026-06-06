@@ -15,7 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/client/components/ui/avat
 import { ProviderIcon } from '@/client/components/common/ProviderIcon'
 import { ArrowDownRight, ArrowUpRight, Activity, Hash, Zap, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { api } from '@/client/lib/api'
-import { computeBillableInput, computeCacheHitRate, getCacheMultipliers, PROVIDER_CACHE_MULTIPLIERS } from '@/shared/billing'
+import { computeCacheHitRate, computeNonCacheInput } from '@/shared/billing'
 import type { LlmUsageRow, UsageSummaryRow } from '@/shared/types'
 
 function formatPercent(ratio: number): string {
@@ -69,26 +69,25 @@ function buildQuery(params: Record<string, string | number | undefined>): string
 // ─── Summary Cards ──────────────────────────────────────────────────────────
 
 function SummaryCards({ data, loading, t }: {
-  data: { inputTokens: number; outputTokens: number; totalTokens: number; cacheReadTokens: number; cacheWriteTokens: number; billableInputTokens: number; calls: number }
+  data: { inputTokens: number; outputTokens: number; totalTokens: number; cacheReadTokens: number; cacheWriteTokens: number; calls: number }
   loading: boolean
   t: TFunction
 }) {
-  // Use the provider-aware billable input computed server-side. Aggregations
-  // span multiple providers (e.g. one Kin used both Anthropic and OpenAI),
-  // so applying a single client-side multiplier here would be wrong.
-  const billableInput = data.billableInputTokens
-  const billableTotal = billableInput + data.outputTokens
+  // Raw token counts, no weighting. We split input into tokens served from
+  // cache (cache hit) and tokens that were not (fresh + cache write).
+  const cacheHit = data.cacheReadTokens
+  const nonCache = computeNonCacheInput(data)
   const hitRate = computeCacheHitRate(data)
   const cards = [
     {
-      label: t('settings.tokenUsage.billableTotal'),
-      value: `≈ ${formatTokens(billableTotal)}`,
+      label: t('settings.tokenUsage.cacheHitInput', 'Cache hit'),
+      value: formatTokens(cacheHit),
       icon: Zap,
-      color: 'text-primary',
+      color: 'text-success',
       sub: hitRate > 0 ? `${formatPercent(hitRate)} ${t('settings.tokenUsage.cacheHit')}` : undefined,
       subClass: hitRateColor(hitRate),
     },
-    { label: t('settings.tokenUsage.inputBillable'), value: `≈ ${formatTokens(billableInput)}`, icon: ArrowDownRight, color: 'text-foreground' },
+    { label: t('settings.tokenUsage.nonCacheInput', 'Non-cache'), value: formatTokens(nonCache), icon: ArrowDownRight, color: 'text-foreground' },
     { label: t('settings.tokenUsage.outputTokens'), value: formatTokens(data.outputTokens), icon: ArrowUpRight, color: 'text-chart-2' },
     { label: t('settings.tokenUsage.apiCalls'), value: formatNumber(data.calls), icon: Hash, color: 'text-muted-foreground' },
   ]
@@ -128,12 +127,8 @@ function DailySparkline({ data, t }: { data: UsageSummaryRow[]; t: (key: string)
   const height = 40
   const barWidth = Math.max(2, width / data.length - 1)
   const gap = 1
-  // Use the billable-input equivalent (provider-aware, accounts for cache
-  // discounts) to match the SummaryCards above. Gross inputTokens dramatically
-  // overstates cost on Anthropic with prompt caching: a day with 500k cache
-  // reads counts as 500k of "input" gross but ~50k billable. The chart was
-  // making heavy-cache days look 5-10x bigger than they actually cost.
-  const maxTotal = Math.max(1, ...data.map((d) => d.billableInputTokens + d.outputTokens))
+  // Real token counts (input + output), no weighting.
+  const maxTotal = Math.max(1, ...data.map((d) => d.inputTokens + d.outputTokens))
 
   return (
     <div className="space-y-1.5">
@@ -143,9 +138,9 @@ function DailySparkline({ data, t }: { data: UsageSummaryRow[]; t: (key: string)
       </div>
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="w-full">
         {data.map((d, i) => {
-          const total = d.billableInputTokens + d.outputTokens
+          const total = d.inputTokens + d.outputTokens
           const totalH = (total / maxTotal) * height
-          const inputH = (d.billableInputTokens / maxTotal) * height
+          const inputH = (d.inputTokens / maxTotal) * height
           const outputH = (d.outputTokens / maxTotal) * height
           const x = i * (barWidth + gap)
           return (
@@ -248,11 +243,12 @@ function BreakdownTable({ rows, loading, groupBy, kinMap, t }: {
   return (
     <div className="glass-strong rounded-lg overflow-hidden">
       <div className="overflow-x-auto">
-        <div className="min-w-[420px]">
-          {/* Header — wider grid: group | billable in | output | hit% | calls */}
-          <div className="grid grid-cols-[1fr_90px_80px_60px_60px] gap-2 px-3 py-2 text-[10px] uppercase tracking-wider text-muted-foreground/60 border-b border-border/30">
+        <div className="min-w-[480px]">
+          {/* Header — group | cache hit | non-cache | output | hit% | calls */}
+          <div className="grid grid-cols-[1fr_80px_80px_80px_50px_50px] gap-2 px-3 py-2 text-[10px] uppercase tracking-wider text-muted-foreground/60 border-b border-border/30">
             <span>{t('settings.tokenUsage.columnGroup')}</span>
-            <span className="text-right">{t('settings.tokenUsage.columnInputBillable')}</span>
+            <span className="text-right" title={t('settings.tokenUsage.cacheHitInput', 'Cache hit')}>{t('settings.tokenUsage.columnCacheHit', 'Cache hit')}</span>
+            <span className="text-right" title={t('settings.tokenUsage.nonCacheInput', 'Non-cache')}>{t('settings.tokenUsage.columnNonCache', 'Non-cache')}</span>
             <span className="text-right">{t('settings.tokenUsage.columnOutput')}</span>
             <span className="text-right" title={t('settings.tokenUsage.columnCacheHitFull')}>%</span>
             <span className="text-right">{t('settings.tokenUsage.columnCalls')}</span>
@@ -260,33 +256,26 @@ function BreakdownTable({ rows, loading, groupBy, kinMap, t }: {
           {/* Rows */}
           <div className="max-h-[300px] overflow-y-auto">
             {rows.map((row) => {
-          // Provider-aware billable input is computed server-side (CASE WHEN
-          // per provider_type, summed across rows in the group).
-          const billable = row.billableInputTokens
+          const cacheHit = row.cacheReadTokens
+          const nonCache = computeNonCacheInput(row)
           const hit = computeCacheHitRate(row)
           const hasCache = (row.cacheReadTokens > 0) || (row.cacheWriteTokens > 0)
-          // When the row IS a single provider (groupBy=provider_type) we can
-          // show the exact pricing multipliers in the tooltip. For other
-          // groupings the row may span multiple providers — omit multipliers
-          // since the displayed billable was computed server-side per row
-          // with the right per-provider CASE WHEN.
           const fresh = Math.max(0, row.inputTokens - row.cacheReadTokens - row.cacheWriteTokens)
-          const knownProvider = groupBy === 'provider_type' && row.group in PROVIDER_CACHE_MULTIPLIERS
-          const m = knownProvider ? getCacheMultipliers(row.group) : null
           const tooltip = !hasCache
             ? undefined
-            : m
-              ? `Gross input ${formatTokens(row.inputTokens)} = fresh ${formatTokens(fresh)} + cache write ${formatTokens(row.cacheWriteTokens)} (×${m.write}) + cache read ${formatTokens(row.cacheReadTokens)} (×${m.read})`
-              : `Gross input ${formatTokens(row.inputTokens)} = fresh ${formatTokens(fresh)} + cache write ${formatTokens(row.cacheWriteTokens)} + cache read ${formatTokens(row.cacheReadTokens)} (multipliers vary by provider)`
+            : `Input ${formatTokens(row.inputTokens)} = fresh ${formatTokens(fresh)} + cache write ${formatTokens(row.cacheWriteTokens)} + cache read ${formatTokens(row.cacheReadTokens)}`
           return (
             <div
               key={row.group}
-              className="grid grid-cols-[1fr_90px_80px_60px_60px] gap-2 px-3 py-1.5 text-xs hover:bg-muted/30 border-b border-border/20 items-center"
+              className="grid grid-cols-[1fr_80px_80px_80px_50px_50px] gap-2 px-3 py-1.5 text-xs hover:bg-muted/30 border-b border-border/20 items-center"
               title={tooltip}
             >
               <RowLabel group={row.group} groupBy={groupBy} kinMap={kinMap} />
-              <span className="text-right font-mono tabular-nums font-semibold text-primary">
-                ≈ {formatTokens(billable)}
+              <span className="text-right font-mono tabular-nums font-semibold text-success">
+                {formatTokens(cacheHit)}
+              </span>
+              <span className="text-right font-mono tabular-nums text-foreground">
+                {formatTokens(nonCache)}
               </span>
               <span className="text-right font-mono tabular-nums text-muted-foreground">
                 {formatTokens(row.outputTokens)}
@@ -449,14 +438,15 @@ function DetailTable({ rows, loading, page, totalCount, onPageChange, kinMap, t 
     <div className="space-y-2">
       <div className="glass-strong rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
-          <div className="min-w-[720px]">
+          <div className="min-w-[800px]">
             {/* Header */}
-            <div className="grid grid-cols-[140px_1fr_1fr_80px_80px_70px_50px_50px] gap-2 px-3 py-2 text-[10px] uppercase tracking-wider text-muted-foreground/60 border-b border-border/30">
+            <div className="grid grid-cols-[140px_1fr_1fr_70px_70px_70px_60px_45px_45px] gap-2 px-3 py-2 text-[10px] uppercase tracking-wider text-muted-foreground/60 border-b border-border/30">
               <span>{t('settings.tokenUsage.detailDate')}</span>
               <span>{t('settings.tokenUsage.detailKin')}</span>
               <span>{t('settings.tokenUsage.detailModel')}</span>
               <span>{t('settings.tokenUsage.detailCallSite')}</span>
-              <span className="text-right">{t('settings.tokenUsage.columnInputBillable')}</span>
+              <span className="text-right" title={t('settings.tokenUsage.cacheHitInput')}>{t('settings.tokenUsage.columnCacheHit')}</span>
+              <span className="text-right" title={t('settings.tokenUsage.nonCacheInput')}>{t('settings.tokenUsage.columnNonCache')}</span>
               <span className="text-right">{t('settings.tokenUsage.columnOutput')}</span>
               <span className="text-right" title={t('settings.tokenUsage.columnCacheHitFull')}>%</span>
               <span className="text-right">{t('settings.tokenUsage.detailSteps')}</span>
@@ -471,18 +461,17 @@ function DetailTable({ rows, loading, page, totalCount, onPageChange, kinMap, t 
               cacheReadTokens: row.cacheReadTokens ?? 0,
               cacheWriteTokens: row.cacheWriteTokens ?? 0,
             }
-            // Provider-aware: each call belongs to a single provider, so we
-            // use its multipliers directly here.
-            const billable = computeBillableInput(usage, row.providerType)
+            const cacheHit = usage.cacheReadTokens
+            const nonCache = computeNonCacheInput(usage)
             const hit = computeCacheHitRate(usage)
             const hasCache = (row.cacheReadTokens ?? 0) > 0 || (row.cacheWriteTokens ?? 0) > 0
             const fresh = Math.max(0, (row.inputTokens ?? 0) - (row.cacheReadTokens ?? 0) - (row.cacheWriteTokens ?? 0))
             return (
               <div
                 key={row.id}
-                className="grid grid-cols-[140px_1fr_1fr_80px_80px_70px_50px_50px] gap-2 px-3 py-1.5 text-xs hover:bg-muted/30 border-b border-border/20 items-center"
+                className="grid grid-cols-[140px_1fr_1fr_70px_70px_70px_60px_45px_45px] gap-2 px-3 py-1.5 text-xs hover:bg-muted/30 border-b border-border/20 items-center"
                 title={hasCache
-                  ? `Gross input ${formatTokens(row.inputTokens ?? 0)} = fresh ${formatTokens(fresh)} + cache write ${formatTokens(row.cacheWriteTokens ?? 0)} (×1.25) + cache read ${formatTokens(row.cacheReadTokens ?? 0)} (×0.1)`
+                  ? `Input ${formatTokens(row.inputTokens ?? 0)} = fresh ${formatTokens(fresh)} + cache write ${formatTokens(row.cacheWriteTokens ?? 0)} + cache read ${formatTokens(row.cacheReadTokens ?? 0)}`
                   : `Input ${formatTokens(row.inputTokens ?? 0)} (no cache)`}
               >
                 <span className="text-muted-foreground tabular-nums" title={date.toISOString()}>
@@ -507,8 +496,11 @@ function DetailTable({ rows, loading, page, totalCount, onPageChange, kinMap, t 
                   <span className="truncate" title={row.modelId ?? undefined}>{row.modelId ?? '—'}</span>
                 </div>
                 <span className="truncate text-muted-foreground">{row.callSite}</span>
-                <span className="text-right font-mono tabular-nums font-semibold text-primary">
-                  ≈ {formatTokens(billable)}
+                <span className="text-right font-mono tabular-nums font-semibold text-success">
+                  {formatTokens(cacheHit)}
+                </span>
+                <span className="text-right font-mono tabular-nums text-foreground">
+                  {formatTokens(nonCache)}
                 </span>
                 <span className="text-right font-mono tabular-nums text-muted-foreground">
                   {formatTokens(row.outputTokens ?? 0)}
@@ -671,9 +663,7 @@ export function TokenUsageSettings({ initialKinFilter }: { initialKinFilter?: st
     setDetailPage(page)
   }, [])
 
-  // Derive totals from summary rows. billableInputTokens is already computed
-  // per row server-side with the right provider multiplier, so summing them
-  // is correct even when rows span multiple providers.
+  // Derive totals from summary rows — raw token counts, no weighting.
   const totals = useMemo(() => {
     return summaryRows.reduce(
       (acc, r) => ({
@@ -682,10 +672,9 @@ export function TokenUsageSettings({ initialKinFilter }: { initialKinFilter?: st
         totalTokens: acc.totalTokens + r.totalTokens,
         cacheReadTokens: acc.cacheReadTokens + (r.cacheReadTokens ?? 0),
         cacheWriteTokens: acc.cacheWriteTokens + (r.cacheWriteTokens ?? 0),
-        billableInputTokens: acc.billableInputTokens + (r.billableInputTokens ?? 0),
         calls: acc.calls + r.count,
       }),
-      { inputTokens: 0, outputTokens: 0, totalTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, billableInputTokens: 0, calls: 0 },
+      { inputTokens: 0, outputTokens: 0, totalTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, calls: 0 },
     )
   }, [summaryRows])
 

@@ -7,15 +7,12 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from '@/client/components/ui/popover'
-import { computeBillableInput, computeCacheHitRate, computeFreshInput, getCacheMultipliers } from '@/shared/billing'
+import { computeCacheHitRate, computeFreshInput, computeNonCacheInput } from '@/shared/billing'
 import type { MessageTokenUsage, TaskTokenUsage } from '@/shared/types'
 
 interface TokenUsageIndicatorProps {
   tokenUsage: MessageTokenUsage | TaskTokenUsage
-  /** Provider type ("anthropic", "openai", ...) to pick the right cache
-   *  multipliers. Falls back to Anthropic if absent. */
-  providerType?: string | null
-  /** Optional popover title override. Defaults to "Billable equivalent" — the
+  /** Optional popover title override. Defaults to "Token usage" — the
    *  task-level reading uses "Task total" instead so the user can tell apart a
    *  per-message badge from the running task total when both surface in the
    *  task panel. */
@@ -35,28 +32,16 @@ function formatPercent(ratio: number): string {
   return `${Math.round(ratio * 100)}%`
 }
 
-export const TokenUsageIndicator = memo(function TokenUsageIndicator({ tokenUsage, providerType, title, subtitle }: TokenUsageIndicatorProps) {
+export const TokenUsageIndicator = memo(function TokenUsageIndicator({ tokenUsage, title, subtitle }: TokenUsageIndicatorProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
 
-  const multipliers = getCacheMultipliers(providerType)
-  // Prefer the server-computed billable total when the caller passes a
-  // `TaskTokenUsage` (provider-aware across rows). Falls back to the local
-  // approximation for plain `MessageTokenUsage` (single message).
-  const serverBillable = (tokenUsage as Partial<TaskTokenUsage>).billableInputTokens
-  const billableInput = typeof serverBillable === 'number'
-    ? serverBillable
-    : computeBillableInput(tokenUsage, providerType)
   const fresh = computeFreshInput(tokenUsage)
   const cacheRead = tokenUsage.cacheReadTokens ?? 0
   const cacheWrite = tokenUsage.cacheWriteTokens ?? 0
+  const nonCache = computeNonCacheInput(tokenUsage)
   const hitRate = computeCacheHitRate(tokenUsage)
   const hasCache = cacheRead > 0 || cacheWrite > 0
-
-  // Headline = the input billed equivalent + output. This is what the user
-  // actually paid for — gross totalTokens was misleading (90% off cache reads
-  // counted at full price).
-  const headline = billableInput + tokenUsage.outputTokens
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -69,10 +54,10 @@ export const TokenUsageIndicator = memo(function TokenUsageIndicator({ tokenUsag
             'bg-primary/10 text-primary hover:bg-primary/18',
             'transition-colors duration-150',
           )}
-          title={t('chat.tokenUsage.headlineHint', '~ billable token equivalent. Click for the full breakdown.')}
+          title={t('chat.tokenUsage.headlineHint', 'Real token counts. Click for the full breakdown.')}
         >
           <Zap className="size-2.5" />
-          <span>≈ {formatTokenCount(headline)}</span>
+          <span>↓ {formatTokenCount(tokenUsage.inputTokens)} · ↑ {formatTokenCount(tokenUsage.outputTokens)}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -82,30 +67,33 @@ export const TokenUsageIndicator = memo(function TokenUsageIndicator({ tokenUsag
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <div className="flex flex-col gap-3 text-xs">
-          {/* Headline: billable equivalent */}
+          {/* Headline: cache hit vs non-cache split */}
           <div className="space-y-1">
             <div className="flex items-center gap-1.5 font-medium text-foreground">
               <Zap className="size-3 text-primary" />
-              {title ?? t('chat.tokenUsage.billableTitle', 'Billable equivalent')}
+              {title ?? t('chat.tokenUsage.usageTitle', 'Token usage')}
             </div>
             {subtitle && (
               <div className="text-[10px] text-muted-foreground leading-snug">{subtitle}</div>
             )}
             <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 tabular-nums">
-              <span className="text-muted-foreground">{t('chat.tokenUsage.input')}</span>
-              <span className="text-right font-semibold text-primary">≈ {formatTokenCount(billableInput)}</span>
+              {hasCache && (
+                <>
+                  <span className="text-muted-foreground">{t('chat.tokenUsage.cacheHitInput', 'Cache hit')}</span>
+                  <span className="text-right font-semibold text-success">{formatTokenCount(cacheRead)}</span>
+                  <span className="text-muted-foreground">{t('chat.tokenUsage.nonCacheInput', 'Non-cache')}</span>
+                  <span className="text-right font-semibold text-foreground">{formatTokenCount(nonCache)}</span>
+                </>
+              )}
+              {!hasCache && (
+                <>
+                  <span className="text-muted-foreground">{t('chat.tokenUsage.input')}</span>
+                  <span className="text-right font-semibold text-foreground">{formatTokenCount(tokenUsage.inputTokens)}</span>
+                </>
+              )}
               <span className="text-muted-foreground">{t('chat.tokenUsage.output')}</span>
               <span className="text-right font-semibold text-foreground">{formatTokenCount(tokenUsage.outputTokens)}</span>
             </div>
-            {hasCache && (
-              <p className="pt-1 text-[10px] text-muted-foreground leading-snug">
-                {t('chat.tokenUsage.billableHintDynamic', {
-                  defaultValue: 'On this provider, cache reads cost {{readPct}}% and cache writes cost {{writePct}}% of fresh input — this number reflects that.',
-                  readPct: Math.round(multipliers.read * 100),
-                  writePct: Math.round(multipliers.write * 100),
-                })}
-              </p>
-            )}
           </div>
 
           {/* Raw breakdown */}
@@ -124,13 +112,13 @@ export const TokenUsageIndicator = memo(function TokenUsageIndicator({ tokenUsag
               )}
               {cacheWrite > 0 && (
                 <>
-                  <span className="pl-2">↳ {t('chat.tokenUsage.cacheWrite')} <span className="text-muted-foreground/70">({multipliers.write}×)</span></span>
+                  <span className="pl-2">↳ {t('chat.tokenUsage.cacheWrite')}</span>
                   <span className="text-right text-foreground">{formatTokenCount(cacheWrite)}</span>
                 </>
               )}
               {cacheRead > 0 && (
                 <>
-                  <span className="pl-2">↳ {t('chat.tokenUsage.cacheRead')} <span className="text-muted-foreground/70">({multipliers.read}×)</span></span>
+                  <span className="pl-2">↳ {t('chat.tokenUsage.cacheRead')}</span>
                   <span className="text-right text-foreground">{formatTokenCount(cacheRead)}</span>
                 </>
               )}

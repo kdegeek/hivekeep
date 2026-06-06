@@ -74,7 +74,7 @@ export function TaskCard({
   const relTime = formatRelativeTime(task.createdMs, { suffix: true })
 
   const usage = task.tokenUsage
-  const tokenHeadline = usage ? usage.billableInputTokens + usage.outputTokens : 0
+  const tokenHeadline = usage ? usage.inputTokens + usage.outputTokens : 0
   const callCount = usage?.callCount ?? 0
   const depth = task.depth ?? 0
 

@@ -65,9 +65,6 @@ interface MessageBubbleProps {
   onToggleReaction?: (messageId: string, emoji: string) => void
   /** Token usage data for this message (assistant messages only). */
   tokenUsage?: MessageTokenUsage | null
-  /** LLM provider type ("anthropic", "openai", ...) used to pick the right
-   *  cache multipliers when computing the billable token equivalent. */
-  providerType?: string | null
   /** Distraction-less variant (onboarding modal): hides the per-message footer
    *  (timestamp, reading time, token usage, reactions/actions). */
   compact?: boolean
@@ -904,7 +901,6 @@ export const MessageBubble = memo(function MessageBubble({
   onEditResend,
   onToggleReaction,
   tokenUsage,
-  providerType,
   compact = false,
   reasoning,
   channelContextLine,
@@ -1090,7 +1086,7 @@ export const MessageBubble = memo(function MessageBubble({
                   <RelativeTimestamp timestamp={timestamp} className="text-[10px] text-muted-foreground/70" />
                 )}
                 <ReadingTime content={content} />
-                {tokenUsage && <TokenUsageIndicator tokenUsage={tokenUsage} providerType={providerType} />}
+                {tokenUsage && <TokenUsageIndicator tokenUsage={tokenUsage} />}
                 {onRegenerate && <RegenerateButton onRegenerate={onRegenerate} />}
                 <ReadAloudButton content={content} />
                 {onToggleReaction && <ReactionPicker onSelect={handleToggleReaction} isUser={false} />}
@@ -1179,7 +1175,7 @@ export const MessageBubble = memo(function MessageBubble({
             />
           )}
           {!isUser && <ReadingTime content={content} />}
-          {!isUser && tokenUsage && <TokenUsageIndicator tokenUsage={tokenUsage} providerType={providerType} />}
+          {!isUser && tokenUsage && <TokenUsageIndicator tokenUsage={tokenUsage} />}
           {!isUser && onRegenerate && <RegenerateButton onRegenerate={onRegenerate} />}
           {!isUser && <ReadAloudButton content={content} />}
           {onToggleReaction && <ReactionPicker onSelect={handleToggleReaction} isUser={isUser} />}

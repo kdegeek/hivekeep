@@ -719,14 +719,14 @@
       "cacheWrite": "Cache write",
       "reasoning": "Reasoning",
       "steps": "{{count}} steps",
-      "billableTitle": "Billable equivalent",
-      "billableHint": "Cache reads cost 10% and cache writes cost 125% of fresh input — this number reflects that.",
-      "billableHintDynamic": "On this provider, cache reads cost {{readPct}}% and cache writes cost {{writePct}}% of fresh input — this number reflects that.",
+      "usageTitle": "Token usage",
+      "cacheHitInput": "Cache hit",
+      "nonCacheInput": "Non-cache",
       "rawBreakdown": "Raw breakdown",
       "inputGross": "Input (gross)",
       "fresh": "fresh",
       "cacheHit": "Cache hit",
-      "headlineHint": "≈ billable token equivalent. Click for the full breakdown."
+      "headlineHint": "Real token counts. Click for the full breakdown."
     },
     "contextSource": {
       "estimateHint": "Local BPE estimate. The chat banner shows the provider-reported value when available.",
@@ -744,9 +744,8 @@
     "cacheChip": {
       "aria": "Cache state from last turn",
       "title": "Last turn cache",
-      "hint": "{{hit}}% of input was served from cache (×0.1 cost). The cache is warm — your next message should be cheap unless the prefix changes significantly.",
-      "hintDynamic": "{{hit}}% of input was served from cache (×{{readMult}} cost on this provider). The cache is warm — your next message should be cheap unless the prefix changes significantly.",
-      "hintColdDynamic": "{{hit}}% of input was served from cache (×{{readMult}}) on the last turn — but that was {{ago}} ago, past Anthropic's ~5min ephemeral TTL. The prefix is cold; the next request pays a full cache write (×{{writeMult}})."
+      "hint": "{{hit}}% of input was served from cache. The cache is warm — your next message should be cheap unless the prefix changes significantly.",
+      "hintCold": "{{hit}}% of input was served from cache on the last turn — but that was {{ago}} ago, past Anthropic's ~5min ephemeral TTL. The prefix is cold; the next request re-writes it."
     },
     "forceCompact": "Force compaction",
     "tooltipContext": "Context window",
@@ -798,7 +797,6 @@
       "cache": {
         "title": "Last turn cache",
         "hit": "hit rate",
-        "cost": "cost",
         "read": "Read from cache",
         "write": "Written to cache",
         "fresh": "Fresh input",
@@ -2254,14 +2252,15 @@
       "columnOutput": "Output",
       "columnTotal": "Total",
       "columnCalls": "Calls",
-      "columnInputBillable": "≈ Input bil.",
+      "columnCacheHit": "Cache hit",
+      "columnNonCache": "Non-cache",
       "columnCacheHitFull": "Cache hit rate",
-      "billableTotal": "≈ Billable equiv.",
-      "inputBillable": "≈ Input billable",
+      "cacheHitInput": "Cache hit",
+      "nonCacheInput": "Non-cache",
       "cacheHit": "cache hit",
       "noData": "No usage data for this period",
       "dailyTrend": "Daily trend",
-      "legendInput": "Input (billable)",
+      "legendInput": "Input",
       "legendOutput": "Output",
       "filters": "Filters",
       "detailTitle": "Request log",
