@@ -6,6 +6,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
 
 COPY package.json bun.lock ./
+# Workspace members must be present so `@kinbot-developer/sdk` (workspace:*) resolves.
+COPY packages ./packages
 RUN bun install --frozen-lockfile
 
 # ─── Stage 2: Build frontend ─────────────────────────────────────────────────
@@ -28,6 +30,10 @@ LABEL org.opencontainers.image.title="KinBot" \
 # Install production dependencies (better-sqlite3 needs build tools for node-gyp)
 RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
 COPY package.json bun.lock ./
+# The server imports `@kinbot-developer/sdk` (workspace pkg shipping TS source)
+# at runtime, so the workspace members must be present for the production install
+# AND must persist in the final image (Bun runs the SDK's src directly).
+COPY packages ./packages
 # Remove husky prepare script (not needed in production, bun ignores HUSKY=0)
 RUN sed -i '/"prepare":/d' package.json && \
     bun install --frozen-lockfile --production && \
@@ -48,8 +54,6 @@ COPY --from=build /app/src/server ./src/server
 COPY --from=build /app/src/shared ./src/shared
 COPY --from=build /app/tsconfig.json ./tsconfig.json
 COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts
-COPY --from=build /app/registry ./registry
-COPY --from=build /app/store ./store
 # .env.example is the config catalog surfaced via list_platform_config_options
 COPY --from=build /app/.env.example ./.env.example
 
