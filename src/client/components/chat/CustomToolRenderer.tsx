@@ -1,7 +1,7 @@
 import { Component, Suspense, lazy, type ComponentType, type ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
 import { JsonViewer } from '@/client/components/common/JsonViewer'
-import { UI_KIT, type CustomToolUiKit } from '@/client/components/chat/custom-tool-ui-kit'
+import { UI_KIT, type CustomToolUiKit } from '@/shared/custom-tool-ui-kit'
 import { useCustomToolMeta } from '@/client/lib/custom-tool-names'
 import i18n from '@/client/lib/i18n'
 

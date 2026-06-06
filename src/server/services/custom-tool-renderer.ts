@@ -42,7 +42,7 @@ import * as ReactDOM from 'react-dom'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createLogger } from '@/server/logger'
 import { getCustomTool, toolDir } from '@/server/services/custom-tools'
-import { UI_KIT } from '@/client/components/chat/custom-tool-ui-kit'
+import { UI_KIT } from '@/shared/custom-tool-ui-kit'
 
 const log = createLogger('custom-tool-renderer')
 
