@@ -14,7 +14,7 @@ Deployed as a GitHub Pages **project site** at `https://marlburrow.github.io/kin
 
 ## Where to drop your assets
 
-**1. Avatars (JSON + images)** — `src/data/kins.json`
+**1. Avatars (JSON + images)** — `src/kins.json` (kept out of a `data/` folder on purpose: the repo's root `.gitignore` ignores `data/`)
 Each entry: `{ "name": string, "domain": string, "avatar": string | null, "status"?: "online" | "working" | "idle" }`
 - Put avatar images in `public/avatars/` and set `"avatar": "/avatars/atlas.png"`.
 - `null` avatar → a themed placeholder robot is shown automatically.

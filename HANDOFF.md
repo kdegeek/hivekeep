@@ -50,7 +50,7 @@ Redo, from scratch, everything *around* KinBot for a **1.0 release**: the GitHub
 - **Run:** `cd site && bun install && bun run dev` → http://localhost:4321/kinbot . Build: `bun run build`. **GitHub Pages project site**, `base: '/kinbot'`.
 - **Design system:** `site/src/styles/global.css` (aurora tokens mirror the app). Icons: `astro-icon` (lucide + simple-icons) + `@lobehub/icons` for provider marks (SSR-only, no client JS).
 - **Homepage** (`site/src/pages/index.astro`) is a one-pager: hero + product-like "your kins" panel, channel strip, install **video placeholder** (`#demo`), numbered sections 01 memory · 02 self-host/vault · 03 self-improving/tools · 04 omnichannel+handoff · 05 transparency (context viewer) · 06 Sherpa onboarding · 07 the household (examples) · Providers & plugins · Why KinBot (honest comparison vs OpenClaw/Hermes) · Get started · footer.
-- **Data:** `site/src/data/kins.json` drives the hero panel + household grid (`{name, domain, avatar, status?}`).
+- **Data:** `site/src/kins.json` drives the hero panel + household grid (`{name, domain, avatar, status?}`). (Not under a `data/` folder: the repo root `.gitignore` ignores `data/`, which would silently drop it.)
 - **Faithful sims** mirror real components: recall → `src/server/tools/memory-tools.ts`; context viewer → `src/server/services/context-preview.ts`; provider icons → `src/client/components/common/ProviderIcon.tsx` (lobehub whitelist). Token cache is provider-agnostic (`token-usage.ts`), not "Anthropic".
 - **Placeholders to replace with real captures** (feathered `.shot` slots): Fig.2 tool render, Fig.3 channel handoff, Fig.5 Sherpa onboarding, and the install video (`site/public/videos/install.mp4`).
 
