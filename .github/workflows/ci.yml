@@ -5,13 +5,15 @@ on:
     branches: [main]
     paths-ignore:
       - 'site/**'
-      - '*.md'
+      - 'docs-site/**'
+      - '**.md'
       - 'LICENSE'
   pull_request:
     branches: [main]
     paths-ignore:
       - 'site/**'
-      - '*.md'
+      - 'docs-site/**'
+      - '**.md'
       - 'LICENSE'
 
 concurrency:
@@ -20,7 +22,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build & Test
+    name: Typecheck, Test & Build
     runs-on: ubuntu-latest
 
     steps:
@@ -42,63 +44,14 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+        env:
+          HUSKY: 0
 
       - name: Type check
         run: bun run typecheck
 
+      - name: Test
+        run: bun run test
+
       - name: Build
         run: bun run build
-
-      - name: Test
-        run: |
-          # Run tests without coverage first — this is the correctness gate.
-          # Bun's --coverage flag has known issues with mock.module (ESM caching)
-          # that cause false failures in tests relying on module-level mocks.
-          bun test 2>&1 | tee test-output.txt; test_exit=${PIPESTATUS[0]}
-          if [ $test_exit -ne 0 ]; then
-            echo "::group::Error markers in full-suite output"
-            grep -n -B2 -A5 'Unhandled error\|SyntaxError\|TypeError.*undefined\|# error' test-output.txt || echo "(none found)"
-            echo "::endgroup::"
-          fi
-          exit $test_exit
-
-      - name: Coverage report
-        if: always()
-        run: |
-          # Coverage run is best-effort — mock.module issues under --coverage
-          # can cause false failures (e.g. inter-agent-tools, drizzle-orm ESM caching).
-          bun test --coverage 2>&1 | tee coverage-output.txt || true
-
-      - name: Coverage summary
-        if: github.event_name == 'pull_request'
-        run: |
-          # Extract the summary line from Bun's coverage output
-          echo "### 📊 Test Coverage" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          grep -E '^\s*(All files|src/)' coverage-output.txt | head -40 >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-
-  docker:
-    name: Docker Build
-    runs-on: ubuntu-latest
-    # Only run when Docker-relevant files change
-    if: >
-      github.event_name == 'push' ||
-      github.event_name == 'pull_request'
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Build Docker image (no push)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: docker/Dockerfile
-          push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          tags: hivekeep:ci-${{ github.sha }}

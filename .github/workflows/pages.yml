@@ -7,6 +7,11 @@ on:
     paths:
       - 'site/**'
       - 'docs-site/**'
+  schedule:
+    # Daily, refresh stars/version on the live site.
+    - cron: '17 6 * * *'
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -51,11 +56,47 @@ jobs:
           restore-keys: |
             npm-docs-${{ runner.os }}-
 
+      - name: Refresh stars/version stats
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p site/src/data
+
+          # Fallback version from package.json (strip a leading v if present).
+          PKG_VERSION=$(bun --print "require('./package.json').version")
+
+          REPO_JSON=$(curl -fsSL \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/MarlBurroW/hivekeep" || echo '')
+
+          RELEASE_JSON=$(curl -fsSL \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/MarlBurroW/hivekeep/releases/latest" || echo '')
+
+          STARS=$(printf '%s' "$REPO_JSON" | bun --print "try { JSON.parse(require('fs').readFileSync(0,'utf8')).stargazers_count ?? 0 } catch { 0 }" 2>/dev/null || echo 0)
+          [ -z "$STARS" ] && STARS=0
+
+          LATEST_TAG=$(printf '%s' "$RELEASE_JSON" | bun --print "try { JSON.parse(require('fs').readFileSync(0,'utf8')).tag_name ?? '' } catch { '' }" 2>/dev/null || echo '')
+          # Strip a leading v; fall back to package.json version.
+          VERSION="${LATEST_TAG#v}"
+          [ -z "$VERSION" ] && VERSION="$PKG_VERSION"
+
+          FETCHED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          printf '{"stars":%s,"version":"%s","fetchedAt":"%s"}\n' \
+            "$STARS" "$VERSION" "$FETCHED_AT" > site/src/data/stats.json
+
+          echo "Wrote site/src/data/stats.json:"
+          cat site/src/data/stats.json
+
       - name: Build landing site
         run: cd site && bun install --frozen-lockfile && bun run build
 
       - name: Build docs site
-        run: cd docs-site && npm install && npm run build
+        run: cd docs-site && npm ci && npm run build
 
       - name: Merge outputs
         run: |
@@ -70,7 +111,5 @@ jobs:
         with:
           branch: gh-pages
           folder: merged
-          clean-exclude: |
-            e2e-report
-            showcase
+          single-commit: true
           commit-message: 'chore: update sites'
