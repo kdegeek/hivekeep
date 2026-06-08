@@ -1,4 +1,9 @@
-# Projects & tickets
+# Projects & tickets (internal dev note)
+
+> Internal developer note on the projects/tickets schema and resolver internals.
+> Not user-facing docs. The user-facing Projects guide lives on the docs site
+> under `docs-site/src/content/docs/`. Keep this in sync with
+> `src/server/services/tickets.ts` and `src/server/utils/ticket-ref.ts`.
 
 Hivekeep ships an internal project tracker. A project is a long-lived workspace
 (repo, mission, product line) holding a kanban board of tickets and a palette
