@@ -15,11 +15,16 @@ export default defineConfig({
 					codePaddingBlock: '1rem',
 					codePaddingInline: '1.25rem',
 					frames: {
-						editorTabBarBorderBottomColor: 'oklch(0.24 0.04 300)',
+						editorTabBarBorderBottomColor: 'oklch(0.26 0.045 312)',
 					},
 				},
 			},
 			title: 'Hivekeep Docs',
+			logo: {
+				src: './public/logo.svg',
+				alt: 'Hivekeep',
+			},
+			favicon: '/favicon.svg',
 			editLink: {
 				baseUrl: 'https://github.com/MarlBurroW/hivekeep/edit/main/docs-site/',
 			},
