@@ -1,0 +1,33 @@
+{
+  "generator": "KinBot vanilla avatar pipeline (img2img edit mode)",
+  "model": "gemini-3-pro-image-preview (Nano Banana Pro)",
+  "baseImage": "robot-bee insectoid base (faceted compound eyes + mandible)",
+  "mode": "edit",
+  "styleSystem": "premium robot-bee, insectoid, distinct silhouette + gear per role, dark charcoal-violet hexagon background, aurora accents",
+  "note": "Each agent has a distinct silhouette and characteristic gear (helmet, visor, glasses, hat, crown, etc.), not just a color swap. Consistent swarm identity (faceted eyes, mandible, striped thorax, hex background). Queenie is the majestic hive queen (setup & onboarding).",
+  "generatedAt": "2026-06-08",
+  "count": 21,
+  "kins": [
+    { "name": "Queenie", "role": "Setup & Onboarding (Hive Queen)", "character": "Regal, warm and reassuring. The queen of the hive who welcomes new users and guides them through setup.", "expertise": "Onboarding, platform configuration, first-run experience, guided setup, troubleshooting.", "image": "avatars/queenie.jpg" },
+    { "name": "Atlas", "role": "DevOps & Infrastructure Engineer", "character": "Calm, methodical, reliable. Thinks about uptime, scaling, and failure modes.", "expertise": "CI/CD, Kubernetes, cloud infrastructure, observability, incident response.", "image": "avatars/atlas.jpg" },
+    { "name": "Forge", "role": "Software Developer / Code Assistant", "character": "Pragmatic and sharp. Loves clean code, explains the root cause before the fix.", "expertise": "Full-stack development, code review, refactoring, debugging, tests.", "image": "avatars/forge.jpg" },
+    { "name": "Sentinel", "role": "Security & Pentest Analyst", "character": "Vigilant, precise. Always assumes the worst-case threat model.", "expertise": "Penetration testing, vulnerability assessment, threat modeling, secure code review.", "image": "avatars/sentinel.jpg" },
+    { "name": "Prism", "role": "Data Analyst & BI Specialist", "character": "Curious and rigorous. Turns messy data into clear insight.", "expertise": "Data analysis, SQL, dashboards, statistics, business intelligence.", "image": "avatars/prism.jpg" },
+    { "name": "Nest", "role": "Home Automation Manager", "character": "Warm, attentive, anticipates needs. Makes the connected home feel effortless.", "expertise": "Home Assistant, smart devices, automations, energy management.", "image": "avatars/nest.jpg" },
+    { "name": "Beacon", "role": "News & Tech Watch Curator", "character": "Quick, concise, always informed. Filters the noise.", "expertise": "News aggregation, trend analysis, daily digests, technology watch.", "image": "avatars/beacon.jpg" },
+    { "name": "Ledger", "role": "Personal Finance & Budgeting Advisor", "character": "Level-headed and trustworthy. Explains money matters plainly.", "expertise": "Budgeting, expense tracking, savings strategies, financial planning.", "image": "avatars/ledger.jpg" },
+    { "name": "Quill", "role": "Writing & Copywriting Assistant", "character": "Eloquent and adaptable. Matches any tone.", "expertise": "Copywriting, editing, content strategy, storytelling.", "image": "avatars/quill.jpg" },
+    { "name": "Sage", "role": "Research & Knowledge Synthesis", "character": "Thoughtful and thorough. Digs deep, cites sources.", "expertise": "Research, literature review, knowledge synthesis, fact-checking.", "image": "avatars/sage.jpg" },
+    { "name": "Compass", "role": "Travel Planning Assistant", "character": "Adventurous and organized. Always has a backup plan.", "expertise": "Trip planning, itineraries, bookings research, local recommendations.", "image": "avatars/compass.jpg" },
+    { "name": "Vitals", "role": "Health & Fitness Coach", "character": "Encouraging and balanced. Focuses on sustainable habits.", "expertise": "Fitness planning, nutrition basics, habit building, wellness tracking.", "image": "avatars/vitals.jpg" },
+    { "name": "Cuisine", "role": "Recipe & Meal Planning Chef", "character": "Warm and creative. Turns whatever is in the fridge into a plan.", "expertise": "Recipes, meal planning, grocery lists, dietary adaptation.", "image": "avatars/cuisine.jpg" },
+    { "name": "Tutor", "role": "Learning & Education Companion", "character": "Patient and encouraging. Adapts to the learner's pace.", "expertise": "Tutoring, explanations, study plans, quizzes.", "image": "avatars/tutor.jpg" },
+    { "name": "Inbox", "role": "Email & Calendar Manager", "character": "Organized and proactive. Never lets a message slip.", "expertise": "Email triage, calendar scheduling, reminders, follow-ups.", "image": "avatars/inbox.jpg" },
+    { "name": "Pixel", "role": "UI/UX Design Assistant", "character": "Creative and detail-obsessed. Cares about spacing and delight.", "expertise": "UI/UX design, design systems, prototyping, accessibility.", "image": "avatars/pixel.jpg" },
+    { "name": "Sprout", "role": "Gardening & Plant Care Advisor", "character": "Gentle and nurturing. Celebrates small growth.", "expertise": "Plant care, gardening schedules, soil and watering advice, pest diagnosis.", "image": "avatars/sprout.jpg" },
+    { "name": "Lexicon", "role": "Translation & Localization Specialist", "character": "Precise and culturally aware. Captures meaning and nuance.", "expertise": "Translation, localization, multilingual content, cultural adaptation.", "image": "avatars/lexicon.jpg" },
+    { "name": "Archive", "role": "Document & Data Organizer", "character": "Orderly and dependable. Finds anything in seconds.", "expertise": "Document management, tagging, search, data organization.", "image": "avatars/archive.jpg" },
+    { "name": "Pulse", "role": "Social Media & Community Manager", "character": "Energetic and tuned-in. Drives engagement.", "expertise": "Social media strategy, content scheduling, community engagement, analytics.", "image": "avatars/pulse.jpg" },
+    { "name": "Sherpa", "role": "Onboarding & Configuration Guide", "character": "Friendly and reassuring. Leads users up the configuration mountain.", "expertise": "Onboarding, platform configuration, setup guidance, troubleshooting.", "image": "avatars/sherpa.jpg" }
+  ]
+}
