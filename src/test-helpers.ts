@@ -256,6 +256,12 @@ export const fullMockSchema = {
   ticketTags: {},
   ticketComments: {},
   ticketAttachments: {},
+  agentReadState: {},
+  pendingEmailSends: {},
+  projectKnowledge: {},
+  secretPrompts: {},
+  toolDomains: {},
+  toolboxes: {},
 }
 
 /**

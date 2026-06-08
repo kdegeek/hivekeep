@@ -61,6 +61,8 @@ mock.module('@/server/services/queue', () => ({
 // Stub it so we don't depend on the inter-Agent directory shape here.
 mock.module('@/server/services/inter-agent', () => ({
   listAvailableAgents: async () => [],
+  sendInterAgentMessage: async () => undefined,
+  replyToInterAgentMessage: async () => undefined,
 }))
 
 // Force executeSubAgent's LLM resolution to HANG. executeSubAgent sets the row to

@@ -38,6 +38,7 @@ const mockCreateFileFromContent = mock(() =>
 )
 
 mock.module('@/server/services/file-storage', () => ({
+  readStoredFile: mock(() => Promise.resolve(null)),
   createFileFromContent: mockCreateFileFromContent,
   createFileFromWorkspace: mock(() => Promise.resolve(null)),
   createFileFromUrl: mock(() => Promise.resolve(null)),

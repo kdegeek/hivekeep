@@ -41,7 +41,9 @@ mock.module('@/server/db/schema', () => ({
   agents: { id: 'id', name: 'name', slug: 'slug' },
 }))
 
+const _realAppSettings = await import('@/server/services/app-settings')
 mock.module('@/server/services/app-settings', () => ({
+  ..._realAppSettings,
   getSetting: mock(() => Promise.resolve(null)),
   setSetting: mock(() => Promise.resolve()),
   getGlobalPrompt: mockGetGlobalPrompt,
