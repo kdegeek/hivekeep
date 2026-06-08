@@ -6,6 +6,11 @@ import starlight from '@astrojs/starlight';
 export default defineConfig({
 	site: 'https://marlburrow.github.io',
 	base: '/hivekeep/docs',
+	// Land users straight on Getting Started instead of a marketing splash.
+	// Keys are resolved against the configured `base`, so '/' maps to /hivekeep/docs/.
+	redirects: {
+		'/': '/hivekeep/docs/getting-started/installation/',
+	},
 	integrations: [
 		starlight({
 			expressiveCode: {
@@ -38,7 +43,6 @@ export default defineConfig({
 				Head: './src/components/Head.astro',
 				SiteTitle: './src/components/SiteTitle.astro',
 				Sidebar: './src/components/Sidebar.astro',
-				Hero: './src/components/Hero.astro',
 				Footer: './src/components/Footer.astro',
 				PageFrame: './src/components/PageFrame.astro',
 				PageTitle: './src/components/PageTitle.astro',

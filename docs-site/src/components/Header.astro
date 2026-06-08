@@ -214,9 +214,36 @@ const shouldRenderSearch =
 		50% { opacity: 1; box-shadow: 0 0 6px oklch(0.72 0.22 342 / 0.4); }
 	}
 
-	/* Gradient accent line at the very top of the page */
+	/* Sticky header: pin it to the top on scroll like the sidebar.
+	 * Starlight's default is `position: fixed`, but this component injects an
+	 * announcement bar above the nav row, so the content is taller than the
+	 * fixed --sl-nav-height window and would clip. We make the header
+	 * `sticky` and let it size to its content (announcement + nav row), then
+	 * cancel the layout offset the default fixed header relied on (below).
+	 * `sticky` is also the positioning context for the ::before accent line. */
 	:global(header.header) {
-		position: relative;
+		position: sticky;
+		top: 0;
+		height: auto !important;
+		z-index: var(--sl-z-index-navbar, 10);
+		background: var(--sl-color-bg-nav);
+	}
+
+	/* The default theme adds `padding-top: var(--sl-nav-height)` to the main
+	 * frame to clear the *fixed* header. A sticky header is in normal flow and
+	 * occupies its own space, so that padding becomes a dead gap. Remove it. */
+	:global(.main-frame) {
+		padding-top: var(--sl-mobile-toc-height, 0rem) !important;
+	}
+
+	/* The fixed sidebar offsets its top by --sl-nav-height. Our header also
+	 * carries the announcement bar, so it is taller. Track the real header
+	 * height (published as --kb-header-height by the script below) so the
+	 * sidebar starts exactly below the pinned header instead of under it. */
+	@media (min-width: 50rem) {
+		:global(.sidebar-pane) {
+			inset-block-start: var(--kb-header-height, var(--sl-nav-height)) !important;
+		}
 	}
 
 	:global(header.header::before) {
@@ -235,10 +262,10 @@ const shouldRenderSearch =
 		z-index: 10;
 	}
 
-	/* Scroll progress bar — sits at the bottom of the header */
+	/* Scroll progress bar · sits at the bottom of the (sticky) header */
 	.kb-scroll-progress {
 		position: fixed;
-		top: var(--sl-nav-height);
+		top: var(--kb-header-height, var(--sl-nav-height));
 		left: 0;
 		height: 2px;
 		width: 0%;
@@ -255,6 +282,24 @@ const shouldRenderSearch =
 </style>
 
 <script>
+	// Publish the real (sticky) header height so the fixed sidebar, scroll
+	// progress bar and anchor scroll-padding can sit flush below it. The header
+	// carries an announcement bar that can be dismissed, so the height changes.
+	const headerEl = document.querySelector('header.header') as HTMLElement | null;
+	if (headerEl) {
+		const publishHeight = () => {
+			const h = headerEl.offsetHeight;
+			const root = document.documentElement;
+			root.style.setProperty('--kb-header-height', `${h}px`);
+			root.style.scrollPaddingTop = `calc(${h}px + 1rem)`;
+		};
+		publishHeight();
+		if ('ResizeObserver' in window) {
+			new ResizeObserver(publishHeight).observe(headerEl);
+		}
+		window.addEventListener('resize', publishHeight, { passive: true });
+	}
+
 	// Scroll progress bar
 	const bar = document.querySelector('.kb-scroll-progress') as HTMLElement;
 	if (bar) {

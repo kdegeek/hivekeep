@@ -166,7 +166,6 @@ header.header {
 }
 
 /* ─── GRADIENT HEADINGS ───────────────────────────────── */
-.hero h1,
 h1.gradient-heading {
 	background: linear-gradient(
 		135deg,
@@ -377,16 +376,6 @@ h1.gradient-heading {
 	text-decoration-color: oklch(0.72 0.19 305);
 }
 
-/* ─── HERO SECTION ENHANCEMENTS ───────────────────────── */
-.hero .hero-html {
-	text-align: center;
-}
-
-.hero .tagline {
-	color: var(--sl-color-gray-2) !important;
-	font-size: 1.15rem !important;
-}
-
 /* ─── SEARCH MODAL ────────────────────────────────────── */
 dialog.pagefind-ui,
 dialog[open].pagefind-ui {
@@ -437,7 +426,7 @@ dialog.pagefind-ui::backdrop {
 	}
 }
 
-/* ─── CARD GRID (splash page) ─────────────────────────── */
+/* ─── CARD GRID (used by in-page CardGrid components) ─── */
 .sl-markdown-content .card-grid {
 	gap: 1rem;
 }
@@ -560,11 +549,6 @@ site-search button:hover {
 
 	.expressive-code pre {
 		border-radius: 0 !important;
-	}
-
-	/* Hero on mobile: center and tighten */
-	:global(.kb-hero-wrap .hero) {
-		padding: 2rem 0.5rem !important;
 	}
 
 	/* Mobile nav glass background */
@@ -748,21 +732,6 @@ starlight-menu-button button:hover {
 /* ─── LINK HOVER GLOW ─────────────────────────────────── */
 .sl-markdown-content a:not(.sl-link-button):hover {
 	text-shadow: 0 0 12px oklch(0.72 0.19 305 / 0.15);
-}
-
-/* ─── HERO ACTIONS: GLASS SECONDARY BUTTON REFINEMENT ── */
-.hero .actions .sl-link-button.sl-link-button--minimal {
-	backdrop-filter: blur(8px) saturate(160%) !important;
-	-webkit-backdrop-filter: blur(8px) saturate(160%) !important;
-}
-
-/* ─── SPLASH PAGE HERO ALIGNMENT ──────────────────────── */
-:global(.kb-hero-wrap .hero) {
-	text-align: center;
-}
-
-:global(.kb-hero-wrap .hero .actions) {
-	justify-content: center;
 }
 
 /* ─── HEADING ANCHOR LINKS ────────────────────────────── */
