@@ -94,7 +94,7 @@ export interface AvatarPreset {
 }
 
 export const AVATAR_STYLE_PRESETS: readonly AvatarPreset[] = [
-  { id: 'hivekeep', label: 'Hivekeep (robot-bee)', prompt: 'a premium glossy 3D character render, Pixar-meets-cyberpunk, with dramatic soft studio lighting and vibrant aurora rim-light in violet, magenta and orange, set against a dark charcoal background with a faint glowing honeycomb hexagon pattern; highly detailed, polished collectible-figure look' },
+  { id: 'hivekeep', label: 'Hivekeep (robot-bee)', prompt: '2D "serious cartoon" splash-art, in the art direction of Valorant and League of Legends key art: bold confident linework, semi-realistic hand-painted digital illustration, painterly textures, dramatic rim lighting, rich shadows. Dark charcoal-violet background with a subtle hexagon honeycomb pattern and a soft glow. Centered head-and-shoulders avatar composition. Premium, mature, never childish. No text, no letters, no words, no UI elements.' },
   { id: 'pixar', label: 'Pixar 3D', prompt: 'Pixar / 3D-animation style, soft lighting' },
   { id: 'anime', label: 'Anime', prompt: 'anime art style, clean linework, cel shading' },
   { id: 'watercolor', label: 'Watercolor', prompt: 'soft watercolor painting style' },
@@ -103,7 +103,7 @@ export const AVATAR_STYLE_PRESETS: readonly AvatarPreset[] = [
 ]
 
 export const AVATAR_SUBJECT_PRESETS: readonly AvatarPreset[] = [
-  { id: 'hivekeep-bee', label: 'Hivekeep robot-bee', prompt: 'a friendly anthropomorphic robot-bee mascot: a sleek armored charcoal insectoid with large faceted compound eyes glowing in an aurora gradient, segmented antennae with glowing tips, a small mechanical mandible, a fuzzy amber-striped thorax and translucent insect wings' },
+  { id: 'hivekeep-bee', label: 'Hivekeep robot-bee', prompt: 'An insectoid robot bee: two large faceted glowing compound eyes, a mechanical mandible, segmented antennae with rounded tips, large translucent mechanical wings spread wide behind the shoulders, a robotic thorax with yellow-and-black striped panels, a matte dark charcoal shell with subtle aurora gradient edge accents (indigo to violet to warm orange). Clearly an insect-machine, NOT a humanoid robot, no human face, no human mouth.' },
   { id: 'robot', label: 'Robot', prompt: 'a small, friendly, cute robot' },
   { id: 'human', label: 'Human', prompt: 'a human character' },
   { id: 'elf', label: 'Elf', prompt: 'an elf character with pointed ears' },
