@@ -56,7 +56,7 @@ A single process, a single SQLite file, a single Docker container. No Postgres, 
 This is the surprising part. Hivekeep is not a fixed feature set, it is a base your Agents grow:
 
 - **Custom tools, any language** (Python, Node, Bun, TypeScript, Bash, Deno) with native dependency management, and **rich React renderers** so a tool result shows up as a themed UI card, not raw JSON.
-- **Mini Apps** built by your Agents: real web apps in a sandboxed iframe, with a JS SDK, 24 React hooks, 50+ themed components (DataGrid, charts, Kanban, Calendar), an optional Hono backend, KV storage with snapshots and rollback, a public gallery with clone, 11 templates, and an "Improve this" natural-language edit loop.
+- **Mini Apps** built by your Agents: real web apps in a sandboxed iframe, with a JS SDK, 29 React hooks, 50+ themed components (DataGrid, charts, Kanban, Calendar), an optional Hono backend, KV storage with snapshots and rollback, a public gallery with clone, 14 templates, and an "Improve this" natural-language edit loop.
 - **Plugins** over npm with a typed TypeScript SDK (`@hivekeep/sdk`): a built-in marketplace (any package keyworded `hivekeep-plugin`, live npm search) plus Git install, native provider interfaces, channel adapters, lifecycle hooks, granular runtime-enforced permissions, and a scaffolder (`create-hivekeep-plugin`). Fully self-hosted, no proprietary cloud.
 - **Dynamic MCP servers** the Agents can add and manage, and **toolboxes** (composable named allow-lists) to scope capabilities precisely per role.
 
@@ -99,18 +99,23 @@ Bring one config per provider and Hivekeep auto-detects its capabilities (`llm`,
 
 ## Why Hivekeep
 
-Hivekeep compares to **autonomous-agent platforms**, not to plain LLM chat front-ends. Here are the dimensions where it is uniquely strong:
+Self-hosted AI assistants like **OpenClaw** and **Hermes** are excellent: they win or tie on memory, omnichannel reach, and self-hosting too. Where Hivekeep pulls ahead is the **team**, the **polished product UI**, and **transparency**. Marks below are best-effort from public docs (June 2026); peers genuinely win or tie on several rows.
 
-| Dimension | Hivekeep | OpenClaw | GPTs / Assistants | LibreChat | Dify |
-|---|:---:|:---:|:---:|:---:|:---:|
-| One container, zero external infra | yes | daemon | n/a | Mongo | heavy |
-| Continuous session (no "new chat") | yes | no | no | no | no |
-| Inter-agent collaboration + sub-agents | yes | partial | no | no | workflow |
-| Self-improving (agents build tools, mini-apps, plugins) | yes | partial | partial | partial | partial |
-| Conversational onboarding (zero YAML) | yes, Queenie | CLI | n/a | no | no |
-| Consumer-grade UI / PWA | yes | CLI | yes | yes | builder |
-| Vault secrets never exposed to the LLM | yes | no | n/a | no | no |
-| Token / context transparency | yes | no | no | no | debug |
+| Dimension | Hivekeep | OpenClaw | Hermes |
+|---|:---:|:---:|:---:|
+| Self-hosted, your data | yes | yes | yes |
+| Persistent memory | yes | yes | yes |
+| Native omnichannel | yes | yes | yes |
+| Connected accounts (mail, calendar) | yes | no | partial |
+| Agents build their own tools / skills | yes | partial | yes |
+| Scheduled tasks (cron) | yes | yes | yes |
+| A team of agents that collaborate | yes | no | no |
+| Polished web app (PWA) | yes | partial | partial |
+| Rendered tool calls (UI, not JSON) | yes | no | no |
+| Mini-apps and projects (Kanban) | yes | no | no |
+| Conversational setup (no CLI) | yes | no | no |
+| Secrets never sent to the LLM | yes | partial | partial |
+| Token and context transparency | yes | no | no |
 
 > Hivekeep is production-ready for individual and small-group use, with solid foundations and UX polish that keeps advancing. We are honest about the maturity (~80%) rather than overselling it. See the [roadmap](https://marlburrow.github.io/hivekeep/) for the known rough edges.
 
@@ -152,8 +157,10 @@ docker run -d -p 3001:3000 -v hivekeep-data:/app/data ghcr.io/marlburrow/hivekee
 docker logs hivekeep            # Docker
 journalctl -u hivekeep -e       # native (systemd)
 
-# Generate a diagnostic report for bug reports:
-bash install.sh --doctor
+# Generate a diagnostic report for bug reports (no local clone needed):
+bash <(curl -fsSL https://raw.githubusercontent.com/MarlBurroW/hivekeep/main/install.sh) --doctor
+# Or, if you used the native installer, the wrapper it installs also works:
+#   "$HIVEKEEP_DIR"/hivekeep doctor   (HIVEKEEP_DIR defaults to /opt/hivekeep or ~/hivekeep)
 ```
 
 > **Back up your encryption key.** On first boot Hivekeep generates and persists an AES-256-GCM key at `data/.encryption-key` and encrypts all vault secrets with it. If you instead set `ENCRYPTION_KEY` yourself, you must provide the same value on every restart. Keep this key (or the `data/` directory) backed up, or you lose access to encrypted secrets.
@@ -176,7 +183,7 @@ All capabilities are detailed on the [website](https://marlburrow.github.io/hive
 **Self-hosted and self-improving platform**
 - One process, one SQLite file, one container, zero external infra
 - Custom tools in any language with rich React renderers
-- Mini Apps built by Agents (SDK, 24 hooks, 50+ themed components, optional backend, gallery)
+- Mini Apps built by Agents (SDK, 29 hooks, 50+ themed components, optional backend, gallery)
 - Plugins over npm via a typed SDK plus a built-in marketplace, dynamic MCP, composable toolboxes
 
 **A nice agent UI (PWA)**
@@ -204,7 +211,7 @@ All capabilities are detailed on the [website](https://marlburrow.github.io/hive
 <summary><strong>Full feature list</strong></summary>
 
 #### 1. Agent architecture and runtime
-Persistent identity and expertise per Agent (shared across users, sender-tagged messages, replies in the last speaker's language). One continuous session, never reset. Hybrid long-term memory (sqlite-vec KNN + FTS5, RRF fusion, importance/decay/category re-ranking, multi-query + HyDE + optional LLM rerank). Progressive compaction (token-aware keep-window + telescoping multi-summary, originals never deleted, triggers around 75% of the context window). FIFO queue per Agent with user-message priority. Sub-Agents (`await` / `async`, max depth 3). Inter-Agent messaging (`request` / `reply`, correlation IDs, rate-limited, chain-depth guarded). Unified contacts registry. Stateful browser (14 `browser_*` tools, Playwright + stealth + accessibility-snapshot refs). Native Anthropic prompt caching.
+Persistent identity and expertise per Agent (shared across users, sender-tagged messages, replies in the last speaker's language). One continuous session, never reset. Hybrid long-term memory (sqlite-vec KNN + FTS5, RRF fusion, importance/decay/category re-ranking, multi-query + HyDE + optional LLM rerank). Progressive compaction (token-aware keep-window + telescoping multi-summary, originals never deleted, triggers around 75% of the context window). FIFO queue per Agent with user-message priority. Sub-Agents (`await` / `async`, max depth 3). Inter-Agent messaging (`request` / `reply`, correlation IDs, rate-limited, chain-depth guarded). Unified contacts registry. Stateful browser (18 `browser_*` tools, Playwright + stealth + accessibility-snapshot refs). Native Anthropic prompt caching.
 
 #### 2. UI/UX, PWA, design system, theming
 Installable PWA (hand-coded service worker, offline app shell). 18 OKLch palettes x light/dark/system x adaptive contrast (normal/soft, DB-synced cross-device). Glass/gradient design system, WCAG AA, 21 micro-interaction keyframes. i18n (English + French). Rich tool renders inline. @mentions with autocomplete. Real-time SSE streaming on a single multiplexed connection. Auto-generated per-Agent avatars (3 independent axes: art style, subject, character).
@@ -213,7 +220,7 @@ Installable PWA (hand-coded service worker, offline app shell). 18 OKLch palette
 Multi-language authoring (Python, Node, Bun, TS, Bash, Deno) with native dependency management. Each tool can bundle a `renderer.tsx`, server-bundled and SSR-validated before deploy, delivered as a content-addressed ESM module. Two-phase (build + SSR) validation. Themed UI kit, native renderers for 20+ built-in tools, per-toolbox scoping.
 
 #### 4. Mini Apps
-Agents build real web apps in a sandboxed iframe. Vanilla JS SDK (theme, storage, API/HTTP proxy, memory, conversation, SSE). 24 React hooks. 50+ themed components (DataGrid, charts, Kanban, Calendar). Optional Hono backend. KV storage (snapshots, rollback). Public gallery with clone, 11 templates, an "Improve this" natural-language edit loop, console ring buffer.
+Agents build real web apps in a sandboxed iframe. Vanilla JS SDK (theme, storage, API/HTTP proxy, memory, conversation, SSE). 29 React hooks. 50+ themed components (DataGrid, charts, Kanban, Calendar). Optional Hono backend. KV storage (snapshots, rollback). Public gallery with clone, 14 templates, an "Improve this" natural-language edit loop, console ring buffer.
 
 #### 5. Conversational onboarding (Queenie)
 Minimal 3-screen onboarding, then a permanent configurator Agent (`kind=configurator`) with a dedicated 45+ tool toolbox. Secure input for secrets (`request_provider_setup`, `request_channel_setup`, `prompt_secret`): UI to vault, never to the LLM. Provider connection with key reuse (one key, N capabilities), defaults, global rules, Agent creation, avatars, channels, all by chat. Admin-first-run only.
