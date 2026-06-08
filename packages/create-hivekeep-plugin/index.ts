@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * create-hivekeep-plugin — scaffold a new Hivekeep plugin.
+ * create-hivekeep-plugin: scaffold a new Hivekeep plugin.
  *
  * Usage:
  *   bunx create-hivekeep-plugin
@@ -234,8 +234,8 @@ export function generateIndex(opts: ScaffoldOptions): string {
 
   if (opts.types.includes('hooks')) {
     lines.push(`    hooks: {`)
-    lines.push(`      // Each hook handler receives the typed payload for its hook name —`)
-    lines.push(`      // see HookPayloadMap in @hivekeep/sdk.`)
+    lines.push(`      // Each hook handler receives the typed payload for its hook name.`)
+    lines.push(`      // See HookPayloadMap in @hivekeep/sdk.`)
     lines.push(`      afterChat: (h) => {`)
     lines.push(`        ctx.log.info({ agentId: h.agentId, responseLen: h.response.length }, 'afterChat')`)
     lines.push(`      },`)
@@ -290,7 +290,7 @@ This plugin provides: ${opts.types.join(', ')}
 
 ## Development
 
-See the [Hivekeep Plugin Development Guide](https://github.com/MarlBurroW/hivekeep/blob/main/PLUGIN-DEVELOPMENT.md) for details.
+See the [Hivekeep Plugin Development Guide](https://marlburrow.github.io/hivekeep/docs/plugins/developing/) for details.
 
 ## License
 
@@ -309,7 +309,7 @@ export function generateGitignore(): string {
  * Generate a `package.json` so the plugin is publishable on npm with
  * the `hivekeep-plugin` keyword. Hivekeep's Browse tab (Settings →
  * Plugins → npm) discovers packages via the npm search API filtered
- * on that exact keyword — without it, the plugin stays invisible.
+ * on that exact keyword. Without it, the plugin stays invisible.
  *
  * Key choices:
  * - **peerDependencies on @hivekeep/sdk**: the SDK MUST come

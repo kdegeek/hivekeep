@@ -38,7 +38,7 @@ npm_token
 .DS_Store
 
 # Data (SQLite DB, uploads, workspaces)
-data/
+/data/
 
 # VSCode
 .vscode/

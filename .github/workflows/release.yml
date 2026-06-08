@@ -4,13 +4,20 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
 
 jobs:
-  release:
-    name: Create GitHub Release
+  build-image:
+    name: Build & Push Image
     runs-on: ubuntu-latest
 
     steps:
@@ -34,48 +41,99 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+        env:
+          HUSKY: 0
 
-      - name: Type check
+      - name: Type check (gate)
         run: bun run typecheck
 
-      - name: Build
+      - name: Build (gate)
         run: bun run build
 
-      - name: Extract changelog from CHANGELOG.md
+      - name: Compute image name (lowercased)
+        id: image
+        run: echo "name=${REPO,,}" >> "$GITHUB_OUTPUT"
+        env:
+          REPO: ${{ github.repository }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-') }}
+            type=raw,value=edge,enable=${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: ${{ startsWith(github.ref, 'refs/tags/') && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  release:
+    name: Create GitHub Release
+    needs: build-image
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
         id: changelog
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"
 
-          # Try to extract the section for this version from CHANGELOG.md
-          # Matches "## [X.Y.Z]" and captures everything until the next "## [" or EOF
-          # Try to extract from CHANGELOG.md if it exists
-          SECTION=""
-          if [ -f CHANGELOG.md ]; then
-            SECTION=$(awk -v ver="$VERSION" '
-              /^## \[/ {
-                if (found) exit
-                if (index($0, "[" ver "]")) { found=1; next }
-              }
-              found { print }
-            ' CHANGELOG.md)
+          # No CHANGELOG.md in this repo: build the changelog from git history.
+          # Find the previous tag (the one before the tag being released).
+          PREV_TAG=$(git describe --tags --abbrev=0 "${GITHUB_REF}^" 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            SECTION=$(git log "${PREV_TAG}..${GITHUB_REF}" --pretty=format:"- %s" --no-merges | head -100)
+          else
+            SECTION=$(git log "${GITHUB_REF}" --pretty=format:"- %s" --no-merges | head -50)
           fi
 
-          # Fallback to git log if no CHANGELOG.md or version not found
-          if [ -z "$SECTION" ]; then
-            PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-            if [ -n "$PREV_TAG" ]; then
-              SECTION=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --no-merges | head -50)
-            else
-              SECTION=$(git log --pretty=format:"- %s" --no-merges | head -30)
-            fi
-          fi
+          # The :latest tag is only published for stable (non-prerelease) tags.
+          # Prerelease tags contain a '-' (e.g. v1.0.0-rc.1), so point their
+          # docker-run example at the concrete version instead of :latest.
+          case "$VERSION" in
+            *-*) DOCKER_TAG="$VERSION" ;;
+            *)   DOCKER_TAG="latest" ;;
+          esac
 
           {
-            echo "changelog<<EOF"
+            echo "changelog<<HIVEKEEP_EOF"
             echo "$SECTION"
-            echo "EOF"
+            echo "HIVEKEEP_EOF"
           } >> "$GITHUB_OUTPUT"
           echo "version=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "docker_tag=${DOCKER_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -101,17 +159,10 @@ jobs:
               --name hivekeep \
               -p 3000:3000 \
               -v hivekeep-data:/app/data \
-              ghcr.io/MarlBurroW/hivekeep:${{ github.ref_name }}
+              ghcr.io/marlburrow/hivekeep:${{ steps.changelog.outputs.docker_tag }}
             ```
 
-            **Manual:**
-            ```bash
-            git clone https://github.com/MarlBurroW/hivekeep.git
-            cd hivekeep && bun install && bun run build && bun run db:migrate
-            NODE_ENV=production bun run start
-            ```
-
-            Open `http://localhost:3000` — the setup wizard will guide you through the rest.
+            For all installation methods and an interactive configurator, see the [install guide](https://marlburrow.github.io/hivekeep/install).
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: |

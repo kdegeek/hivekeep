@@ -542,6 +542,19 @@ preflight_checks() {
     fi
   fi
 
+  # Proactively warn about privileged ports (<1024) for non-root installs.
+  # Binding these requires root; a normal user install will otherwise fail at
+  # startup with an opaque permission error. Hoisted out of the install-only
+  # branch above so it also fires on updates and under -y/CI (where the
+  # configure wizard is skipped). Runs exactly once per preflight.
+  if [ -n "${HIVEKEEP_PORT:-}" ] && [ "$IS_ROOT" != true ] && [ "$HIVEKEEP_PORT" -lt 1024 ] 2>/dev/null; then
+    warn "Port $HIVEKEEP_PORT is a privileged port (<1024) and you are not root."
+    warn "A non-root service cannot bind it and will fail to start."
+    info "Pick a port >= 1024 (e.g. 3000), or expose port 80/443 with a reverse proxy"
+    info "(Caddy, nginx, Traefik) in front of Hivekeep. To run on the privileged port"
+    info "directly, re-run the installer as root."
+  fi
+
   # Check available memory (Bun builds can OOM on small machines)
   if [ "$OS" = "Linux" ] && [ -f /proc/meminfo ]; then
     local mem_total_kb mem_avail_kb swap_total_kb
@@ -716,6 +729,12 @@ configure() {
     echo ""
 
     prompt_value HIVEKEEP_PORT "Port" "$HIVEKEEP_PORT"
+
+    # Warn if a non-root user picked a privileged port (<1024): it won't bind.
+    if [ "$IS_ROOT" != true ] && [ "$HIVEKEEP_PORT" -lt 1024 ] 2>/dev/null; then
+      warn "Port $HIVEKEEP_PORT is privileged (<1024) and you are not root, so the service won't be able to bind it."
+      warn "Choose a port >= 1024 (e.g. 3000), or put a reverse proxy in front of Hivekeep for ports 80/443."
+    fi
 
     local default_url="http://${local_ip}:${HIVEKEEP_PORT}"
     [ -n "$HIVEKEEP_PUBLIC_URL" ] && default_url="$HIVEKEEP_PUBLIC_URL"
@@ -911,8 +930,37 @@ install_or_update() {
     fi
 
     retry 3 "git fetch" git -C "$HIVEKEEP_DIR" fetch origin
+
+    # Detect a dirty working tree before pulling. A plain `git pull` aborts with a
+    # cryptic "local changes would be overwritten" error if any tracked file was
+    # edited (or a build artifact got committed locally), so handle it explicitly.
+    local working_tree_dirty=false
+    if [ -n "$(git -C "$HIVEKEEP_DIR" status --porcelain 2>/dev/null)" ]; then
+      working_tree_dirty=true
+    fi
+
     git -C "$HIVEKEEP_DIR" checkout "$HIVEKEEP_BRANCH"
-    retry 3 "git pull" git -C "$HIVEKEEP_DIR" pull origin "$HIVEKEEP_BRANCH"
+
+    if [ "$working_tree_dirty" = true ]; then
+      warn "Local changes detected in $HIVEKEEP_DIR. Stashing them before updating."
+      # Run as a SINGLE attempt: a merge conflict is not transient, so retrying
+      # would only re-fail with "a rebase is in progress" after each backoff and
+      # could leave a half-finished rebase tree littered with conflict markers.
+      if git -C "$HIVEKEEP_DIR" -c rebase.autoStash=true pull --rebase origin "$HIVEKEEP_BRANCH"; then
+        info "Your local changes were stashed and re-applied on top of the update."
+        info "If anything looks off, run: git -C \"$HIVEKEEP_DIR\" stash list"
+      else
+        # Abort any in-progress rebase so the tree is left clean (guarded: this is
+        # a no-op if no rebase is actually in progress).
+        git -C "$HIVEKEEP_DIR" rebase --abort &>/dev/null || true
+        error "Update could not merge your local changes automatically.
+  Your installation has uncommitted edits that conflict with the new version.
+  ${BOLD}Fix:${NC} reset to a clean copy (your data and config are preserved):
+    ${DIM}bash install.sh --reset${NC}"
+      fi
+    else
+      retry 3 "git pull" git -C "$HIVEKEEP_DIR" pull origin "$HIVEKEEP_BRANCH"
+    fi
 
     local new_version
     new_version="$(get_installed_version)"
@@ -2001,8 +2049,13 @@ print_summary() {
     fi
 
     if [ "$has_encryption_key" = false ]; then
-      echo -e "  ${YELLOW}▸${NC} Set an ${BOLD}encryption key${NC} to protect stored API keys at rest:"
-      echo -e "    ${DIM}bash install.sh --env ENCRYPTION_KEY=\$(openssl rand -hex 32)${NC}"
+      echo -e "  ${YELLOW}▸${NC} Your secrets ${BOLD}are encrypted at rest${NC}. Hivekeep auto-generates an"
+      echo -e "    encryption key on first run and saves it to:"
+      echo -e "    ${CYAN}$HIVEKEEP_DATA_DIR/.encryption-key${NC}"
+      echo -e "    ${BOLD}Back up this file together with your database.${NC} Without it, stored"
+      echo -e "    API keys and vault secrets cannot be decrypted after a restore."
+      echo -e "    ${DIM}Optional: pin the key in the environment for easy portability:${NC}"
+      echo -e "    ${DIM}bash install.sh --env ENCRYPTION_KEY=\$(cat $HIVEKEEP_DATA_DIR/.encryption-key)${NC}"
       echo ""
     fi
   fi
@@ -2450,7 +2503,7 @@ show_help() {
   echo -e "${BOLD}Hivekeep Installer${NC} — Self-hosted AI agent platform"
   echo ""
   echo -e "${BOLD}USAGE${NC}"
-  echo "  curl -fsSL https://hivekeep.sh | bash          # Fresh install"
+  echo "  curl -fsSL https://raw.githubusercontent.com/MarlBurroW/hivekeep/main/install.sh | bash   # Fresh install"
   echo "  bash install.sh [COMMAND] [OPTIONS]           # Local install or manage"
   echo ""
 
@@ -2525,7 +2578,7 @@ show_help() {
 
   echo -e "${BOLD}QUICK START${NC}"
   echo -e "  ${DIM}# Install with defaults${NC}"
-  echo "  curl -fsSL https://hivekeep.sh | bash"
+  echo "  curl -fsSL https://raw.githubusercontent.com/MarlBurroW/hivekeep/main/install.sh | bash"
   echo ""
   echo -e "  ${DIM}# Custom port, non-interactive${NC}"
   echo "  HIVEKEEP_PORT=8080 bash install.sh -y"
@@ -3574,6 +3627,22 @@ docker_install() {
   fi
   success "Docker $(docker --version | awk '{print $3}' | tr -d ',')"
 
+  # Docker is installed, but the daemon may not be running (very common on
+  # desktop Linux/macOS). `docker info` talks to the daemon and fails fast if so.
+  if ! docker info &>/dev/null; then
+    local daemon_fix
+    if [ "$OS" = "Darwin" ]; then
+      daemon_fix="Start Docker Desktop and wait for the whale icon to settle, then re-run this command."
+    else
+      daemon_fix="Start the daemon: sudo systemctl start docker
+  (or launch Docker Desktop if you use it), then re-run this command."
+    fi
+    error "Docker is installed but the daemon isn't responding.
+  Hivekeep can't create the container until Docker is running.
+  ${BOLD}Fix:${NC} $daemon_fix"
+  fi
+  success "Docker daemon is running"
+
   # Check Docker Compose (v2 plugin or standalone)
   local compose_cmd=""
   if docker compose version &>/dev/null 2>&1; then
@@ -4421,7 +4490,9 @@ do_config() {
     echo -e "  ${DIM}Encryption key is set ($masked_key). Leave blank to keep it.${NC}"
     prompt_value new_encryption_key "Encryption key" "$current_encryption_key"
   else
-    echo -e "  ${DIM}No encryption key set. API keys are stored in plain text.${NC}"
+    echo -e "  ${DIM}No key is pinned here. Hivekeep auto-generates one at${NC}"
+    echo -e "  ${DIM}$HIVEKEEP_DATA_DIR/.encryption-key on first run (secrets are encrypted at rest).${NC}"
+    echo -e "  ${DIM}Pin it here only if you want it portable across machines.${NC}"
     local gen_key="y"
     if [ "$HIVEKEEP_YES" != true ] && [ "${HIVEKEEP_NO_PROMPT:-}" != "true" ] && [ "${CI:-}" != "true" ]; then
       echo -en "  ${CYAN}?${NC} ${BOLD}Generate an encryption key?${NC} ${DIM}[Y/n]${NC}: " >/dev/tty

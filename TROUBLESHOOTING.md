@@ -76,11 +76,12 @@ bun run db:migrate
 
 ### `ENCRYPTION_KEY` warnings
 
-Hivekeep auto-generates an encryption key on first run and stores it in the database. If you see warnings about the encryption key:
+Hivekeep auto-generates an encryption key on first run and stores it in a file at `$HIVEKEEP_DATA_DIR/.encryption-key` (alongside your database). Secrets are encrypted at rest with it (AES-256-GCM). If you see warnings about the encryption key:
 
 - **Don't change it** after initial setup, or vault entries become unreadable
-- If migrating to a new server, copy the entire `data/` directory
-- To explicitly set it: `ENCRYPTION_KEY=$(openssl rand -hex 32)` before first start
+- **Back up `.encryption-key` together with your database.** A database restored without its matching key cannot decrypt stored API keys or vault secrets
+- If migrating to a new server, copy the entire `data/` directory (this includes `.encryption-key`)
+- To pin it explicitly for portability, set it in the environment before first start: `ENCRYPTION_KEY=$(openssl rand -hex 32)`, or reuse the existing one: `ENCRYPTION_KEY=$(cat $HIVEKEEP_DATA_DIR/.encryption-key)`
 
 ## Memory & Vector Search
 

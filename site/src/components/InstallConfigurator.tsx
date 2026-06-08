@@ -3,13 +3,13 @@ import { useMemo, useState } from 'react'
 /**
  * Client-side install-command generator for the /install page.
  *
- * It owns no network calls — it just turns a few choices into the exact
+ * It owns no network calls, it just turns a few choices into the exact
  * `docker run` / `docker-compose.yml` + `.env` / `install.sh` invocation,
  * plus a reverse-proxy snippet for the "public domain" case.
  *
  * Canonical facts it encodes (keep in sync with docker/ + install.sh):
  *  - image:        ghcr.io/marlburrow/hivekeep
- *  - data volume:  /app/data  (MUST persist — holds the auto-generated
+ *  - data volume:  /app/data  (MUST persist: holds the auto-generated
  *                  encryption key; lose it and every vault secret is gone)
  *  - app port:     3000 inside the container; install.sh default 3000
  *  - install.sh:   reads HIVEKEEP_PORT / HIVEKEEP_PUBLIC_URL
@@ -41,7 +41,7 @@ function CopyButton({ text }: { text: string }) {
           setDone(true)
           setTimeout(() => setDone(false), 1500)
         } catch {
-          /* clipboard blocked — no-op */
+          /* clipboard blocked: no-op */
         }
       }}
       aria-label="Copy to clipboard"
@@ -79,7 +79,7 @@ function randomKey() {
 
 export default function InstallConfigurator() {
   const [useCase, setUseCase] = useState<UseCase>('try')
-  const [method, setMethod] = useState<Method>('docker')
+  const [method, setMethod] = useState<Method>('native')
   const [port, setPort] = useState('3000')
   const [lanAccess, setLanAccess] = useState(false)
   const [host, setHost] = useState('')
@@ -89,15 +89,17 @@ export default function InstallConfigurator() {
   const [dockerTab, setDockerTab] = useState<DockerTab>('run')
 
   // Picking a use case resets method + tab to that case's sensible default.
+  // Native is the recommended default everywhere (it builds locally and needs
+  // no published image); the server case leans on docker compose by convention,
+  // but the method toggle stays available so anyone can switch.
   function pickUseCase(uc: UseCase) {
     setUseCase(uc)
     if (uc === 'try') {
-      setMethod('docker')
-      setDockerTab('run')
+      setMethod('native')
     } else if (uc === 'permanent') {
       setMethod('native')
     } else {
-      setMethod('docker')
+      setMethod('native')
       setDockerTab('compose')
     }
   }
@@ -147,12 +149,12 @@ export default function InstallConfigurator() {
 
   const envFile = useMemo(() => {
     const lines = [
-      '# Public URL — used for invitation links, webhooks, OAuth callbacks, CORS.',
+      '# Public URL: used for invitation links, webhooks, OAuth callbacks, CORS.',
       `PUBLIC_URL=${publicUrl}`,
       '',
       '# Encryption key (AES-256-GCM, 64 hex chars). Auto-generated and stored',
       '# inside the data volume if you leave this unset. Setting it yourself lets',
-      '# you back it up — losing it makes every vault secret unrecoverable.',
+      '# you back it up: losing it makes every vault secret unrecoverable.',
       setKey && key ? `ENCRYPTION_KEY=${key}` : '# ENCRYPTION_KEY=',
     ]
     return lines.join('\n')
@@ -198,7 +200,7 @@ export default function InstallConfigurator() {
 
   return (
     <div className="cfg">
-      {/* Step 1 — use case */}
+      {/* Step 1: use case */}
       <div className="cfg-step">
         <h3>1 · How will you use it?</h3>
         <div className="cfg-opts">
@@ -216,24 +218,22 @@ export default function InstallConfigurator() {
         </div>
       </div>
 
-      {/* Step 2 — settings */}
+      {/* Step 2: settings */}
       <div className="cfg-step">
         <h3>2 · Settings</h3>
         <div className="cfg-fields">
-          {/* method (locked to docker for "just trying") */}
-          {useCase !== 'try' && (
-            <div className="cfg-field">
-              <label>Method</label>
-              <div className="cfg-seg">
-                <button type="button" className={method === 'docker' ? 'sel' : ''} onClick={() => setMethod('docker')}>
-                  Docker
-                </button>
-                <button type="button" className={method === 'native' ? 'sel' : ''} onClick={() => setMethod('native')}>
-                  Native (install.sh)
-                </button>
-              </div>
+          {/* method: native is recommended; Docker stays available with a caveat */}
+          <div className="cfg-field">
+            <label>Method</label>
+            <div className="cfg-seg">
+              <button type="button" className={method === 'native' ? 'sel' : ''} onClick={() => setMethod('native')}>
+                Native (recommended)
+              </button>
+              <button type="button" className={method === 'docker' ? 'sel' : ''} onClick={() => setMethod('docker')}>
+                Docker
+              </button>
             </div>
-          )}
+          </div>
 
           <div className="cfg-field">
             <label htmlFor="cfg-port">Port</label>
@@ -258,7 +258,7 @@ export default function InstallConfigurator() {
                   type="text"
                   value={host}
                   onChange={(e) => setHost(e.target.value)}
-                  placeholder="this machine's LAN IP — e.g. 192.168.1.50"
+                  placeholder="this machine's LAN IP, e.g. 192.168.1.50"
                 />
               )}
             </div>
@@ -294,7 +294,7 @@ export default function InstallConfigurator() {
             </div>
           )}
 
-          {/* advanced — explicit encryption key */}
+          {/* advanced: explicit encryption key */}
           <div className="cfg-field cfg-adv">
             <label>
               <input
@@ -305,7 +305,7 @@ export default function InstallConfigurator() {
                   if (e.target.checked && !key) setKey_(randomKey())
                 }}
               />{' '}
-              Set a fixed encryption key (advanced — back it up)
+              Set a fixed encryption key (advanced: back it up)
             </label>
             {setKey && (
               <div className="cfg-keyrow">
@@ -319,12 +319,24 @@ export default function InstallConfigurator() {
         </div>
       </div>
 
-      {/* Step 3 — output */}
+      {/* Step 3: output */}
       <div className="cfg-step">
         <h3>3 · Run it</h3>
 
         {method === 'docker' ? (
           <>
+            {/* Honest caveat: the published image is not available yet. */}
+            <div className="cfg-warn">
+              <strong>Heads up: the published Docker image is not available yet.</strong>
+              <span>
+                These commands pull <code>{IMAGE}</code>, which is not public on the registry at the moment, so they will
+                fail with <code>manifest unknown</code> or <code>denied</code>. Until it's published, use the{' '}
+                <button type="button" className="cfg-inline-link" onClick={() => setMethod('native')}>
+                  native install
+                </button>{' '}
+                (it builds locally and needs no image), or build the image yourself from a clone of the repo.
+              </span>
+            </div>
             <div className="cfg-tabs">
               <button type="button" className={dockerTab === 'run' ? 'sel' : ''} onClick={() => setDockerTab('run')}>
                 docker run
@@ -334,17 +346,76 @@ export default function InstallConfigurator() {
               </button>
             </div>
             {dockerTab === 'run' ? (
-              <CodeBlock title="Run" lang="shell" code={dockerRun} />
+              <>
+                <CodeBlock title="Run" lang="shell" code={dockerRun} />
+                <p className="cfg-note cfg-keynote">
+                  <strong>Keep your encryption key.</strong> The key is stored inside the <code>hivekeep-data</code>{' '}
+                  volume. If you delete or recreate that volume without persisting the key (or pinning a fixed{' '}
+                  <code>ENCRYPTION_KEY</code> with the advanced toggle above), every vault secret becomes unrecoverable.
+                </p>
+              </>
             ) : (
               <>
                 <CodeBlock title="docker-compose.yml" lang="yaml" code={composeYml} />
                 <CodeBlock title=".env" lang="env" code={envFile} />
                 <CodeBlock title="Start" lang="shell" code="docker compose up -d" />
+                <p className="cfg-note cfg-keynote">
+                  <strong>Keep your encryption key.</strong> It lives in the <code>hivekeep-data</code> volume. Recreating
+                  the volume without persisting the key (or setting a fixed <code>ENCRYPTION_KEY</code> in{' '}
+                  <code>.env</code>) makes every stored secret unrecoverable.
+                </p>
               </>
             )}
+            {/* Recovery notes for the common non-dev Docker failures. */}
+            <div className="cfg-recover">
+              <span className="cfg-recover-head">If a command fails</span>
+              <ul>
+                <li>
+                  <code>port is already allocated</code>: port {portN} is in use. Change the Port field above and copy
+                  the new command.
+                </li>
+                <li>
+                  <code>manifest unknown</code> / <code>denied</code>: the published image isn't available yet. Use the{' '}
+                  <button type="button" className="cfg-inline-link" onClick={() => setMethod('native')}>
+                    native install
+                  </button>{' '}
+                  instead, or build locally.
+                </li>
+                <li>
+                  <code>Cannot connect to the Docker daemon</code>: Docker isn't running. Start Docker Desktop, or run{' '}
+                  <code>sudo systemctl start docker</code> on Linux.
+                </li>
+              </ul>
+            </div>
           </>
         ) : (
-          <CodeBlock title="Install" lang="shell" code={nativeCmd} />
+          <>
+            <CodeBlock title="Install" lang="shell" code={nativeCmd} />
+            <p className="cfg-note cfg-keynote">
+              <strong>Your encryption key is handled for you.</strong> The installer auto-generates and saves it at{' '}
+              <code>$DATA_DIR/.encryption-key</code> so your secrets survive restarts. Back up that file alongside your
+              database. (Pin a fixed <code>ENCRYPTION_KEY</code> with the advanced toggle above if you'd rather manage it
+              yourself.)
+            </p>
+            {/* Recovery notes for the common native failures. */}
+            <div className="cfg-recover">
+              <span className="cfg-recover-head">If the install fails</span>
+              <ul>
+                <li>
+                  <code>port already in use</code> / <code>EADDRINUSE</code>: port {portN} is taken. Change the Port
+                  field above and re-run.
+                </li>
+                <li>
+                  <strong>Windows</strong>: the installer is Linux and macOS only. Run it inside <strong>WSL2</strong>,
+                  or use Docker Desktop.
+                </li>
+                <li>
+                  <strong>Download or clone hangs</strong>: make sure the machine can reach <code>github.com</code> and{' '}
+                  <code>bun.sh</code> over HTTPS (a proxy may be blocking them).
+                </li>
+              </ul>
+            </div>
+          </>
         )}
 
         {/* reverse proxy snippet for the public-domain case */}
@@ -376,7 +447,7 @@ export default function InstallConfigurator() {
         )}
 
         <p className="cfg-foot">
-          Open <code>{publicUrl}</code> in your browser — Queenie walks you through the rest (admin account, your first AI
+          Open <code>{publicUrl}</code> in your browser. Queenie walks you through the rest (admin account, your first AI
           provider, your first agents). No config files to edit.
         </p>
       </div>

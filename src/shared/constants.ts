@@ -94,6 +94,7 @@ export interface AvatarPreset {
 }
 
 export const AVATAR_STYLE_PRESETS: readonly AvatarPreset[] = [
+  { id: 'hivekeep', label: 'Hivekeep (robot-bee)', prompt: 'a premium glossy 3D character render, Pixar-meets-cyberpunk, with dramatic soft studio lighting and vibrant aurora rim-light in violet, magenta and orange, set against a dark charcoal background with a faint glowing honeycomb hexagon pattern; highly detailed, polished collectible-figure look' },
   { id: 'pixar', label: 'Pixar 3D', prompt: 'Pixar / 3D-animation style, soft lighting' },
   { id: 'anime', label: 'Anime', prompt: 'anime art style, clean linework, cel shading' },
   { id: 'watercolor', label: 'Watercolor', prompt: 'soft watercolor painting style' },
@@ -102,6 +103,7 @@ export const AVATAR_STYLE_PRESETS: readonly AvatarPreset[] = [
 ]
 
 export const AVATAR_SUBJECT_PRESETS: readonly AvatarPreset[] = [
+  { id: 'hivekeep-bee', label: 'Hivekeep robot-bee', prompt: 'a friendly anthropomorphic robot-bee mascot: a sleek armored charcoal insectoid with large faceted compound eyes glowing in an aurora gradient, segmented antennae with glowing tips, a small mechanical mandible, a fuzzy amber-striped thorax and translucent insect wings' },
   { id: 'robot', label: 'Robot', prompt: 'a small, friendly, cute robot' },
   { id: 'human', label: 'Human', prompt: 'a human character' },
   { id: 'elf', label: 'Elf', prompt: 'an elf character with pointed ears' },
@@ -111,7 +113,8 @@ export const AVATAR_SUBJECT_PRESETS: readonly AvatarPreset[] = [
 ]
 
 /** Defaults used when the user hasn't customized the avatar axes. The default
- *  subject is a robot because the bundled img2img base image is a robot. */
+ *  style + subject are the Hivekeep robot-bee, matching the bundled img2img base
+ *  image (src/server/assets/base-avatar.png) and the specialist avatar roster. */
 export const DEFAULT_AVATAR_STYLE = AVATAR_STYLE_PRESETS[0]!.prompt
 export const DEFAULT_AVATAR_SUBJECT = AVATAR_SUBJECT_PRESETS[0]!.prompt
 

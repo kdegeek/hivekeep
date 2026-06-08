@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unpkg.com/@hivekeep/sdk/schemas/plugin-manifest.schema.json",
   "title": "Hivekeep Plugin Manifest",
-  "description": "Schema for plugin.json — Hivekeep loads, validates, and registers plugins based on this manifest. Plugin authors get autocomplete and inline validation in any editor that supports JSON Schema (VSCode, JetBrains, …) by referencing this $id at the top of their plugin.json.",
+  "description": "Schema for plugin.json. Hivekeep loads, validates, and registers plugins based on this manifest. Plugin authors get autocomplete and inline validation in any editor that supports JSON Schema (VSCode, JetBrains, …) by referencing this $id at the top of their plugin.json.",
   "type": "object",
   "required": ["name", "version", "description", "main"],
   "additionalProperties": false,
@@ -56,12 +56,16 @@
       "type": "string",
       "description": "Display icon. Either an emoji (\"🔔\") or a path to a file inside the plugin directory."
     },
+    "iconUrl": {
+      "type": "string",
+      "description": "Path to a logo image inside the plugin directory (e.g. \"logo.svg\"). Hivekeep serves it via GET /api/plugins/<name>/logo and surfaces it in the Plugins UI and the npm Browse tab."
+    },
     "permissions": {
       "type": "array",
       "items": {
         "type": "string",
         "pattern": "^(http:[^\\s]+|storage|cards|vault|cron|agents)$",
-        "description": "A permission grant. Hivekeep enforces http:* permissions at runtime through ctx.http.fetch — calls to undeclared hosts throw before going out. Other grants are informational today and will be enforced in future releases."
+        "description": "A permission grant. Hivekeep enforces http:* permissions at runtime through ctx.http.fetch: calls to undeclared hosts throw before going out. Other grants are informational today and will be enforced in future releases."
       },
       "description": "Permissions the plugin requires. Each entry is either an http permission (\"http:api.example.com\", or \"http:*\" for any host) or one of the named capabilities (\"storage\", \"cards\", \"vault\", \"cron\", \"agents\")."
     },
@@ -108,12 +112,12 @@
         "default": {},
         "secret": {
           "type": "boolean",
-          "description": "Marks the field's value as sensitive — Hivekeep encrypts it at rest and masks it in logs."
+          "description": "Marks the field's value as sensitive: Hivekeep encrypts it at rest and masks it in logs."
         },
         "options": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "For type: 'select' — the allowed values."
+          "description": "For type: 'select', the allowed values."
         },
         "min": { "type": "number", "description": "For type: 'number'." },
         "max": { "type": "number", "description": "For type: 'number'." },

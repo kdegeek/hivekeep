@@ -13,4 +13,4 @@ That page covers everything a plugin author needs:
 - Cards (`PluginCardPrimitive` + `card.*` builders)
 - Lifecycle, local testing, publishing
 
-The doc tree on the site (`docs-site/src/content/docs/plugins/`) is the single source of truth — this file is kept only so old links resolve.
+The doc tree on the site (`docs-site/src/content/docs/plugins/`) is the single source of truth. This file is kept only so old links resolve.

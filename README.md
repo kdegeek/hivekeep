@@ -1,207 +1,265 @@
-<div align="center">
+<p align="center"><img src="docs/assets/logo.svg" width="120" alt="Hivekeep" /></p>
 
-# Hivekeep
+<h1 align="center">Hivekeep</h1>
 
-**AI agents that actually remember you.**
+<p align="center">
+  <strong>Your AI team. At home.</strong><br />
+  The simplicity of a consumer assistant, the sovereignty of your own server.<br />
+  A self-hosted platform of persistent AI agents that remember, collaborate, and answer you everywhere, in a single container.
+</p>
 
-Self-hosted. Persistent memory. Real collaboration.
+<p align="center">
+  <sub>100% open-source (AGPL-3.0) · self-hosted · zero external infra</sub>
+</p>
 
-[![CI](https://github.com/MarlBurroW/hivekeep/actions/workflows/ci.yml/badge.svg)](https://github.com/MarlBurroW/hivekeep/actions/workflows/ci.yml)
-[![E2E Tests](https://github.com/MarlBurroW/hivekeep/actions/workflows/e2e.yml/badge.svg)](https://github.com/MarlBurroW/hivekeep/actions/workflows/e2e.yml)
-[![CodeQL](https://github.com/MarlBurroW/hivekeep/actions/workflows/codeql.yml/badge.svg)](https://github.com/MarlBurroW/hivekeep/actions/workflows/codeql.yml)
-[![GitHub Release](https://img.shields.io/github/v/release/MarlBurroW/hivekeep?style=flat-square&color=a855f7)](https://github.com/MarlBurroW/hivekeep/releases)
-[![GitHub Stars](https://img.shields.io/github/stars/MarlBurroW/hivekeep?style=flat-square&color=ec4899)](https://github.com/MarlBurroW/hivekeep)
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=flat-square)](LICENSE)
-[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)](https://github.com/MarlBurroW/hivekeep/pkgs/container/hivekeep)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/MarlBurroW/hivekeep/pulls)
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-22c55e?style=flat-square" alt="License AGPL-3.0" /></a>
+  <a href="https://github.com/MarlBurroW/hivekeep/releases"><img src="https://img.shields.io/github/v/release/MarlBurroW/hivekeep?style=flat-square&color=a855f7" alt="Latest release" /></a>
+  <a href="https://github.com/MarlBurroW/hivekeep/actions/workflows/ci.yml"><img src="https://github.com/MarlBurroW/hivekeep/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/MarlBurroW/hivekeep/pkgs/container/hivekeep"><img src="https://img.shields.io/badge/Docker-ghcr.io-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker image" /></a>
+  <a href="https://github.com/MarlBurroW/hivekeep"><img src="https://img.shields.io/github/stars/MarlBurroW/hivekeep?style=flat-square&color=ec4899" alt="GitHub stars" /></a>
+  <a href="https://bun.sh"><img src="https://img.shields.io/badge/made%20with-Bun-000000?style=flat-square&logo=bun&logoColor=white" alt="Made with Bun" /></a>
+</p>
 
-[Website](https://marlburrow.github.io/hivekeep/) · [Documentation](https://marlburrow.github.io/hivekeep/docs/) · [Quick Start](#-quick-start) · [Features](#-features) · [Use Cases](#-what-people-build-with-hivekeep) · [Architecture](#-architecture) · [E2E Report](https://marlburrow.github.io/hivekeep/e2e-report/) · [Discussions](https://github.com/MarlBurroW/hivekeep/discussions) · [Troubleshooting](TROUBLESHOOTING.md) · [Changelog](https://marlburrow.github.io/hivekeep/changelog) · [Contributing](#contributing)
+<p align="center">
+  <a href="https://marlburrow.github.io/hivekeep/">Website</a> ·
+  <a href="https://marlburrow.github.io/hivekeep/docs/">Docs</a> ·
+  <a href="#get-started">Install</a> ·
+  <a href="#self-improving">Plugins</a>
+</p>
 
-</div>
+---
 
-## Why Hivekeep?
+## The 30-second pitch
 
-Most AI tools treat every conversation as **disposable**. You explain yourself Monday, they forget by Tuesday.
+Most AI tools treat every conversation as disposable. You explain yourself on Monday, they have forgotten by Tuesday. Hivekeep takes the opposite path: a team of persistent **Agents** that live on your server, keep their memory, and work together. Not a chatbot. A household of specialists that works like a hive.
 
-Hivekeep is different. You create **Agents** — AI agents with:
+- **They never forget you.** One continuous session per Agent (no "new conversation"), backed by a hybrid long-term memory that accumulates months of context. No reset, ever.
+- **A team, not a chatbot.** Agents collaborate (`request` / `reply`), delegate to ephemeral sub-Agents, and run scheduled work, so several things move at once.
+- **Self-improving.** Your Agents build their own tools, mini-apps, and plugins. The platform grows with you instead of staying frozen.
+- **Everywhere.** Telegram, WhatsApp, Slack, Discord, Signal, Matrix, plus a polished PWA. An Agent can hand a channel to a specialist in real time.
+- **One container.** Zero Postgres, Redis, Mongo, or queue broker. One process, one SQLite file. Run it and Queenie sets up the rest by conversation.
+- **Your secrets stay yours.** An AES-256-GCM vault that is never exposed to the LLM, connected accounts that never leave your infrastructure, and token transparency so you stay in control of costs.
 
-| | |
+---
+
+## They never forget you
+
+Every Agent has a persistent identity (name, role, character, expertise, model, avatar) shared across everyone on your instance, and **one continuous session** that never resets. Underneath sits a dual-channel long-term memory: automatic extraction during compaction, plus explicit tools (`recall`, `memorize`, `update_memory`, `forget`). Recall is hybrid, sqlite-vec KNN fused with FTS5 keyword search via Reciprocal Rank Fusion, then re-ranked by importance, temporal decay, and category intent. Compaction summarizes old context to stay within token limits and **never deletes the originals**, so anything can be recovered later with `search_history`.
+
+## One container. Nothing leaves your server
+
+A single process, a single SQLite file, a single Docker container. No Postgres, Redis, Mongo, SearxNG, or queue broker to provision. You bring one LLM key, and the whole platform runs on your infrastructure. Upgrading is re-pulling the image (or `git pull` for the native install). Your conversations, memories, and secrets stay on your server.
+
+## Your agents extend the platform themselves
+
+This is the surprising part. Hivekeep is not a fixed feature set, it is a base your Agents grow:
+
+- **Custom tools, any language** (Python, Node, Bun, TypeScript, Bash, Deno) with native dependency management, and **rich React renderers** so a tool result shows up as a themed UI card, not raw JSON.
+- **Mini Apps** built by your Agents: real web apps in a sandboxed iframe, with a JS SDK, 29 React hooks, 50+ themed components (DataGrid, charts, Kanban, Calendar), an optional Hono backend, KV storage with snapshots and rollback, a public gallery with clone, 14 templates, and an "Improve this" natural-language edit loop.
+- **Plugins** over npm with a typed TypeScript SDK (`@hivekeep/sdk`): a built-in marketplace (any package keyworded `hivekeep-plugin`, live npm search) plus Git install, native provider interfaces, channel adapters, lifecycle hooks, granular runtime-enforced permissions, and a scaffolder (`create-hivekeep-plugin`). Fully self-hosted, no proprietary cloud.
+- **Dynamic MCP servers** the Agents can add and manage, and **toolboxes** (composable named allow-lists) to scope capabilities precisely per role.
+
+## One inbox for your whole team
+
+Six native channels: **Telegram, Discord, Slack, WhatsApp, Signal, Matrix**, plus the PWA as a seventh surface. The standout is **real-time channel handoff**: `transfer_channel` reassigns a channel from one Agent to another mid-conversation. The address does not change, the Agent does. The new Agent receives handoff context and the causal chain, with async delivery statuses throughout.
+
+## No black box. No cost surprises
+
+Transparency is a first-class feature, framed as "you control your costs," never "here is the bill." A **Context Viewer** breaks the prompt into a stacked, color-coded bar by section. Cache observability shows hit rate and TTL. Per-Agent EMA calibration compares estimated to actual token counts, and every call is tracked. The vault is AES-256-GCM, never printed in prompts or logs. Connected accounts (mail, calendar, contacts) use OAuth or encrypted credentials, and their tokens are never seen by Agents.
+
+## Setup is a conversation, not a YAML file
+
+Onboarding is three quick screens (identity, language, one LLM key). Then **Queenie**, a permanent configurator Agent with 45+ tools, takes over **by conversation**: she connects providers, secures secrets in the vault, and creates your first Agents. No YAML, no CLI. Secure input means secrets go UI to vault and **never to the LLM** (only a non-sensitive confirmation comes back). One OpenAI key becomes several auto-detected capabilities. Queenie stays accessible for life.
+
+## Build a household for your life
+
+Only **Queenie** ships built in. Everyone else is yours to create, each with an auto-generated avatar. A few examples of what people build (names from the sample roster):
+
+| Agent | Role |
 |---|---|
-| 🧠 **Persistent memory** | They remember every conversation. Forever. Vector search + full-text across months of interactions. |
-| 🎭 **Real identity** | Name, role, personality, avatar. They know who they are and who you are. |
-| 🤝 **Collaboration** | Agents talk to each other, delegate tasks, spawn workers. A team, not a chatbot. |
-| ⚡ **Autonomy** | Cron jobs, webhooks, Telegram. They work while you sleep. |
-| 🏠 **Self-hosted** | One process. One SQLite file. Your data never leaves your server. |
+| **Atlas** | DevOps and infrastructure: CI/CD, observability, incident response |
+| **Forge** | Code assistant: full-stack development, review, refactoring, debugging |
+| **Sentinel** | Security: pentesting, threat modeling, secure code review |
+| **Prism** | Data and BI: SQL, dashboards, reporting, business intelligence |
+| **Nest** | Home automation: Home Assistant, smart devices, energy management |
+| **Sage** | Research: literature review, synthesis, fact-checking |
+| **Inbox** | Email and calendar: triage, scheduling, reminders, follow-ups |
+| **Cuisine** | Cooking: recipes, meal planning, grocery lists |
+| **Ledger** | Personal finance: budgeting, expense tracking, planning |
+| **Lexicon** | Translation and localization across languages |
 
-> *"Like having your own team of AI specialists that live on your server and never forget a thing."*
+The same building blocks cover a DevOps copilot, a home brain, a personal knowledge base, a multi-agent dispatcher team, a business monitor, or a shared family assistant.
 
----
+## Providers and plugins
 
-
-## ✨ Features
-
-### 🧠 Intelligence
-Persistent memory (vector + full-text) · Knowledge base / RAG · Session compacting · Sub-agents · Inter-Agent communication · Continuous sessions that never reset
-
-### 🔧 Automation & Extensibility
-Cron jobs · Webhooks · HTTP requests · 6 channels (Telegram, Discord, Slack, WhatsApp, Signal, Matrix) · MCP servers · Custom tools · Mini Apps · **Plugin system** · Contacts · Notifications · Human-in-the-loop prompts · 23 AI providers (incl. Ollama) · Multi-provider auto-detection
-
-### 🔒 Security & Privacy
-AES-256-GCM vault · Auth with roles · Invitation system · 100% self-hosted · Your data never leaves your server
-
-### 🎨 Experience
-8 color palettes · Dark/Light/System themes · English & French · @mentions with autocomplete · File uploads · Image generation · Real-time SSE streaming
-
-<details>
-<summary><strong>Full feature list</strong></summary>
-
-#### Agents
-- **Persistent identity** — each Agent has a name, description, character, expertise domain, model, and avatar
-- **Continuous sessions** — one session per Agent, never resets
-- **Shared Agents** — all users on the instance interact with the same Agents; messages are tagged with sender identity
-
-#### Intelligence
-- **Long-term memory** — dual-channel: automatic extraction pipeline on every LLM turn + explicit `remember()` tool; hybrid search (vector similarity + full-text); query intent detection with category-aware score boosting; token-budgeted memory block in prompt
-- **Knowledge base / RAG** — upload documents and texts as reference material; hybrid search (vector + full-text) retrieves relevant chunks at query time
-- **Session compacting** — token-aware compaction with multi-summary accumulation and telescopic merge; original messages are always preserved
-- **Sub-Agents (tasks)** — Agents can delegate work to ephemeral sub-agents; `await` mode re-enters the parent queue with the result, `async` mode deposits it as informational
-- **Inter-Agent communication** — request/reply pattern with correlation IDs; rate-limited; replies are always informational (no ping-pong)
-
-#### Automation
-- **Cron jobs** — in-process scheduler (croner); Agents can create their own crons (with user approval); searchable/filterable cron list; cron results appear in the main session
-- **Webhooks** — inbound webhooks to trigger Agents from external systems; configurable per-Agent
-- **Channels** — 6 platforms: Telegram, Discord, Slack, WhatsApp, Signal, Matrix
-- **Notifications** — Agents can send push notifications to users via the `notify` tool
-- **Human-in-the-loop** — Agents can prompt users for approval before sensitive actions (cron creation, MCP server management, etc.)
-
-#### Security & Privacy
-- **Vault** — AES-256-GCM encrypted secrets; never exposed in prompts or logs; message redaction prevents leaking into compacted summaries
-- **Authentication** — Better Auth with HTTP-only cookie sessions; admin + member roles; invitation system
-- **Self-hosted** — your data never leaves your server
-
-#### Extensibility
-- **MCP servers** — connect any Model Context Protocol server to extend Agents with external tools; Agents can manage their own MCP connections
-- **Plugin system** — extend Hivekeep with third-party plugins; plugins can register tools, hooks, AI providers, and channels; discover and install from npm via the built-in marketplace (any package tagged with the `hivekeep-plugin` keyword); install from a Git URL for unpublished or private plugins; hot reload during development; managed via the UI with per-plugin configuration, encrypted secret storage, and enable/disable toggles; health monitoring with circuit breaker auto-disable; dependency management between plugins; version compatibility checking
-- **Custom tools** — Agents can create, register, and run their own scripts from their workspace
-- **Mini Apps** — Agents can build and deploy interactive web apps (HTML/CSS/JS) that live in the sidebar; auto-injected design system + JavaScript SDK with theme sync, toasts, inter-app navigation (`openApp`), dialogs (`confirm`/`prompt`), window title & badge control, persistent key-value storage (`get`/`set`/`delete`/`list`/`clear`), starter templates, parent-child event communication, and an App Gallery to browse and clone community apps
-- **Contacts** — manage contacts that Agents can reference and interact with
-- **Multi-provider** — 23 providers: Anthropic, Anthropic OAuth, OpenAI, Gemini, Mistral, DeepSeek, Groq, Together AI, Fireworks AI, Ollama, OpenRouter, Cohere, xAI, Voyage AI, Jina AI, Nomic, Tavily, Serper, Perplexity, Replicate, Stability AI, FAL AI, Brave Search
-
-#### Experience
-- **8 color palettes** — Aurora, Ocean, Forest, Sunset, Monochrome, Sakura, Neon, Lavender
-- **Dark / Light / System** theme modes
-- **Internationalization** — English and French
-- **File uploads** — share files with Agents; image generation supported
-- **Real-time streaming** — SSE-based, multiplexed across all Agents on a single connection
-- **@mentions** — mention Agents and users in messages with autocomplete and styled pills; mentioned Agents receive notifications
-- **Responsive UI** — mobile-friendly settings, contextual info tips, suggestion chips in empty chat states
-- **System info** — version, uptime, and stats visible in settings
-
-#### Built-in Tools (120+)
-
-Agents have access to a rich set of native tools out of the box, no configuration needed:
-
-**Memory & Knowledge** — `recall`, `memorize`, `update_memory`, `forget`, `list_memories`, `review_memories`, `search_history`, `search_knowledge`, `list_knowledge_sources`
-
-**Web & Browsing** — `web_search`, `browse_url`, `extract_links`, `screenshot_url`
-
-**Contacts** — `get_contact`, `search_contacts`, `create_contact`, `update_contact`, `delete_contact`, `find_contact_by_identifier`, `set_contact_note`
-
-**Vault & Secrets** — `get_secret`, `create_secret`, `update_secret`, `delete_secret`, `search_secrets`, `redact_message`, vault entries & attachments
-
-**Multi-Agent** — `spawn_self`, `spawn_agent`, `send_message`, `reply`, `list_kins`, `report_to_parent`, `request_input`, task management, `create_agent`, `update_agent`, `delete_agent`, `get_agent_details`
-
-**Automation** — `create_cron`, `update_cron`, `delete_cron`, `list_crons`, `trigger_cron`, `get_cron_journal`, `wake_me_in`, `wake_me_every`, `cancel_wakeup`, `list_wakeups`, webhooks (CRUD)
-
-**Mini Apps** — create, update, delete, read/write files, snapshots, rollback, persistent key-value storage, browse & clone from the App Gallery, templates, docs, icon generation
-
-**Channels** — `list_channels`, `list_channel_conversations`, `send_channel_message`
-
-**Custom Tools** — `register_tool`, `run_custom_tool`, `list_custom_tools` (Agents write and run their own scripts)
-
-**Filesystem** — `read_file`, `write_file`, `edit_file`, `list_directory` (read, create, edit, and browse files in the workspace)
-
-**Files & Images** — `store_file`, `get_stored_file`, `list_stored_files`, `search_stored_files`, `update_stored_file`, `delete_stored_file`, `attach_file`, `generate_image`, `list_image_models`
-
-**System** — `run_shell`, `execute_sql`, `get_platform_logs`, `get_system_info`, user management
-
-**MCP** — `add_mcp_server`, `update_mcp_server`, `remove_mcp_server`, `list_mcp_servers`
-
-**HTTP** — `http_request` (make HTTP requests to external APIs with full method/header/body control)
-
-**Human-in-the-Loop** — `prompt_human` (ask user for approval before sensitive actions), `notify` (push notifications)
-
-</details>
-
-## 💡 What people build with Hivekeep
-
-**DevOps copilot** — An Agent connected to GitHub webhooks triages new issues, reviews PRs, runs CI checks, and creates releases. It remembers your codebase conventions and past decisions. Cron jobs monitor infrastructure and alert you on Telegram.
-
-**Home automation brain** — An Agent talks to Home Assistant via MCP, learns your routines over time, and adjusts lighting/heating based on context. Ask it "why was the heating on last night?" and it remembers.
-
-**Personal knowledge base** — Upload docs, meeting notes, project specs. An Agent indexes everything with RAG and answers questions across months of accumulated context. Unlike ChatGPT, it never forgets previous conversations.
-
-**Multi-agent team** — A dispatcher Agent receives requests and delegates to specialists (one for code, one for sysadmin, one for writing). They collaborate, share context through memories, and report back.
-
-**Business monitoring** — Webhooks feed sales data, support tickets, or server metrics into an Agent. It builds mini-app dashboards, sends daily Slack summaries, and flags anomalies before you notice them.
-
-**Family assistant** — Multiple users share the same instance. One Agent manages groceries via Telegram, another handles kids' schedules, another tracks household tasks. Each remembers everyone's preferences.
+Bring one config per provider and Hivekeep auto-detects its capabilities (`llm`, `embedding`, `image`, `search`, `stt`, `tts`). **Built in today:** Anthropic (API key and Claude Max OAuth), OpenAI (API key and Codex CLI), Google Gemini, OpenRouter, and xAI for LLMs; OpenAI and Gemini for images; OpenAI for embeddings; OpenAI and ElevenLabs for speech-to-text and text-to-speech; Brave Search, SerpAPI, Tavily, and Perplexity Sonar for web search. Need more? Add any provider as a **plugin** through the typed SDK, no fork required.
 
 ---
 
-## 🚀 Quick Start
+## Why Hivekeep
 
-```bash
-docker run -d --name hivekeep -p 3000:3000 -v hivekeep-data:/app/data ghcr.io/marlburrow/hivekeep:latest
-```
+Self-hosted AI assistants like **OpenClaw** and **Hermes** are excellent: they win or tie on memory, omnichannel reach, and self-hosting too. Where Hivekeep pulls ahead is the **team**, the **polished product UI**, and **transparency**. Marks below are best-effort from public docs (June 2026); peers genuinely win or tie on several rows.
 
-Open `http://localhost:3000` — done. The onboarding wizard handles the rest.
+| Dimension | Hivekeep | OpenClaw | Hermes |
+|---|:---:|:---:|:---:|
+| Self-hosted, your data | yes | yes | yes |
+| Persistent memory | yes | yes | yes |
+| Native omnichannel | yes | yes | yes |
+| Connected accounts (mail, calendar) | yes | no | partial |
+| Agents build their own tools / skills | yes | partial | yes |
+| Scheduled tasks (cron) | yes | yes | yes |
+| A team of agents that collaborate | yes | no | no |
+| Polished web app (PWA) | yes | partial | partial |
+| Rendered tool calls (UI, not JSON) | yes | no | no |
+| Mini-apps and projects (Kanban) | yes | no | no |
+| Conversational setup (no CLI) | yes | no | no |
+| Secrets never sent to the LLM | yes | partial | partial |
+| Token and context transparency | yes | no | no |
 
-<details>
-<summary><strong>Other install methods</strong> (one-liner script, Docker Compose, manual)</summary>
+> Hivekeep is production-ready for individual and small-group use, with solid foundations and UX polish that keeps advancing. We are honest about the maturity (~80%) rather than overselling it. See the [roadmap](https://marlburrow.github.io/hivekeep/) for the known rough edges.
 
-### One-liner install (Linux / macOS)
+---
+
+## Get started
+
+One command. No `docker-compose`, no YAML, no database to provision.
+
+### Native install (recommended)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MarlBurroW/hivekeep/main/install.sh | bash
 ```
 
-This script will:
-1. Install [Bun](https://bun.sh) if not already present
-2. Clone the repository to `/opt/hivekeep`
-3. Install dependencies and build the frontend
-4. Run database migrations
-5. Create a system service (systemd on Linux, launchd on macOS)
-6. Start Hivekeep on port **3000**
+The script installs [Bun](https://bun.sh) if needed, clones the repo, builds the frontend, runs migrations, creates a system service (systemd or launchd), and starts Hivekeep on port **3000**. It preflights disk, RAM, ports, and connectivity, and rolls back cleanly on failure.
 
-**Customizable via env vars:**
-```bash
-HIVEKEEP_DIR=/home/me/hivekeep \
-HIVEKEEP_DATA_DIR=/home/me/hivekeep-data \
-HIVEKEEP_PORT=8080 \
-  bash <(curl -fsSL https://raw.githubusercontent.com/MarlBurroW/hivekeep/main/install.sh)
-```
+Then open `http://localhost:3000` and **Queenie takes it from there**: three quick screens, then she configures everything by conversation.
 
-### Docker Compose
+### Docker (alternative)
 
 ```bash
-git clone https://github.com/MarlBurroW/hivekeep.git
-cd hivekeep/docker
-ENCRYPTION_KEY=$(openssl rand -hex 32) docker compose up -d
+docker run -d \
+  --name hivekeep \
+  -p 3000:3000 \
+  -v hivekeep-data:/app/data \
+  ghcr.io/marlburrow/hivekeep:latest
 ```
 
-See [`docker/docker-compose.yml`](docker/docker-compose.yml) for full options.
+> This path requires the published container image. If the pull fails with `manifest unknown` or a `403`, the image is not public yet, use the native installer above (it builds locally and needs no registry image), or build from source. See the [install docs](https://marlburrow.github.io/hivekeep/docs/) for the Docker Compose path and reverse-proxy setup. The installer also offers a hardened Docker mode: `bash <(curl -fsSL .../install.sh) --docker`.
 
-### Manual
+### Recovery one-liners
 
 ```bash
-git clone https://github.com/MarlBurroW/hivekeep.git
-cd hivekeep
-bun install
-bun run build
-bun run db:migrate
-NODE_ENV=production bun run start
+# Port 3000 already taken? Map another host port (Docker):
+docker run -d -p 3001:3000 -v hivekeep-data:/app/data ghcr.io/marlburrow/hivekeep:latest
+
+# Inspect why the daemon will not start:
+docker logs hivekeep            # Docker
+journalctl -u hivekeep -e       # native (systemd)
+
+# Generate a diagnostic report for bug reports (no local clone needed):
+bash <(curl -fsSL https://raw.githubusercontent.com/MarlBurroW/hivekeep/main/install.sh) --doctor
+# Or, if you used the native installer, the wrapper it installs also works:
+#   "$HIVEKEEP_DIR"/hivekeep doctor   (HIVEKEEP_DIR defaults to /opt/hivekeep or ~/hivekeep)
 ```
+
+> **Back up your encryption key.** On first boot Hivekeep generates and persists an AES-256-GCM key at `data/.encryption-key` and encrypts all vault secrets with it. If you instead set `ENCRYPTION_KEY` yourself, you must provide the same value on every restart. Keep this key (or the `data/` directory) backed up, or you lose access to encrypted secrets.
+
+To expose Hivekeep on your network or behind a reverse proxy, add `-e HOST=0.0.0.0` and `-e PUBLIC_URL=https://your-domain`. See the [configuration reference](config.md) for every environment variable.
+
+---
+
+## Features
+
+All capabilities are detailed on the [website](https://marlburrow.github.io/hivekeep/) and in the [docs](https://marlburrow.github.io/hivekeep/docs/). The short version:
+
+**Persistent agents that remember and collaborate**
+- Persistent identity, expertise, and long-term memory per Agent, shared across instance users
+- One continuous session, never resets
+- Hybrid memory: sqlite-vec KNN + FTS5 fused by Reciprocal Rank Fusion, automatic extraction plus explicit tools
+- Progressive compaction that summarizes without ever deleting originals
+- Sub-Agents (`await` / `async`), inter-Agent messaging (`request` / `reply`), unified contacts registry, stateful browser
+
+**Self-hosted and self-improving platform**
+- One process, one SQLite file, one container, zero external infra
+- Custom tools in any language with rich React renderers
+- Mini Apps built by Agents (SDK, 29 hooks, 50+ themed components, optional backend, gallery)
+- Plugins over npm via a typed SDK plus a built-in marketplace, dynamic MCP, composable toolboxes
+
+**A nice agent UI (PWA)**
+- Installable PWA, responsive and mobile-first
+- 18 OKLch palettes (aurora, ocean, forest, sunset, monochrome, sakura, neon, lavender, midnight, copper, jade, crimson, galaxy, amber, slate, rose, mint, citrus) x light/dark/system x adaptive contrast
+- Glass/gradient design system, WCAG AA, i18n (English and French)
+- Rich tool renders inline, @mentions with autocomplete, real-time SSE streaming, auto-generated per-Agent avatars
+
+**Conversational onboarding (Queenie)**
+- Minimal 3-screen onboarding, then full guided configuration by chat
+- Secure input: secrets go UI to vault, never to the LLM
+- One key becomes many auto-detected capabilities, avatars are auto-generated and customizable
+
+**Everywhere**
+- Six native channels: Telegram, Discord, Slack, WhatsApp, Signal, Matrix
+- Real-time channel handoff between Agents with handoff context and causal chain
+
+**Trust, security, and transparency**
+- AES-256-GCM vault, never exposed to the LLM
+- Connected accounts (mail, calendar, contacts) whose tokens are never seen by Agents
+- Token and context transparency: Context Viewer, cache observability, per-Agent EMA calibration
+- Multi-user isolation, quick private sessions, Better Auth with admin and member roles
+
+<details>
+<summary><strong>Full feature list</strong></summary>
+
+#### 1. Agent architecture and runtime
+Persistent identity and expertise per Agent (shared across users, sender-tagged messages, replies in the last speaker's language). One continuous session, never reset. Hybrid long-term memory (sqlite-vec KNN + FTS5, RRF fusion, importance/decay/category re-ranking, multi-query + HyDE + optional LLM rerank). Progressive compaction (token-aware keep-window + telescoping multi-summary, originals never deleted, triggers around 75% of the context window). FIFO queue per Agent with user-message priority. Sub-Agents (`await` / `async`, max depth 3). Inter-Agent messaging (`request` / `reply`, correlation IDs, rate-limited, chain-depth guarded). Unified contacts registry. Stateful browser (18 `browser_*` tools, Playwright + stealth + accessibility-snapshot refs). Native Anthropic prompt caching.
+
+#### 2. UI/UX, PWA, design system, theming
+Installable PWA (hand-coded service worker, offline app shell). 18 OKLch palettes x light/dark/system x adaptive contrast (normal/soft, DB-synced cross-device). Glass/gradient design system, WCAG AA, 21 micro-interaction keyframes. i18n (English + French). Rich tool renders inline. @mentions with autocomplete. Real-time SSE streaming on a single multiplexed connection. Auto-generated per-Agent avatars (3 independent axes: art style, subject, character).
+
+#### 3. Custom tools + rich renderers
+Multi-language authoring (Python, Node, Bun, TS, Bash, Deno) with native dependency management. Each tool can bundle a `renderer.tsx`, server-bundled and SSR-validated before deploy, delivered as a content-addressed ESM module. Two-phase (build + SSR) validation. Themed UI kit, native renderers for 20+ built-in tools, per-toolbox scoping.
+
+#### 4. Mini Apps
+Agents build real web apps in a sandboxed iframe. Vanilla JS SDK (theme, storage, API/HTTP proxy, memory, conversation, SSE). 29 React hooks. 50+ themed components (DataGrid, charts, Kanban, Calendar). Optional Hono backend. KV storage (snapshots, rollback). Public gallery with clone, 14 templates, an "Improve this" natural-language edit loop, console ring buffer.
+
+#### 5. Conversational onboarding (Queenie)
+Minimal 3-screen onboarding, then a permanent configurator Agent (`kind=configurator`) with a dedicated 45+ tool toolbox. Secure input for secrets (`request_provider_setup`, `request_channel_setup`, `prompt_secret`): UI to vault, never to the LLM. Provider connection with key reuse (one key, N capabilities), defaults, global rules, Agent creation, avatars, channels, all by chat. Admin-first-run only.
+
+#### 6. Auto-generated avatars
+End-to-end image generation: an LLM prompt-writer rewrites each prompt from the global style, subject type, and Agent identity. Text-to-image or image-to-image with a neutral base for cross-Agent consistency. Three UI modes (upload + crop, auto, manual).
+
+#### 7. Projects, Kanban, tickets, GitHub
+Projects with injectable context, 5-column Kanban (drag-and-drop, optimistic, SSE), tickets (tags, comments, attachments, history, mentions), per-project tags. Ticket sub-tasks in mandatory `await` with project + ticket context. Automated enrichment. GitHub integration (background clone, isolated worktree per sub-task, PAT in vault via credential helper).
+
+#### 8. Connected accounts (mail, calendar, contacts)
+Generic multi-provider OAuth2 (Google, Microsoft 365, Apple). Mail (Gmail, Outlook/365, IMAP/SMTP). Calendar events (Google, M365, iCloud CalDAV, generic CalDAV). Read-only contact search (iCloud, Google People, MS Graph, CardDAV). Tokens cached server-side, never seen by Agents. Optional send-approval mode, per-Agent allow-list, encryption at rest.
+
+#### 9. Plugins, SDK, marketplace
+NPM-based plugins, typed TypeScript SDK (`@hivekeep/sdk`). Built-in marketplace (keyword `hivekeep-plugin`, live npm search) + Git install. Strict declarative manifest with granular permissions. Native AI tools, native provider families (LLM, embedding, image, search, TTS, STT + email/contacts/calendar), channel adapters, lifecycle hooks, interactive cards, per-plugin storage, permission-controlled HTTP, namespaced vault, scaffold CLI (`create-hivekeep-plugin`), auto-disable on error.
+
+#### 10. Toolboxes and tool scoping
+Dynamic composition of `CORE_TOOLS` plus toolboxes, resolved each turn (hot reload). Nine built-in toolboxes (code, research, ops, scout, all, email, calendar, address-book, configurator). Smart wildcard (`all`/`*` covers natives + enabled custom, never MCP/plugin). Flexible assignment (Agent, task, cron, webhook), sub-Agent hard floor, scout delegation to a cheap read-only model.
+
+#### 11. Context and token transparency
+Context Viewer (stacked multicolor bar by section + detailed table). Granular per-section estimation. Provider-agnostic cache observability (read/write/fresh tokens, hit rate, residual TTL). Per-Agent EMA calibration. Exhaustive per-call usage tracking (`llm_usage`). Sensitive tool-result masking before summarization. Budget-based history trimming.
+
+#### 12. Channels and multi-Agent binding
+Six platforms (Telegram, Discord, Slack, WhatsApp, Signal, Matrix). Real-time channel transfer (`transfer_channel`, atomic mutation, audit messages, SSE, sideband hint). Mutable Agent-channel binding, inter-Agent sending with auto prefix, transfer context injected into `<channel-context>`, causal chain (`channelOriginId`), async delivery statuses, attachments + vision.
+
+#### 13. Vault and secret security
+AES-256-GCM (random 12-byte IV + auth tag, auto-generated 256-bit key, `chmod 0600`). Secure UI-to-vault input (create + test + store atomically, no return to the LLM). Deterministic config references (`$vault:`). Message redaction that blocks compacting leakage. Typed vault entries (credential, card, note, identity, custom), metadata-only search, encrypted attachments.
+
+#### 14. Memory system
+Dual-channel capture (automatic with KNN dedup + explicit with category/importance/subject/scope). Hybrid search (KNN cosine + FTS5, RRF, multi-query + optional HyDE). Post-fusion ranking (decay, importance, retrieval boost, subject boost, category intent). Optional LLM rerank + adaptive-K trimming, auto consolidation of near-duplicates, importance recalibration, conservative stale pruning, pluggable embeddings with FTS-only graceful degradation, scoped memories.
+
+#### 15. Automation
+Crons (POSIX/ISO8601, one-shot, croner in-process; Agent-created crons need user approval; cron learnings auto-saved). Webhooks (SHA256 token, simple/regex filters, templates, rate-limited). Human-in-the-loop (`prompt_human`: confirm/select/text). Scout (read-only delegation to a cheap model). Wakeups (`wake_me_in` / `wake_me_every`). Persistent task queue with concurrency groups and frozen snapshots.
+
+#### 16. Platform and power-user
+Dynamic MCP servers (Agents manage their own). Real-time system logs (ring buffer, filterable, SSE). Direct SQL (opt-in, bound params, row cap). Platform config with secret redaction. Centralized contacts with scoped notes. Shareable files (public/password/expiring/burn). Quick private sessions per user. Multi-channel notifications. Pluggable provider resolver (one config, auto-detected capabilities).
+
+#### Built-in tools (120+)
+A rich set of native tools out of the box across Memory/Knowledge, Web/Browsing, Contacts, Vault, Multi-Agent, Automation, Mini Apps, Channels, Custom Tools, Filesystem, Files/Images, System, MCP, HTTP, and Human-in-the-Loop. Examples: `recall`, `memorize`, `search_history`, `web_search`, `browse_url`, `spawn_agent`, `send_message`, `reply`, `create_cron`, `transfer_channel`, `create_mini_app`, `register_tool`, `run_shell`, `add_mcp_server`, `http_request`, `prompt_human`.
 
 </details>
 
@@ -209,81 +267,45 @@ NODE_ENV=production bun run start
 
 ## Architecture
 
-```
-                     ┌──────────────────────────────┐
-                     │          Channels             │
-                     │  Telegram · Discord · Slack   │
-                     │  WhatsApp · Signal · Matrix   │
-                     └──────────────┬───────────────┘
-                                    │
-┌───────────────────────────────────┼───────────────────────────┐
-│                   Hivekeep  (single process)                    │
-│                                    │                          │
-│  ┌──────────────────┐      ┌───────▼───────────────────────┐  │
-│  │  React + Vite    │      │        Hono REST API          │  │
-│  │  Tailwind 4      │◀────▶│        + SSE stream           │  │
-│  │  shadcn/ui       │      └───────┬───────────────────────┘  │
-│  └──────────────────┘              │                          │
-│                                    │                          │
-│    ┌───────────┬───────────┬───────────┬───────────┐          │
-│    │           │           │           │           │          │
-│  ┌─▼────────┐┌─▼────────┐┌─▼────────┐┌─▼────────┐┌─▼──────┐ │
-│  │ Vercel   ││ Queue    ││ Croner   ││ Mini     ││Plugins │ │
-│  │ AI SDK   ││ (FIFO)   ││(Cron     ││ Apps     ││        │ │
-│  │ Agent      ││ per Agent  ││ jobs)    ││ + Tools  ││ tools  │ │
-│  │ Engine   │└──────────┘└──────────┘└──────────┘│ hooks  │ │
-│  └────┬─────┘                                    │providers│ │
-│       │                                          │channels│ │
-│       │                                          └────────┘ │
-│  ┌────▼────────────────────────────────────────────────────┐ │
-│  │           SQLite  (bun:sqlite + Drizzle ORM)            │ │
-│  │           + FTS5 (full-text search)                     │ │
-│  │           + sqlite-vec (vector similarity)              │ │
-│  └─────────────────────────────────────────────────────────┘ │
-└──────────┬───────────────────────────────────┬───────────────┘
-           │                                   │
-   AI Providers (23)                   Integrations
-   Anthropic · OpenAI · Gemini          MCP servers
-   Mistral · DeepSeek · Groq            Webhooks
-   Ollama · OpenRouter · xAI            Custom tools
-   Cohere · Together · Fireworks        Web browsing
-   + embedding, image, search           Plugins (npm)
-```
+One process, one SQLite file, one container. Everything is here, nothing external to wire up.
 
-**Key design principles:**
-- **Queue per Agent** — one message processed at a time per Agent; user messages have priority over automated ones
-- **Global SSE** — one SSE connection per browser tab, multiplexed by `agentId`; no per-Agent polling
-- **No message deletion** — compacting compresses older messages into dated summaries that merge telescopically; original messages always preserved
-- **Secrets stay in the vault** — vault secrets are never exposed in prompts; redaction prevents leaking into summaries
+- **Native LLM primitives.** AI providers are implemented natively, organized by capability in `src/server/llm/{llm,embedding,image,search,stt,tts,core}/`. There is no external agent-orchestration SDK in the loop. Plugins consume the same surface through `@hivekeep/sdk`.
+- **Queue per Agent.** A serialized FIFO per Agent with user-message priority, so there are no race conditions on shared context.
+- **Global SSE.** One real-time connection per client, multiplexed by `agentId`. No per-Agent connections.
+- **No message deletion.** Compaction compresses older messages into dated summaries that merge telescopically. Originals are always preserved and recoverable.
+- **Secrets stay in the vault.** Vault secrets are never placed in prompts. Redaction prevents leaks into summaries.
+- **Pluggable providers.** One config per provider, capabilities (`llm`, `embedding`, `image`, `search`, `stt`, `tts`) auto-detected.
+
+Full details in the [technical docs](https://marlburrow.github.io/hivekeep/docs/).
 
 ---
 
-## Tech Stack
+## Tech stack
 
 | Layer | Technology |
 |---|---|
 | **Runtime** | [Bun](https://bun.sh) |
-| **Backend** | [Hono](https://hono.dev), [Drizzle ORM](https://orm.drizzle.team), bun:sqlite, [sqlite-vec](https://github.com/asg017/sqlite-vec), [Vercel AI SDK](https://sdk.vercel.ai), [Better Auth](https://www.better-auth.com), [croner](https://github.com/Hexagon/croner) |
-| **Frontend** | [React 19](https://react.dev), [Vite](https://vite.dev), [Tailwind CSS 4](https://tailwindcss.com), [shadcn/ui](https://ui.shadcn.com), [i18next](https://www.i18next.com) |
-| **AI Providers** | Anthropic, OpenAI, Gemini, Mistral, DeepSeek, Groq, Together AI, Fireworks AI, Ollama, OpenRouter, Cohere, xAI, Voyage AI, Jina AI, Nomic, Tavily, Serper, Perplexity, Replicate, Stability AI, FAL AI, Brave Search |
+| **Backend** | [Hono](https://hono.dev), [Drizzle ORM](https://orm.drizzle.team), bun:sqlite, [sqlite-vec](https://github.com/asg017/sqlite-vec), native LLM primitives (`src/server/llm/*`), [Better Auth](https://www.better-auth.com), [croner](https://github.com/Hexagon/croner) |
+| **Frontend** | [React](https://react.dev), [Vite](https://vite.dev), [Tailwind CSS](https://tailwindcss.com), [shadcn/ui](https://ui.shadcn.com), [i18next](https://www.i18next.com) |
+| **LLM providers** | Anthropic, OpenAI, Google Gemini, OpenRouter, xAI (plus image, embedding, search, and speech providers; more via plugins) |
 | **Database** | SQLite (single file) + FTS5 + sqlite-vec |
 
 ---
 
 ## Configuration
 
-Copy `.env.example` to `.env` and adjust as needed. All values have sensible defaults — you can start with an empty `.env`.
+All values have sensible defaults, you can start with an empty `.env`. The most common ones:
 
 | Variable | Default | Description |
 |---|---|---|
 | `PORT` | `3000` | HTTP server port |
 | `HOST` | `127.0.0.1` | Bind address (`0.0.0.0` to expose on all interfaces) |
 | `HIVEKEEP_DATA_DIR` | `./data` | Persistent data directory (DB, uploads, workspaces) |
-| `ENCRYPTION_KEY` | *(auto-generated)* | 64-char hex key for AES-256-GCM vault encryption. Auto-generated and persisted to `data/.encryption-key` on first run. |
-| `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` |
-| `PUBLIC_URL` | `http://localhost:3000` | Public-facing URL (used in webhooks, invitation links) |
+| `ENCRYPTION_KEY` | *(auto-generated)* | 64-char hex key for AES-256-GCM vault encryption. Auto-generated and persisted to `data/.encryption-key` on first run. Keep it backed up. |
+| `LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
+| `PUBLIC_URL` | `http://localhost:3000` | Public-facing URL (webhooks, invitation links) |
 
-See [`.env.example`](.env.example) for the complete list of all options (compacting thresholds, memory tuning, queue settings, cron limits, web browsing, etc.).
+See [`config.md`](config.md) and [`.env.example`](.env.example) for the complete reference (compaction thresholds, memory tuning, queue settings, cron limits, web browsing, and more).
 
 ---
 
@@ -291,7 +313,7 @@ See [`.env.example`](.env.example) for the complete list of all options (compact
 
 ### Prerequisites
 
-- [Bun](https://bun.sh) >= 1.0
+- [Bun](https://bun.sh) 1.3+
 - Git
 
 ### Setup
@@ -300,361 +322,61 @@ See [`.env.example`](.env.example) for the complete list of all options (compact
 git clone https://github.com/MarlBurroW/hivekeep.git
 cd hivekeep
 bun install
-bun run dev    # Starts Vite dev server (port 5173) + Hono backend (port 3000)
+bun run dev    # Vite dev server (5173) + Hono backend (3000)
 ```
-
-The dev server proxies API requests from port 5173 to 3000 automatically.
 
 ### Commands
 
 | Command | Description |
 |---|---|
 | `bun run dev` | Start dev servers (Vite + Hono with hot reload) |
-| `bun run build` | Production build (Vite → `dist/client/`) |
-| `bun run start` | Start production server |
-| `bun run db:generate` | Generate a new Drizzle migration from schema changes |
-| `bun run db:migrate` | Apply pending migrations to the SQLite database |
+| `bun run typecheck` | `tsc --noEmit` (also run by the pre-commit hook) |
+| `bun run test` | Unit tests (`bun test`) |
+| `bun run build` | Production build (Vite to `dist/client/`) |
+| `bun run start` | Start the production server |
+| `bun run db:generate` | Generate a Drizzle migration from schema changes |
+| `bun run db:migrate` | Apply pending migrations |
 
 ### Project structure
 
 ```
 src/
-  server/           # Bun + Hono backend
-    routes/         # REST API routes (one file per resource)
-    services/       # Business logic
-    providers/      # AI provider implementations
-    tools/          # Native tools exposed to Agents
-    db/             # SQLite connection, Drizzle schema, migrations
-    auth/           # Better Auth config + middleware
-    sse/            # SSE manager
-    config.ts       # Centralized configuration
-  client/           # React + Vite frontend
-    pages/          # Page components
-    components/     # UI components (shadcn/ui + custom)
-    hooks/          # Custom React hooks
-    locales/        # i18n translation files (en.json, fr.json)
-    styles/         # Design tokens + Tailwind config
-  shared/           # Types and constants shared by client and server
-    types.ts
-    constants.ts
-data/               # Created at runtime — SQLite DB, uploads, workspaces
-plugins/            # Installed third-party plugins (each with plugin.json + main entry)
-docker/             # Dockerfile + docker-compose.yml
-site/               # GitHub Pages landing site
+  server/    # Bun + Hono backend (routes, services, llm/, tools, db, auth, sse)
+  client/    # React + Vite frontend (pages, components, hooks, locales, styles)
+  shared/    # Types and constants shared by client and server
+data/        # Created at runtime: SQLite DB, uploads, workspaces
+site/        # Marketing site (Astro)
+docs-site/   # Documentation (Astro + Starlight)
 ```
-
-### Adding a new language
-
-1. Copy `src/client/locales/en.json` to `src/client/locales/<lang>.json`
-2. Translate all values (keys must remain identical)
-3. Register the language in `src/client/lib/i18n.ts`
-
----
-
-## ⚙️ Environment Variables
-
-All settings have sensible defaults. Override only what you need.
-
-<details>
-<summary><strong>Full configuration reference</strong></summary>
-
-#### Core
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `3000` | HTTP server port |
-| `HOST` | `127.0.0.1` | Bind address (`0.0.0.0` to expose externally) |
-| `NODE_ENV` | `development` | Set to `production` for optimized builds |
-| `PUBLIC_URL` | `http://localhost:{PORT}` | Public-facing URL (for OAuth callbacks, webhooks) |
-| `HIVEKEEP_DATA_DIR` | `./data` | Data directory (DB, uploads, workspaces) |
-| `ENCRYPTION_KEY` | Auto-generated | AES-256 key for vault encryption. Auto-generated and persisted on first run. Must be preserved across restarts. |
-| `LOG_LEVEL` | `info` | Log verbosity: `debug`, `info`, `warn`, `error` |
-| `DB_PATH` | `{dataDir}/hivekeep.db` | SQLite database file path |
-
-#### Memory & Compacting
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `COMPACTING_THRESHOLD_PERCENT` | `75` | Context usage % before compaction triggers |
-| `COMPACTING_KEEP_PERCENT` | `40` | % of context window preserved as raw messages |
-| `COMPACTING_SUMMARY_BUDGET_PERCENT` | `20` | Max % of context for summaries before telescopic merge |
-| `COMPACTING_MAX_SUMMARIES` | `10` | Max active summaries before telescopic merge |
-| `COMPACTING_MAX_SUMMARIES_PER_KIN` | `50` | Total summary retention per Agent (active + archived) |
-| `COMPACTING_MODEL` | Provider default | Override the model used for session compacting |
-| `MEMORY_EXTRACTION_MODEL` | Provider default | Override the model used for memory extraction |
-| `MEMORY_MAX_RELEVANT` | `10` | Max relevant memories injected into context |
-| `MEMORY_SIMILARITY_THRESHOLD` | `0.7` | Minimum cosine similarity for memory retrieval |
-| `MEMORY_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model for memory vectors |
-| `MEMORY_EMBEDDING_DIMENSION` | `1536` | Vector dimension for embeddings |
-| `MEMORY_TOKEN_BUDGET` | `0` | Max tokens for memory block in prompt (`0` = unlimited) |
-| `MEMORY_RERANK_MODEL` | Provider default | Cross-encoder rerank model (Cohere, Jina) for memory retrieval |
-| `MEMORY_CONSOLIDATION_MODEL` | Provider default | Model used for memory consolidation |
-| `MEMORY_CONSOLIDATION_SIMILARITY` | `0.85` | Cosine similarity threshold for merging duplicate memories |
-| `MEMORY_CONSOLIDATION_MAX_GEN` | `5` | Max consolidation generations per run |
-| `MEMORY_MULTI_QUERY_MODEL` | Provider default | Model for multi-query expansion during recall |
-| `MEMORY_HYDE_MODEL` | Provider default | Model for HyDE (hypothetical document embedding) queries |
-| `MEMORY_CONTEXTUAL_REWRITE_MODEL` | Provider default | Model for contextual memory rewriting |
-| `MEMORY_CONTEXTUAL_REWRITE_THRESHOLD` | `80` | Token threshold to trigger contextual rewrite |
-| `MEMORY_ADAPTIVE_K` | `true` | Enable adaptive K (dynamic result count based on score distribution) |
-| `MEMORY_ADAPTIVE_K_MIN_SCORE_RATIO` | `0.3` | Minimum score ratio for adaptive K cutoff |
-| `MEMORY_RRF_K` | `60` | Reciprocal Rank Fusion K parameter for hybrid search |
-| `MEMORY_FTS_BOOST` | `0.5` | Full-text search score boost factor |
-| `MEMORY_SUBJECT_BOOST` | `1.3` | Score boost for subject-matching memories |
-| `MEMORY_CATEGORY_BOOST` | `1.25` | Score boost for category-matching memories |
-| `MEMORY_TEMPORAL_DECAY_LAMBDA` | `0.01` | Temporal decay rate (higher = faster decay) |
-| `MEMORY_TEMPORAL_DECAY_FLOOR` | `0.7` | Minimum score multiplier from temporal decay |
-| `HISTORY_TOKEN_BUDGET` | `40000` | Max tokens for conversation history in context |
-
-#### Tasks & Queues
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `QUEUE_POLL_INTERVAL` | `500` | Queue polling interval in ms |
-| `TASKS_MAX_DEPTH` | `3` | Maximum sub-task nesting depth |
-| `TASKS_MAX_REQUEST_INPUT` | `3` | Max concurrent task requests per input |
-| `TASKS_MAX_CONCURRENT` | `10` | Max concurrent tasks globally |
-| `TOOLS_MAX_STEPS` | `10` | Max tool call steps per LLM turn |
-
-#### Cron & Automation
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CRONS_MAX_ACTIVE` | `50` | Max active cron jobs |
-| `CRONS_MAX_CONCURRENT_EXEC` | `5` | Max concurrent cron executions |
-
-#### Inter-Agent Communication
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `INTER_KIN_MAX_CHAIN_DEPTH` | `5` | Max chain depth for Agent-to-Agent messages |
-| `INTER_KIN_RATE_LIMIT` | `20` | Max inter-Agent messages per minute |
-
-#### Channels & Webhooks
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CHANNELS_MAX_PER_KIN` | `5` | Max channel connections per Agent |
-| `WEBHOOKS_MAX_PER_KIN` | `20` | Max webhooks per Agent |
-| `WEBHOOKS_MAX_PAYLOAD_BYTES` | `1048576` | Max webhook payload size (1 MB) |
-| `WEBHOOKS_LOG_RETENTION_DAYS` | `30` | Webhook execution log retention period |
-| `WEBHOOKS_MAX_LOGS_PER_WEBHOOK` | `500` | Max stored execution logs per webhook |
-| `WEBHOOKS_RATE_LIMIT_PER_MINUTE` | `60` | Max webhook executions per minute |
-
-#### File Storage & Uploads
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `UPLOAD_DIR` | `{dataDir}/uploads` | Upload directory |
-| `UPLOAD_MAX_FILE_SIZE` | `50` | Max upload size in MB |
-| `UPLOAD_CHANNEL_RETENTION_DAYS` | `30` | Channel file retention period in days |
-| `UPLOAD_CHANNEL_CLEANUP_INTERVAL` | `60` | Channel file cleanup interval in minutes |
-| `FILE_STORAGE_DIR` | `{dataDir}/storage` | Agent file storage directory |
-| `FILE_STORAGE_MAX_SIZE` | `100` | Max file size in MB |
-| `FILE_STORAGE_CLEANUP_INTERVAL` | `60` | Cleanup interval in minutes |
-
-#### Vault
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `VAULT_ATTACHMENT_DIR` | `{dataDir}/vault` | Vault attachment directory |
-| `VAULT_MAX_ATTACHMENT_SIZE` | `50` | Max attachment size in MB |
-| `VAULT_MAX_ATTACHMENTS_PER_ENTRY` | `10` | Max attachments per vault entry |
-
-#### Workspaces & Mini Apps
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WORKSPACE_BASE_DIR` | `{dataDir}/workspaces` | Agent workspace base directory |
-| `MINI_APPS_DIR` | `{dataDir}/mini-apps` | Mini apps storage directory |
-| `MINI_APPS_MAX_PER_KIN` | `20` | Max mini apps per Agent |
-| `MINI_APPS_MAX_FILE_SIZE` | `5` | Max single file size in MB |
-| `MINI_APPS_MAX_TOTAL_SIZE` | `50` | Max total size per app in MB |
-| `MINI_APPS_BACKEND_ENABLED` | `true` | Enable mini app backend execution |
-
-#### Web Browsing
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WEB_BROWSING_PAGE_TIMEOUT` | `30000` | Page load timeout in ms |
-| `WEB_BROWSING_MAX_CONTENT_LENGTH` | `100000` | Max extracted content length |
-| `WEB_BROWSING_MAX_CONCURRENT` | `5` | Max concurrent fetches |
-| `WEB_BROWSING_USER_AGENT` | Hivekeep default | Custom User-Agent string |
-| `WEB_BROWSING_BLOCKED_DOMAINS` | *(empty)* | Comma-separated blocked domains |
-| `WEB_BROWSING_PROXY` | *(none)* | HTTP proxy for web requests |
-| `WEB_BROWSING_HEADLESS_ENABLED` | `false` | Enable headless browser (Puppeteer) |
-| `PUPPETEER_EXECUTABLE_PATH` | Auto-detected | Chrome/Chromium path for headless mode |
-| `WEB_BROWSING_MAX_BROWSERS` | `2` | Max concurrent browser instances |
-| `WEB_BROWSING_BROWSER_IDLE_TIMEOUT` | `60000` | Browser idle timeout in ms |
-
-#### MCP & Human-in-the-Loop
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MCP_REQUIRE_APPROVAL` | `true` | Require user approval for MCP server management |
-| `HUMAN_PROMPTS_MAX_PENDING` | `5` | Max pending human-in-the-loop prompts per Agent |
-
-#### Sessions & Invitations
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `QUICK_SESSION_EXPIRATION_HOURS` | `24` | Quick session expiration time |
-| `QUICK_SESSION_MAX_PER_USER_KIN` | `1` | Max active quick sessions per user per Agent |
-| `QUICK_SESSION_RETENTION_DAYS` | `7` | Quick session data retention |
-| `QUICK_SESSION_CLEANUP_INTERVAL` | `60` | Cleanup interval in minutes |
-| `INVITATION_DEFAULT_EXPIRY_DAYS` | `7` | Default invitation link expiry |
-| `INVITATION_MAX_ACTIVE` | `50` | Max active invitations |
-
-#### Notifications
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NOTIFICATIONS_RETENTION_DAYS` | `30` | Notification retention period |
-| `NOTIFICATIONS_MAX_PER_USER` | `500` | Max stored notifications per user |
-| `NOTIFICATIONS_EXT_MAX_PER_USER` | `5` | Max external notification endpoints per user |
-| `NOTIFICATIONS_EXT_RATE_LIMIT` | `5` | External notification rate limit per minute |
-| `NOTIFICATIONS_EXT_MAX_ERRORS` | `5` | Max consecutive errors before disabling endpoint |
-
-#### Wakeups
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WAKEUPS_MAX_PENDING_PER_KIN` | `20` | Max pending wakeups per Agent |
-
-#### Version Check
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `VERSION_CHECK_ENABLED` | `false` | Enable automatic version checking |
-| `VERSION_CHECK_REPO` | `MarlBurroW/hivekeep` | GitHub repo to check for new releases |
-| `VERSION_CHECK_INTERVAL_HOURS` | `12` | Hours between version checks |
-
-</details>
-
----
-
-## 🔧 Troubleshooting
-
-<details>
-<summary><strong>Common issues and solutions</strong></summary>
-
-#### Port already in use
-
-```
-Error: listen EADDRINUSE :::3000
-```
-
-Another process is using port 3000. Either stop it or change Hivekeep's port:
-
-```bash
-PORT=3001 bun src/server/index.ts
-# or with Docker:
-docker run -d -p 3001:3000 ghcr.io/marlburrow/hivekeep:latest
-```
-
-#### Database migration errors after update
-
-If you see migration errors after updating Hivekeep:
-
-```bash
-# Backup first
-cp data/hivekeep.db data/hivekeep.db.bak
-
-# Re-run migrations
-bun run db:migrate
-```
-
-#### Docker container won't start
-
-Check logs for details:
-
-```bash
-docker logs hivekeep
-```
-
-Common causes:
-- **Permission issues on volume:** Ensure the data directory is writable (`chmod 777 ./data` or match UID)
-- **Missing encryption key:** If you previously set `ENCRYPTION_KEY`, you must provide it on every restart (vault data is encrypted with it)
-
-#### Provider connection fails
-
-- Verify your API key is correct and has sufficient credits
-- For self-hosted providers (Ollama), ensure the base URL is reachable from the Hivekeep container (use `host.docker.internal` or the host's LAN IP, not `localhost`)
-- Check provider status pages for outages
-
-#### Memory search returns no results
-
-Memory extraction runs asynchronously after each LLM turn. If you just started a conversation:
-- Wait a few seconds for the extraction pipeline to complete
-- Check that you have an embedding provider configured in Settings > Providers
-
-#### Blank page / frontend not loading
-
-```bash
-# Rebuild the frontend
-bun run build
-
-# Then restart
-bun src/server/index.ts
-```
-
-For Docker, pull the latest image which includes pre-built frontend assets.
-
-#### Generate a diagnostic report
-
-If you're stuck, generate a report to include in bug reports:
-
-```bash
-bash install.sh --doctor
-```
-
-</details>
-
----
-
-## 💬 Community & Support
-
-- **Issues** — [Report bugs or request features](https://github.com/MarlBurroW/hivekeep/issues)
-- **Discussions** — [Questions, ideas, and show & tell](https://github.com/MarlBurroW/hivekeep/discussions)
-- **Contributing** — [Read the guide](CONTRIBUTING.md) to get started
-- **Security** — [Report vulnerabilities responsibly](SECURITY.md)
-- **Changelog** — [See what's new](https://marlburrow.github.io/hivekeep/changelog)
-
-If Hivekeep is useful to you, consider [starring the repo](https://github.com/MarlBurroW/hivekeep) — it helps others discover the project.
-
-## Contributing
-
-Contributions are welcome! See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full guide: setup, adding providers/channels, code style, and commit conventions.
-
-Quick version:
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feat/my-feature`
-3. Follow existing code conventions:
-   - Files: `kebab-case.ts` / Components: `PascalCase.tsx`
-   - Shared types in `src/shared/types.ts`; shared constants in `src/shared/constants.ts`
-   - API errors: `{ "error": { "code": "ERROR_CODE", "message": "..." } }`
-   - Never hardcode user-facing text — always use `useTranslation()` and add keys to both `en.json` and `fr.json`
-4. Open a Pull Request with a clear description
 
 ### Design system
 
-The UI is built on a custom design system with 8 palettes and full dark/light mode support. Before building any new UI:
-- Consult `src/client/pages/design-system/DesignSystemPage.tsx` (live showcase, source of truth)
-- Use semantic CSS variables (`var(--color-*)`) or Tailwind tokens — never hardcode colors
+The UI follows a custom design system with 18 palettes and full dark/light support. Before building any UI:
+- Consult `src/client/pages/design-system/DesignSystemPage.tsx` (the live showcase, source of truth)
+- Use semantic CSS variables (`var(--color-*)`) or Tailwind tokens, never hardcode colors
 - Reuse components from `src/client/components/ui/`
+
+---
+
+## Community and support
+
+- **Issues** - [report bugs or request features](https://github.com/MarlBurroW/hivekeep/issues)
+- **Discussions** - [questions, ideas, show and tell](https://github.com/MarlBurroW/hivekeep/discussions)
+- **Troubleshooting** - [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+- **Security** - see [SECURITY.md](SECURITY.md) to report a vulnerability
+
+If Hivekeep is useful to you, consider [starring the repo](https://github.com/MarlBurroW/hivekeep). It helps others find the project.
+
+## Contributing
+
+Contributions are welcome: code, plugins, mini-apps, translations, docs, feedback. Read [CONTRIBUTING.md](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md) to get started. Before pushing, run `bun run typecheck` and `bun run test` (both are also run by the pre-commit hook). Publish a plugin to npm with the `hivekeep-plugin` keyword to surface it in the marketplace.
 
 ---
 
 ## License
 
-Hivekeep is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+Hivekeep is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-only). You are free to use, modify, and distribute it. If you deploy a modified version as a network service, you must make your source available under the same license. Your data, your keys, your server, no lock-in.
 
-You are free to use, modify, and distribute Hivekeep. However, if you deploy a modified version as a network service, you must also make your source code available under the same license. This protects against cloud-washing while keeping the project fully open.
-
-For commercial use cases where the AGPL obligations are not compatible with your business, a commercial license is available — open an issue to discuss.
-
----
-
-<div align="center">
-Made with care · <a href="https://github.com/marlburrow">marlburrow</a>
-</div>
+<p align="center">
+  <sub>Built with care and <a href="https://bun.sh">Bun</a> · <a href="https://marlburrow.github.io/hivekeep/">Website</a> · <a href="https://marlburrow.github.io/hivekeep/docs/">Docs</a></sub>
+</p>

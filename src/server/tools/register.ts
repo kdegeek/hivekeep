@@ -253,6 +253,7 @@ import {
 } from '@/server/tools/knowledge-tools'
 import { getPlatformLogsTool, getPlatformConfigTool, listPlatformConfigOptionsTool, updatePlatformConfigTool, restartPlatformTool } from '@/server/tools/platform-tools'
 import { getSystemInfoTool } from '@/server/tools/system-info-tools'
+import { getSetupHealthTool } from '@/server/tools/health-tools'
 import { httpRequestTool } from '@/server/tools/http-request-tools'
 import { executeSqlTool } from '@/server/tools/database-tools'
 import {
@@ -611,6 +612,9 @@ export function registerAllTools(): void {
   toolRegistry.register('update_platform_config', updatePlatformConfigTool, 'system')
   toolRegistry.register('restart_platform', restartPlatformTool, 'system')
   toolRegistry.register('get_system_info', getSystemInfoTool, 'system')
+  // Read-only "doctor 2.0" diagnostic: capability coverage, invalid providers,
+  // stale defaults, channel status, public-URL sanity + a prioritized fix list.
+  toolRegistry.register('get_setup_health', getSetupHealthTool, 'system')
   toolRegistry.register('http_request', httpRequestTool, 'browse')
 
   // Database tools (main only, opt-in required — God Tier)

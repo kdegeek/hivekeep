@@ -566,8 +566,8 @@ Architecture monolithique en un seul process, conçue pour un déploiement simpl
 | **Recherche vectorielle** | sqlite-vec | Extension SQLite pour la recherche KNN sur les embeddings (mémoire long terme) |
 | **Recherche textuelle** | SQLite FTS5 | Full-text search natif pour la recherche hybride (mémoire + historique) |
 | **ORM** | Drizzle | Type-safe, migrations, requêtes proches du SQL |
-| **LLM** | Vercel AI SDK (`ai`) | Orchestration multi-provider (Anthropic, OpenAI), streaming, tool calling |
-| **Embeddings** | Vercel AI SDK (`ai`) | Génération d'embeddings multi-provider (OpenAI, Voyage AI) pour la mémoire long terme |
+| **LLM** | Primitives natives (`src/server/llm/llm/`) | Orchestration multi-provider (Anthropic, OpenAI, Gemini, OpenRouter, xAI), streaming, tool calling |
+| **Embeddings** | Primitives natives (`src/server/llm/embedding/`) | Génération d'embeddings (OpenAI) pour la mémoire long terme |
 | **Auth** | Better Auth | Multi-user, sessions, compatible SQLite/Drizzle |
 | **Crons** | croner | Scheduler in-process, pas besoin de Redis |
 | **Real-time** | SSE (via Hono) | Streaming des réponses LLM et mises a jour des tâches |
@@ -580,18 +580,18 @@ Architecture monolithique en un seul process, conçue pour un déploiement simpl
 | **Bundler** | Vite | Dev server rapide, HMR, build optimisé |
 | **Styling** | Tailwind CSS | Utility-first, rapide a prototyper |
 | **Composants** | shadcn/ui | Composants accessibles et personnalisables, basés sur Radix UI |
-| **AI Client** | Vercel AI SDK (`ai/react`) | Hooks React pour le streaming LLM (`useChat`, `useCompletion`) |
+| **AI Client** | Client SSE natif (`src/client/hooks/`) | Hooks React maison pour le streaming LLM via SSE |
 
 ### Vue d'ensemble
 
 ```
 Hivekeep
 ├── Frontend (React + Vite + Tailwind + shadcn/ui)
-│   └── Vercel AI SDK (ai/react)
+│   └── Client SSE natif (hooks React maison)
 │
 └── Backend (Bun + Hono)
     ├── Drizzle + SQLite (persistance)
-    ├── Vercel AI SDK (orchestration LLM)
+    ├── Primitives LLM natives (orchestration multi-provider, src/server/llm/*)
     ├── Better Auth (authentification)
     └── croner (tâches planifiées)
 ```
@@ -640,16 +640,16 @@ Le SSE est utilisé pour tout ce qui est poussé du serveur vers le client en te
 
 | Canal SSE | Contenu |
 |---|---|
-| **Chat stream** | Tokens du LLM en streaming lors d'une réponse du Agent (natif Vercel AI SDK) |
+| **Chat stream** | Tokens du LLM en streaming lors d'une réponse du Agent (via les primitives LLM natives) |
 | **Événements** | Changement d'état d'une tâche, résultat d'un sous-Agent, exécution d'un cron, message inter-Agents |
 
-Le frontend maintient une connexion SSE persistante par session active. Le Vercel AI SDK côté React (`useChat`) gère nativement le streaming SSE.
+Le frontend maintient une connexion SSE persistante par session active. Des hooks React maison gèrent le streaming SSE côté client.
 
 ### Pourquoi pas WebSocket ?
 
 - Le seul flux bidirectionnel est "user envoie un message / serveur stream la réponse", et REST + SSE couvre ça parfaitement
 - SSE est plus simple a implémenter, débugger et maintenir (HTTP standard, reconnexion automatique native)
-- Better Auth et Vercel AI SDK fonctionnent nativement en REST + SSE
+- Better Auth et les primitives LLM natives fonctionnent nativement en REST + SSE
 - Pas de protocole custom a gérer
 
 ---

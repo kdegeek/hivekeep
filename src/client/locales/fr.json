@@ -1,7 +1,7 @@
 {
   "secretPrompt": {
     "getKey": "Générer ta clé ici",
-    "privacyNote": "Ça va directement dans ton coffre chiffré — l'IA ne le voit jamais.",
+    "privacyNote": "Ça va directement dans ton coffre chiffré. L'IA ne le voit jamais.",
     "later": "Plus tard",
     "saving": "Enregistrement…",
     "submit": "Enregistrer en sécurité"
@@ -115,16 +115,23 @@
     "step": "Étape {{current}} sur {{total}}",
     "bootstrap": {
       "title": "Connecte ton IA",
-      "description": "Pour donner vie à ton assistant, connecte un fournisseur d'IA. Commence par un fournisseur intégré — tu pourras en ajouter d'autres plus tard, et des plugins pour encore plus de fournisseurs.",
+      "description": "Pour donner vie à ton assistant, connecte un fournisseur d'IA. Commence par un fournisseur intégré. Tu pourras en ajouter d'autres plus tard, et des plugins pour encore plus de fournisseurs.",
       "connect": "Connecter un fournisseur",
       "seeding": "On donne vie à ton assistant…",
-      "noLlm": "Aucun fournisseur LLM trouvé — connecte-en un."
+      "noLlm": "Aucun fournisseur LLM trouvé. Connecte-en un."
     },
     "modal": {
       "stopTitle": "Arrêter la configuration guidée ?",
-      "stopBody": "Tu pourras reprendre à tout moment en parlant à Queenie dans ta liste d'Agents — ta conversation est sauvegardée.",
+      "stopBody": "Tu pourras reprendre à tout moment en parlant à Queenie dans ta liste d'Agents. Ta conversation est sauvegardée.",
       "keepGoing": "Continuer",
       "stop": "Arrêter pour l'instant"
+    },
+    "rescue": {
+      "title": "Quelque chose a échoué",
+      "body": "Queenie a rencontré une erreur : {{error}}. C'est souvent un souci de clé ou de configuration de fournisseur. Laisse Queenie t'aider à corriger ça.",
+      "reconfigure": "Reconfigurer le fournisseur",
+      "reconfiguring": "On demande à Queenie…",
+      "message": "Quelque chose vient d'échouer avec une erreur. On dirait un souci de clé ou de configuration de fournisseur. Peux-tu m'aider à diagnostiquer et reconfigurer le fournisseur ?"
     },
     "identity": {
       "title": "Votre identité",
@@ -2458,6 +2465,7 @@
       "deactivate_channel": "Désactiver un canal",
       "attach_file": "Joindre un fichier",
       "get_system_info": "Infos système",
+      "get_setup_health": "Vérifier l'état de la configuration",
       "list_providers": "Lister les fournisseurs",
       "list_models": "Lister les modèles",
       "describe_provider_config": "Décrire la config d'un fournisseur",

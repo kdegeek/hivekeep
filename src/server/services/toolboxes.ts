@@ -248,6 +248,10 @@ export const BUILTIN_TOOLBOXES: readonly BuiltinToolboxDef[] = [
       'extract_links',
       // Platform / system administration.
       'get_system_info',
+      // Read-only "doctor 2.0" diagnostic — CALL FIRST on any rescue: capability
+      // coverage, invalid providers (with lastError), stale defaults, channel
+      // status, public-URL sanity + a prioritized fix list.
+      'get_setup_health',
       'get_platform_config',
       'list_platform_config_options',
       'update_platform_config',

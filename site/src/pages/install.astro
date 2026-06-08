@@ -5,37 +5,63 @@ import InstallConfigurator from '../components/InstallConfigurator.tsx';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
-// Two install methods, honest tradeoffs. `y` = strength, `n` = caveat.
+const INSTALL_ONELINER = 'curl -fsSL https://raw.githubusercontent.com/MarlBurroW/hivekeep/main/install.sh | bash';
+
+// Three install methods, honest tradeoffs. `y` = strength, `n` = caveat.
+// Native is the recommended default for everyone: it builds locally, so it does
+// NOT depend on a published container image, and it persists the encryption key.
 const methods = [
+  {
+    tag: 'Recommended',
+    name: 'Native (install.sh)',
+    primary: true,
+    pick: 'Pick this if you just want it to work. One command, on your own Linux or macOS box.',
+    points: [
+      ['y', 'One command, builds locally, no image to publish or pull'],
+      ['y', 'Saves your encryption key automatically, secrets persist'],
+      ['y', 'Runs as a service (systemd / launchd), auto-update with rollback'],
+      ['y', 'Agents own the box: install tools & deps, direct hardware access'],
+      ['n', 'Modifies the host system (by design)'],
+      ['n', 'Linux & macOS only (Windows via WSL2)'],
+    ],
+  },
   {
     tag: 'Container',
     name: 'Docker',
     primary: false,
-    for: 'Best for trying it out, or running a clean, sandboxed appliance.',
+    pick: 'Pick this if you already live in Docker and want a clean, sandboxed appliance.',
     points: [
-      ['y', 'Runs anywhere — macOS, Linux, Windows'],
-      ['y', 'Zero host pollution, fully isolated'],
-      ['y', 'One command to run, one to update'],
+      ['y', 'Fully isolated, zero host pollution'],
+      ['y', 'Runs anywhere Docker runs, including Windows'],
+      ['n', 'Published image is not available yet, prefer native for now'],
       ['n', "Agent-installed tools & binaries don't survive a restart"],
-      ['n', 'Limited access to host hardware'],
+      ['n', 'You must persist the data volume or you lose your secrets'],
     ],
   },
   {
-    tag: 'Bare metal',
-    name: 'Native (install.sh)',
-    primary: true,
-    for: 'Best for a permanent home where the agents truly own the machine.',
+    tag: 'From source',
+    name: 'Manual',
+    primary: false,
+    pick: 'Pick this if you want to read the code, hack on it, or run it your own way.',
     points: [
-      ['y', 'Agents own the box — install tools & deps, persisted'],
-      ['y', 'Direct hardware access (GPU, devices)'],
-      ['y', 'systemd / launchd service, auto-update with rollback'],
-      ['n', 'Modifies the host system (by design)'],
-      ['n', 'Linux & macOS (Windows via WSL2)'],
+      ['y', 'Full control: clone, build, run with Bun yourself'],
+      ['y', 'Best for contributors and development'],
+      ['n', 'No service, no auto-update, you wire those up'],
+      ['n', 'You handle Bun, build, migrations and the encryption key by hand'],
     ],
   },
 ];
+
+// Plain prerequisites for the recommended native path, in non-dev language.
+const prereqs = [
+  ['lucide:shield', 'You can run sudo', 'The installer needs it to install missing system packages (git, curl, unzip).'],
+  ['lucide:hard-drive', 'About 500 MB free disk', 'Room to clone and build. 1 GB or more is comfortable.'],
+  ['lucide:cpu', 'A 64-bit machine', 'x86_64 or ARM64. 32-bit (older Raspberry Pi) is not supported.'],
+  ['lucide:globe', 'Outbound HTTPS', 'It downloads from github.com and bun.sh, so those must be reachable.'],
+  ['lucide:key-round', 'openssl present', 'Used to generate keys. It ships with almost every Linux and macOS.'],
+];
 ---
-<Base title="Install Hivekeep" description="Install Hivekeep your way — Docker to try it, or a native install to give your agents a real home. Generate the exact command for your setup.">
+<Base title="Install Hivekeep" description="Install Hivekeep your way: Docker to try it, or a native install to give your agents a real home. Generate the exact command for your setup.">
   <!-- ===== top bar ===== -->
   <header class="topbar"><div class="wrap in">
     <a class="brand" href={`${base}/`}><img class="brand-logo" src={`${base}/logo.svg`} width="28" height="28" alt="" /> Hivekeep</a>
@@ -51,17 +77,75 @@ const methods = [
   <div class="wrap">
     <div class="install-head">
       <span class="kicker" style="justify-content:center">Install</span>
-      <h1 class="display">Install Hivekeep your way.</h1>
-      <p>Two paths, same app. Pick how much of the machine you want your agents to own — then generate the exact command. Either way, once it's up, <b>Queenie</b> sets up the rest by chatting with you. No config files to edit.</p>
+      <h1 class="display">Install Hivekeep.</h1>
+      <p>One recommended way for everyone, plus options if you want a domain, a custom port, or Docker. Whichever you pick, once it's up <b>Queenie</b> sets up the rest by chatting with you. No config files to edit.</p>
+    </div>
+
+    <!-- ===== recommended quick start ===== -->
+    <div class="rec-card">
+      <div class="rec-card-top">
+        <span class="rec-tag"><Icon name="lucide:sparkles" /> Recommended for everyone</span>
+        <h2 class="display">The one-line install.</h2>
+        <p>Paste this into a terminal on your Linux or macOS machine. It does everything for you, then opens in your browser.</p>
+      </div>
+      <div class="rec-cmd">
+        <code>{INSTALL_ONELINER}</code>
+        <button type="button" class="rec-copy" data-copy={INSTALL_ONELINER} aria-label="Copy install command">
+          <Icon name="lucide:copy" /> <span>Copy</span>
+        </button>
+      </div>
+      <div class="rec-grid">
+        <div class="rec-does">
+          <span class="rh"><Icon name="lucide:shield-check" /> What it does to your machine</span>
+          <ul>
+            <li>Installs <b>Bun</b> if it is missing</li>
+            <li>Clones Hivekeep into its own folder and <b>builds</b> it</li>
+            <li>Auto-generates and saves an <b>encryption key</b> at <code>$DATA_DIR/.encryption-key</code> so your secrets survive restarts</li>
+            <li>Sets it up as an optional background <b>service</b> and starts it</li>
+          </ul>
+        </div>
+        <div class="rec-recover">
+          <span class="rh"><Icon name="lucide:life-buoy" /> If something goes wrong</span>
+          <ul>
+            <li><b>"port already allocated" / address in use</b>: something else uses port 3000. Use the configurator below to pick another port, e.g. 3001.</li>
+            <li><b>Windows?</b> The native installer is Linux and macOS only. Use <b>WSL2</b> and run it inside your Linux shell, or use Docker Desktop.</li>
+            <li><b>Stuck downloading?</b> Make sure the machine can reach <code>github.com</code> and <code>bun.sh</code> over HTTPS (corporate proxies often block these).</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== prerequisites ===== -->
+    <div class="prereqs">
+      <span class="kicker">Before you start</span>
+      <h2 class="display" style="margin:12px 0 6px;">What the native install needs.</h2>
+      <p class="prereqs-sub">Most machines already have all of this. Quick checklist:</p>
+      <div class="prereq-grid">
+        {prereqs.map(([icon, title, desc]) => (
+          <div class="prereq">
+            <span class="pic"><Icon name={icon} /></span>
+            <div>
+              <div class="pt">{title}</div>
+              <div class="pd">{desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p class="prereqs-win"><Icon name="lucide:monitor" /> <b>On Windows?</b> The native installer doesn't run on Windows directly. Use <b>WSL2</b> (run the one-liner inside your Linux distro) or <b>Docker Desktop</b>.</p>
     </div>
 
     <!-- ===== method comparison ===== -->
-    <div class="methods">
+    <div style="margin:48px 0 0;">
+      <span class="kicker">Compare</span>
+      <h2 class="display" style="margin:12px 0 6px;">Which path is right for you?</h2>
+      <p class="prereqs-sub">All three run the exact same app. They differ in how it lives on the machine.</p>
+    </div>
+    <div class="methods methods-3">
       {methods.map((m) => (
         <div class={`method${m.primary ? ' primary' : ''}`}>
           <span class="tag">{m.tag}</span>
           <h3 class="display">{m.name}</h3>
-          <p class="for">{m.for}</p>
+          <p class="for">{m.pick}</p>
           <ul>
             {m.points.map(([k, label]) => (
               <li class={k}>
@@ -75,9 +159,10 @@ const methods = [
     </div>
 
     <!-- ===== configurator ===== -->
-    <div id="configure" style="scroll-margin-top:80px;margin:18px 0 70px;">
+    <div id="configure" style="scroll-margin-top:80px;margin:48px 0 70px;">
       <span class="kicker">Configure your install</span>
-      <h2 class="display" style="margin:12px 0 22px;">Generate your command.</h2>
+      <h2 class="display" style="margin:12px 0 6px;">Need a port, a domain, or Docker?</h2>
+      <p class="prereqs-sub" style="margin-bottom:22px;">Answer a couple of questions and we'll generate the exact command for your setup.</p>
       <InstallConfigurator client:load />
     </div>
   </div>
@@ -85,6 +170,27 @@ const methods = [
   <!-- ===== footer ===== -->
   <footer class="footer"><div class="wrap in">
     <a class="brand" href={`${base}/`}><img class="brand-logo" src={`${base}/logo.svg`} width="26" height="26" alt="" /> Hivekeep</a>
-    <span class="m">Open-source · MIT · Built with Bun · © 2026</span>
+    <span class="m">Open-source · AGPL-3.0 · Built with Bun · © 2026</span>
   </div></footer>
+
+<script>
+  // Click-to-copy for the recommended one-liner card ([data-copy]).
+  document.querySelectorAll<HTMLElement>('[data-copy]').forEach((btn) => {
+    const text = btn.dataset.copy || ''
+    const label = btn.querySelector('span')
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(text)
+      } catch {
+        return
+      }
+      btn.classList.add('done')
+      if (label) label.textContent = 'Copied'
+      setTimeout(() => {
+        btn.classList.remove('done')
+        if (label) label.textContent = 'Copy'
+      }, 1500)
+    })
+  })
+</script>
 </Base>

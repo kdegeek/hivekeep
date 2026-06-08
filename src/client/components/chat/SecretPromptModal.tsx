@@ -15,7 +15,7 @@ import { Label } from '@/client/components/ui/label'
 import { useSecretPrompts } from '@/client/hooks/useSecretPrompts'
 
 /**
- * Secure-input modal — appears when the configurator Agent requests a secret
+ * Secure-input modal: appears when the configurator Agent requests a secret
  * (API key, token) via request_provider_setup / prompt_secret. The value is
  * POSTed straight to the server (→ vault); it never goes through the LLM.
  *
@@ -83,7 +83,7 @@ export function SecretPromptModal({ agentId }: { agentId: string | null }) {
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                 >
-                  {t('secretPrompt.getKey', 'Get your key here')}
+                  {t('secretPrompt.getKey')}
                   <ExternalLink className="size-3" />
                 </a>
               )}
@@ -92,16 +92,16 @@ export function SecretPromptModal({ agentId }: { agentId: string | null }) {
 
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Lock className="size-3 shrink-0" />
-            {t('secretPrompt.privacyNote', 'This goes straight to your encrypted vault — the AI never sees it.')}
+            {t('secretPrompt.privacyNote')}
           </p>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="ghost" onClick={() => setDismissed(prompt.promptId)} disabled={isResponding}>
-            {t('secretPrompt.later', 'Later')}
+            {t('secretPrompt.later')}
           </Button>
           <Button onClick={handleSubmit} disabled={!canSubmit || isResponding}>
-            {isResponding ? t('secretPrompt.saving', 'Saving…') : t('secretPrompt.submit', 'Save securely')}
+            {isResponding ? t('secretPrompt.saving') : t('secretPrompt.submit')}
           </Button>
         </DialogFooter>
       </DialogContent>

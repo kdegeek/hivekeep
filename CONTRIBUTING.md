@@ -121,7 +121,7 @@ The SDK exposes `tool()`, `asSchema()`, `z` (re-export of zod), and the full typ
 - Keep plugins focused: one clear purpose per plugin
 - Write a helpful README so users know how to configure and use it
 - Use `ctx.log` for logging, `ctx.storage` for persistence, `ctx.config` for user-supplied settings
-- See the [Plugin Development Guide](docs/plugins.md) for the full API reference
+- See the [Plugin Development Guide](https://marlburrow.github.io/hivekeep/docs/plugins/developing/) for the full API reference
 
 ## Code Style
 

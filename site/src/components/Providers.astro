@@ -5,19 +5,12 @@ import { Icon } from 'astro-icon/components';
 import Claude from '@lobehub/icons/es/Claude';
 import OpenAI from '@lobehub/icons/es/OpenAI';
 import Gemini from '@lobehub/icons/es/Gemini';
-import Mistral from '@lobehub/icons/es/Mistral';
-import DeepSeek from '@lobehub/icons/es/DeepSeek';
-import Groq from '@lobehub/icons/es/Groq';
-import Ollama from '@lobehub/icons/es/Ollama';
 import OpenRouter from '@lobehub/icons/es/OpenRouter';
-import Together from '@lobehub/icons/es/Together';
-import Cohere from '@lobehub/icons/es/Cohere';
-import Replicate from '@lobehub/icons/es/Replicate';
-import Stability from '@lobehub/icons/es/Stability';
-import Fal from '@lobehub/icons/es/Fal';
+import XAI from '@lobehub/icons/es/XAI';
 import Perplexity from '@lobehub/icons/es/Perplexity';
-import Voyage from '@lobehub/icons/es/Voyage';
-import Jina from '@lobehub/icons/es/Jina';
+// Mistral & Replicate are plugin-only providers, shown in the plugin cards below (not the built-in chips).
+import Mistral from '@lobehub/icons/es/Mistral';
+import Replicate from '@lobehub/icons/es/Replicate';
 
 const S = 18;
 ---
@@ -25,7 +18,7 @@ const S = 18;
   <div class="body">
     <span class="kicker">Providers &amp; plugins</span>
     <h2 class="display" style="margin-top:12px">Bring any provider, or add your own.</h2>
-    <p>Hivekeep speaks to providers across every capability out of the box. One config per provider, and capabilities are auto-detected (an OpenAI key lights up LLM, image, embeddings and speech at once).</p>
+    <p>These providers are built in across every capability. One config per provider, and capabilities are auto-detected (an OpenAI key lights up LLM, image, embeddings and speech at once). Need another? Add it with a plugin.</p>
 
     <div class="prov-groups">
       <div class="pgroup">
@@ -34,12 +27,8 @@ const S = 18;
           <span class="pchip"><Claude.Color size={S} /> Anthropic</span>
           <span class="pchip"><OpenAI size={S} /> OpenAI</span>
           <span class="pchip"><Gemini.Color size={S} /> Gemini</span>
-          <span class="pchip"><Mistral.Color size={S} /> Mistral</span>
-          <span class="pchip"><DeepSeek.Color size={S} /> DeepSeek</span>
-          <span class="pchip"><Groq size={S} /> Groq</span>
-          <span class="pchip"><Ollama size={S} /> Ollama</span>
+          <span class="pchip"><XAI size={S} /> xAI</span>
           <span class="pchip"><OpenRouter size={S} /> OpenRouter</span>
-          <span class="pchip"><Together.Color size={S} /> Together</span>
         </div>
       </div>
 
@@ -48,9 +37,6 @@ const S = 18;
         <div class="picons">
           <span class="pchip"><OpenAI size={S} /> OpenAI</span>
           <span class="pchip"><Gemini.Color size={S} /> Gemini</span>
-          <span class="pchip"><Replicate size={S} /> Replicate</span>
-          <span class="pchip"><Stability.Color size={S} /> Stability</span>
-          <span class="pchip"><Fal size={S} /> Fal</span>
         </div>
       </div>
 
@@ -69,7 +55,6 @@ const S = 18;
         <div class="picons">
           <span class="pchip"><Icon name="simple-icons:elevenlabs" /> ElevenLabs</span>
           <span class="pchip"><OpenAI size={S} /> OpenAI</span>
-          <span class="pchip more">Whisper · Deepgram</span>
         </div>
       </div>
 
@@ -77,9 +62,6 @@ const S = 18;
         <div class="ptitle"><Icon name="lucide:vector-square" /> Embeddings</div>
         <div class="picons">
           <span class="pchip"><OpenAI size={S} /> OpenAI</span>
-          <span class="pchip"><Voyage.Color size={S} /> Voyage</span>
-          <span class="pchip"><Jina size={S} /> Jina</span>
-          <span class="pchip"><Cohere.Color size={S} /> Cohere</span>
         </div>
       </div>
 
