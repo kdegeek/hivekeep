@@ -80,6 +80,7 @@ export const CONFIGURATOR_MODEL_PREFERENCES: Record<string, readonly string[]> =
   xai: ['grok-4', 'grok-3', 'grok-2', 'grok'],
   deepseek: ['pro', 'flash', 'deepseek'],
   minimax: ['m3', 'minimax'],
+  moonshot: ['k2.6', 'kimi-k2', 'kimi', 'moonshot'],
 }
 
 /** Avatar appearance is two independent global axes the prompt-writer agent is
