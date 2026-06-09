@@ -79,6 +79,7 @@ export const CONFIGURATOR_MODEL_PREFERENCES: Record<string, readonly string[]> =
   openrouter: ['sonnet', 'gpt-4o', 'gpt-4.1', 'llama'],
   xai: ['grok-4', 'grok-3', 'grok-2', 'grok'],
   deepseek: ['pro', 'flash', 'deepseek'],
+  minimax: ['m3', 'minimax'],
 }
 
 /** Avatar appearance is two independent global axes the prompt-writer agent is

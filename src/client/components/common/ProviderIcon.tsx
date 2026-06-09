@@ -26,6 +26,7 @@ const LOBEHUB_LOADERS: Record<string, IconLoader> = {
   Gemini: () => import('@lobehub/icons/es/Gemini') as any,
   Mistral: () => import('@lobehub/icons/es/Mistral') as any,
   DeepSeek: () => import('@lobehub/icons/es/DeepSeek') as any,
+  Minimax: () => import('@lobehub/icons/es/Minimax') as any,
   Groq: () => import('@lobehub/icons/es/Groq') as any,
   Together: () => import('@lobehub/icons/es/Together') as any,
   Fireworks: () => import('@lobehub/icons/es/Fireworks') as any,
