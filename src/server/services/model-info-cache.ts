@@ -17,6 +17,7 @@ import { loadProviderConfig } from '@/server/services/provider-config'
 import { listModelsForProvider, getCapabilitiesForType } from '@/server/providers/index'
 import { createLogger } from '@/server/logger'
 import { setModelInfoLookup } from '@/shared/model-context-windows'
+import { reconcileAllProviders, listRegistry } from '@/server/services/model-registry'
 import { config } from '@/server/config'
 
 const log = createLogger('model-info-cache')
@@ -132,6 +133,28 @@ export async function refreshAllProviderModels(): Promise<void> {
         }
       })
     await Promise.allSettled(tasks)
+
+    // Model registry (flag-gated): reconcile every provider's models into the
+    // registry (source of truth), then overlay the registry's context/maxOutput
+    // onto this cache so getModelContextWindow() reflects registry values. In
+    // phase 1 this matches the provider's own values (apiSeed wins), so it's a
+    // safe no-op overlay; once provider heuristics are removed (phase 3) the
+    // registry (models.dev) keeps the cache correct.
+    if (config.modelRegistry.enabled) {
+      try {
+        await reconcileAllProviders()
+        for (const row of listRegistry()) {
+          if (row.stale) continue
+          setModelInfo(row.modelId, {
+            contextWindow: row.contextWindow ?? undefined,
+            maxOutput: row.maxOutput ?? undefined,
+          })
+        }
+      } catch (err) {
+        log.warn({ err }, 'Model registry reconcile failed')
+      }
+    }
+
     log.info({ providerCount: tasks.length, totalCached: cache.size }, 'Model-info cache refresh complete')
   } catch (err) {
     log.warn({ err }, 'Model-info cache refresh failed')

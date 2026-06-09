@@ -181,6 +181,14 @@ export const config = {
     path: process.env.DB_PATH ?? `${dataDir}/hivekeep.db`,
   },
 
+  /** Model registry (models.dev-backed metadata source of truth). When OFF
+   *  (default), provider `listModels()` metadata is used as-is (legacy path).
+   *  When ON, the registry enriches/overrides model metadata. See
+   *  `model-metadata.md`. Phased rollout — flip on once a deployment is ready. */
+  modelRegistry: {
+    enabled: process.env.HIVEKEEP_MODEL_REGISTRY === 'true',
+  },
+
   compacting: {
     ...parseModelEnv(process.env.COMPACTING_MODEL) as { model?: string; providerId?: string },
     /** Trigger compaction when total context tokens exceed this % of the model's context window. */
