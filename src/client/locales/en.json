@@ -1300,6 +1300,33 @@
         "bullet1": "Art style (A) and Subject/type (B) are global — every newly generated avatar uses them for a consistent look",
         "bullet2": "The base image gives image-capable models a reference so avatars share the same render. Generate or upload one, then keep 'Use base image' on",
         "bullet3": "Each Agent's own character (C) is written automatically from its identity — tweak a single avatar from the Agent's avatar picker (Manual tab) without touching these globals"
+      },
+      "bulk": {
+        "cardTitle": "Regenerate existing avatars",
+        "cardTip": "Runs the normal auto-generation for each selected Agent using the art direction above. Existing avatars are overwritten.",
+        "cardHint": "Apply the current art direction to Agents created before you changed it.",
+        "button": "Regenerate all avatars",
+        "title": "Regenerate avatars",
+        "description": "Pick the Agents whose avatars you want to regenerate with the current art direction. Regeneration runs on the server — you can close this window once it starts.",
+        "model": "Image model",
+        "selectAll": "Select all",
+        "deselectAll": "Deselect all",
+        "selectedCount": "{{count}} selected",
+        "configuratorTag": "configurator",
+        "regenerate": "Regenerate ({{count}})",
+        "noAgents": "No Agents to regenerate yet.",
+        "running": {
+          "note": "Regeneration is running on the server — you can safely close this window, it will keep going.",
+          "progress": "{{done}} / {{total}} done",
+          "failedCount": "{{count}} failed"
+        },
+        "done": {
+          "allOk": "All {{count}} avatars regenerated.",
+          "summary": "{{succeeded}} regenerated, {{failed}} failed."
+        },
+        "failedList": "Failed:",
+        "toastDoneAllOk": "All {{count}} avatars regenerated",
+        "toastDone": "Avatar regeneration finished — {{succeeded}} done, {{failed}} failed"
       }
     },
     "providers": {

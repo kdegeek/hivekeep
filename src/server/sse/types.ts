@@ -39,6 +39,8 @@ export type SSEEventType =
   | 'compacting:start'
   | 'compacting:done'
   | 'compacting:error'
+  | 'avatar-bulk:progress'
+  | 'avatar-bulk:done'
   | 'channel:created'
   | 'channel:updated'
   | 'channel:deleted'

@@ -54,7 +54,9 @@ import {
   generateNeutralAvatarBase,
   setCustomBaseAvatar,
   clearCustomBaseAvatar,
+  ImageGenerationError,
 } from '@/server/services/image-generation'
+import { startBulkAvatarRegen, getBulkAvatarJob } from '@/server/services/avatar-regeneration'
 import { sseManager } from '@/server/sse/index'
 import type { AppVariables } from '@/server/app'
 import { createLogger } from '@/server/logger'
@@ -225,6 +227,65 @@ settingsRoutes.delete('/avatar-base', async (c) => {
   clearCustomBaseAvatar()
   log.info('Custom avatar base cleared')
   return c.json({ baseImageUrl: `/api/agents/avatar-base/image?v=${Date.now()}`, hasCustomBase: false })
+})
+
+// GET /api/settings/avatars/bulk-regenerate — current/last bulk job snapshot,
+// so the modal can hydrate live progress when reopened mid-run.
+settingsRoutes.get('/avatars/bulk-regenerate', async (c) => {
+  return c.json({ job: getBulkAvatarJob() })
+})
+
+// POST /api/settings/avatars/bulk-regenerate — kick off a background bulk
+// regeneration of the selected agents' avatars through the normal "auto" flow.
+// Returns immediately; progress streams over SSE (avatar-bulk:progress/done).
+settingsRoutes.post('/avatars/bulk-regenerate', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const { agentIds, imageProviderId, imageModel } = body as {
+    agentIds?: unknown
+    imageProviderId?: string
+    imageModel?: string
+  }
+
+  if (!Array.isArray(agentIds) || agentIds.length === 0 || !agentIds.every((id) => typeof id === 'string')) {
+    return c.json(
+      { error: { code: 'INVALID_BODY', message: 'agentIds must be a non-empty array of agent ids' } },
+      400,
+    )
+  }
+
+  // Keep only ids that actually exist, preserving the caller's order.
+  const existing = db.select({ id: agents.id }).from(agents).all()
+  const existingIds = new Set(existing.map((a) => a.id))
+  const validIds = (agentIds as string[]).filter((id) => existingIds.has(id))
+  if (validIds.length === 0) {
+    return c.json(
+      { error: { code: 'NO_VALID_AGENTS', message: 'None of the given agents exist' } },
+      400,
+    )
+  }
+
+  if (getBulkAvatarJob()?.status === 'running') {
+    return c.json(
+      { error: { code: 'JOB_RUNNING', message: 'A bulk avatar regeneration is already running' } },
+      409,
+    )
+  }
+
+  try {
+    const job = await startBulkAvatarRegen(validIds, {
+      ...(imageProviderId ? { providerId: imageProviderId } : {}),
+      ...(imageModel ? { modelId: imageModel } : {}),
+    })
+    log.info({ jobId: job.id, total: job.total }, 'Bulk avatar regeneration started')
+    return c.json({ jobId: job.id, total: job.total })
+  } catch (err) {
+    if (err instanceof ImageGenerationError && err.code === 'NO_IMAGE_PROVIDER') {
+      return c.json({ error: { code: 'NO_IMAGE_PROVIDER', message: err.message } }, 422)
+    }
+    const message = err instanceof Error ? err.message : 'Bulk avatar regeneration failed'
+    log.error({ err }, 'Failed to start bulk avatar regeneration')
+    return c.json({ error: { code: 'BULK_REGEN_FAILED', message } }, 502)
+  }
 })
 
 // GET /api/settings/models — legacy endpoint (extraction + embedding only)

@@ -13,9 +13,12 @@ import { FormField } from '@/client/components/common/FormField'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
 import { api, getErrorMessage, toastError } from '@/client/lib/api'
 import { useModels } from '@/client/hooks/useModels'
+import { useAgents } from '@/client/hooks/useAgents'
+import { useSSE } from '@/client/hooks/useSSE'
 import { useSettingsNav } from '@/client/pages/settings/SettingsPage'
+import { BulkAvatarRegenModal } from '@/client/components/agent/BulkAvatarRegenModal'
 import { AVATAR_STYLE_PRESETS, AVATAR_SUBJECT_PRESETS } from '@/shared/constants'
-import { ImageUp, Loader2, Sparkles, Upload, RotateCcw } from 'lucide-react'
+import { ImageUp, Loader2, Sparkles, Upload, RotateCcw, Wand2 } from 'lucide-react'
 
 interface AvatarConfig {
   style: string
@@ -28,7 +31,20 @@ export function AvatarsSettings() {
   const { t } = useTranslation()
   const navigate = useSettingsNav()
   const { imageModels } = useModels()
+  const { agents } = useAgents()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [bulkOpen, setBulkOpen] = useState(false)
+
+  // Notify on bulk-regeneration completion even after the modal is closed
+  // (while the user is still on this settings tab).
+  useSSE({
+    'avatar-bulk:done': (data) => {
+      const failed = (data.failed as number) ?? 0
+      const succeeded = (data.succeeded as number) ?? 0
+      if (failed === 0) toast.success(t('settings.avatars.bulk.toastDoneAllOk', { count: succeeded }))
+      else toast.warning(t('settings.avatars.bulk.toastDone', { succeeded, failed }))
+    },
+  })
 
   const [isLoading, setIsLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
@@ -209,6 +225,29 @@ export function AvatarsSettings() {
   return (
     <div className="space-y-8">
       <p className="text-sm text-muted-foreground">{t('settings.avatars.description')}</p>
+
+      {/* ─── Bulk regeneration ──────────────────────────────────────────── */}
+      <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-0.5">
+          <Label className="inline-flex items-center gap-1.5">
+            {t('settings.avatars.bulk.cardTitle')}
+            <InfoTip content={t('settings.avatars.bulk.cardTip')} />
+          </Label>
+          <p className="text-xs text-muted-foreground">{t('settings.avatars.bulk.cardHint')}</p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          onClick={() => setBulkOpen(true)}
+          disabled={!hasImageModels}
+          title={!hasImageModels ? t('settings.avatars.base.needsProvider') : undefined}
+        >
+          <Wand2 className="size-4" />
+          {t('settings.avatars.bulk.button')}
+        </Button>
+      </div>
 
       {/* ─── Base image (img2img reference) ─────────────────────────────── */}
       <div className="space-y-3">
@@ -391,6 +430,13 @@ export function AvatarsSettings() {
           'settings.avatars.help.bullet3',
         ]}
         storageKey="help.avatars.open"
+      />
+
+      <BulkAvatarRegenModal
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        agents={agents}
+        imageModels={imageModels}
       />
     </div>
   )

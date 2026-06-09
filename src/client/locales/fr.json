@@ -1300,6 +1300,33 @@
         "bullet1": "Le style artistique (A) et le sujet/type (B) sont globaux — chaque nouvel avatar généré les utilise pour un rendu cohérent",
         "bullet2": "L'image de base donne aux modèles compatibles une référence pour que les avatars partagent le même rendu. Générez-en une ou importez-la, puis gardez « Utiliser l'image de base » activé",
         "bullet3": "Le caractère propre à chaque Agent (C) est écrit automatiquement à partir de son identité — ajustez un avatar précis depuis le sélecteur d'avatar de l'Agent (onglet Manuel) sans toucher à ces réglages globaux"
+      },
+      "bulk": {
+        "cardTitle": "Régénérer les avatars existants",
+        "cardTip": "Lance la génération automatique habituelle pour chaque Agent sélectionné en utilisant la direction artistique ci-dessus. Les avatars existants sont écrasés.",
+        "cardHint": "Appliquez la direction artistique actuelle aux Agents créés avant que vous ne la modifiiez.",
+        "button": "Régénérer tous les avatars",
+        "title": "Régénérer les avatars",
+        "description": "Choisissez les Agents dont vous voulez régénérer l'avatar avec la direction artistique actuelle. La régénération s'exécute sur le serveur — vous pouvez fermer cette fenêtre une fois qu'elle a démarré.",
+        "model": "Modèle d'image",
+        "selectAll": "Tout sélectionner",
+        "deselectAll": "Tout désélectionner",
+        "selectedCount": "{{count}} sélectionné(s)",
+        "configuratorTag": "configurateur",
+        "regenerate": "Régénérer ({{count}})",
+        "noAgents": "Aucun Agent à régénérer pour l'instant.",
+        "running": {
+          "note": "La régénération s'exécute sur le serveur — vous pouvez fermer cette fenêtre sans risque, elle continuera.",
+          "progress": "{{done}} / {{total}} terminé(s)",
+          "failedCount": "{{count}} en échec"
+        },
+        "done": {
+          "allOk": "Les {{count}} avatars ont été régénérés.",
+          "summary": "{{succeeded}} régénéré(s), {{failed}} en échec."
+        },
+        "failedList": "En échec :",
+        "toastDoneAllOk": "Les {{count}} avatars ont été régénérés",
+        "toastDone": "Régénération des avatars terminée — {{succeeded}} réussi(s), {{failed}} en échec"
       }
     },
     "providers": {
