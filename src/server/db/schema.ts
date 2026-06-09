@@ -85,6 +85,42 @@ export const providers = sqliteTable('providers', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })
 
+/**
+ * Model registry — the source of truth for per-model metadata (context, modalities,
+ * reasoning, pricing), seeded from the bundled models.dev snapshot and editable by
+ * the admin. One row per (provider, upstream model id). See `model-metadata.md`.
+ *
+ * Capability flags are NULLABLE on purpose: `null` = "unknown" (fail-open), which
+ * is distinct from an explicit `false`. `overridden_fields` lists the fields the
+ * admin has pinned (they survive models.dev re-syncs); `manual` mode freezes the
+ * whole row. Wiring is gated behind the `HIVEKEEP_MODEL_REGISTRY` flag.
+ */
+export const modelRegistry = sqliteTable('model_registry', {
+  id: text('id').primaryKey(),
+  providerId: text('provider_id').notNull().references(() => providers.id, { onDelete: 'cascade' }),
+  modelId: text('model_id').notNull(),
+  displayName: text('display_name'),
+  mappingMode: text('mapping_mode').notNull().default('auto'), // 'auto' | 'manual'
+  modelsDevKey: text('models_dev_key'), // e.g. "deepseek/deepseek-v4-flash"
+  matchConfidence: text('match_confidence'), // 'exact' | 'normalized' | 'family' | 'none'
+  contextWindow: integer('context_window'),
+  maxOutput: integer('max_output'),
+  supportsToolCall: integer('supports_tool_call', { mode: 'boolean' }), // null = unknown
+  supportsImageInput: integer('supports_image_input', { mode: 'boolean' }), // null = unknown
+  supportsPdfInput: integer('supports_pdf_input', { mode: 'boolean' }), // null = unknown
+  reasoning: text('reasoning'), // JSON: { enabled: boolean, efforts: string[] }
+  pricing: text('pricing'), // JSON: { input, output, cacheRead?, cacheWrite? }
+  overriddenFields: text('overridden_fields'), // JSON string[] of admin-pinned field names
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  needsReview: integer('needs_review', { mode: 'boolean' }).notNull().default(false), // auto-pick low confidence → "à vérifier"
+  stale: integer('stale', { mode: 'boolean' }).notNull().default(false), // id no longer returned by the provider API
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+}, (table) => [
+  uniqueIndex('idx_model_registry_provider_model').on(table.providerId, table.modelId),
+  index('idx_model_registry_provider').on(table.providerId),
+])
+
 export const agents = sqliteTable('agents', {
   id: text('id').primaryKey(),
   slug: text('slug').unique(),

@@ -819,6 +819,9 @@ export interface LLMModel {
   maxTools?: number
   /** True when the model can accept image blocks in user messages. */
   supportsImageInput?: boolean
+  /** True when the model can accept PDF / document blocks in user messages.
+   *  (models.dev exposes a `pdf` input modality alongside `image`.) */
+  supportsPdfInput?: boolean
   /** True when the model supports provider-side prompt caching
    *  (Anthropic explicit cache_control, OpenAI auto-cache). */
   supportsPromptCaching?: boolean

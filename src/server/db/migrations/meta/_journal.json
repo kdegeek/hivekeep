@@ -673,6 +673,13 @@
       "when": 1781019487220,
       "tag": "0095_salty_grey_gargoyle",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "6",
+      "when": 1781042539105,
+      "tag": "0096_tricky_sage",
+      "breakpoints": true
     }
   ]
 }
