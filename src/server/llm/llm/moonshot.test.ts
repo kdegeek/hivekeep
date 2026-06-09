@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'bun:test'
-import { inferContextWindow, inferImageInput, mapModel, type MoonshotModel } from './moonshot'
+import {
+  assistantMessage,
+  inferContextWindow,
+  inferImageInput,
+  inferThinking,
+  mapModel,
+  type MoonshotModel,
+} from './moonshot'
 
 // Fixtures mirror the LIVE /models payload, which enriches each entry with
 // authoritative capability metadata: `context_length`, `supports_image_in`,
@@ -129,10 +136,34 @@ describe('inferImageInput', () => {
   })
 })
 
+// ─── inferThinking (reasoning classification) ────────────────────────────────
+
+describe('inferThinking', () => {
+  it('advertises the low/medium/high effort range for reasoning-flagged models', () => {
+    const t = inferThinking(k26)
+    expect(t).toBeDefined()
+    expect(t!.efforts).toEqual(['low', 'medium', 'high'])
+    expect(typeof t!.note).toBe('string')
+    expect(inferThinking(k25)).toBeDefined()
+  })
+
+  it('returns undefined for models the API does not mark reasoning-capable', () => {
+    expect(inferThinking(v1_8k)).toBeUndefined()
+    expect(inferThinking(v1_8kVision)).toBeUndefined()
+    expect(inferThinking(v1_auto)).toBeUndefined()
+  })
+
+  it('does not infer reasoning from the id alone (only the explicit flag)', () => {
+    // A bare flagship entry (no supports_reasoning field) gets NO thinking,
+    // even though its id is a kimi-k2 flagship.
+    expect(inferThinking(bareK2)).toBeUndefined()
+  })
+})
+
 // ─── mapModel ────────────────────────────────────────────────────────────────
 
 describe('mapModel', () => {
-  it('classifies the flagship as an image-capable llm with no thinking', () => {
+  it('classifies the flagship as an image- and reasoning-capable llm', () => {
     const m = mapModel(k26)!
     expect(m.id).toBe('kimi-k2.6')
     expect(m.name).toBe('kimi-k2.6')
@@ -141,27 +172,74 @@ describe('mapModel', () => {
     expect(m.supportsParallelTools).toBe(true)
     // The API reports supports_image_in:true even though the id has no "vision".
     expect(m.supportsImageInput).toBe(true)
-    // Reasoning is never advertised — reasoning_effort acceptance is unconfirmed.
-    expect(m.thinking).toBeUndefined()
+    // The API reports supports_reasoning:true and accepts reasoning_effort.
+    expect(m.thinking?.efforts).toEqual(['low', 'medium', 'high'])
   })
 
-  it('sets supportsImageInput on a vision-preview model', () => {
+  it('sets supportsImageInput but no thinking on a vision-preview model', () => {
     const m = mapModel(v1_8kVision)!
     expect(m.id).toBe('moonshot-v1-8k-vision-preview')
     expect(m.contextWindow).toBe(8_192)
     expect(m.supportsImageInput).toBe(true)
+    // Vision models are not reasoning models.
     expect(m.thinking).toBeUndefined()
   })
 
-  it('leaves supportsImageInput undefined on a text-only model', () => {
+  it('leaves supportsImageInput and thinking undefined on a text-only model', () => {
     const m = mapModel(v1_128k)!
     expect(m.id).toBe('moonshot-v1-128k')
     expect(m.contextWindow).toBe(131_072)
     expect(m.supportsImageInput).toBeUndefined()
+    expect(m.thinking).toBeUndefined()
   })
 
   it('returns null for entries without an id', () => {
     expect(mapModel({ id: '' })).toBeNull()
+  })
+})
+
+// ─── assistantMessage (reasoning_content replay) ─────────────────────────────
+
+describe('assistantMessage', () => {
+  // Moonshot reasoning models 400 on a tool-call assistant message that lacks
+  // reasoning_content. The engine strips unsigned thinking before replay, so it
+  // is usually empty here — an empty string is what prevents the 400.
+  it('sets reasoning_content (empty) on a tool-call message with no thinking', () => {
+    const msg = assistantMessage([
+      { type: 'tool-use', id: 'call_1', name: 'get_weather', args: { city: 'Paris' } },
+    ]) as { tool_calls?: unknown[]; reasoning_content?: string }
+    expect(msg.tool_calls).toHaveLength(1)
+    expect(msg.reasoning_content).toBe('')
+  })
+
+  it('replays real reasoning text when a thinking block is present', () => {
+    const msg = assistantMessage([
+      { type: 'thinking', text: 'The user wants the weather, so I will call the tool.' },
+      { type: 'tool-use', id: 'call_1', name: 'get_weather', args: { city: 'Paris' } },
+    ]) as { tool_calls?: unknown[]; reasoning_content?: string }
+    expect(msg.tool_calls).toHaveLength(1)
+    expect(msg.reasoning_content).toBe('The user wants the weather, so I will call the tool.')
+  })
+
+  it('does NOT attach reasoning_content to a plain text message (no tool calls)', () => {
+    const msg = assistantMessage([{ type: 'text', text: 'It is 18°C in Paris.' }]) as {
+      content?: string
+      reasoning_content?: string
+      tool_calls?: unknown[]
+    }
+    expect(msg.content).toBe('It is 18°C in Paris.')
+    expect(msg.tool_calls).toBeUndefined()
+    expect('reasoning_content' in msg).toBe(false)
+  })
+
+  it('keeps assistant text alongside tool calls', () => {
+    const msg = assistantMessage([
+      { type: 'text', text: 'Let me check.' },
+      { type: 'tool-use', id: 'call_1', name: 'get_weather', args: { city: 'Paris' } },
+    ]) as { content?: string; tool_calls?: unknown[]; reasoning_content?: string }
+    expect(msg.content).toBe('Let me check.')
+    expect(msg.tool_calls).toHaveLength(1)
+    expect(msg.reasoning_content).toBe('')
   })
 })
 

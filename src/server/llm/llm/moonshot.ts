@@ -24,17 +24,16 @@
  * e.g. `moonshot-v1-{8k,32k,128k}-vision-preview`) is kept only as a fallback
  * for entries that omit the field.
  *
- * Reasoning: the API advertises `supports_reasoning: true` for `kimi-k2.{5,6}`,
- * but that flag does NOT confirm the model accepts the OpenAI-compatible
- * `reasoning_effort` request parameter — Moonshot may reason automatically via a
- * different mechanism. We have already hit 400s on other providers
- * (gpt-5-chat-latest, grok *-non-reasoning) by sending `reasoning_effort` to
- * models that reject it, and the param is currently untestable here (the test
- * account is balance-suspended). The safe default is therefore to NOT advertise
- * reasoning efforts for any Moonshot model (`thinking` left undefined), so the
- * effort gate in `chat()` never fires. The `reasoning_content` → thinking-delta
- * passthrough is kept regardless (harmless if the field is absent), so reasoning
- * summaries still stream through when the model emits them.
+ * Reasoning: the API's `supports_reasoning` flag is authoritative and was
+ * verified live — `kimi-k2.{5,6}` reason by default (they stream
+ * `reasoning_content` with no extra params) AND accept the OpenAI-compatible
+ * `reasoning_effort` request param (low/medium/high all return 200; even the
+ * non-reasoning `moonshot-v1-*` models tolerate it but simply don't reason). So
+ * we advertise the standard effort range ONLY for models the API marks
+ * reasoning-capable; the effort gate in `chat()` then forwards `reasoning_effort`
+ * for exactly those. Models without the flag get no `thinking`, so the gate
+ * never fires for them. The `reasoning_content` → thinking-delta passthrough is
+ * kept regardless (harmless when absent), so reasoning summaries stream through.
  */
 
 import OpenAI, { APIError } from 'openai'
@@ -112,9 +111,10 @@ export interface MoonshotModel {
   /** Authoritative video-input flag (not yet modeled — image-in is what drives capability). */
   supports_video_in?: boolean
   /**
-   * Whether the model reasons. NOTE: this does NOT imply it accepts the OpenAI
-   * `reasoning_effort` request param, so it is deliberately not consumed yet
-   * (see file header — `thinking` stays undefined).
+   * Authoritative reasoning flag. When true, `inferThinking()` advertises the
+   * low/medium/high effort range and `chat()` forwards `reasoning_effort` to the
+   * API. Verified live: `kimi-k2.{5,6}` accept low/medium/high (200); the
+   * non-reasoning `moonshot-v1-*` models tolerate but ignore the param.
    */
   supports_reasoning?: boolean
 }
@@ -167,10 +167,30 @@ export function inferImageInput(model: MoonshotModel): boolean {
 }
 
 /**
+ * Reasoning support, driven by the API's authoritative `supports_reasoning`
+ * flag. Verified live: the flagged models (`kimi-k2.{5,6}`) accept the
+ * OpenAI-compatible `reasoning_effort` param across low/medium/high. We
+ * advertise that effort range only for flagged models, so the `chat()` gate
+ * forwards `reasoning_effort` for exactly those (and never for the older
+ * `moonshot-v1-*` models, which don't reason). The id is not consulted — only
+ * the explicit flag is trustworthy here.
+ *
+ * @internal exported for tests.
+ */
+export function inferThinking(model: MoonshotModel): LLMModel['thinking'] | undefined {
+  if (model.supports_reasoning !== true) return undefined
+  return {
+    efforts: ['low', 'medium', 'high'],
+    note: 'Kimi reasons by default; the effort setting is accepted but may have a limited visible effect.',
+  }
+}
+
+/**
  * Map a Moonshot catalogue entry to a Hivekeep `LLMModel`, or null if it has no
- * id. Every model is classified as an `llm` capability. Image input is set from
- * the id (vision models), reasoning is deliberately left undefined (see file
- * header), and context windows are inferred from the id suffix.
+ * id. Every model is classified as an `llm` capability. Image input and
+ * reasoning are taken from the API's authoritative `supports_image_in` /
+ * `supports_reasoning` flags (id heuristics are a fallback for image only), and
+ * context windows from the API's `context_length` (id-suffix fallback).
  *
  * @internal exported for tests.
  */
@@ -185,9 +205,10 @@ export function mapModel(model: MoonshotModel): LLMModel | null {
     // forwards cache hits in usage. No per-block cache control to send.
     supportsPromptCaching: true,
     supportsParallelTools: true,
-    // No `thinking`: reasoning_effort support is unconfirmed — never send it.
   }
   if (inferImageInput(model)) out.supportsImageInput = true
+  const thinking = inferThinking(model)
+  if (thinking) out.thinking = thinking
   return out
 }
 
@@ -312,14 +333,36 @@ function userBlocksToContent(
   return parts
 }
 
-function assistantMessage(
+/**
+ * Build an OpenAI-compatible assistant message from hivekeep content blocks.
+ *
+ * Moonshot's reasoning models (`kimi-k2.{5,6}`) run with thinking enabled by
+ * default and REJECT an assistant *tool-call* message that carries no
+ * `reasoning_content` ("400 thinking is enabled but reasoning_content is missing
+ * in assistant tool call message at index N"). This fires on every multi-step
+ * tool-using turn — the continuation call replays the prior assistant tool-call
+ * message, and Queenie is tool-heavy. The engine strips unsigned thinking before
+ * replay (it only carries `signature`-bearing thinking across steps, see
+ * agent-engine's `if (tb.signature)` gate) and Moonshot's `reasoning_content` is
+ * unsigned, so the real reasoning text is usually unavailable here. An empty
+ * string satisfies the requirement (verified live) and is accepted/ignored by
+ * the non-reasoning `moonshot-v1-*` models, so we set `reasoning_content`
+ * unconditionally on tool-call messages. When a thinking block IS present (e.g.
+ * a future signed path) we replay its text for chain-of-thought continuity.
+ *
+ * @internal exported for tests.
+ */
+export function assistantMessage(
   blocks: HivekeepMessage['content'],
-): ChatCompletionAssistantMessageParam {
+): ChatCompletionAssistantMessageParam & { reasoning_content?: string } {
   let text = ''
+  let reasoning = ''
   const toolCalls: ChatCompletionMessageToolCall[] = []
   for (const b of blocks) {
     if (b.type === 'text') {
       text += b.text
+    } else if (b.type === 'thinking') {
+      reasoning += b.text
     } else if (b.type === 'tool-use') {
       toolCalls.push({
         id: b.id,
@@ -331,9 +374,16 @@ function assistantMessage(
       })
     }
   }
-  const msg: ChatCompletionAssistantMessageParam = { role: 'assistant' }
+  // `reasoning_content` is a Moonshot/OpenAI-compatible extension absent from
+  // the upstream assistant-message type.
+  const msg: ChatCompletionAssistantMessageParam & { reasoning_content?: string } = {
+    role: 'assistant',
+  }
   if (text) msg.content = text
-  if (toolCalls.length > 0) msg.tool_calls = toolCalls
+  if (toolCalls.length > 0) {
+    msg.tool_calls = toolCalls
+    msg.reasoning_content = reasoning
+  }
   return msg
 }
 
@@ -555,10 +605,10 @@ export const moonshotProvider: LLMProvider = {
     }
 
     // Reasoning: only send the OpenAI-compatible `reasoning_effort` string when
-    // the model advertises reasoning support. Moonshot models never set
-    // `thinking` (see file header), so this gate never fires — but it mirrors
-    // the xAI/DeepSeek shape so the day Moonshot confirms support it's a
-    // one-line metadata change in `mapModel`.
+    // the model advertises reasoning support. `mapModel` sets `thinking` from
+    // the API's `supports_reasoning` flag, so this fires for `kimi-k2.{5,6}`
+    // (verified to accept low/medium/high) and stays silent for the older
+    // `moonshot-v1-*` models.
     if (request.thinkingEffort && model.thinking?.efforts?.length) {
       const chosen = downgradeEffort(request.thinkingEffort, model.thinking.efforts)
       if (chosen) {
