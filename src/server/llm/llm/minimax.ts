@@ -26,15 +26,21 @@
  * `thinking-delta` and text after `</think>` to `text-delta`. If no `<think>`
  * appears, content streams through as plain `text-delta`.
  *
- * Because reasoning support cannot be advertised via `reasoning_effort` (the
- * /models payload exposes no thinking metadata, and the reasoning is implicit
- * in the model family rather than an opt-in effort knob), `thinking` is left
- * undefined on every model — so the effort gate in `chat()` never fires and we
- * never send `reasoning_effort` (which would be a 400 on a model that rejects
- * it, the bug that bit gpt-5-chat-latest / grok non-reasoning).
+ * IMPORTANT (verified live on MiniMax-M3): M3 streams its reasoning TWICE per
+ * chunk — once in a dedicated `delta.reasoning` field AND once inline in
+ * `delta.content` as `<think>…</think>` (identical text). To avoid emitting the
+ * chain-of-thought twice, the handler prefers the dedicated field and, once it
+ * has seen it, strips the `<think>` wrapper from content WITHOUT re-emitting its
+ * interior (the answer after `</think>` always flows through). Models that only
+ * stream `<think>` in content fall back to the parser's thinking output.
  *
- * Vision/image input: the /models payload exposes no modality metadata, so
- * every MiniMax model defaults to text-only.
+ * Because reasoning has no `reasoning_effort` knob (the /models payload exposes
+ * no thinking metadata and reasoning is implicit in the family), `thinking` is
+ * left undefined on every model — so the effort gate in `chat()` never fires and
+ * we never send `reasoning_effort` (which would 400 on a model that rejects it).
+ *
+ * Vision/image input: /models exposes no modality field, so it is inferred from
+ * the id — MiniMax-M3 is multimodal (image input), the M2.x family is text-only.
  */
 
 import OpenAI, { APIError } from 'openai'
@@ -116,16 +122,17 @@ export interface MiniMaxModel {
  * 128k — the /models endpoint omits the window, and over-reporting a window we
  * never reach is harmless while under-reporting truncates real conversations.
  */
-const DEFAULT_CONTEXT_WINDOW = 1_000_000
+const DEFAULT_CONTEXT_WINDOW = 1_048_576
 
 /**
  * Context windows by family. MiniMax's `/models` endpoint omits the window, so
  * we map it from the model id. First match wins. Every current M-series id
  * (MiniMax-M3, MiniMax-M2.x, *-highspeed, …) is long-context, so the single
- * `minimax-m` prefix and the default both land at 1M.
+ * `minimax-m` prefix and the default both land at 1M (1,048,576, matching the
+ * repo convention for the 1M tier in deepseek.ts).
  */
 const CONTEXT_BY_PREFIX: Array<[RegExp, number]> = [
-  [/^minimax-m/i, 1_000_000],
+  [/^minimax-m/i, 1_048_576],
 ]
 
 /**
@@ -139,18 +146,31 @@ export function inferContextWindow(model: MiniMaxModel): number {
 }
 
 /**
+ * Vision support. MiniMax-M3 is the multimodal generation (text + image + video
+ * in); the M2.x family is text-only (verified live — M3 ingests an image and
+ * answers about it; M2 ignores it). /models exposes no modality field, so we
+ * infer from the id.
+ *
+ * @internal exported for tests.
+ */
+const VISION_PATTERN = /^minimax-m3/i
+export function inferImageInput(model: MiniMaxModel): boolean {
+  return VISION_PATTERN.test(model.id)
+}
+
+/**
  * Map a MiniMax catalogue entry to a Hivekeep `LLMModel`, or null if it has no
- * id. Every model is classified as an `llm` capability: text-only (no vision),
- * with reasoning deliberately left undefined (see file header — reasoning is
- * emitted inline as `<think>` rather than opted into via `reasoning_effort`).
- * Context windows are inferred from family naming.
+ * id. Classified as an `llm` capability; image input is set for the multimodal
+ * M3 family (text-only otherwise). Reasoning is deliberately left undefined (see
+ * file header — it is emitted inline as `<think>`, not opted into via
+ * `reasoning_effort`). Context windows are inferred from family naming.
  *
  * @internal exported for tests.
  */
 export function mapModel(model: MiniMaxModel): LLMModel | null {
   if (!model.id) return null
 
-  return {
+  const out: LLMModel = {
     id: model.id,
     name: model.id,
     contextWindow: inferContextWindow(model),
@@ -158,9 +178,10 @@ export function mapModel(model: MiniMaxModel): LLMModel | null {
     // forwards cache hits in usage. No per-block cache control to send.
     supportsPromptCaching: true,
     supportsParallelTools: true,
-    // No vision: the /models payload exposes no modality metadata.
     // No `thinking`: reasoning is inline <think>, never reasoning_effort.
   }
+  if (inferImageInput(model)) out.supportsImageInput = true
+  return out
 }
 
 // ─── Inline <think> stream parser (THE SPECIAL PART) ─────────────────────────
@@ -508,6 +529,10 @@ async function* streamChat(
   let usage: Usage = {}
   // The inline-<think> parser: routes delta.content into thinking vs answer.
   const think = createThinkParser()
+  // MiniMax-M3 ALSO streams reasoning in a dedicated field; when it does, the
+  // inline <think> interior is a verbatim duplicate and must not be emitted
+  // twice. Once we've seen the dedicated field, suppress the parser's thinking.
+  let sawDedicatedReasoning = false
 
   try {
     for await (const chunk of stream) {
@@ -529,19 +554,24 @@ async function* streamChat(
             reasoning?: string | null
           })
         | undefined
-      // Forward-compat: if MiniMax ever surfaces reasoning in a dedicated
-      // field (like DeepSeek), route it straight to thinking-delta.
+      // MiniMax-M3 streams its reasoning in a dedicated `reasoning` field AND
+      // inline in `content` as <think>…</think> (the same text). Prefer the
+      // dedicated field; once seen, the <think> interior is a duplicate so we
+      // strip the wrapper but don't re-emit it. (DeepSeek-style `reasoning_content`
+      // is tolerated for forward-compat.)
       const reasoning = delta?.reasoning_content ?? delta?.reasoning
       if (reasoning) {
+        sawDedicatedReasoning = true
         yield { type: 'thinking-delta', text: reasoning }
       }
-      // The actual MiniMax M-series path: reasoning is inline in content as
-      // <think>…</think>. The state machine separates it from the answer and
-      // tolerates tags split across chunks.
+      // The classic MiniMax path: reasoning inline in content as <think>…</think>.
+      // The state machine separates it from the answer (tolerating tags split
+      // across chunks); its thinking is suppressed when the dedicated field
+      // already carried the reasoning, but the answer always flows through.
       if (delta?.content) {
         for (const seg of think.push(delta.content)) {
           if (seg.kind === 'thinking') {
-            yield { type: 'thinking-delta', text: seg.text }
+            if (!sawDedicatedReasoning) yield { type: 'thinking-delta', text: seg.text }
           } else {
             yield { type: 'text-delta', text: seg.text }
           }
@@ -568,10 +598,11 @@ async function* streamChat(
     throw mapApiError(err)
   }
 
-  // Flush any buffered trailing fragment from the <think> parser.
+  // Flush any buffered trailing fragment from the <think> parser (suppressing
+  // duplicated thinking when the dedicated reasoning field already carried it).
   for (const seg of think.flush()) {
     if (seg.kind === 'thinking') {
-      yield { type: 'thinking-delta', text: seg.text }
+      if (!sawDedicatedReasoning) yield { type: 'thinking-delta', text: seg.text }
     } else {
       yield { type: 'text-delta', text: seg.text }
     }
