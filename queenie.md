@@ -78,10 +78,14 @@ get_global_prompt, set_global_prompt,
 generate_image, list_image_models, describe_image_model,
 create_contact, set_contact_note, get_contact,
 memorize, recall,
+list_email_accounts, list_calendar_accounts, list_address_books,
+describe_trigger_conditions, list_email_folders, create_account_trigger,
+list_account_triggers, update_account_trigger, delete_account_trigger,
 prompt_secret, prompt_human,
 web_search, browse_url
 ```
 > `generate_image` est inclus volontairement : une fois l'image provider branché, Queenie peut **générer un avatar d'exemple** pour se mettre d'accord sur le style de façon empirique (cf. §9).
+> **Comptes connectés & déclencheurs email** : *connecter* un compte (OAuth/login) reste UI-only — Queenie ne peut que le constater (`list_email_accounts`…) et guider vers les Settings. En revanche **configurer des triggers** est tool-driven : une fois un compte email branché, Queenie peut câbler des déclencheurs (`describe_trigger_conditions` → `list_email_folders` → `create_account_trigger`) qui sollicitent un Agent quand un mail correspond à des conditions (conversation ou tâche isolée). Les triggers créés par un Agent peuvent requérir une approbation selon le réglage global `agent_triggers_require_approval`.
 > `create_agent`/`update_agent`/channel admin sont aujourd'hui `defaultDisabled` et `HARD_EXCLUDED_FROM_SUBKIN` — ce sont des tools « main ». Queenie est un Agent **main**, donc ils s'appliquent dès qu'ils sont dans sa toolbox. La même toolbox sert en modale et en liste (réponse à la contrainte « toolset restreint » sans infra par-vue).
 
 ### 4.4 Bloc système `[Configurator mission]`
@@ -119,7 +123,7 @@ Pour que Queenie réponde avec autorité (et **ne botte jamais en touche**), il 
 
 - **Document bundlé** `src/server/assets/queenie-knowledge.md`, **chargé au démarrage** (lecture cachée) et injecté dans le **segment STABLE** du prompt de Queenie (bloc `[Configurator knowledge]`, juste après `[Configurator mission]`). Stable ⇒ amorti par le cache de prompt ; **uniquement** pour `kind==='configurator'`, donc aucun impact sur les autres Agents.
 - **Contenu à rédiger** (gros prompt — tâche 27.5.6) :
-  - **Catalogue des fonctionnalités** avec, pour chacune, *à quoi ça sert / quand le proposer* : Agents & sous-Agents (tasks `await`/`async`), crons, mémoire (extraction auto + outils), vault/secrets, channels (Discord/Telegram…), mini-apps, projets & tickets, custom tools, MCP servers, providers & capacités (llm/embedding/image/search/tts/stt), recherche web, génération d'images, TTS/STT, compacting, communication inter-Agents, palettes/design.
+  - **Catalogue des fonctionnalités** avec, pour chacune, *à quoi ça sert / quand le proposer* : Agents & sous-Agents (tasks `await`/`async`), crons, mémoire (extraction auto + outils), vault/secrets, channels (Discord/Telegram…), comptes connectés (email/agenda/contacts) & **déclencheurs email** (triggers : un mail correspondant sollicite un Agent, en conversation ou en tâche), mini-apps, projets & tickets, custom tools, MCP servers, providers & capacités (llm/embedding/image/search/tts/stt), recherche web, génération d'images, TTS/STT, compacting, communication inter-Agents, palettes/design.
   - **Architecture globale** (vulgarisée) : process unique, SQLite unique, conteneur unique, queue FIFO par Agent, SSE global, plugins.
   - **Méta-projet** (faits figés) : produit **Hivekeep** (*« AI agents that actually remember you »*) ; créateur **marlburrow** (GitHub [@MarlBurroW](https://github.com/MarlBurroW)) ; repo `https://github.com/MarlBurroW/hivekeep` ; site `https://marlburrow.github.io/hivekeep/` ; docs `https://marlburrow.github.io/hivekeep/docs/` ; licence **MIT** ; aide via GitHub **Issues**/**Discussions** (pas de Discord) ; **open source, self-hosted, pas de SaaS prévu**.
   - **Limites & garde-fous** : ce que Queenie peut/doit ne pas faire (ne jamais demander un secret en clair, config globale réservée à l'admin, etc.).
