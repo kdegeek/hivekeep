@@ -566,7 +566,7 @@ Architecture monolithique en un seul process, conçue pour un déploiement simpl
 | **Recherche vectorielle** | sqlite-vec | Extension SQLite pour la recherche KNN sur les embeddings (mémoire long terme) |
 | **Recherche textuelle** | SQLite FTS5 | Full-text search natif pour la recherche hybride (mémoire + historique) |
 | **ORM** | Drizzle | Type-safe, migrations, requêtes proches du SQL |
-| **LLM** | Primitives natives (`src/server/llm/llm/`) | Orchestration multi-provider (Anthropic, OpenAI, Gemini, OpenRouter, xAI), streaming, tool calling |
+| **LLM** | Primitives natives (`src/server/llm/llm/`) | Orchestration multi-provider (Anthropic, OpenAI, Gemini, OpenRouter, xAI, DeepSeek, MiniMax, Kimi), streaming, tool calling |
 | **Embeddings** | Primitives natives (`src/server/llm/embedding/`) | Génération d'embeddings (OpenAI) pour la mémoire long terme |
 | **Auth** | Better Auth | Multi-user, sessions, compatible SQLite/Drizzle |
 | **Crons** | croner | Scheduler in-process, pas besoin de Redis |
@@ -748,9 +748,10 @@ A partir d'un `ProviderConfig`, le système instancie les interfaces de capacit�
 
 | Provider | Capacités |
 |---|---|
-| **Anthropic** | `llm` |
-| **OpenAI** | `llm`, `embedding`, `image` |
+| **Anthropic** | `llm` (clé API + OAuth Claude Max) |
+| **OpenAI** | `llm`, `embedding`, `image`, `tts`, `stt` (clé API + Codex CLI) |
 | **Gemini** | `llm`, `image` |
+| **OpenRouter / xAI / DeepSeek / MiniMax / Kimi** | `llm` |
 | **Voyage AI** | `embedding` |
 
 #### Search Providers

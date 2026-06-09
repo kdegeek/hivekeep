@@ -551,6 +551,71 @@ Journal des appels webhook reçus.
 
 ---
 
+### `account_triggers`
+
+Déclencheurs par compte email connecté : quand un nouvel email correspond à l'arbre de conditions, l'Agent cible est sollicité (conversation ou tâche). Polling (aucun provider ne fait de push simple en mono-conteneur).
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | text PK | UUID | |
+| `account_id` | text | FK → providers.id, ON DELETE CASCADE, NOT NULL | Compte email connecté (capability `email`) |
+| `name` | text | NOT NULL | Nom d'affichage |
+| `is_active` | integer | NOT NULL, DEFAULT 1 | Actif / Inactif |
+| `folder` | text | NOT NULL, DEFAULT 'INBOX' | Dossier/label surveillé |
+| `conditions` | text | NOT NULL | Arbre de conditions (JSON : nœud `{type:'group', op:'and'\|'or', children[]}` ou `{type:'leaf', field, op, value, negate?}`) |
+| `prompt` | text | NOT NULL | Instruction transmise à l'Agent cible |
+| `target_agent_id` | text | FK → agents.id, NOT NULL | Agent sollicité |
+| `dispatch_mode` | text | NOT NULL, DEFAULT 'conversation' | 'conversation' (injecté dans la session principale, avec contexte) ou 'task' (sous-tâche isolée, sans historique) |
+| `max_concurrent_tasks` | integer | NOT NULL, DEFAULT 1 | Max tâches concurrentes (mode task). 0 = illimité |
+| `needs_body` | integer | NOT NULL, DEFAULT 0 | 1 si une condition vise le corps/pièces jointes (fetch du message complet requis au polling) |
+| `last_triggered_at` | integer | | Dernier déclenchement |
+| `trigger_count` | integer | NOT NULL, DEFAULT 0 | Nombre de déclenchements |
+| `created_by` | text | NOT NULL, DEFAULT 'user' | 'user' ou 'agent' |
+| `requires_approval` | integer | NOT NULL, DEFAULT 0 | 1 si en attente d'approbation (trigger créé par un Agent, réglage global `agent_triggers_require_approval` activé) |
+| `created_at` | integer | NOT NULL | |
+| `updated_at` | integer | NOT NULL | |
+
+**Index** :
+- `idx_account_triggers_account` sur `account_id`
+- `idx_account_triggers_target_agent` sur `target_agent_id`
+
+---
+
+### `account_sync_state`
+
+Curseur de polling + déduplication, **par (compte, dossier)** — chaque dossier est un flux distinct.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `account_id` | text | FK → providers.id, ON DELETE CASCADE | |
+| `folder` | text | NOT NULL | |
+| `last_seen_date` | integer | NOT NULL | Watermark (Unix ms). Initialisé à NOW à la création du 1er trigger sur ce flux (cold-start : jamais de rejeu de l'historique) |
+| `seen_ids` | text | NOT NULL, DEFAULT '[]' | Anneau JSON des derniers provider-message-ids traités (anti-doublon de bord, le filtre `after` étant à la seconde / inclusif) |
+| `last_polled_at` | integer | | |
+| `last_error` | text | | Dernière erreur de polling |
+
+**PK** : (`account_id`, `folder`)
+
+---
+
+### `trigger_logs`
+
+Journal d'évaluation/déclenchement des triggers.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | text PK | UUID | |
+| `trigger_id` | text | FK → account_triggers.id, ON DELETE CASCADE, NOT NULL | |
+| `summary` | text | | Résumé du mail (« from · subject ») |
+| `matched` | integer | NOT NULL | 1 si le trigger a matché |
+| `action` | text | | 'conversation' \| 'task' (null si non matché) |
+| `created_at` | integer | NOT NULL | |
+
+**Index** :
+- `idx_trigger_logs_trigger_created` sur (`trigger_id`, `created_at`)
+
+---
+
 ### `vault_secrets`
 
 Coffre-fort de secrets chiffrés.

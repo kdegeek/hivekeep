@@ -1276,6 +1276,38 @@ to?: number
 
 ---
 
+## Account Triggers
+
+Déclencheurs par compte email connecté (table `account_triggers`, voir `schema.md`). Quand un nouvel email d'un compte connecté correspond à l'arbre de conditions, l'Agent cible est sollicité — dans sa conversation principale (avec contexte) ou via une sous-tâche isolée (le prompt doit alors être auto-suffisant). Réutilise le moteur de dispatch des webhooks. Le polling ne fait aucun appel API quand aucun trigger n'est actif.
+
+### `GET /api/account-triggers?accountId=`
+
+Liste les triggers, optionnellement filtrés sur un compte. → `{ triggers: AccountTriggerSummary[] }`.
+
+### `POST /api/account-triggers`
+
+Crée un trigger (`created_by: 'user'`). Body : `{ accountId, name, folder?, conditions, prompt, targetAgentId, dispatchMode?, maxConcurrentTasks? }`. `conditions` = arbre `ConditionNode`, validé serveur (profondeur ≤ 4, ≤ 30 feuilles, groupe non vide, regex compilable). `201` → `{ trigger }`, sinon `400 VALIDATION_ERROR`.
+
+### `PATCH /api/account-triggers/:id`
+
+Met à jour (ou approuve via `isActive: true`). → `{ trigger }` ou `404`.
+
+### `DELETE /api/account-triggers/:id`
+
+Supprime le trigger.
+
+### `GET /api/account-triggers/:id/logs?limit=`
+
+Journal d'évaluation/déclenchement (`trigger_logs`). → `{ logs: TriggerLogEntry[] }`.
+
+### `GET /api/account-triggers/settings/approval` · `PUT /api/account-triggers/settings/approval`
+
+Réglage global : les triggers créés par un Agent doivent-ils être approuvés avant d'être actifs (défaut `false`). `GET` → `{ requireApproval }` ; `PUT { enabled: boolean }`.
+
+### `GET /api/email-accounts/:id/folders`
+
+Liste les dossiers/labels d'un compte connecté (pour le picker de dossier d'un trigger). → `{ folders: { id, name, type? }[] }`. Retombe sur `INBOX` si le provider n'expose pas `listFolders`.
+
 ## SSE
 
 ### `GET /api/sse`
@@ -1306,6 +1338,12 @@ Connexion SSE **globale** (une seule par client). Le serveur multiplex les évé
 
 // Exécution d'un cron
 { event: 'cron:triggered', data: { cronId: string, agentId: string, taskId: string } }
+
+// Trigger email (compte connecté) : créé / modifié / supprimé / déclenché
+{ event: 'trigger:created', data: { triggerId: string, accountId: string } }
+{ event: 'trigger:updated', data: { triggerId: string, accountId: string } }
+{ event: 'trigger:deleted', data: { triggerId: string, accountId: string } }
+{ event: 'trigger:fired',   data: { triggerId: string, accountId: string } }
 
 // Queue mise a jour
 { event: 'queue:update', data: { agentId: string, queueSize: number, isProcessing: boolean, processingStartedAt?: number } }

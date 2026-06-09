@@ -93,7 +93,7 @@ The same building blocks cover a DevOps copilot, a home brain, a personal knowle
 
 ## Providers and plugins
 
-Bring one config per provider and Hivekeep auto-detects its capabilities (`llm`, `embedding`, `image`, `search`, `stt`, `tts`). **Built in today:** Anthropic (API key and Claude Max OAuth), OpenAI (API key and Codex CLI), Google Gemini, OpenRouter, and xAI for LLMs; OpenAI and Gemini for images; OpenAI for embeddings; OpenAI and ElevenLabs for speech-to-text and text-to-speech; Brave Search, SerpAPI, Tavily, and Perplexity Sonar for web search. Need more? Add any provider as a **plugin** through the typed SDK, no fork required.
+Bring one config per provider and Hivekeep auto-detects its capabilities (`llm`, `embedding`, `image`, `search`, `stt`, `tts`). **Built in today:** Anthropic (API key and Claude Max OAuth), OpenAI (API key and Codex CLI), Google Gemini, OpenRouter, xAI, DeepSeek, MiniMax, and Kimi (Moonshot) for LLMs; OpenAI and Gemini for images; OpenAI for embeddings; OpenAI and ElevenLabs for speech-to-text and text-to-speech; Brave Search, SerpAPI, Tavily, and Perplexity Sonar for web search. Need more? Add any provider as a **plugin** through the typed SDK, no fork required.
 
 ---
 
@@ -232,7 +232,7 @@ End-to-end image generation: an LLM prompt-writer rewrites each prompt from the 
 Projects with injectable context, 5-column Kanban (drag-and-drop, optimistic, SSE), tickets (tags, comments, attachments, history, mentions), per-project tags. Ticket sub-tasks in mandatory `await` with project + ticket context. Automated enrichment. GitHub integration (background clone, isolated worktree per sub-task, PAT in vault via credential helper).
 
 #### 8. Connected accounts (mail, calendar, contacts)
-Generic multi-provider OAuth2 (Google, Microsoft 365, Apple). Mail (Gmail, Outlook/365, IMAP/SMTP). Calendar events (Google, M365, iCloud CalDAV, generic CalDAV). Read-only contact search (iCloud, Google People, MS Graph, CardDAV). Tokens cached server-side, never seen by Agents. Optional send-approval mode, per-Agent allow-list, encryption at rest.
+Generic multi-provider OAuth2 (Google, Microsoft 365, Apple). Mail (Gmail, Outlook/365, IMAP/SMTP). Calendar events (Google, M365, iCloud CalDAV, generic CalDAV). Read-only contact search (iCloud, Google People, MS Graph, CardDAV). Tokens cached server-side, never seen by Agents. Optional send-approval mode, per-Agent allow-list, encryption at rest. **Email triggers**: per-account condition trees (sender, domain, subject, body, attachment…, nested AND/OR) that automatically prompt a target Agent — injected into its conversation or spawned as an isolated task — when matching mail arrives (polled, with cold-start and anti-flood guards; Agents can set them up via tools).
 
 #### 9. Plugins, SDK, marketplace
 NPM-based plugins, typed TypeScript SDK (`@hivekeep/sdk`). Built-in marketplace (keyword `hivekeep-plugin`, live npm search) + Git install. Strict declarative manifest with granular permissions. Native AI tools, native provider families (LLM, embedding, image, search, TTS, STT + email/contacts/calendar), channel adapters, lifecycle hooks, interactive cards, per-plugin storage, permission-controlled HTTP, namespaced vault, scaffold CLI (`create-hivekeep-plugin`), auto-disable on error.
@@ -287,7 +287,7 @@ Full details in the [technical docs](https://marlburrow.github.io/hivekeep/docs/
 | **Runtime** | [Bun](https://bun.sh) |
 | **Backend** | [Hono](https://hono.dev), [Drizzle ORM](https://orm.drizzle.team), bun:sqlite, [sqlite-vec](https://github.com/asg017/sqlite-vec), native LLM primitives (`src/server/llm/*`), [Better Auth](https://www.better-auth.com), [croner](https://github.com/Hexagon/croner) |
 | **Frontend** | [React](https://react.dev), [Vite](https://vite.dev), [Tailwind CSS](https://tailwindcss.com), [shadcn/ui](https://ui.shadcn.com), [i18next](https://www.i18next.com) |
-| **LLM providers** | Anthropic, OpenAI, Google Gemini, OpenRouter, xAI (plus image, embedding, search, and speech providers; more via plugins) |
+| **LLM providers** | Anthropic, OpenAI, Google Gemini, OpenRouter, xAI, DeepSeek, MiniMax, Kimi (plus image, embedding, search, and speech providers; more via plugins) |
 | **Database** | SQLite (single file) + FTS5 + sqlite-vec |
 
 ---

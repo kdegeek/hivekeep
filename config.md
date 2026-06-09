@@ -285,6 +285,21 @@ Internal tuning parameters — most deployments never touch them, the defaults a
 | `WEBHOOKS_MAX_LOGS_PER_WEBHOOK` | `500` | Max number of log entries retained per webhook. |
 | `WEBHOOKS_RATE_LIMIT_PER_MINUTE` | `60` | Delivery rate limit. |
 
+## Email triggers
+
+Triggers on connected email accounts: a matching incoming email prompts a target Agent (in its conversation or as a task). Polled — see `account_triggers` / `account_sync_state` in `schema.md`.
+
+| Env Var | Default | Description |
+|---------|---------|-------------|
+| `EMAIL_TRIGGERS_MAX_PER_ACCOUNT` | `20` | Max triggers per connected account. |
+| `EMAIL_TRIGGER_POLL_INTERVAL` | `120_000` (2 min) | Poller interval in ms. `<= 0` disables the poller entirely. |
+| `EMAIL_TRIGGER_MAX_PER_CYCLE` | `50` | Anti-flood cap: max messages processed per (account, folder) per cycle. |
+| `EMAIL_TRIGGER_LOG_RETENTION_DAYS` | `30` | Retention of trigger evaluation logs. |
+| `EMAIL_TRIGGER_MAX_LOGS_PER_TRIGGER` | `500` | Max log entries retained per trigger. |
+| `EMAIL_TRIGGER_SEEN_IDS_RING` | `200` | Size of the per-(account, folder) seen-ids dedup ring. |
+
+> Whether Agent-created triggers need user approval is a runtime setting (`agent_triggers_require_approval` in `app_settings`, default off), not an env var.
+
 ## Channels
 
 | Env Var | Default | Description |
