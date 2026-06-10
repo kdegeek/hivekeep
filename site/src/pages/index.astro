@@ -84,6 +84,66 @@ const cmpRows = [
   ['Token & context transparency',          'yes', 'no',  'no'],
 ];
 const cmpIcon = { yes: 'lucide:check', par: 'lucide:minus', no: 'lucide:x' };
+
+// ── "See more features" expandable grid (after section 07) ──────────────────
+// Curated from the docs/spec/code feature inventory — every card maps to a real,
+// shipped capability. Keep blurbs ≤1 sentence; one <b> emphasis max.
+const fxCategories: { label: string; icon: string; cards: { title: string; blurb: string; icon: string }[] }[] = [
+  {
+    label: 'Agents & collaboration', icon: 'users', cards: [
+      { title: 'Agents talk to agents', blurb: 'Your specialists message each other with <b>request/reply</b> patterns — ask one agent, watch it consult another on its own.', icon: 'messages-square' },
+      { title: 'Sub-agent delegation', blurb: 'Agents spawn ephemeral sub-agents for heavy work — <b>blocking or parallel</b> — with concurrency limits and clean reports back.', icon: 'git-branch' },
+      { title: 'Scout mode', blurb: 'Delegate read-only research to a <b>cheap, fast model</b> and get a digest back without burning flagship tokens.', icon: 'binoculars' },
+      { title: 'Built-in CRM', blurb: 'Agents keep an auto-populated contact book with notes and preferences — plus read-only sync from <b>iCloud and CardDAV</b>.', icon: 'users' },
+    ],
+  },
+  {
+    label: 'Automation', icon: 'workflow', cards: [
+      { title: 'Crons that learn', blurb: 'Scheduled jobs spawn agents on a cron, keep a <b>run journal</b>, and save learnings to improve every future run.', icon: 'calendar-clock' },
+      { title: 'Inbound webhooks', blurb: 'Any HTTP event can wake an agent — with <b>payload filtering</b> (dot-path or regex), rate limits, and request logs.', icon: 'webhook' },
+      { title: 'Email triggers', blurb: 'Incoming mail matching your rules automatically wakes the right agent — into its conversation or an <b>isolated task</b>.', icon: 'mail-check' },
+      { title: 'Wake-up timers', blurb: 'Agents schedule their own future work — <b>“wake me in 2 hours”</b> — so follow-ups and reminders actually happen.', icon: 'alarm-clock' },
+      { title: 'Agent-run kanban', blurb: 'Organize work into projects and tickets, then <b>assign tickets to agents</b> that execute them and report back as comments.', icon: 'kanban' },
+    ],
+  },
+  {
+    label: 'Memory & context', icon: 'brain-circuit', cards: [
+      { title: 'One endless conversation', blurb: 'No “new chat” button — old messages compact into <b>dated summaries</b> while the originals stay safe in the database.', icon: 'infinity' },
+      { title: 'Self-cleaning memory', blurb: 'Memories are consolidated, re-scored by usage, and stale ones pruned — recall stays <b>sharp, not hoarded</b>.', icon: 'brain' },
+      { title: 'Knowledge bases', blurb: 'Upload documents once; relevant excerpts are <b>auto-surfaced</b> into context whenever the topic comes up.', icon: 'book-open' },
+      { title: 'Project knowledge', blurb: 'Each project keeps curated facts, decisions, and gotchas — <b>pinned entries</b> ride along in every agent turn.', icon: 'notebook-pen' },
+      { title: 'Searchable past', blurb: 'Agents search their entire history with <b>semantic + full-text</b> rank fusion, so nothing said is ever truly lost.', icon: 'history' },
+    ],
+  },
+  {
+    label: 'Connected world', icon: 'globe', cards: [
+      { title: 'Email, handled', blurb: 'Read, search, and send across <b>Gmail, Outlook, iCloud, and IMAP</b> — with an approval mode on outgoing mail.', icon: 'mail' },
+      { title: 'Calendar control', blurb: 'Agents create, update, and search events on <b>Google, Outlook, and CalDAV</b> calendars on your behalf.', icon: 'calendar-days' },
+      { title: 'Real browser automation', blurb: 'Agents drive a <b>stateful browser</b> — log in, fill forms, click, screenshot — and save sessions for next time.', icon: 'mouse-pointer-click' },
+      { title: 'Web search & reading', blurb: 'Pluggable search backends (<b>Brave, Tavily, SerpAPI, Perplexity</b>) plus page fetching, link extraction, and screenshots.', icon: 'globe' },
+      { title: 'Voice in, voice out', blurb: 'Speech-to-text and <b>text-to-speech</b> through any configured provider — talk to your agents and hear them answer.', icon: 'mic' },
+    ],
+  },
+  {
+    label: 'Control & trust', icon: 'shield', cards: [
+      { title: 'Encrypted vault', blurb: 'Secrets stored with <b>AES-256-GCM</b>, never injected into prompts — agents fetch them only through a scoped tool.', icon: 'key-round' },
+      { title: 'Secrets skip the LLM', blurb: 'Keys are typed into <b>secure popups</b> that bypass the model entirely, and leaked values can be redacted after the fact.', icon: 'shield-check' },
+      { title: 'Human-in-the-loop', blurb: 'Agents pause and ask before acting — blocking prompts, <b>approval gates</b>, even captcha hand-offs mid-automation.', icon: 'hand' },
+      { title: 'Shared household', blurb: 'Invite family or teammates to one instance — everyone shares the agents, and agents <b>know who’s speaking</b>.', icon: 'users-round' },
+      { title: 'Rewind & export', blurb: 'Delete messages, <b>rewind</b> a conversation to any point, or export it all as Markdown or JSON — your history, your call.', icon: 'undo-2' },
+    ],
+  },
+  {
+    label: 'Experience', icon: 'sparkles', cards: [
+      { title: '18 color palettes', blurb: 'From Aurora to Citrus — <b>18 palettes</b> with light, dark, and soft-contrast modes, one click away.', icon: 'palette' },
+      { title: 'Install it anywhere', blurb: 'A full <b>PWA</b> — install on desktop or phone, get unread badges, and stay synced across devices in real time.', icon: 'smartphone' },
+      { title: 'Quick sessions', blurb: 'Ephemeral side-chats with <b>per-session model overrides</b> — experiment freely, then save the good bits as memories.', icon: 'zap' },
+      { title: 'Per-message controls', blurb: 'Override the model and <b>thinking effort</b> for a single message, right from the composer.', icon: 'sliders-horizontal' },
+      { title: 'Images & avatars', blurb: 'Agents <b>generate and edit images</b> on demand — including consistent, styled avatars for your whole roster.', icon: 'image' },
+    ],
+  },
+];
+const fxCount = fxCategories.reduce((n, c) => n + c.cards.length, 0);
 ---
 <Base>
   <!-- ===== top bar ===== -->
@@ -392,6 +452,27 @@ const cmpIcon = { yes: 'lucide:check', par: 'lucide:minus', no: 'lucide:x' };
         })}
       </div>
     </div>
+  </section></div>
+  <hr class="rule" />
+
+  <!-- ===== more features ===== -->
+  <div class="wrap" id="more-features"><section class="morefx-sec reveal">
+    <span class="kicker">Under the hood</span>
+    <h2 class="display" style="margin-top:12px">And {fxCount} more features.</h2>
+    <p class="morefx-sub">Everything below ships in the box — no add-ons, no paid tiers.</p>
+    {fxCategories.map((cat) => (
+      <div class="fx-cat">
+        <h3 class="fx-cat-title"><Icon name={`lucide:${cat.icon}`} /> {cat.label}</h3>
+        <div class="fx-grid">
+          {cat.cards.map((c) => (
+            <div class="fx-card">
+              <span class="fx-ic"><Icon name={`lucide:${c.icon}`} /></span>
+              <div><h4>{c.title}</h4><p set:html={c.blurb}></p></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    ))}
   </section></div>
   <hr class="rule" />
 
