@@ -5,7 +5,7 @@ import { Button } from '@/client/components/ui/button'
 import { Textarea } from '@/client/components/ui/textarea'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/client/components/ui/tooltip'
 import { cn } from '@/client/lib/utils'
-import { ArrowUp, Square, Paperclip, X, FileIcon, Loader2 } from 'lucide-react'
+import { ArrowUp, Square, Paperclip, X, FileIcon, Loader2, Wrench } from 'lucide-react'
 import { useInputHistory } from '@/client/hooks/useInputHistory'
 import { MAX_MESSAGE_LENGTH } from '@/shared/constants'
 import { MentionPopover, getMentionItemCount, getMentionItemAt, type MentionItem } from '@/client/components/chat/MentionPopover'
@@ -75,6 +75,11 @@ interface MessageInputProps {
   thinkingEffort?: AgentThinkingEffort | null
   /** Change thinking enabled/effort. When omitted the effort picker is hidden. */
   onChangeThinking?: (next: { enabled: boolean; effort: AgentThinkingEffort | null }) => void
+  /** Number of tools currently exposed to the agent — shown as a badge next to
+   *  the effort picker. Hidden when undefined. */
+  toolCount?: number
+  /** Opens the tools listing modal (owned by the parent panel). */
+  onShowTools?: () => void
 }
 
 export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProps>(function MessageInput({
@@ -104,6 +109,8 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
   thinkingEnabled = false,
   thinkingEffort = null,
   onChangeThinking,
+  toolCount,
+  onShowTools,
 }, ref) {
   const { t } = useTranslation()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -800,6 +807,24 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
                 onChange={onChangeThinking}
                 compact
               />
+            )}
+
+            {onShowTools && toolCount !== undefined && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 shrink-0 gap-1 rounded-lg px-2 text-xs font-normal text-muted-foreground hover:text-foreground"
+                    onClick={onShowTools}
+                  >
+                    <Wrench className="size-3.5" />
+                    <span className="tabular-nums">{toolCount}</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t('chat.toolsBadge.tooltip', { count: toolCount, defaultValue: '{{count}} tools available — click to list them' })}</TooltipContent>
+              </Tooltip>
             )}
           </div>
 

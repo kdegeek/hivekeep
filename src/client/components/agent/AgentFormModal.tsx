@@ -71,6 +71,9 @@ interface AgentDetail {
 interface AgentFormModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Tab to land on when the modal opens (e.g. 'tools' from the composer's
+   *  tools badge). Defaults to 'general'. */
+  initialTab?: 'general' | 'tools' | 'memory' | 'compaction' | 'thinking'
   llmModels: Model[]
   imageModels?: Model[]
   onUploadAvatar: (agentId: string, file: File) => Promise<string>
@@ -215,6 +218,7 @@ function TabForm({
 export function AgentFormModal({
   open,
   onOpenChange,
+  initialTab,
   llmModels,
   imageModels,
   onUploadAvatar,
@@ -251,7 +255,12 @@ export function AgentFormModal({
   const [isRefining, setIsRefining] = useState(false)
 
   // Form state
-  const [activeTab, setActiveTab] = useState<TabId>('general')
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? 'general')
+
+  // Land on the requested tab each time the modal opens.
+  useEffect(() => {
+    if (open) setActiveTab(initialTab ?? 'general')
+  }, [open, initialTab])
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
   const [role, setRole] = useState('')

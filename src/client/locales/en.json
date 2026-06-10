@@ -937,6 +937,16 @@
       "success_other": "Rewound — {{count}} messages removed"
     },
     "regenerate": "Regenerate",
+    "toolsBadge": {
+      "tooltip_one": "{{count}} tool available — click to list it",
+      "tooltip_other": "{{count}} tools available — click to list them"
+    },
+    "toolsModal": {
+      "title": "{{name}} — tools",
+      "description": "Every tool currently exposed to this agent, grouped by domain.",
+      "descriptionQuick": "Tools exposed in this quick session (session-restricted tools like tasks, crons and inter-agent messaging are excluded).",
+      "edit": "Edit tools"
+    },
     "mobileInfo": {
       "messages": "messages"
     },

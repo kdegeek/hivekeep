@@ -937,6 +937,16 @@
       "success_other": "Retour effectué — {{count}} messages supprimés"
     },
     "regenerate": "Régénérer",
+    "toolsBadge": {
+      "tooltip_one": "{{count}} outil disponible — cliquez pour le lister",
+      "tooltip_other": "{{count}} outils disponibles — cliquez pour les lister"
+    },
+    "toolsModal": {
+      "title": "{{name}} — outils",
+      "description": "Tous les outils actuellement exposés à cet agent, groupés par domaine.",
+      "descriptionQuick": "Outils exposés dans cette session rapide (les outils restreints en session — tâches, crons, messagerie inter-agents — sont exclus).",
+      "edit": "Modifier les outils"
+    },
     "mobileInfo": {
       "messages": "messages"
     },

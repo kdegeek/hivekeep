@@ -2058,7 +2058,7 @@ export async function processNextMessage(agentId: string): Promise<boolean> {
 
 // ─── Quick Session Tools Exclusion List ───────────────────────────────────
 
-const QUICK_SESSION_EXCLUDED_TOOLS = new Set([
+export const QUICK_SESSION_EXCLUDED_TOOLS = new Set([
   // Spawning / Tasks
   'spawn_self', 'spawn_agent', 'respond_to_task', 'cancel_task', 'list_tasks',
   'report_to_parent', 'update_task_status', 'request_input',

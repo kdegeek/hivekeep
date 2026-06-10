@@ -113,6 +113,8 @@ export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingAgent, setEditingAgent] = useState<Awaited<ReturnType<typeof getAgent>> | null>(null)
+  // Tab the edit modal opens on — 'tools' when coming from the composer's tools badge.
+  const [editInitialTab, setEditInitialTab] = useState<'tools' | undefined>(undefined)
 
   // Settings + account modals are owned by App.tsx (AuthenticatedShell) and rendered there.
   // ChatPage calls the props directly to open them. We keep a local alias for backwards
@@ -148,13 +150,14 @@ export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
   // everything) stuck on a blank screen forever.
   const initialDataLoaded = !agentsLoading
 
-  const handleOpenEditModal = async (agentId?: string) => {
+  const handleOpenEditModal = async (agentId?: string, initialTab?: 'tools') => {
     const id = agentId ?? selectedAgent?.id
     if (!id) return
     refetchModels()
     try {
       const detail = await getAgent(id)
       setEditingAgent(detail)
+      setEditInitialTab(initialTab)
       setShowEditModal(true)
     } catch {
       // Ignore errors
@@ -309,7 +312,7 @@ export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
                     modelUnavailable={unavailableAgentIds.has(selectedAgent.id)}
                     queueState={agentQueueState.get(selectedAgent.id)}
                     onModelChange={(modelId, providerId) => handleModelChange(selectedAgent.id, modelId, providerId)}
-                    onEditAgent={() => handleOpenEditModal()}
+                    onEditAgent={(opts) => handleOpenEditModal(undefined, opts?.initialTab)}
                     onOpenSettings={handleOpenSettings}
                   />
                 ) : (
@@ -403,6 +406,7 @@ export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
           <AgentFormModal
             open={showEditModal}
             onOpenChange={setShowEditModal}
+            initialTab={editInitialTab}
             llmModels={llmModels}
             imageModels={imageModels}
             agent={editingAgent}

@@ -517,6 +517,37 @@ agentRoutes.get('/:id/context-preview', async (c) => {
   })
 })
 
+// GET /api/agents/:id/tools — the agent's RESOLVED toolset: the exact tool set
+// a main turn (or quick-session turn with ?quick=1) would receive, across
+// native + plugin + MCP + custom tools, after toolbox gating. Names + LLM
+// descriptions only; the client groups by domain via /api/tools/domains.
+agentRoutes.get('/:id/tools', async (c) => {
+  const agent = resolveAgentByIdOrSlug(c.req.param('id'))
+  if (!agent) {
+    return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Agent not found' } }, 404)
+  }
+  const user = c.get('user') as { id: string }
+  const quick = c.req.query('quick') === '1' || c.req.query('quick') === 'true'
+
+  const { resolveToolset } = await import('@/server/services/toolset-resolver')
+  const toolset = await resolveToolset({
+    agentId: agent.id,
+    toolboxIds: agent.toolboxIds,
+    isSubAgent: false,
+    userId: user.id,
+    quick,
+  })
+  if (quick) {
+    const { QUICK_SESSION_EXCLUDED_TOOLS } = await import('@/server/services/agent-engine')
+    for (const name of QUICK_SESSION_EXCLUDED_TOOLS) delete toolset[name]
+  }
+
+  const tools = Object.entries(toolset)
+    .map(([name, tool]) => ({ name, description: tool.description ?? '' }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+  return c.json({ tools })
+})
+
 // ─── Agent CRUD (parameterized routes) ───────────────────────────────────────
 
 // GET /api/agents/:id — get a single agent (accepts UUID or slug)

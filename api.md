@@ -402,6 +402,15 @@ Historique paginé des messages.
 }
 ```
 
+### `GET /api/agents/:id/tools`
+
+Le toolset RÉSOLU de l'Agent — l'ensemble exact d'outils qu'un tour recevrait (natifs + plugins + MCP + customs, après filtrage par toolbox). `?quick=1` renvoie la variante quick-session (sans les outils exclus en session : tâches, crons, inter-agents…). Alimente le badge outils du composer et sa modal de listing (le client groupe par domaine via `/api/tools/domains`).
+
+```typescript
+// Response 200
+{ tools: Array<{ name: string, description: string }> }  // triés par nom
+```
+
 ### `POST /api/agents/:id/messages/inject`
 
 Injecte un message dans la conversation en cours. Si le Agent est en train de streamer une réponse, le stream est interrompu (la réponse partielle est sauvegardée) et le message injecté est mis en file d'attente en priorité haute. Utilisé pour la commande `/btw` et la promotion de messages depuis la queue.

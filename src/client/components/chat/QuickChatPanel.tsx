@@ -29,6 +29,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/client/components/ui/
 // globally; this is the session-scoped replacement.)
 import { X, Zap, MessageSquare, LogOut, History, Pin, PinOff } from 'lucide-react'
 import type { AgentThinkingEffort } from '@/shared/types'
+import { AgentToolsModal } from '@/client/components/agent/AgentToolsModal'
+import { useAgentTools } from '@/client/hooks/useAgentTools'
 import { useAutoScroll } from '@/client/hooks/useAutoScroll'
 import { cn } from '@/client/lib/utils'
 import { ContextBar } from '@/client/components/chat/ContextBar'
@@ -57,12 +59,18 @@ interface QuickChatPanelProps {
   /** The agent's thinking defaults — shown until the session overrides them. */
   agentThinkingEnabled?: boolean
   agentThinkingEffort?: AgentThinkingEffort | null
+  /** Opens the agent's tools management (forwarded to the tools modal). */
+  onEditTools?: () => void
 }
 
-export function QuickChatPanel({ agentId, agentName, agentAvatarUrl, agentModel, llmModels, sessionId, expiresAt, onHide, onEnd, onShowHistory, agentThinkingEnabled, agentThinkingEffort }: QuickChatPanelProps) {
+export function QuickChatPanel({ agentId, agentName, agentAvatarUrl, agentModel, llmModels, sessionId, expiresAt, onHide, onEnd, onShowHistory, agentThinkingEnabled, agentThinkingEffort, onEditTools }: QuickChatPanelProps) {
   const { t } = useTranslation()
   const { user } = useAuth()
   const { messages, session, streamingMessage, isProcessing, isStreaming, sendMessage, stopStreaming, updateSessionOverrides } = useQuickChat(sessionId, agentId)
+  // Tools badge: the quick-session variant of the resolved toolset (the
+  // session-excluded tools — tasks, crons, inter-agent… — are not counted).
+  const { tools: quickTools, count: quickToolCount, refetch: refetchQuickTools } = useAgentTools(agentId, { quick: true })
+  const [toolsModalOpen, setToolsModalOpen] = useState(false)
   const { toolCallsByMessage } = useToolCalls(agentId, messages)
   const { content: draftContent, setContent: setDraftContent, clearDraft } = useDraftMessage(`quick-${sessionId}`)
   const { pendingFiles, addFiles, removeFile, clearFiles, isUploading } = useFileUpload(agentId)
@@ -288,6 +296,18 @@ export function QuickChatPanel({ agentId, agentName, agentAvatarUrl, agentModel,
         thinkingEnabled={session?.thinkingEnabled ?? agentThinkingEnabled ?? false}
         thinkingEffort={session?.thinkingEffort ?? agentThinkingEffort ?? null}
         onChangeThinking={(next) => void updateSessionOverrides({ thinkingEnabled: next.enabled, thinkingEffort: next.effort })}
+        toolCount={quickToolCount}
+        onShowTools={() => { void refetchQuickTools(); setToolsModalOpen(true) }}
+      />
+
+      {/* Tools listing modal (composer tools badge — quick-session variant) */}
+      <AgentToolsModal
+        open={toolsModalOpen}
+        onOpenChange={setToolsModalOpen}
+        agentName={agentName}
+        tools={quickTools}
+        isQuickSession
+        onEditTools={onEditTools}
       />
 
       {/* Close confirmation dialog */}

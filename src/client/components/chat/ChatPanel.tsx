@@ -5,6 +5,8 @@ import { Button } from '@/client/components/ui/button'
 import { ScrollArea } from '@/client/components/ui/scroll-area'
 import { MessageBubble } from '@/client/components/chat/MessageBubble'
 import { MessageInput, type MessageInputHandle } from '@/client/components/chat/MessageInput'
+import { AgentToolsModal } from '@/client/components/agent/AgentToolsModal'
+import { useAgentTools } from '@/client/hooks/useAgentTools'
 import { TypingIndicator } from '@/client/components/chat/TypingIndicator'
 import { ConversationHeader } from '@/client/components/chat/ConversationHeader'
 import { ActiveProjectChip } from '@/client/components/project/ActiveProjectChip'
@@ -82,7 +84,7 @@ interface ChatPanelProps {
   modelUnavailable?: boolean
   queueState?: { isProcessing: boolean; queueSize: number; processingStartedAt?: number; contextTokens?: number; contextWindow?: number; apiContextTokens?: number; contextBreakdown?: ContextTokenBreakdown; pipelineStatus?: ContextPipelineStatus; compactingPercent?: number; compactingThresholdPercent?: number; summaryCount?: number; maxSummaries?: number; summaryTokens?: number; summaryBudgetTokens?: number; keepPercent?: number }
   onModelChange: (modelId: string, providerId: string) => void
-  onEditAgent: () => void
+  onEditAgent: (opts?: { initialTab?: 'tools' }) => void
   onOpenSettings?: (section?: string, filters?: { agentId?: string }) => void
   /** Distraction-less variant (used by the onboarding modal): renders a minimal
    *  header (avatar + name only, no model picker / actions toolbar) and drops the
@@ -118,6 +120,9 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
   const [isToolCallsOpen, setIsToolCallsOpen] = useState(false)
   // Pending "rewind to here" target — the confirmation dialog owns the actual call.
   const [rewindTarget, setRewindTarget] = useState<string | null>(null)
+  // Tools badge: the agent's resolved toolset + its listing modal.
+  const { tools: agentTools, count: agentToolCount, refetch: refetchAgentTools } = useAgentTools(agent.id)
+  const [toolsModalOpen, setToolsModalOpen] = useState(false)
   const { openTask } = useSidePanel()
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null)
   const [showScrollBottom, setShowScrollBottom] = useState(false)
@@ -1262,6 +1267,17 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
         thinkingEnabled={thinkingEnabled}
         thinkingEffort={thinkingEffort}
         onChangeThinking={updateThinking}
+        toolCount={agentToolCount}
+        onShowTools={() => { void refetchAgentTools(); setToolsModalOpen(true) }}
+      />
+
+      {/* Tools listing modal (composer tools badge) */}
+      <AgentToolsModal
+        open={toolsModalOpen}
+        onOpenChange={setToolsModalOpen}
+        agentName={agent.name}
+        tools={agentTools}
+        onEditTools={() => onEditAgent({ initialTab: 'tools' })}
       />
 
       {/* Task detail modal — kept as fallback for legacy references */}
@@ -1294,6 +1310,7 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
                 onShowHistory={() => setShowQuickHistory(true)}
                 agentThinkingEnabled={thinkingEnabled}
                 agentThinkingEffort={thinkingEffort}
+                onEditTools={() => { setQuickOpen(false); onEditAgent({ initialTab: 'tools' }) }}
               />
             </Suspense>
           ) : (
