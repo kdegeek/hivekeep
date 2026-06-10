@@ -1378,7 +1378,11 @@
       }
     },
     "modelRegistry": {
-      "title": "Model registry"
+      "title": "Model registry",
+      "subtitle": "Every model exposed by your providers. Metadata (context, capabilities, pricing) is auto-filled from the community models.dev database — edit any value to pin it, or remap a wrong match.",
+      "openPageTitle": "Open the model registry",
+      "openPageHint": "The full table opens on its own page — more room for context, pricing and capabilities.",
+      "openPage": "Open Models page"
     },
     "models": {
       "title": "Models & Services",
@@ -3052,7 +3056,8 @@
     "projects": "Projects",
     "tasks": "Tasks",
     "crons": "Scheduled Tasks",
-    "apps": "Mini-Apps"
+    "apps": "Mini-Apps",
+    "models": "Models"
   },
   "orphanTask": {
     "menuAction": "Start a task",

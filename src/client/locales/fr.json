@@ -1378,7 +1378,11 @@
       }
     },
     "modelRegistry": {
-      "title": "Registre de modèles"
+      "title": "Registre de modèles",
+      "subtitle": "Tous les modèles exposés par vos providers. Les métadonnées (contexte, capacités, tarifs) sont préremplies depuis la base communautaire models.dev — modifiez une valeur pour la figer, ou corrigez un mauvais mapping.",
+      "openPageTitle": "Ouvrir le registre de modèles",
+      "openPageHint": "Le tableau complet s'ouvre sur sa propre page — plus de place pour le contexte, les tarifs et les capacités.",
+      "openPage": "Ouvrir la page Modèles"
     },
     "models": {
       "title": "Modèles & Services",
@@ -3052,7 +3056,8 @@
     "projects": "Projets",
     "tasks": "Tâches",
     "crons": "Tâches planifiées",
-    "apps": "Mini-apps"
+    "apps": "Mini-apps",
+    "models": "Modèles"
   },
   "orphanTask": {
     "menuAction": "Lancer une tâche",

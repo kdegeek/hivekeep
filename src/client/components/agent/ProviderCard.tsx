@@ -7,7 +7,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/clie
 import { PROVIDER_DISPLAY_NAMES } from '@/shared/constants'
 import { ProviderIcon } from '@/client/components/common/ProviderIcon'
 import { ConfirmDeleteButton } from '@/client/components/common/ConfirmDeleteButton'
-import { useSettingsNav } from '@/client/pages/settings/SettingsPage'
+import { useNavigate } from 'react-router-dom'
+import { useSettingsClose } from '@/client/pages/settings/SettingsPage'
 
 const CAPABILITY_ICONS: Record<string, typeof Brain> = {
   llm: Brain,
@@ -39,7 +40,8 @@ interface ProviderCardProps {
 
 export function ProviderCard({ provider, isTesting, onTest, onEdit, onDelete }: ProviderCardProps) {
   const { t } = useTranslation()
-  const settingsNav = useSettingsNav()
+  const navigate = useNavigate()
+  const closeSettings = useSettingsClose()
 
   return (
     <Card className="surface-card">
@@ -99,7 +101,7 @@ export function ProviderCard({ provider, isTesting, onTest, onEdit, onDelete }: 
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  onClick={() => settingsNav('modelRegistry')}
+                  onClick={() => { closeSettings(); navigate('/models') }}
                 >
                   <List className="size-3.5" />
                 </Button>

@@ -18,6 +18,7 @@ const ProjectsPage = lazy(() => import('@/client/pages/projects/ProjectsPage').t
 const TasksPage = lazy(() => import('@/client/pages/tasks/TasksPage').then(m => ({ default: m.TasksPage })))
 const CronsPage = lazy(() => import('@/client/pages/crons/CronsPage').then(m => ({ default: m.CronsPage })))
 const MiniAppsPage = lazy(() => import('@/client/pages/mini-apps/MiniAppsPage').then(m => ({ default: m.MiniAppsPage })))
+const ModelRegistryPage = lazy(() => import('@/client/pages/models/ModelRegistryPage').then(m => ({ default: m.ModelRegistryPage })))
 const LoginPage = lazy(() => import('@/client/pages/login/LoginPage').then(m => ({ default: m.LoginPage })))
 const OnboardingPage = lazy(() => import('@/client/pages/onboarding/OnboardingPage').then(m => ({ default: m.OnboardingPage })))
 const DesignSystemPage = lazy(() => import('@/client/pages/design-system/DesignSystemPage').then(m => ({ default: m.DesignSystemPage })))
@@ -219,6 +220,7 @@ function AuthenticatedShell() {
                 <Route path="/tasks" element={<TasksPage />} />
                 <Route path="/crons" element={<CronsPage />} />
                 <Route path="/mini-apps" element={<MiniAppsPage />} />
+                <Route path="/models" element={<ModelRegistryPage />} />
                 <Route
                   path="*"
                   element={

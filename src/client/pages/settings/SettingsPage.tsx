@@ -147,6 +147,15 @@ export function useSettingsNav(): (section: SectionId) => void {
   return ctx ?? (() => {})
 }
 
+/** Lets a settings sub-section close the whole modal — e.g. when deep-linking
+ *  out to a routed page (the model registry lives at `/models`). */
+const SettingsCloseContext = createContext<(() => void) | null>(null)
+
+export function useSettingsClose(): () => void {
+  const ctx = useContext(SettingsCloseContext)
+  return ctx ?? (() => {})
+}
+
 const sectionComponents: Record<string, React.FC> = {
   general: GeneralSettings,
   providers: ProvidersSettings,
@@ -357,13 +366,15 @@ export function SettingsModal({ open, onOpenChange, initialSection, initialFilte
           {/* Main content */}
           <div className="flex-1 overflow-y-auto p-4 md:p-6">
             <div className="mx-auto max-w-2xl">
-              <SettingsNavContext.Provider value={setActiveSection}>
-                {ActiveComponent && (
-                  activeSection === 'tokenUsage' && initialFilters
-                    ? <TokenUsageSettings initialAgentFilter={initialFilters.agentId} />
-                    : <ActiveComponent />
-                )}
-              </SettingsNavContext.Provider>
+              <SettingsCloseContext.Provider value={() => onOpenChange(false)}>
+                <SettingsNavContext.Provider value={setActiveSection}>
+                  {ActiveComponent && (
+                    activeSection === 'tokenUsage' && initialFilters
+                      ? <TokenUsageSettings initialAgentFilter={initialFilters.agentId} />
+                      : <ActiveComponent />
+                  )}
+                </SettingsNavContext.Provider>
+              </SettingsCloseContext.Provider>
             </div>
           </div>
         </div>
