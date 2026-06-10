@@ -10,8 +10,11 @@ export interface ProviderModel {
   providerName: string
   providerType: string
   capability: string
-  /** LLM-family only — chat accepts image attachments. */
+  /** LLM-family only — chat accepts image attachments. (Tri-state: true /
+   *  false = explicitly not / undefined = unknown.) */
   supportsImageInput?: boolean
+  /** LLM-family only — chat accepts PDF attachments. Same tri-state. */
+  supportsPdfInput?: boolean
   /** Image-family only — how many source images the model accepts
    *  (0 = text-to-image, 1 = single-image edit, N>1 = multi-reference). */
   maxImageInputs?: number

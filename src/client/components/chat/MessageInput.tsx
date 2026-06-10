@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHandle, memo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { Button } from '@/client/components/ui/button'
 import { Textarea } from '@/client/components/ui/textarea'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/client/components/ui/tooltip'
@@ -61,7 +62,7 @@ interface MessageInputProps {
   activeProjectSlug?: string | null
   // ── Generation controls (relocated from the conversation header) ──
   /** Models available for the model picker. When omitted the picker is hidden. */
-  llmModels?: { id: string; name: string; providerId: string; providerName: string; providerType: string; capability: string }[]
+  llmModels?: { id: string; name: string; providerId: string; providerName: string; providerType: string; capability: string; supportsImageInput?: boolean; supportsPdfInput?: boolean }[]
   /** Currently selected model id. */
   model?: string
   /** Provider id backing the selected model (disambiguates same-id models). */
@@ -503,15 +504,45 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
     }
   }
 
+  // Gate image/PDF attachments the selected model explicitly can't accept (the
+  // registry exposes the capability). Fail-open on unknown — only block on a hard
+  // `false`. Text files always pass (they're inlined as text).
+  const addFilesGated = useCallback(
+    (files: FileList | File[]) => {
+      if (!onAddFiles) return
+      const selected = llmModels?.find((m) => m.id === model && (!providerId || m.providerId === providerId))
+      const imageBlocked = selected?.supportsImageInput === false
+      const pdfBlocked = selected?.supportsPdfInput === false
+      const arr = Array.from(files)
+      if (!imageBlocked && !pdfBlocked) { onAddFiles(arr); return }
+      const accepted: File[] = []
+      const rejected: string[] = []
+      for (const f of arr) {
+        if (imageBlocked && f.type.startsWith('image/')) rejected.push(f.name)
+        else if (pdfBlocked && f.type === 'application/pdf') rejected.push(f.name)
+        else accepted.push(f)
+      }
+      if (rejected.length > 0) {
+        toast.warning(t('chat.attachmentUnsupported', {
+          model: selected?.name ?? model,
+          files: rejected.join(', '),
+          defaultValue: "{{model}} can't read these — skipped: {{files}}",
+        }))
+      }
+      if (accepted.length > 0) onAddFiles(accepted)
+    },
+    [onAddFiles, llmModels, model, providerId, t],
+  )
+
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files.length > 0 && onAddFiles) {
-        onAddFiles(e.target.files)
+      if (e.target.files && e.target.files.length > 0) {
+        addFilesGated(e.target.files)
       }
       // Reset so the same file can be re-selected
       e.target.value = ''
     },
-    [onAddFiles],
+    [addFilesGated],
   )
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
@@ -539,11 +570,11 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
       e.stopPropagation()
       dragCounterRef.current = 0
       setIsDragging(false)
-      if (e.dataTransfer.files && e.dataTransfer.files.length > 0 && onAddFiles) {
-        onAddFiles(e.dataTransfer.files)
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        addFilesGated(e.dataTransfer.files)
       }
     },
-    [onAddFiles],
+    [addFilesGated],
   )
 
   const handlePaste = useCallback(
@@ -562,10 +593,10 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
 
       if (files.length > 0) {
         e.preventDefault()
-        onAddFiles(files)
+        addFilesGated(files)
       }
     },
-    [onAddFiles],
+    [onAddFiles, addFilesGated],
   )
 
   /** Wrap the current selection (or insert at cursor) with markdown syntax */

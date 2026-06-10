@@ -632,6 +632,7 @@
   },
   "chat": {
     "placeholder": "Comment puis-je vous aider ?",
+    "attachmentUnsupported": "{{model}} ne peut pas les lire — ignorés : {{files}}",
     "send": "Envoyer",
     "stop": "Arrêter la génération",
     "selectAgent": "Sélectionnez un Agent pour commencer",

@@ -632,6 +632,7 @@
   },
   "chat": {
     "placeholder": "How can I help you?",
+    "attachmentUnsupported": "{{model}} can't read these — skipped: {{files}}",
     "send": "Send",
     "stop": "Stop generating",
     "selectAgent": "Select an Agent to start chatting",

@@ -470,8 +470,11 @@ providerRoutes.get('/models', async (c) => {
     providerName: string
     providerType: string
     capability: string
-    /** LLM-family only — true when the chat model accepts image attachments. */
+    /** LLM-family only — whether the chat model accepts image attachments.
+     *  Tri-state: true / false (explicitly not) / undefined (unknown). */
     supportsImageInput?: boolean
+    /** LLM-family only — whether the chat model accepts PDF attachments. */
+    supportsPdfInput?: boolean
     /** Image-family only — how many source images the model accepts. */
     maxImageInputs?: number
     /** Maximum input/context tokens. Populated when the provider's API exposes it. */
@@ -510,7 +513,8 @@ providerRoutes.get('/models', async (c) => {
             // Chat models go through the same registry enrichment as the chat
             // path, so the label (name), context and capabilities shown in the
             // picker match what the Agent actually runs with.
-            const m = model.capability === 'llm' ? { ...model, ...enrichModel(p.id, p.type, model) } : model
+            const enriched = model.capability === 'llm' ? enrichModel(p.id, p.type, model) : null
+            const m = enriched ? { ...model, ...enriched } : model
             entries.push({
               id: m.id,
               name: m.name,
@@ -518,7 +522,11 @@ providerRoutes.get('/models', async (c) => {
               providerName: p.name,
               providerType: p.type,
               capability: m.capability,
-              ...(m.capability === 'llm' && m.supportsImageInput ? { supportsImageInput: true } : {}),
+              // Faithful tri-state (read off the enriched LLMModel, which carries
+              // both flags) so the client can gate uploads on an explicit `false`
+              // (text-only model) without blocking on `undefined` (unknown).
+              ...(enriched && enriched.supportsImageInput !== undefined ? { supportsImageInput: enriched.supportsImageInput } : {}),
+              ...(enriched && enriched.supportsPdfInput !== undefined ? { supportsPdfInput: enriched.supportsPdfInput } : {}),
               ...(m.capability === 'image' ? { maxImageInputs: m.maxImageInputs ?? 0 } : {}),
               ...(m.contextWindow ? { contextWindow: m.contextWindow } : {}),
               ...(m.maxOutput != null ? { maxOutput: m.maxOutput } : {}),
