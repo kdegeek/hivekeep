@@ -51,6 +51,10 @@ export function __setSnapshotForTests(s: Snapshot | null): void {
 const PROVIDER_ID_MAP: Record<string, string> = {
   moonshot: 'moonshotai',
   gemini: 'google',
+  // Subscription / CLI providers serve the SAME underlying models as the base
+  // provider, so they match the base provider's models.dev entries.
+  'anthropic-oauth': 'anthropic', // Claude Pro/Max (used by Claude Code)
+  'openai-codex': 'openai', // OpenAI Codex CLI subscription
 }
 export function toModelsDevProviderId(providerType: string): string {
   return PROVIDER_ID_MAP[providerType] ?? providerType
@@ -170,6 +174,17 @@ export function listModelsDevKeys(providerType: string): string[] {
   const prov = snapshot()[provId]
   if (!prov) return []
   return Object.keys(prov).map((id) => `${provId}/${id}`)
+}
+
+/** Every models.dev key ("<provId>/<modelId>") across ALL providers, sorted —
+ *  for the admin remap combobox (search the whole catalogue, since a
+ *  subscription/plugin provider may map to a different provider's entry). */
+export function listAllModelsDevKeys(): string[] {
+  const out: string[] = []
+  for (const [prov, models] of Object.entries(snapshot())) {
+    for (const id of Object.keys(models)) out.push(`${prov}/${id}`)
+  }
+  return out.sort()
 }
 
 /** Look up a models.dev entry by its "<provId>/<modelId>" key (for admin remap). */

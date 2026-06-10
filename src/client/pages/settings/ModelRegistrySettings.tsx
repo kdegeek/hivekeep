@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { RefreshCw, Pencil, AlertTriangle, Pin, Wand2, Search } from 'lucide-react'
+import { RefreshCw, Pencil, AlertTriangle, Pin, Wand2, Search, ChevronsUpDown, Check } from 'lucide-react'
 import { Button } from '@/client/components/ui/button'
 import { Input } from '@/client/components/ui/input'
 import { Label } from '@/client/components/ui/label'
@@ -14,6 +14,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/client/components/ui/select'
+import { Popover, PopoverTrigger, PopoverContent } from '@/client/components/ui/popover'
+import {
+  Command, CommandInput, CommandList, CommandEmpty, CommandItem,
+} from '@/client/components/ui/command'
 import { api, getErrorMessage } from '@/client/lib/api'
 
 interface RegistryModel {
@@ -218,6 +222,8 @@ function EditModelDialog({ model, onClose, onSaved }: {
   const [priceOut, setPriceOut] = useState(model.pricing?.output?.toString() ?? '')
   const [manual, setManual] = useState(model.mappingMode === 'manual')
   const [candidates, setCandidates] = useState<string[]>([])
+  const [remapOpen, setRemapOpen] = useState(false)
+  const [remapQuery, setRemapQuery] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -274,15 +280,43 @@ function EditModelDialog({ model, onClose, onSaved }: {
             <span className="font-mono">{model.modelsDevKey ?? '—'}</span> ({model.matchConfidence ?? 'none'})
           </p>
 
-          {/* remap */}
+          {/* remap — searchable across the whole models.dev catalogue */}
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5"><Wand2 className="size-3.5" /> {t('settings.modelRegistry.remap', 'Remap to models.dev entry')}</Label>
-            <Select onValueChange={remap}>
-              <SelectTrigger><SelectValue placeholder={t('settings.modelRegistry.remapPick', 'Pick the correct model…')} /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                {candidates.map((k) => <SelectItem key={k} value={k} className="font-mono text-xs">{k}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Popover open={remapOpen} onOpenChange={setRemapOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" className="w-full justify-between font-mono text-xs font-normal">
+                  <span className="truncate">{model.modelsDevKey ?? t('settings.modelRegistry.remapPick', 'Pick the correct model…')}</span>
+                  <ChevronsUpDown className="size-3.5 opacity-50 shrink-0" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-96 p-0" align="start">
+                <Command shouldFilter={false}>
+                  <CommandInput
+                    placeholder={t('settings.modelRegistry.searchModelsDev', 'Search models.dev…')}
+                    value={remapQuery}
+                    onValueChange={setRemapQuery}
+                  />
+                  <CommandList>
+                    <CommandEmpty>{t('common.noResults', 'No results')}</CommandEmpty>
+                    {candidates
+                      .filter((k) => k.toLowerCase().includes(remapQuery.toLowerCase()))
+                      .slice(0, 60)
+                      .map((k) => (
+                        <CommandItem
+                          key={k}
+                          value={k}
+                          onSelect={() => { remap(k); setRemapOpen(false) }}
+                          className="font-mono text-xs"
+                        >
+                          <Check className={`size-3.5 ${model.modelsDevKey === k ? 'opacity-100' : 'opacity-0'}`} />
+                          {k}
+                        </CommandItem>
+                      ))}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

@@ -21,7 +21,7 @@ import {
   type RegistryEditPatch,
   type RegistryField,
 } from '@/server/services/model-registry'
-import { listModelsDevKeys } from '@/server/llm/metadata/models-dev'
+import { listModelsDevKeys, listAllModelsDevKeys } from '@/server/llm/metadata/models-dev'
 import { refreshAllProviderModels } from '@/server/services/model-info-cache'
 import type { AppVariables } from '@/server/app'
 import { createLogger } from '@/server/logger'
@@ -81,13 +81,17 @@ modelRoutes.get('/', (c) => {
   })
 })
 
-/** models.dev candidate keys for a row's provider (the remap picker). */
+/** models.dev candidate keys for the remap combobox. Returns the SAME provider's
+ *  entries first (most likely), then the entire catalogue (searchable) — a
+ *  subscription/plugin provider may legitimately map to another provider's id. */
 modelRoutes.get('/:id/candidates', (c) => {
   const row = getRegistryRowById(c.req.param('id'))
   if (!row) return c.json({ error: { code: 'NOT_FOUND', message: 'Model not found' } }, 404)
   const prov = db.select().from(providers).where(eq(providers.id, row.providerId)).get()
-  if (!prov) return c.json({ candidates: [] })
-  return c.json({ candidates: listModelsDevKeys(prov.type) })
+  const same = prov ? listModelsDevKeys(prov.type) : []
+  const sameSet = new Set(same)
+  const rest = listAllModelsDevKeys().filter((k) => !sameSet.has(k))
+  return c.json({ candidates: [...same, ...rest] })
 })
 
 /** Admin edit — each metadata field present is pinned (survives resync). */
