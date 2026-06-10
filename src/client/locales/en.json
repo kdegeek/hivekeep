@@ -940,6 +940,7 @@
       "success_other": "Rewound — {{count}} messages removed"
     },
     "regenerate": "Regenerate",
+    "moreActions": "More actions",
     "toolsBadge": {
       "tooltip_one": "{{count}} tool available — click to list it",
       "tooltip_other": "{{count}} tools available — click to list them"

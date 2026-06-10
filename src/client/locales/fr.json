@@ -940,6 +940,7 @@
       "success_other": "Retour effectué — {{count}} messages supprimés"
     },
     "regenerate": "Régénérer",
+    "moreActions": "Plus d'actions",
     "toolsBadge": {
       "tooltip_one": "{{count}} outil disponible — cliquez pour le lister",
       "tooltip_other": "{{count}} outils disponibles — cliquez pour les lister"

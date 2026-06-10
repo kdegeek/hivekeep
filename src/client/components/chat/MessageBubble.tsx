@@ -20,7 +20,13 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from '@/client/components/ui/context-menu'
-import { FileIcon, Download, Brain, ChevronDown, Copy, Check, RefreshCw, Quote, Pencil, Volume2, VolumeX, BookOpen, SmilePlus, EyeOff, History, Trash2 } from 'lucide-react'
+import { FileIcon, Download, Brain, ChevronDown, Copy, Check, RefreshCw, Quote, Pencil, Volume2, VolumeX, BookOpen, SmilePlus, EyeOff, History, Trash2, MoreHorizontal } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/client/components/ui/dropdown-menu'
 import type { ToolCallViewItem } from '@/client/hooks/useToolCalls'
 import { RelativeTimestamp } from '@/client/components/chat/RelativeTimestamp'
 import type { MessageFile, MessageTokenUsage } from '@/shared/types'
@@ -332,6 +338,54 @@ function ReasoningBlock({ reasoning }: { reasoning: string }) {
         </div>
       </CollapsibleContent>
     </Collapsible>
+  )
+}
+
+// ─── Message "more" menu (hover ⋯ — delete / rewind) ─────────────────────────
+
+/**
+ * Visible hover entry point for the destructive message actions (rewind /
+ * delete). The same actions also live in the right-click context menu, but a
+ * context menu alone is invisible — this makes them discoverable.
+ */
+function MessageMoreMenu({ messageId, onDeleteMessage, onRewindHere }: {
+  messageId: string
+  onDeleteMessage?: (messageId: string) => void
+  onRewindHere?: (messageId: string) => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'opacity-0 group-hover/msg:opacity-100 transition-opacity',
+            'rounded-md p-1 hover:bg-muted/80 active:scale-95',
+            'text-muted-foreground hover:text-foreground',
+            'data-[state=open]:opacity-100',
+          )}
+          title={t('chat.moreActions', 'More actions')}
+          aria-label={t('chat.moreActions', 'More actions')}
+        >
+          <MoreHorizontal className="size-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-52">
+        {onRewindHere && (
+          <DropdownMenuItem onClick={() => onRewindHere(messageId)}>
+            <History className="size-4" />
+            {t('chat.contextMenu.rewindHere', 'Rewind to here')}
+          </DropdownMenuItem>
+        )}
+        {onDeleteMessage && (
+          <DropdownMenuItem variant="destructive" onClick={() => onDeleteMessage(messageId)}>
+            <Trash2 className="size-4" />
+            {t('chat.contextMenu.deleteMessage', 'Delete message')}
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -1133,6 +1187,9 @@ export const MessageBubble = memo(function MessageBubble({
                 {onRegenerate && <RegenerateButton onRegenerate={onRegenerate} />}
                 <ReadAloudButton content={content} />
                 {onToggleReaction && <ReactionPicker onSelect={handleToggleReaction} isUser={false} />}
+                {messageId && (onDeleteMessage || onRewindHere) && (
+                  <MessageMoreMenu messageId={messageId} onDeleteMessage={onDeleteMessage} onRewindHere={onRewindHere} />
+                )}
               </div>
             </>
           )}
@@ -1222,6 +1279,9 @@ export const MessageBubble = memo(function MessageBubble({
           {!isUser && onRegenerate && <RegenerateButton onRegenerate={onRegenerate} />}
           {!isUser && <ReadAloudButton content={content} />}
           {onToggleReaction && <ReactionPicker onSelect={handleToggleReaction} isUser={isUser} />}
+          {messageId && (onDeleteMessage || onRewindHere) && (
+            <MessageMoreMenu messageId={messageId} onDeleteMessage={onDeleteMessage} onRewindHere={onRewindHere} />
+          )}
         </div>
       </div>
     </div>
