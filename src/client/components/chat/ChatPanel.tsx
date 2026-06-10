@@ -1271,14 +1271,18 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
         onShowTools={() => { void refetchAgentTools(); setToolsModalOpen(true) }}
       />
 
-      {/* Tools listing modal (composer tools badge) */}
-      <AgentToolsModal
-        open={toolsModalOpen}
-        onOpenChange={setToolsModalOpen}
-        agentName={agent.name}
-        tools={agentTools}
-        onEditTools={() => onEditAgent({ initialTab: 'tools' })}
-      />
+      {/* Tools listing modal (composer tools badge) — mounted on demand so the
+          tool catalog is only fetched when actually opened */}
+      {toolsModalOpen && (
+        <AgentToolsModal
+          open={toolsModalOpen}
+          onOpenChange={setToolsModalOpen}
+          agentId={agent.id}
+          agentName={agent.name}
+          tools={agentTools}
+          onEditTools={() => onEditAgent({ initialTab: 'tools' })}
+        />
+      )}
 
       {/* Task detail modal — kept as fallback for legacy references */}
 

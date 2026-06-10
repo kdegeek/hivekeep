@@ -301,14 +301,17 @@ export function QuickChatPanel({ agentId, agentName, agentAvatarUrl, agentModel,
       />
 
       {/* Tools listing modal (composer tools badge — quick-session variant) */}
-      <AgentToolsModal
-        open={toolsModalOpen}
-        onOpenChange={setToolsModalOpen}
-        agentName={agentName}
-        tools={quickTools}
-        isQuickSession
-        onEditTools={onEditTools}
-      />
+      {toolsModalOpen && (
+        <AgentToolsModal
+          open={toolsModalOpen}
+          onOpenChange={setToolsModalOpen}
+          agentId={agentId}
+          agentName={agentName}
+          tools={quickTools}
+          isQuickSession
+          onEditTools={onEditTools}
+        />
+      )}
 
       {/* Close confirmation dialog */}
       <AlertDialog open={showCloseDialog} onOpenChange={(open) => {

@@ -13,15 +13,19 @@ import {
 import { Button } from '@/client/components/ui/button'
 import { Input } from '@/client/components/ui/input'
 import { Badge } from '@/client/components/ui/badge'
-import { ToolDomainBadge } from '@/client/components/common/ToolDomainBadge'
-import { getToolDomain, getToolDomainMeta } from '@/client/lib/tool-domain-lookup'
-import type { ToolDomain } from '@/shared/types'
+import { Skeleton } from '@/client/components/ui/skeleton'
+import { ToolSelector, type ToolSelectorTool } from '@/client/components/common/ToolSelector'
+import { useToolCatalog } from '@/client/hooks/useToolCatalog'
+import { getToolDomain } from '@/client/lib/tool-domain-lookup'
 import type { AgentToolInfo } from '@/client/hooks/useAgentTools'
 
 interface AgentToolsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  agentId: string
   agentName: string
+  /** The agent's RESOLVED toolset (GET /agents/:id/tools) — the names define
+   *  which catalog entries are shown. */
   tools: AgentToolInfo[]
   /** Variant label — quick sessions expose a reduced set. */
   isQuickSession?: boolean
@@ -30,32 +34,47 @@ interface AgentToolsModalProps {
 }
 
 /**
- * Read-only listing of every tool currently exposed to the agent, grouped by
- * domain — opened from the composer's tools badge. The edit button hands off
- * to the agent's tools management.
+ * Read-only listing of every tool currently exposed to the agent — opened from
+ * the composer's tools badge. Renders with the SAME ToolSelector used by the
+ * toolbox editor and the Agent Tools tab (source/domain collapsible groups,
+ * friendly names, provenance), in read-only mode with everything "on".
  */
-export function AgentToolsModal({ open, onOpenChange, agentName, tools, isQuickSession, onEditTools }: AgentToolsModalProps) {
+export function AgentToolsModal({ open, onOpenChange, agentId, agentName, tools, isQuickSession, onEditTools }: AgentToolsModalProps) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
+  const { tools: catalog, isLoading: catalogLoading } = useToolCatalog(agentId)
 
-  const groups = useMemo(() => {
+  const resolvedNames = useMemo(() => new Set(tools.map((tool) => tool.name)), [tools])
+
+  // The catalog entry carries the display metadata (source, domain, label,
+  // provenance). Resolved names missing from the catalog (e.g. a transient MCP
+  // hiccup) still show, with a minimal synthesized entry.
+  const exposedEntries = useMemo<ToolSelectorTool[]>(() => {
+    const byName = new Map(catalog.map((entry) => [entry.name, entry]))
+    return tools.map((tool) =>
+      byName.get(tool.name) ?? {
+        name: tool.name,
+        source: 'native' as const,
+        domain: getToolDomain(tool.name),
+        label: null,
+        description: tool.description || null,
+        defaultDisabled: false,
+        readOnly: false,
+        destructive: false,
+        hardExcludedFromSubAgent: false,
+      },
+    )
+  }, [tools, catalog])
+
+  const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const filtered = q
-      ? tools.filter((tool) => tool.name.toLowerCase().includes(q) || tool.description.toLowerCase().includes(q))
-      : tools
-    const byDomain = new Map<string, AgentToolInfo[]>()
-    for (const tool of filtered) {
-      const domain = getToolDomain(tool.name)
-      const list = byDomain.get(domain) ?? []
-      list.push(tool)
-      byDomain.set(domain, list)
-    }
-    const labelOf = (domain: string): string => {
-      const meta = getToolDomainMeta(domain)
-      return meta.labelKey ? t(meta.labelKey) : (meta.label ?? domain)
-    }
-    return [...byDomain.entries()].sort((a, b) => labelOf(a[0]).localeCompare(labelOf(b[0])))
-  }, [tools, query, t])
+    if (!q) return exposedEntries
+    return exposedEntries.filter((entry) =>
+      entry.name.toLowerCase().includes(q)
+      || (typeof entry.label === 'string' && entry.label.toLowerCase().includes(q))
+      || (entry.description ?? '').toLowerCase().includes(q),
+    )
+  }, [exposedEntries, query])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -73,7 +92,7 @@ export function AgentToolsModal({ open, onOpenChange, agentName, tools, isQuickS
           </DialogDescription>
         </DialogHeader>
 
-        <DialogBody className="space-y-4">
+        <DialogBody className="space-y-3">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
@@ -84,28 +103,20 @@ export function AgentToolsModal({ open, onOpenChange, agentName, tools, isQuickS
             />
           </div>
 
-          {groups.length === 0 && (
-            <p className="py-8 text-center text-sm text-muted-foreground">{t('common.noResults', 'No results')}</p>
-          )}
-
-          {groups.map(([domain, domainTools]) => (
-            <div key={domain}>
-              <div className="mb-1.5 flex items-center gap-2">
-                <ToolDomainBadge domain={domain as ToolDomain} />
-                <span className="text-xs text-muted-foreground/60">({domainTools.length})</span>
-              </div>
-              <div className="overflow-hidden rounded-lg border border-border">
-                {domainTools.map((tool, i) => (
-                  <div key={tool.name} className={`px-3 py-2 ${i > 0 ? 'border-t border-border/50' : ''}`}>
-                    <p className="font-mono text-xs font-medium">{tool.name}</p>
-                    {tool.description && (
-                      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{tool.description}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
+          {catalogLoading && exposedEntries.length === 0 ? (
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
             </div>
-          ))}
+          ) : filtered.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">{t('common.noResults', 'No results')}</p>
+          ) : (
+            <ToolSelector
+              tools={filtered}
+              selected={resolvedNames}
+              onChange={() => {}}
+              readOnly
+            />
+          )}
         </DialogBody>
 
         <DialogFooter>
