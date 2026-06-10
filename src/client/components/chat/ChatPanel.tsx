@@ -1198,6 +1198,7 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
             toolCalls={toolCalls}
             toolCallCount={toolCallCount}
             onClose={toggleToolCalls}
+            onShowAvailableTools={() => { void refetchAgentTools(); setToolsModalOpen(true) }}
           />
         </div>
 

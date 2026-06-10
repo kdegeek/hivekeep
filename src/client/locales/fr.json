@@ -2429,6 +2429,7 @@
   "tools": {
     "viewer": {
       "title": "Appels d'outils",
+      "showAvailable": "Voir les outils disponibles",
       "description": "{{count}} appel(s) d'outil dans cette conversation",
       "empty": "Aucun appel d'outil. Les outils apparaîtront ici quand l'Agent les utilisera.",
       "input": "Entrée",

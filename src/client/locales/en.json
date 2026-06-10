@@ -2429,6 +2429,7 @@
   "tools": {
     "viewer": {
       "title": "Tool Calls",
+      "showAvailable": "View available tools",
       "description": "{{count}} tool call(s) in this conversation",
       "empty": "No tool calls yet. Tools will appear here when the Agent uses them.",
       "input": "Input",
