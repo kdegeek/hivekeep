@@ -637,28 +637,16 @@ async function listGeminiModels(apiKey: string): Promise<LLMModel[]> {
       // `gemini-3-flash` passes; a new image variant like
       // `gemini-3-flash-image-edit` is automatically dropped.
       if (NON_LLM_MODALITY_PATTERN.test(id)) continue
-      // Multimodal models surface their capability via inputTokenLimit
-      // alone — the official API doesn't expose an image-input flag.
-      // Use a name heuristic: every 2.x+ Gemini accepts images.
-      const supportsImageInput = /^gemini-(2|3)/.test(id)
+      // Context window + max output come from the genuine Gemini API
+      // (inputTokenLimit/outputTokenLimit). Vision, reasoning and prompt
+      // caching are filled by the model registry from models.dev — Gemini's
+      // listing doesn't tag them and name heuristics drift.
       const model: LLMModel = {
         id,
         name: m.displayName ?? id,
-        contextWindow: m.inputTokenLimit ?? 0,
-        supportsImageInput,
-        // Thinking is a model-level feature on the 2.5/3 series. The
-        // public listing doesn't tag it, but the budget setting is
-        // accepted on every 2.5+ model — we expose all 4 efforts and
-        // let the budget mapping handle it.
-        thinking: /^gemini-(2\.5|3)/.test(id)
-          ? { efforts: ['low', 'medium', 'high', 'max'] }
-          : undefined,
-        // Implicit context cache on Gemini 2.5 (no per-request flag);
-        // explicit caching exists via separate cachedContent API but
-        // isn't yet wired.
-        supportsPromptCaching: /^gemini-2\.5/.test(id),
         supportsParallelTools: true,
       }
+      if (m.inputTokenLimit != null) model.contextWindow = m.inputTokenLimit
       if (m.outputTokenLimit != null) model.maxOutput = m.outputTokenLimit
       out.push(model)
     }

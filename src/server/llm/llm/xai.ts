@@ -94,56 +94,6 @@ export interface XaiLanguageModel {
 
 // ─── Metadata-driven model classification ────────────────────────────────────
 
-/** Default context window when no family prefix matches. */
-const DEFAULT_CONTEXT_WINDOW = 131_072
-
-/**
- * Context windows by family. xAI's catalogue endpoint omits the window, so we
- * map it from the model id / aliases. First match wins. Values follow xAI's
- * published model pages (grok-4.3 / grok-4.20 = 1M, grok-4-fast = 2M,
- * grok-4 / grok-build / grok-code = 256k, grok-3 = 131k).
- */
-const CONTEXT_BY_PREFIX: Array<[RegExp, number]> = [
-  [/grok-4\.3/, 1_000_000],
-  // xAI's docs spell this both ways: grok-4.20-… and grok-420-….
-  [/grok-4\.?20/, 1_000_000],
-  [/grok-4-fast/, 2_000_000],
-  [/grok-4/, 256_000],
-  [/grok-build/, 256_000],
-  [/grok-code/, 256_000],
-  [/grok-3/, 131_072],
-]
-
-/**
- * Reasoning families that accept the OpenAI-compatible `reasoning_effort`
- * parameter. Plain `grok-4` is intentionally absent: it reasons internally
- * but rejects `reasoning_effort` (400). The `grok-4-` prefix here only
- * matches the fast/reasoning variants because plain `grok-4` has no trailing
- * segment.
- */
-const REASONING_PATTERN =
-  /(grok-4\.3|grok-4\.20|grok-3-mini|grok-4-fast|grok-build|reasoning)/
-
-/**
- * Names to test for classification: the id plus every alias. xAI sometimes
- * returns an obfuscated canonical id (e.g. `"latest"`) whose aliases carry
- * the recognizable family name (`"grok-4.3-latest"`).
- *
- * @internal exported for tests.
- */
-export function modelNames(model: XaiLanguageModel): string[] {
-  return [model.id, ...(model.aliases ?? [])].filter((n): n is string => !!n)
-}
-
-/** @internal exported for tests. */
-export function inferContextWindow(model: XaiLanguageModel): number {
-  const names = modelNames(model)
-  for (const [pattern, value] of CONTEXT_BY_PREFIX) {
-    if (names.some((n) => pattern.test(n))) return value
-  }
-  return DEFAULT_CONTEXT_WINDOW
-}
-
 /**
  * Vision support: xAI exposes `input_modalities`. A model accepts image
  * blocks iff that array contains `"image"`.
@@ -152,24 +102,6 @@ export function inferContextWindow(model: XaiLanguageModel): number {
  */
 export function inferImageInput(model: XaiLanguageModel): boolean {
   return model.input_modalities?.includes('image') ?? false
-}
-
-/**
- * Reasoning support: Grok reasoning families accept `reasoning_effort`
- * (`low | medium | high`; xAI also has `none`, expressed in Hivekeep as the
- * absence of an effort). Hivekeep's `max` downgrades to `high` at request time.
- *
- * @internal exported for tests.
- */
-export function inferThinking(model: XaiLanguageModel): LLMModel['thinking'] | undefined {
-  const names = modelNames(model)
-  // Some variants are explicitly NON-reasoning (e.g. `grok-4.20-0309-non-reasoning`):
-  // they 400 on `reasoning_effort`. Exclude them first — note the substring
-  // "reasoning" also lives inside "non-reasoning", and the family prefix
-  // (`grok-4.20`) would otherwise match the positive pattern below.
-  if (names.some((n) => /non-reasoning/i.test(n))) return undefined
-  if (!names.some((n) => REASONING_PATTERN.test(n))) return undefined
-  return { efforts: ['low', 'medium', 'high'] }
 }
 
 /**
@@ -223,15 +155,14 @@ export function mapModel(model: XaiLanguageModel): LLMModel | null {
   const out: LLMModel = {
     id: model.id,
     name: model.id,
-    contextWindow: inferContextWindow(model),
     // OpenAI-compatible upstreams cache prompts transparently; xAI forwards
     // cache hits in usage. No per-block cache control to send.
     supportsPromptCaching: true,
     supportsParallelTools: true,
   }
+  // Image input + pricing come from the real xAI API (kept as seed hints);
+  // context window + reasoning are filled by the registry from models.dev.
   if (inferImageInput(model)) out.supportsImageInput = true
-  const thinking = inferThinking(model)
-  if (thinking) out.thinking = thinking
   const pricing = convertPricing(model)
   if (pricing) out.pricing = pricing
   return out

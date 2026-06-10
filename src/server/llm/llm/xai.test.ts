@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import {
-  modelNames,
-  inferContextWindow,
   inferImageInput,
-  inferThinking,
   isTextOutputModel,
   convertPricing,
   mapModel,
@@ -61,47 +58,7 @@ const audioOnly: XaiLanguageModel = {
   output_modalities: ['audio'],
 }
 
-// ─── modelNames ──────────────────────────────────────────────────────────────
-
-describe('modelNames', () => {
-  it('includes the id and every alias', () => {
-    expect(modelNames(grok43)).toEqual(['latest', 'grok-4.3-latest', 'grok-latest'])
-  })
-
-  it('handles missing aliases', () => {
-    expect(modelNames({ id: 'grok-4' })).toEqual(['grok-4'])
-  })
-})
-
-// ─── inferContextWindow ──────────────────────────────────────────────────────
-
-describe('inferContextWindow', () => {
-  it('maps grok-4.3 (via alias) to 1M', () => {
-    expect(inferContextWindow(grok43)).toBe(1_000_000)
-  })
-
-  it('maps grok-4.20 to 1M', () => {
-    expect(inferContextWindow(grokReasoning)).toBe(1_000_000)
-  })
-
-  it('maps plain grok-4 to 256k', () => {
-    expect(inferContextWindow(grok4)).toBe(256_000)
-  })
-
-  it('maps grok-3 family to 131k', () => {
-    expect(inferContextWindow(grok3Mini)).toBe(131_072)
-  })
-
-  it('maps grok-4-fast to 2M', () => {
-    expect(inferContextWindow({ id: 'grok-4-fast-reasoning' })).toBe(2_000_000)
-  })
-
-  it('falls back to the default when no family matches', () => {
-    expect(inferContextWindow({ id: 'mystery-model' })).toBe(131_072)
-  })
-})
-
-// ─── inferImageInput ─────────────────────────────────────────────────────────
+// ─── inferImageInput (genuine xAI API: input_modalities) ─────────────────────
 
 describe('inferImageInput', () => {
   it('is true when input_modalities includes image', () => {
@@ -116,30 +73,6 @@ describe('inferImageInput', () => {
 
   it('is false when input_modalities is absent', () => {
     expect(inferImageInput({ id: 'x' })).toBe(false)
-  })
-})
-
-// ─── inferThinking ───────────────────────────────────────────────────────────
-
-describe('inferThinking', () => {
-  it('detects reasoning for grok-4.3', () => {
-    expect(inferThinking(grok43)!.efforts).toEqual(['low', 'medium', 'high'])
-  })
-
-  it('detects reasoning for *-reasoning variants', () => {
-    expect(inferThinking(grokReasoning)!.efforts).toEqual(['low', 'medium', 'high'])
-  })
-
-  it('detects reasoning for grok-3-mini', () => {
-    expect(inferThinking(grok3Mini)!.efforts).toEqual(['low', 'medium', 'high'])
-  })
-
-  it('returns undefined for plain grok-4 (rejects reasoning_effort)', () => {
-    expect(inferThinking(grok4)).toBeUndefined()
-  })
-
-  it('never reports a max effort', () => {
-    expect(inferThinking(grok43)!.efforts).not.toContain('max')
   })
 })
 
@@ -191,26 +124,26 @@ describe('convertPricing', () => {
 // ─── mapModel ────────────────────────────────────────────────────────────────
 
 describe('mapModel', () => {
-  it('maps a full vision/reasoning model', () => {
+  it('keeps the genuine API fields (image, pricing); context/thinking → registry', () => {
     const m = mapModel(grok43)!
     expect(m.id).toBe('latest')
-    expect(m.contextWindow).toBe(1_000_000)
     expect(m.supportsImageInput).toBe(true)
-    expect(m.thinking?.efforts).toEqual(['low', 'medium', 'high'])
     expect(m.pricing?.input).toBeCloseTo(1.25, 6)
+    // Context window + reasoning are no longer guessed here.
+    expect(m.contextWindow).toBeUndefined()
+    expect(m.thinking).toBeUndefined()
   })
 
-  it('omits image flag and thinking for plain grok-4', () => {
+  it('keeps image flag from the API for vision models', () => {
     const m = mapModel(grok4)!
     expect(m.supportsImageInput).toBe(true)
-    expect(m.thinking).toBeUndefined()
-    expect(m.contextWindow).toBe(256_000)
+    expect(m.contextWindow).toBeUndefined()
   })
 
-  it('flags reasoning for text-only reasoning variants', () => {
+  it('leaves image unset for text-only models', () => {
     const m = mapModel(grokReasoning)!
     expect(m.supportsImageInput).toBeUndefined()
-    expect(m.thinking?.efforts).toEqual(['low', 'medium', 'high'])
+    expect(m.thinking).toBeUndefined()
   })
 
   it('drops audio-only output models', () => {
