@@ -286,12 +286,17 @@ export interface RegistryEditPatch {
   pricing?: { input: number; output: number; cacheRead?: number; cacheWrite?: number } | null
 }
 
-/** Apply an admin edit. Every metadata field present in the patch is pinned. */
+/**
+ * Apply an admin edit. Each metadata field PRESENT in the patch is pinned (the
+ * UI sends only changed fields, so an unchanged save pins nothing). Touching a
+ * row at all counts as reviewing it, so the `needsReview` flag is cleared.
+ */
 export function updateRegistryModel(id: string, patch: RegistryEditPatch): void {
   const row = db.select().from(modelRegistry).where(eq(modelRegistry.id, id)).get()
   if (!row) return
   const pinned = new Set<string>(safeParseArray(row.overriddenFields))
-  const set: Partial<Row> = { updatedAt: new Date() }
+  // The admin has now looked at this row — clear the "verify the auto-match" flag.
+  const set: Partial<Row> = { updatedAt: new Date(), needsReview: false }
 
   if (patch.displayName !== undefined) {
     const dn = patch.displayName.trim()
@@ -361,6 +366,36 @@ export function unpinField(id: string, field: RegistryField): void {
   const pinned = new Set<string>(safeParseArray(row.overriddenFields))
   pinned.delete(field)
   db.update(modelRegistry).set({ overriddenFields: JSON.stringify([...pinned]), updatedAt: new Date() }).where(eq(modelRegistry.id, id)).run()
+}
+
+/**
+ * Drop ALL admin overrides and re-derive every field from the auto match
+ * (models.dev) — the inverse of pinning. Returns the row to `auto` mode, clears
+ * the review flag, and recomputes the label/metadata from the mapped entry. The
+ * next resync further reconciles with the provider's live API seed.
+ */
+export function resetModelToAuto(id: string): void {
+  const row = db.select().from(modelRegistry).where(eq(modelRegistry.id, id)).get()
+  if (!row) return
+  const md = row.modelsDevKey ? getModelsDevByKey(row.modelsDevKey) : null
+  const cols = metadataToColumns(md ? modelsDevToMetadata(md) : {})
+  db.update(modelRegistry)
+    .set({
+      mappingMode: 'auto',
+      overriddenFields: '[]',
+      needsReview: false,
+      displayName: displayNameFromKey(row.modelsDevKey, row.modelId),
+      contextWindow: cols.contextWindow ?? null,
+      maxOutput: cols.maxOutput ?? null,
+      supportsImageInput: cols.supportsImageInput ?? null,
+      supportsPdfInput: cols.supportsPdfInput ?? null,
+      supportsToolCall: cols.supportsToolCall ?? null,
+      reasoning: cols.reasoning ?? null,
+      pricing: cols.pricing ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(modelRegistry.id, id))
+    .run()
 }
 
 export function getRegistryRowById(id: string): Row | undefined {

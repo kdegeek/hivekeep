@@ -1384,7 +1384,14 @@
       "openPageHint": "Le tableau complet s'ouvre sur sa propre page — plus de place pour le contexte, les tarifs et les capacités.",
       "openPage": "Ouvrir la page Modèles",
       "displayName": "Libellé",
-      "displayNameHint": "Affiché partout où apparaît un nom de modèle. Laissez vide pour utiliser le libellé models.dev (à défaut, l'id)."
+      "displayNameHint": "Affiché partout où apparaît un nom de modèle. Laissez vide pour utiliser le libellé models.dev (à défaut, l'id).",
+      "reviewBanner_one": "{{count}} modèle à vérifier — sa correspondance models.dev était incertaine. Cliquez ✓ pour confirmer qu'elle est bonne, ou ouvrez la ligne pour la remapper.",
+      "reviewBanner_other": "{{count}} modèles à vérifier — leur correspondance models.dev était incertaine. Cliquez ✓ pour confirmer qu'elle est bonne, ou ouvrez la ligne pour la remapper.",
+      "reviewHint": "La correspondance models.dev ci-dessous était incertaine. Vérifiez que les valeurs semblent justes (remappez sinon), puis Enregistrez pour confirmer — ça lève le « review ».",
+      "confirmTooltip": "Confirmer que cette correspondance est correcte (lève le « review »)",
+      "reset": "Réinitialiser en auto",
+      "resetHint": "Ce modèle a des valeurs manuelles. Réinitialisez pour les abandonner et suivre models.dev automatiquement.",
+      "resetDone": "Réinitialisé en auto"
     },
     "models": {
       "title": "Modèles & Services",

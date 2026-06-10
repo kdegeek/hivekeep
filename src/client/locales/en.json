@@ -1384,7 +1384,14 @@
       "openPageHint": "The full table opens on its own page — more room for context, pricing and capabilities.",
       "openPage": "Open Models page",
       "displayName": "Display name",
-      "displayNameHint": "Shown everywhere a model name appears. Leave blank to use the models.dev label (falls back to the id)."
+      "displayNameHint": "Shown everywhere a model name appears. Leave blank to use the models.dev label (falls back to the id).",
+      "reviewBanner_one": "{{count}} model to review — its models.dev match was uncertain. Click ✓ to confirm a match is right, or open a row to remap it.",
+      "reviewBanner_other": "{{count}} models to review — their models.dev match was uncertain. Click ✓ to confirm a match is right, or open a row to remap it.",
+      "reviewHint": "The models.dev match below was uncertain. Check the values look right (remap if not), then Save to confirm — that clears the review flag.",
+      "confirmTooltip": "Confirm this match is correct (clears review)",
+      "reset": "Reset to auto",
+      "resetHint": "This model has manual overrides. Reset to drop them and follow models.dev automatically.",
+      "resetDone": "Reset to automatic"
     },
     "models": {
       "title": "Models & Services",

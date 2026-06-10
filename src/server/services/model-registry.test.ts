@@ -51,7 +51,7 @@ mock.module('@/server/db/index', () => ({ db: testDb, sqlite }))
 const reg = schemaIsReal
   ? await import('@/server/services/model-registry')
   : ({} as typeof import('@/server/services/model-registry'))
-const { reconcileProviderModels, getRegistryRow, listRegistryByProvider, rowToMetadata, updateRegistryModel, remapModel, setMappingMode } = reg
+const { reconcileProviderModels, getRegistryRow, listRegistryByProvider, rowToMetadata, updateRegistryModel, remapModel, setMappingMode, resetModelToAuto } = reg
 const modelRegistry = (schema as typeof import('@/server/db/schema')).modelRegistry
 
 const PROVIDER = 'provider-uuid-1'
@@ -162,5 +162,31 @@ d('admin edits (Models view)', () => {
     updateRegistryModel(id, { contextWindow: 7 })
     reconcileProviderModels(PROVIDER, 'deepseek', [{ id: 'deepseek-v4-flash', name: 'DS', contextWindow: 1_000_000 }])
     expect(getRegistryRow(PROVIDER, 'deepseek-v4-flash')!.contextWindow).toBe(7)
+  })
+
+  it('clears needsReview on save and pins nothing for an empty patch', () => {
+    reconcileProviderModels(PROVIDER, 'deepseek', [{ id: 'weird-alias', name: 'Weird' }])
+    const id = getRegistryRow(PROVIDER, 'weird-alias')!.id
+    expect(getRegistryRow(PROVIDER, 'weird-alias')!.needsReview).toBe(true)
+    updateRegistryModel(id, {}) // no-op save = "I looked at it"
+    const row = getRegistryRow(PROVIDER, 'weird-alias')!
+    expect(row.needsReview).toBe(false)
+    expect(JSON.parse(row.overriddenFields!)).toEqual([])
+  })
+
+  it('resetModelToAuto drops every pin, returns to auto, and re-derives from models.dev', () => {
+    reconcileProviderModels(PROVIDER, 'deepseek', [{ id: 'deepseek-v4-flash', name: 'DS', contextWindow: 1_000_000 }])
+    const id = getRegistryRow(PROVIDER, 'deepseek-v4-flash')!.id
+    updateRegistryModel(id, { contextWindow: 42, displayName: 'My Custom Label' })
+    setMappingMode(id, 'manual')
+    expect(JSON.parse(getRegistryRow(PROVIDER, 'deepseek-v4-flash')!.overriddenFields!).length).toBeGreaterThan(0)
+
+    resetModelToAuto(id)
+    const row = getRegistryRow(PROVIDER, 'deepseek-v4-flash')!
+    expect(row.mappingMode).toBe('auto')
+    expect(JSON.parse(row.overriddenFields!)).toEqual([])
+    expect(row.contextWindow).toBe(1_000_000) // back to the models.dev value
+    expect(row.displayName).not.toBe('My Custom Label') // custom label dropped
+    expect(row.needsReview).toBe(false)
   })
 })

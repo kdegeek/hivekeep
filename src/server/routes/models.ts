@@ -17,6 +17,7 @@ import {
   setMappingMode,
   remapModel,
   unpinField,
+  resetModelToAuto,
   getRegistryRowById,
   type RegistryEditPatch,
   type RegistryField,
@@ -137,6 +138,16 @@ modelRoutes.post('/:id/unpin', async (c) => {
   const { field } = (await c.req.json().catch(() => ({}))) as { field?: string }
   if (!field) return c.json({ error: { code: 'VALIDATION_ERROR', message: 'field is required' } }, 400)
   unpinField(id, field as RegistryField)
+  const updated = getRegistryRowById(id)!
+  const prov = db.select().from(providers).where(eq(providers.id, updated.providerId)).get()
+  return c.json({ model: serialize(updated, prov ?? undefined) })
+})
+
+/** Reset a row to fully automatic — drop every pin/manual override. */
+modelRoutes.post('/:id/reset', async (c) => {
+  const id = c.req.param('id')
+  if (!getRegistryRowById(id)) return c.json({ error: { code: 'NOT_FOUND', message: 'Model not found' } }, 404)
+  resetModelToAuto(id)
   const updated = getRegistryRowById(id)!
   const prov = db.select().from(providers).where(eq(providers.id, updated.providerId)).get()
   return c.json({ model: serialize(updated, prov ?? undefined) })

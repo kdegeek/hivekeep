@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { RefreshCw, Pencil, AlertTriangle, Pin, Wand2, Search, ChevronsUpDown, Check } from 'lucide-react'
+import { RefreshCw, Pencil, AlertTriangle, Pin, Wand2, Search, ChevronsUpDown, Check, RotateCcw } from 'lucide-react'
 import { Button } from '@/client/components/ui/button'
 import { Input } from '@/client/components/ui/input'
 import { Label } from '@/client/components/ui/label'
@@ -86,6 +86,17 @@ export function ModelRegistryTable() {
     }
   }
 
+  // One-click "this auto-match is correct" — an empty patch clears needsReview
+  // server-side without pinning any field.
+  const confirmReview = async (m: RegistryModel) => {
+    try {
+      const res = await api.patch<{ model: RegistryModel }>(`/models/${m.id}`, {})
+      setModels((ms) => ms.map((x) => (x.id === res.model.id ? res.model : x)))
+    } catch (err) {
+      toast.error(getErrorMessage(err))
+    }
+  }
+
   const providerOptions = useMemo(() => {
     const seen = new Map<string, string>()
     for (const m of models) if (m.providerName) seen.set(m.providerId, m.providerName)
@@ -130,7 +141,7 @@ export function ModelRegistryTable() {
       {reviewCount > 0 && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
           <AlertTriangle className="size-4 text-amber-500" />
-          {t('settings.modelRegistry.reviewBanner', { count: reviewCount, defaultValue: '{{count}} model(s) need review — the auto-match was low-confidence. Open and remap or confirm.' })}
+          {t('settings.modelRegistry.reviewBanner', { count: reviewCount, defaultValue: '{{count}} model(s) to review — their models.dev match was uncertain. Click ✓ to confirm a match is right, or open a row to remap it.' })}
         </div>
       )}
 
@@ -193,6 +204,16 @@ export function ModelRegistryTable() {
                   {m.pricing ? `${m.pricing.input}·${m.pricing.output}` : '—'}
                 </td>
                 <td className="text-right">
+                  {m.needsReview && !m.stale && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => confirmReview(m)}
+                      title={t('settings.modelRegistry.confirmTooltip', 'Confirm this match is correct (clears review)')}
+                    >
+                      <Check className="size-4 text-amber-600" />
+                    </Button>
+                  )}
                   <Button variant="ghost" size="sm" onClick={() => setEditing(m)}><Pencil className="size-4" /></Button>
                 </td>
               </tr>
@@ -250,20 +271,43 @@ function EditModelDialog({ model, onClose, onSaved }: {
       if (manual !== (model.mappingMode === 'manual')) {
         await api.post(`/models/${model.id}/mode`, { mode: manual ? 'manual' : 'auto' })
       }
-      const patch: Record<string, unknown> = {
-        displayName,
-        contextWindow: ctx ? Number(ctx) : null,
-        maxOutput: maxOut ? Number(maxOut) : null,
-        supportsImageInput: image,
-        supportsPdfInput: pdf,
-        supportsToolCall: tools,
-        thinking: reasoning
-          ? { efforts: efforts.split(',').map((e) => e.trim()).filter(Boolean) }
-          : null,
-        pricing: priceIn || priceOut ? { input: Number(priceIn) || 0, output: Number(priceOut) || 0 } : null,
+      // Only send fields the admin actually changed — every field present in the
+      // patch gets PINNED server-side, so sending unchanged values would pin the
+      // whole row on a no-op save. An empty patch still clears the review flag.
+      const patch: Record<string, unknown> = {}
+      const ctxNum = ctx ? Number(ctx) : null
+      const maxNum = maxOut ? Number(maxOut) : null
+      const initEfforts = (model.reasoning?.efforts ?? []).join(', ')
+      const initReasoning = model.reasoning?.enabled ?? false
+      const initPriceIn = model.pricing?.input?.toString() ?? ''
+      const initPriceOut = model.pricing?.output?.toString() ?? ''
+      if (displayName !== (model.displayName ?? '')) patch.displayName = displayName
+      if (ctxNum !== (model.contextWindow ?? null)) patch.contextWindow = ctxNum
+      if (maxNum !== (model.maxOutput ?? null)) patch.maxOutput = maxNum
+      if (image !== (model.supportsImageInput ?? false)) patch.supportsImageInput = image
+      if (pdf !== (model.supportsPdfInput ?? false)) patch.supportsPdfInput = pdf
+      if (tools !== (model.supportsToolCall ?? true)) patch.supportsToolCall = tools
+      if (reasoning !== initReasoning || (reasoning && efforts !== initEfforts)) {
+        patch.thinking = reasoning ? { efforts: efforts.split(',').map((e) => e.trim()).filter(Boolean) } : null
+      }
+      if (priceIn !== initPriceIn || priceOut !== initPriceOut) {
+        patch.pricing = priceIn || priceOut ? { input: Number(priceIn) || 0, output: Number(priceOut) || 0 } : null
       }
       const res = await api.patch<{ model: RegistryModel }>(`/models/${model.id}`, patch)
       toast.success(t('settings.modelRegistry.saved', 'Saved'))
+      onSaved(res.model)
+    } catch (err) {
+      toast.error(getErrorMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const resetToAuto = async () => {
+    setSaving(true)
+    try {
+      const res = await api.post<{ model: RegistryModel }>(`/models/${model.id}/reset`, {})
+      toast.success(t('settings.modelRegistry.resetDone', 'Reset to automatic'))
       onSaved(res.model)
     } catch (err) {
       toast.error(getErrorMessage(err))
@@ -293,6 +337,13 @@ function EditModelDialog({ model, onClose, onSaved }: {
       submitLabel={t('common.save', 'Save')}
       cancelLabel={t('common.cancel', 'Cancel')}
     >
+      {model.needsReview && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
+          <AlertTriangle className="size-4 shrink-0 text-amber-500" />
+          <span>{t('settings.modelRegistry.reviewHint', 'The models.dev match below was uncertain. Check the values look right (remap if not), then Save to confirm — that clears the review flag.')}</span>
+        </div>
+      )}
+
       <Field label={t('settings.modelRegistry.displayName', 'Display name')}>
         <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder={model.modelId} />
         <p className="text-[11px] text-muted-foreground">
@@ -363,6 +414,18 @@ function EditModelDialog({ model, onClose, onSaved }: {
             )}
             <Toggle label={t('settings.modelRegistry.manual', 'Manual (freeze — never auto-synced)')} checked={manual} onChange={setManual} />
           </div>
+
+          {(model.overriddenFields.length > 0 || model.mappingMode === 'manual') && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+              <span className="text-xs text-muted-foreground">
+                {t('settings.modelRegistry.resetHint', 'This model has manual overrides. Reset to drop them and follow models.dev automatically.')}
+              </span>
+              <Button type="button" variant="ghost" size="sm" onClick={resetToAuto} disabled={saving} className="shrink-0">
+                <RotateCcw className="size-3.5" />
+                {t('settings.modelRegistry.reset', 'Reset to auto')}
+              </Button>
+            </div>
+          )}
     </FormDialog>
   )
 }
