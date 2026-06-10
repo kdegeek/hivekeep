@@ -16,6 +16,9 @@ Hivekeep ships with built-in providers across six capability families: language 
 | [Google Gemini](https://aistudio.google.com/apikey) | ✅ | | ✅ | | | | ✅ |
 | [OpenRouter](https://openrouter.ai/keys) | ✅ | | | | | | ✅ |
 | [xAI](https://console.x.ai) | ✅ | | | | | | ✅ |
+| [DeepSeek](https://platform.deepseek.com/api_keys) | ✅ | | | | | | ✅ |
+| [MiniMax](https://platform.minimax.io/user-center/basic-information/interface-key) | ✅ | | | | | | ✅ |
+| [Kimi (Moonshot)](https://platform.moonshot.ai/console/api-keys) | ✅ | | | | | | ✅ |
 | [Brave Search](https://brave.com/search/api/) | | | | ✅ | | | ✅ |
 | [SerpAPI](https://serpapi.com/manage-api-key) | | | | ✅ | | | ✅ |
 | [Tavily](https://app.tavily.com/home) | | | | ✅ | | | ✅ |
@@ -28,6 +31,8 @@ This table is the exact set of built-in providers (see `src/shared/provider-meta
 - **Image generation** is built in for **OpenAI** and **Gemini**.
 - **STT and TTS** are built in for **OpenAI** and **ElevenLabs**.
 - Providers such as **Mistral** and **Replicate** are not built in: they ship as plugins.
+
+Per-model metadata (context window, image/PDF support, reasoning, pricing, and the display label) is **not configured per provider** — it's auto-filled from [models.dev](https://models.dev) and managed in the [Model Registry](/docs/providers/model-registry/), where you can also enable/disable models, fix a wrong match, or override any value.
 
 ## Capabilities
 

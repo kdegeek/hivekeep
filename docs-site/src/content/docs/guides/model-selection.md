@@ -5,6 +5,10 @@ description: Choose the right model for your Agents and fix common issues like "
 
 The model you assign to an Agent has a **massive** impact on how well it performs — especially for autonomous tasks. This guide helps you choose the right model and debug common problems.
 
+:::note
+Which models are available to assign is governed by the [Model Registry](/docs/providers/model-registry/) — disable the ones you don't want, and each model's context window, capabilities and label come from there (auto-filled from models.dev).
+:::
+
 ## Recommended models
 
 ### For autonomous / agentic Agents

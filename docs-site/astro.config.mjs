@@ -140,6 +140,7 @@ export default defineConfig({
 					label: 'Providers',
 					items: [
 						{ label: 'Supported Providers', slug: 'providers/supported' },
+						{ label: 'Model Registry', slug: 'providers/model-registry' },
 						{ label: 'Adding Custom', slug: 'providers/custom' },
 					],
 				},
