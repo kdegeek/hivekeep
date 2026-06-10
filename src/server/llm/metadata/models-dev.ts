@@ -73,17 +73,24 @@ export interface ModelsDevMatch {
  * Lowercase, unify separators, and strip trailing release markers so dated
  * snapshots collapse onto their base model:
  *   gpt-4-0613 → gpt-4, gemini-2.0-flash-001 → gemini-2.0-flash,
- *   kimi-k2-0905-preview → kimi-k2.
+ *   kimi-k2-0905-preview → kimi-k2, claude-haiku-4-5-20241022 → claude-haiku-4-5,
+ *   gpt-5-2025-08-07 → gpt-5 (OpenAI's dashed ISO date), o3-2025-04-16 → o3.
  * Repeated until stable so combined suffixes (date + "-preview") both go.
- * Pure-digit suffixes of 3+ digits are treated as version/date stamps;
- * context markers like `-16k`/`-128k` keep their letter and survive.
+ * Recognised version/date stamps: a dashed ISO date (`-YYYY-MM-DD`) or a
+ * pure-digit run of 3+ digits (`-0613`, `-20241022`). Context markers like
+ * `-16k`/`-128k` keep their letter and survive.
  */
 function normalizeId(id: string): string {
   let s = id.toLowerCase().replace(/[\s_]+/g, '-')
   let prev: string
   do {
     prev = s
-    s = s.replace(/-(latest|preview)$/g, '').replace(/-\d{3,}$/g, '')
+    s = s
+      .replace(/-(latest|preview)$/g, '')
+      // Dashed ISO date, e.g. `-2025-08-07` (OpenAI). The 2-digit month/day
+      // wouldn't be caught by the pure-digit rule below.
+      .replace(/-\d{4}-\d{2}-\d{2}$/g, '')
+      .replace(/-\d{3,}$/g, '')
   } while (s !== prev)
   return s
 }

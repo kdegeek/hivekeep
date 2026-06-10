@@ -7,6 +7,7 @@ import { describe, it, expect, mock, beforeEach } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import * as schema from '@/server/db/schema'
+import { __setSnapshotForTests } from '@/server/llm/metadata/models-dev'
 
 // Some earlier test files stub `@/server/db/schema` via mock.module (every table
 // becomes `{}`). When this file runs after one of those, the static
@@ -176,6 +177,37 @@ d('admin edits (Models view)', () => {
     expect(row.needsReview).toBe(false)
     expect(row.enabled).toBe(true) // confirming enables it
     expect(JSON.parse(row.overriddenFields!)).toEqual([])
+  })
+
+  it('auto-confirms (clears review + enables) when a later resync matches confidently', () => {
+    try {
+      // First pass: model absent from the snapshot → flagged review + disabled.
+      __setSnapshotForTests({ deepseek: {} } as never)
+      reconcileProviderModels(PROVIDER, 'deepseek', [{ id: 'ds-future', name: 'x' }])
+      let row = getRegistryRow(PROVIDER, 'ds-future')!
+      expect(row.needsReview).toBe(true)
+      expect(row.enabled).toBe(false)
+
+      // Second pass: the snapshot now has it (exact) → auto-confirm + enable.
+      __setSnapshotForTests({ deepseek: { 'ds-future': { name: 'DS Future', context: 1000 } } } as never)
+      reconcileProviderModels(PROVIDER, 'deepseek', [{ id: 'ds-future', name: 'x' }])
+      row = getRegistryRow(PROVIDER, 'ds-future')!
+      expect(row.matchConfidence).toBe('exact')
+      expect(row.needsReview).toBe(false)
+      expect(row.enabled).toBe(true)
+    } finally {
+      __setSnapshotForTests(null)
+    }
+  })
+
+  it('does NOT re-flag or re-enable an admin-disabled row on resync', () => {
+    reconcileProviderModels(PROVIDER, 'deepseek', [{ id: 'deepseek-v4-flash', name: 'DS', contextWindow: 1_000_000 }])
+    const id = getRegistryRow(PROVIDER, 'deepseek-v4-flash')!.id
+    updateRegistryModel(id, { enabled: false }) // admin hides a confident model
+    reconcileProviderModels(PROVIDER, 'deepseek', [{ id: 'deepseek-v4-flash', name: 'DS', contextWindow: 1_000_000 }])
+    const row = getRegistryRow(PROVIDER, 'deepseek-v4-flash')!
+    expect(row.enabled).toBe(false) // stays hidden — resync respects the choice
+    expect(row.needsReview).toBe(false)
   })
 
   it('lets an explicit enabled=false win over the auto-enable on review-clear', () => {

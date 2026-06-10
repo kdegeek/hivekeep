@@ -73,6 +73,14 @@ describe('matchModelsDev', () => {
     expect(matchModelsDev('gemini', 'gemini-3-pro')!.confidence).toBe('exact')
   })
 
+  it('strips a dashed ISO date suffix (OpenAI-style) to the base model', () => {
+    // gemini-3-pro-2025-08-07 → gemini-3-pro (the 2-digit month/day evade the
+    // pure-digit rule, so this needs the dedicated date strip).
+    const m = matchModelsDev('gemini', 'gemini-3-pro-2025-08-07')!
+    expect(m.confidence).toBe('normalized')
+    expect(m.key).toBe('google/gemini-3-pro')
+  })
+
   it('returns null for plugin providers (never in models.dev)', () => {
     expect(matchModelsDev('plugin:acme:custom', 'deepseek-v4-flash')).toBeNull()
   })

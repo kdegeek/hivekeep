@@ -217,6 +217,14 @@ export function reconcileProviderModels(
     const recomputed = metadataToColumns(auto)
     const patch: Partial<Row> = { stale: false, updatedAt: now, matchConfidence: confidence, modelsDevKey: matchKey }
     if (!pinned.has('displayName')) patch.displayName = autoDisplayName(model, md?.metadata.displayName)
+    // If a still-unconfirmed row now matches confidently (e.g. the matching
+    // logic improved between runs), auto-confirm it: clear review and enable.
+    // We never RE-flag here — an admin-confirmed row (needsReview already false)
+    // and a manually-disabled row are left untouched.
+    if (row.needsReview && (confidence === 'exact' || confidence === 'normalized')) {
+      patch.needsReview = false
+      patch.enabled = true
+    }
     for (const f of PINNABLE_FIELDS) {
       if (pinned.has(f)) continue // keep admin-pinned value
       if (f === 'thinking') patch.reasoning = recomputed.reasoning ?? null
