@@ -58,6 +58,8 @@
     "save": "Save",
     "remove": "Remove",
     "cancel": "Cancel",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all",
     "delete": "Delete",
     "confirm": "Confirm",
     "back": "Back",

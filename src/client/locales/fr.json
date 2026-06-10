@@ -58,6 +58,8 @@
     "save": "Enregistrer",
     "remove": "Retirer",
     "cancel": "Annuler",
+    "expandAll": "Tout déplier",
+    "collapseAll": "Tout replier",
     "delete": "Supprimer",
     "confirm": "Confirmer",
     "back": "Retour",
