@@ -93,6 +93,17 @@ All API routes return JSON. Errors follow this format:
 5. **WCAG AA contrast** — all text must meet 4.5:1 contrast ratio. Use `muted-foreground` for secondary text, never raw opacity.
 6. **Consistent spacing and radii** — follow the existing token scale. Don't invent custom values.
 
+**UI workflow rules (founder feedback — each of these was a real review correction; follow them BEFORE writing any frontend code):**
+
+7. **Search for an existing equivalent FIRST.** Before building any list, dialog, picker, or card, grep `src/client/components/` for a component already rendering the same kind of data and reuse/extend it — the goal is that the same data looks the same everywhere. Concrete precedents: forms in modals use `FormDialog` (never hand-assemble Dialog+Footer — the panel variant gives the fixed header/scrollable body/divided footer users expect); any tool list uses `ToolSelector` (the toolbox look); confirmations use `AlertDialog`/`ConfirmDeleteButton`; empty states use `EmptyState`. When a near-match exists but doesn't quite fit, add a mode/prop to it (e.g. `ToolSelector hideSwitches`) instead of forking a lookalike.
+8. **Always design for mobile, not just desktop.** Every new page/feature must be BOTH reachable and usable on a phone:
+   - *Reachable*: the left `ActivityBar` rail is hidden below `md` — mobile section nav lives in `AppTopBar` (a single dropdown cluster below `sm`, an icon segmented control between `sm` and `md`). A new section page must be added there too, and the top bar must never overflow (cluster into a dropdown rather than cramming icons).
+   - *Usable*: dense tables become stacked cards below `sm` (`hidden sm:block` table + `sm:hidden` card list); fixed-width filters go `w-full sm:w-*`; verify at 360–400px.
+9. **Consistency between pages.** Routed section pages (Projects, Tasks, Crons, Mini-Apps, Models…) all use the canonical `PageHeader` (icon + title + right-aligned `actions` slot). Page-level actions (sync/refresh buttons, etc.) belong in that `actions` slot, not in the page body.
+10. **No misleading affordances.** A read-only listing must not render disabled interactive controls (switches, toggles) — they read as broken UI. Give the shared component a display-only mode instead.
+11. **Discoverability.** Never ship an action that exists ONLY in a right-click context menu — it's invisible. Always provide a visible entry point too (hover "⋯" menu, header button).
+12. **Docs ship with the feature.** A user-facing feature isn't done until `docs-site/` is updated (and `api.md` for new REST routes / SSE events). Stale docs (e.g. a providers table missing newly built-in providers) are bugs.
+
 ## Architecture principles
 
 - **Queue per Agent**: each Agent has a FIFO queue. One message processed at a time. User messages have priority over automated ones.
@@ -130,8 +141,9 @@ Verified end-to-end (the DeepSeek provider followed exactly these steps). `PROVI
 ## Development workflow
 
 1. Work in small, verified increments; one commit per completed change with a clear message
-2. **All frontend work MUST follow the existing design system** (see the Design system section) — it is already built; never ship UI that ignores it
+2. **All frontend work MUST follow the existing design system AND the UI workflow rules** (see the Design system section — reuse-first, mobile, page consistency, no dead affordances) — it is already built; never ship UI that ignores it
 3. Run `bun run dev` frequently, and `bun run typecheck` + `bun run test` before committing (the pre-commit hook runs both)
+4. **User-facing features ship with their docs**: update `docs-site/` (Starlight) and `api.md` (new routes / SSE events) in the same change, not "later"
 
 ## Commands
 
