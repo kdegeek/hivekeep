@@ -184,16 +184,50 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
+          set -uo pipefail
           VERSION="${GITHUB_REF#refs/tags/v}"
 
-          # No CHANGELOG.md in this repo: build the changelog from git history.
+          # No CHANGELOG.md in this repo: build the changelog from git history,
+          # grouped by conventional-commit type so release notes read cleanly
+          # instead of dumping a raw, unsorted git log.
           # Find the previous tag (the one before the tag being released).
           PREV_TAG=$(git describe --tags --abbrev=0 "${GITHUB_REF}^" 2>/dev/null || echo "")
           if [ -n "$PREV_TAG" ]; then
-            SECTION=$(git log "${PREV_TAG}..${GITHUB_REF}" --pretty=format:"- %s" --no-merges | head -100)
+            RANGE="${PREV_TAG}..${GITHUB_REF}"
+            CAP=400
           else
-            SECTION=$(git log "${GITHUB_REF}" --pretty=format:"- %s" --no-merges | head -50)
+            RANGE="${GITHUB_REF}"
+            CAP=80
           fi
+          RAW=$(git log "$RANGE" --pretty=format:'%s' --no-merges | head -n "$CAP")
+
+          # Emit a "### Title" section for the commits matching $1, with the
+          # conventional-commit prefix stripped. No-op when the section is empty.
+          emit_section () {
+            local pattern="$1" title="$2" body
+            body=$(printf '%s\n' "$RAW" | grep -E "$pattern" \
+              | sed -E 's/^[a-zA-Z]+(\([^)]*\))?!?:[[:space:]]*//' \
+              | sed -E 's/^/- /') || true
+            if [ -n "$body" ]; then
+              printf '### %s\n%s\n\n' "$title" "$body"
+            fi
+          }
+
+          {
+            emit_section '^feat(\(|!|:)'     'Features'
+            emit_section '^fix(\(|!|:)'      'Fixes'
+            emit_section '^perf(\(|!|:)'     'Performance'
+            emit_section '^refactor(\(|!|:)' 'Refactor'
+            emit_section '^docs(\(|!|:)'     'Documentation'
+            # Anything that is not one of the user-facing types above
+            # (chore/test/ci/build/style/unprefixed) keeps its prefix for context.
+            OTHER=$(printf '%s\n' "$RAW" \
+              | grep -vE '^(feat|fix|perf|refactor|docs)(\(|!|:)' \
+              | sed -E 's/^/- /') || true
+            if [ -n "$OTHER" ]; then
+              printf '### Other changes\n%s\n\n' "$OTHER"
+            fi
+          } > changelog.md
 
           # The :latest tag is only published for stable (non-prerelease) tags.
           # Prerelease tags contain a '-' (e.g. v1.0.0-rc.1), so point their
@@ -205,7 +239,7 @@ jobs:
 
           {
             echo "changelog<<HIVEKEEP_EOF"
-            echo "$SECTION"
+            cat changelog.md
             echo "HIVEKEEP_EOF"
           } >> "$GITHUB_OUTPUT"
           echo "version=v${VERSION}" >> "$GITHUB_OUTPUT"
