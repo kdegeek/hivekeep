@@ -2,7 +2,6 @@
   "secretPrompt": {
     "getKey": "Générer ta clé ici",
     "privacyNote": "Ça va directement dans ton coffre chiffré. L'IA ne le voit jamais.",
-    "later": "Plus tard",
     "saving": "Enregistrement…",
     "submit": "Enregistrer en sécurité"
   },

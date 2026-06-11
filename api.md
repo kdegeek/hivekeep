@@ -1338,6 +1338,22 @@ Réglage global : les triggers créés par un Agent doivent-ils être approuvés
 
 Liste les dossiers/labels d'un compte connecté (pour le picker de dossier d'un trigger). → `{ folders: { id, name, type? }[] }`. Retombe sur `INBOX` si le provider n'expose pas `listFolders`.
 
+## Secure input (secret prompts)
+
+Popup de saisie sécurisée : un Agent (configurateur ou via `prompt_secret` / `request_provider_setup`) demande un secret (clé d'API, token). La valeur va **directement au coffre** ; elle ne transite jamais par le LLM, n'est ni journalisée ni stockée dans `secret_prompts`. Voir `secret-prompts.ts`. Émet `prompt:secret-request` / `prompt:secret-resolved` en SSE.
+
+### `GET /api/secret-prompts/pending?agentId=`
+
+Prompts en attente pour l'Agent (hydratation au montage / reconnexion). Métadonnées des champs uniquement, **jamais** de valeur secrète. → `{ prompts: SecretPromptRequest[] }`.
+
+### `POST /api/secret-prompts/:id/respond`
+
+Soumet les valeurs : `{ values: Record<fieldKey, string> }`. Le serveur stocke dans le coffre et exécute l'effet de bord (créer+tester un provider, stocker un secret, créer un channel). Pour le purpose `vault`, une clé déjà présente est **mise à jour** (upsert) au lieu d'échouer sur la contrainte `UNIQUE(key)`. Dans tous les cas, le prompt quitte l'état `pending` (succès **comme** échec) et l'Agent est relancé via un message de confirmation non sensible — un effet de bord qui throw ne laisse plus le prompt bloqué (sinon il se re-déclenchait à chaque rechargement). → `{ success: true, summary }` ou `400 SECRET_PROMPT_ERROR`.
+
+### `POST /api/secret-prompts/:id/cancel`
+
+Écarte définitivement un prompt en attente sans fournir la valeur : statut `cancelled`, l'Agent (ou la sous-tâche suspendue) est relancé avec une note « refusé ». Idempotent si déjà résolu. → `{ success: true }` ou `400 SECRET_PROMPT_ERROR`.
+
 ## SSE
 
 ### `GET /api/sse`

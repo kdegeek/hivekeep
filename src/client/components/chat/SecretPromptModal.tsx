@@ -24,7 +24,7 @@ import { useSecretPrompts } from '@/client/hooks/useSecretPrompts'
  */
 export function SecretPromptModal({ agentId }: { agentId: string | null }) {
   const { t } = useTranslation()
-  const { prompts, respond, isResponding } = useSecretPrompts(agentId)
+  const { prompts, respond, cancel, isResponding } = useSecretPrompts(agentId)
   const [values, setValues] = useState<Record<string, string>>({})
   const [dismissed, setDismissed] = useState<string | null>(null)
 
@@ -42,6 +42,18 @@ export function SecretPromptModal({ agentId }: { agentId: string | null }) {
   const handleSubmit = async () => {
     try {
       await respond(prompt.promptId, values)
+      setValues({})
+    } catch {
+      // toast handled in the hook
+    }
+  }
+
+  // Persistent dismiss: tell the server to cancel the prompt (resumes the Agent)
+  // so it never re-appears. The X / click-away below only hides it for this
+  // session.
+  const handleCancel = async () => {
+    try {
+      await cancel(prompt.promptId)
       setValues({})
     } catch {
       // toast handled in the hook
@@ -97,8 +109,8 @@ export function SecretPromptModal({ agentId }: { agentId: string | null }) {
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="ghost" onClick={() => setDismissed(prompt.promptId)} disabled={isResponding}>
-            {t('secretPrompt.later')}
+          <Button variant="ghost" onClick={handleCancel} disabled={isResponding}>
+            {t('common.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={!canSubmit || isResponding}>
             {isResponding ? t('secretPrompt.saving') : t('secretPrompt.submit')}

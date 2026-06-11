@@ -65,5 +65,21 @@ export function useSecretPrompts(agentId: string | null) {
     }
   }, [])
 
-  return { prompts, respond, isResponding, refetch: fetchPending }
+  // Persistently dismiss a prompt (server marks it `cancelled` and resumes the
+  // Agent). Without this, "Later" was local-only and the prompt re-fired on the
+  // next reload / SSE-resync.
+  const cancel = useCallback(async (promptId: string) => {
+    setIsResponding(true)
+    try {
+      await api.post(`/secret-prompts/${promptId}/cancel`, {})
+      setPrompts((prev) => prev.filter((p) => p.promptId !== promptId))
+    } catch (err) {
+      toastError(err)
+      throw err
+    } finally {
+      setIsResponding(false)
+    }
+  }, [])
+
+  return { prompts, respond, cancel, isResponding, refetch: fetchPending }
 }

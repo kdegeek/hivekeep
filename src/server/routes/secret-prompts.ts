@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { respondToSecretPrompt, getPendingSecretPrompts } from '@/server/services/secret-prompts'
+import { respondToSecretPrompt, cancelSecretPrompt, getPendingSecretPrompts } from '@/server/services/secret-prompts'
 import type { AppVariables } from '@/server/app'
 
 export const secretPromptRoutes = new Hono<{ Variables: AppVariables }>()
@@ -23,6 +23,21 @@ secretPromptRoutes.post('/:id/respond', async (c) => {
     return c.json({ error: { code: 'SECRET_PROMPT_ERROR', message: result.error } }, 400)
   }
   return c.json({ success: true, summary: result.summary })
+})
+
+/**
+ * POST /api/secret-prompts/:id/cancel — dismiss a pending secure-input prompt
+ * without providing the value. Takes it out of `pending` (so it stops re-firing
+ * on every reload) and resumes the Agent with a neutral "declined" note.
+ */
+secretPromptRoutes.post('/:id/cancel', async (c) => {
+  const promptId = c.req.param('id')
+  const user = c.get('user')
+  const result = await cancelSecretPrompt(promptId, user.id)
+  if (!result.success) {
+    return c.json({ error: { code: 'SECRET_PROMPT_ERROR', message: result.error } }, 400)
+  }
+  return c.json({ success: true })
 })
 
 /**

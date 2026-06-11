@@ -2,7 +2,6 @@
   "secretPrompt": {
     "getKey": "Get your key here",
     "privacyNote": "This goes straight to your encrypted vault. The AI never sees it.",
-    "later": "Later",
     "saving": "Saving…",
     "submit": "Save securely"
   },

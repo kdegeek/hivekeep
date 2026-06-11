@@ -23,7 +23,7 @@ import { secretPrompts, providers, tasks, messages } from '@/server/db/schema'
 import { sseManager } from '@/server/sse/index'
 import { enqueueMessage } from '@/server/services/queue'
 import { encrypt } from '@/server/services/encryption'
-import { createSecret } from '@/server/services/vault'
+import { createSecret, getSecretByKey, updateSecret } from '@/server/services/vault'
 import { vaultifyProviderConfig } from '@/server/services/provider-config'
 import { testProviderConnection, getCapabilitiesForType } from '@/server/providers/index'
 import { generateProviderSlug } from '@/server/services/provider-slug'
@@ -158,7 +158,10 @@ export async function respondToSecretPrompt(
         ? allFamilies.filter((f) => ps.families!.includes(f))
         : allFamilies
       if (capabilities.length === 0) {
-        return { success: false, error: `Provider type "${ps.type}" supports no usable capability.` }
+        // Throw (not early-return): the catch below finalizes the prompt and
+        // resumes the Agent. A bare return here would leave it `pending` and
+        // re-fire on every reload — the same trap as a swallowed exception.
+        throw new Error(`Provider type "${ps.type}" supports no usable capability.`)
       }
 
       const id = uuid()
@@ -192,7 +195,16 @@ export async function respondToSecretPrompt(
       const storedKeys: string[] = []
       for (const f of fields) {
         if (!f.secret) continue
-        await createSecret(f.key, values[f.key]!, prompt.agentId, f.label)
+        // Upsert: the user is actively entering this credential, so re-submitting
+        // a key that already exists should UPDATE it, not crash on the vault's
+        // UNIQUE(key) constraint (which was swallowed into "Failed to apply" and,
+        // worse, left the prompt pending → re-prompted forever).
+        const existing = await getSecretByKey(f.key)
+        if (existing) {
+          await updateSecret(existing.id, { value: values[f.key]!, description: f.label })
+        } else {
+          await createSecret(f.key, values[f.key]!, prompt.agentId, f.label)
+        }
         storedKeys.push(f.key)
       }
       resultRef = { vaultKeys: storedKeys }
@@ -217,19 +229,86 @@ export async function respondToSecretPrompt(
         : `Channel "${cs.name}" (${cs.platform}) was created but activation FAILED: ${activated?.statusMessage ?? 'unknown error'}. Ask the user to double-check the token / settings.`
       log.info({ promptId, channelId: channel.id, platform: cs.platform, ok }, 'Channel created from secure input')
     } else {
-      return { success: false, error: `Unsupported secret prompt purpose: ${prompt.purpose}` }
+      throw new Error(`Unsupported secret prompt purpose: ${prompt.purpose}`)
     }
   } catch (err) {
     log.error({ promptId, purpose: prompt.purpose, err }, 'Secret prompt side effect failed')
+    // A thrown side effect MUST still take the prompt out of `pending` and resume
+    // the Agent — otherwise the prompt re-fires on every reload/SSE-resync (it was
+    // never advanced) and the user is re-prompted forever. Mirror the provider
+    // "saved but test failed" philosophy: finalize + resume with a failure note.
+    await finalizeSecretPrompt(prompt, {
+      ok: false,
+      status: 'answered',
+      summary: 'the secure input could not be applied (an unexpected error occurred). Apologize and offer to try again.',
+      confirmationPrefix: 'Secure input failed',
+      resultRef: { error: 'side-effect-failed' },
+      userId,
+    })
     return { success: false, error: 'Failed to apply the secure input. Please try again.' }
   }
 
+  await finalizeSecretPrompt(prompt, {
+    ok: true,
+    status: 'answered',
+    summary,
+    confirmationPrefix: 'Secure input received',
+    resultRef,
+    userId,
+  })
+
+  return { success: true, summary }
+}
+
+/**
+ * Cancel a pending secure-input prompt: the user dismissed the popup without
+ * providing the value. Takes the prompt out of `pending` (so it never re-fires)
+ * and resumes the Agent / sub-Agent with a neutral "declined" note so a suspended
+ * task can't hang forever.
+ */
+export async function cancelSecretPrompt(
+  promptId: string,
+  userId?: string,
+): Promise<{ success: true } | { success: false; error: string }> {
+  const prompt = await db.select().from(secretPrompts).where(eq(secretPrompts.id, promptId)).get()
+  if (!prompt) return { success: false, error: 'Prompt not found' }
+  if (prompt.status !== 'pending') return { success: true } // already resolved — idempotent
+
+  await finalizeSecretPrompt(prompt, {
+    ok: false,
+    status: 'cancelled',
+    summary: 'the user dismissed the secure-input request and did not provide the value.',
+    confirmationPrefix: 'Secure input dismissed',
+    resultRef: { cancelled: true },
+    userId,
+  })
+  log.info({ promptId, agentId: prompt.agentId }, 'Secret prompt cancelled by user')
+  return { success: true }
+}
+
+/**
+ * Shared terminal step for a secret prompt: advance it out of `pending`, inject a
+ * non-sensitive confirmation message that resumes the Agent (or claims+resumes a
+ * suspended sub-Agent task), and broadcast `prompt:secret-resolved` so every open
+ * modal closes. Used by the success, handled-failure, and cancel paths alike.
+ */
+async function finalizeSecretPrompt(
+  prompt: { id: string; agentId: string; taskId: string | null },
+  opts: {
+    ok: boolean
+    status: 'answered' | 'cancelled'
+    summary: string
+    confirmationPrefix: string
+    resultRef: Record<string, unknown>
+    userId?: string
+  },
+): Promise<void> {
   await db
     .update(secretPrompts)
-    .set({ status: 'answered', resultRef: JSON.stringify(resultRef), respondedAt: new Date() })
-    .where(eq(secretPrompts.id, promptId))
+    .set({ status: opts.status, resultRef: JSON.stringify(opts.resultRef), respondedAt: new Date() })
+    .where(eq(secretPrompts.id, prompt.id))
 
-  const confirmation = `[Secure input received — ${summary}]`
+  const confirmation = `[${opts.confirmationPrefix} — ${opts.summary}]`
 
   if (prompt.taskId) {
     const claim = sqlite.run(
@@ -244,7 +323,7 @@ export async function respondToSecretPrompt(
         role: 'user',
         content: confirmation,
         sourceType: 'user',
-        sourceId: userId ?? null,
+        sourceId: opts.userId ?? null,
         createdAt: new Date(),
       })
       const { runOrQueueResumedTask } = await import('@/server/services/tasks')
@@ -258,7 +337,7 @@ export async function respondToSecretPrompt(
       messageType: 'user',
       content: confirmation,
       sourceType: 'user',
-      sourceId: userId,
+      sourceId: opts.userId,
       priority: config.queue.userPriority,
     })
   }
@@ -266,10 +345,8 @@ export async function respondToSecretPrompt(
   sseManager.sendToAgent(prompt.agentId, {
     type: 'prompt:secret-resolved',
     agentId: prompt.agentId,
-    data: { promptId, agentId: prompt.agentId, ok: true, summary },
+    data: { promptId: prompt.id, agentId: prompt.agentId, ok: opts.ok, summary: opts.summary },
   })
-
-  return { success: true, summary }
 }
 
 export async function getPendingSecretPrompts(agentId: string) {
