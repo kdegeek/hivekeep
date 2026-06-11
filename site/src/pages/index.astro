@@ -193,6 +193,7 @@ const fxCount = fxCategories.reduce((n, c) => n + c.cards.length, 0);
       {channels.map(([slug, label]) => (
         <span class="chan"><Icon name={`simple-icons:${slug}`} /> {label}</span>
       ))}
+      <span class="chan"><Icon name="lucide:monitor-smartphone" /> Web · PWA</span>
     </div></div>
   </section>
 
@@ -378,9 +379,58 @@ const fxCount = fxCategories.reduce((n, c) => n + c.cards.length, 0);
       </div>
     </div>
   </section></div>
-  <!-- ===== 05 transparent ===== -->
-  <div class="wrap" id="transparency"><section class="section reveal">
-    <div class="num"><div class="hexnum"><span class="n">05</span></div><small>Transparent</small><span class="spine" aria-hidden="true"></span></div>
+  <!-- ===== 05 in your pocket (PWA) ===== -->
+  <div class="wrap" id="pocket"><section class="section reveal">
+    <div class="num"><div class="hexnum"><span class="n">05</span></div><small>Mobile</small><span class="spine" aria-hidden="true"></span></div>
+    <div class="body">
+      <h2 class="display">The whole hive, in your pocket.</h2>
+      <div class="split2">
+        <div>
+          <p>Hivekeep is a real app on your phone: install it <b>straight from the browser</b> — no app store, no account with anyone, nothing extra to deploy. Full-screen, an icon on your home screen, <b>unread badges</b> that actually work.</p>
+          <p>And it's the <b>same live session</b> as your desktop: an answer that lands at your desk is already on your phone. Reply by <b>voice</b>, send photos, approve an agent's plan from the couch.</p>
+          <div class="taglist">
+            <span class="t"><Icon name="lucide:smartphone" /> installable PWA</span>
+            <span class="t"><Icon name="lucide:monitor-smartphone" /> desktop + mobile</span>
+            <span class="t"><Icon name="lucide:bell" /> unread badges</span>
+            <span class="t"><Icon name="lucide:mic" /> voice in &amp; out</span>
+          </div>
+        </div>
+        <div class="pocket-stage">
+          <div class="phone" aria-label="Hivekeep running as an installed app on a phone">
+            <div class="ph-screen">
+              <span class="ph-island" aria-hidden="true"></span>
+              <div class="ph-status mono"><span>21:37</span><span class="ph-st-ics"><Icon name="lucide:signal" /><Icon name="lucide:wifi" /><Icon name="lucide:battery-medium" /></span></div>
+              <div class="ph-chat-head">
+                <img src={`${base}/avatars/nest.jpg`} alt="" width="26" height="26" loading="lazy" />
+                <span class="ph-nm">Nest</span>
+                <span class="dm-chip"><span class="pip"></span> online</span>
+              </div>
+              <div class="ph-chat">
+                <div class="dm-row user"><div class="dm-bubble user">Heading home — make it cozy 🛋️</div></div>
+                <div class="dm-row">
+                  <div class="dm-col">
+                    <div class="dm-tool"><span class="dm-tool-ic dm-t-config"><Icon name="lucide:thermometer" /></span><span class="dm-tool-nm">Set heating<span class="dm-tool-detail"> · living room → 21.5°</span></span><span class="dm-tool-status"><Icon name="lucide:check" class="dm-ok" /></span></div>
+                    <div class="dm-tool"><span class="dm-tool-ic dm-t-email"><Icon name="lucide:lamp" /></span><span class="dm-tool-nm">Scene<span class="dm-tool-detail"> · Evening</span></span><span class="dm-tool-status"><Icon name="lucide:check" class="dm-ok" /></span></div>
+                    <div class="dm-bubble agent">Heater's on, lights set to <strong>Evening</strong>. Traffic says 18 min — want the oven preheated too?</div>
+                  </div>
+                </div>
+              </div>
+              <div class="ph-composer">
+                <div class="dm-input-box"><span class="dm-input-ph">Message Nest…</span><span class="ph-mic"><Icon name="lucide:mic" /></span><span class="dm-send"><Icon name="lucide:arrow-up" /></span></div>
+              </div>
+              <span class="ph-homebar" aria-hidden="true"></span>
+            </div>
+          </div>
+          <span class="pk-chip pk-a"><Icon name="lucide:arrow-down-to-line" /> <span><b>Install from the browser</b><i>no app store needed</i></span></span>
+          <span class="pk-chip pk-b"><span class="pk-app"><img src={`${base}/logo.svg`} alt="" width="22" height="22" /><i class="pk-badge">3</i></span> <span><b>Unread badges</b><i>on your home screen</i></span></span>
+          <span class="pk-chip pk-c"><Icon name="lucide:zap" /> <span><b>Synced with desktop</b><i>one live session</i></span></span>
+        </div>
+      </div>
+    </div>
+  </section></div>
+  <!-- ===== 06 transparent ===== -->
+  <div class="wrap band" id="transparency"><section class="section reveal">
+    <div class="num"><div class="hexnum"><span class="n">06</span></div><small>Transparent</small><span class="spine" aria-hidden="true"></span></div>
     <div class="body">
       <h2 class="display">No black box. No cost surprises.</h2>
       <div class="split2">
@@ -415,9 +465,9 @@ const fxCount = fxCategories.reduce((n, c) => n + c.cards.length, 0);
       </div>
     </div>
   </section></div>
-  <!-- ===== 06 setup / queenie ===== -->
-  <div class="wrap band" id="setup"><section class="section reveal">
-    <div class="num"><div class="hexnum"><span class="n">06</span></div><small>Setup</small><span class="spine" aria-hidden="true"></span></div>
+  <!-- ===== 07 setup / queenie ===== -->
+  <div class="wrap" id="setup"><section class="section reveal">
+    <div class="num"><div class="hexnum"><span class="n">07</span></div><small>Setup</small><span class="spine" aria-hidden="true"></span></div>
     <div class="body">
       <h2 class="display">Setup is a conversation, not a YAML file.</h2>
       <div class="split2">
@@ -429,9 +479,9 @@ const fxCount = fxCategories.reduce((n, c) => n + c.cards.length, 0);
       </div>
     </div>
   </section></div>
-  <!-- ===== 07 the household ===== -->
+  <!-- ===== 08 the household ===== -->
   <div class="wrap" id="household"><div class="comb" style="--comb-lit:radial-gradient(520px 360px at 16% 22%,#000 0%,transparent 62%),radial-gradient(600px 400px at 78% 82%,#000 0%,transparent 62%)" aria-hidden="true"><span class="comb-dim"></span><span class="comb-lit-clip"><span class="comb-lit"></span></span></div><section class="section reveal">
-    <div class="num"><div class="hexnum"><span class="n">07</span></div><small>Examples</small><span class="spine" aria-hidden="true"></span></div>
+    <div class="num"><div class="hexnum"><span class="n">08</span></div><small>Examples</small><span class="spine" aria-hidden="true"></span></div>
     <div class="body">
       <h2 class="display">Build a household for your life.</h2>
       <p>Hivekeep ships with one Agent: <b>Queenie</b>, your setup guide. You create the rest, or just ask Queenie to build them for you. Each one gets its own name, domain, memory, tools, and a generated avatar.</p>

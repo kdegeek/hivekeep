@@ -352,6 +352,61 @@ html.js .reveal.in{opacity:1;transform:none;}
 .cachep .leg{display:flex;gap:16px;margin-top:9px;font-family:"JetBrains Mono",monospace;font-size:.6rem;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-soft);}
 .cachep .leg .sw{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:-1px;}
 
+/* ── pocket / PWA section (05): CSS phone mockup + floating chips ──────────
+   The screen reuses the dm-* chat skin (scaled down) so the phone shows the
+   exact same product UI as the other demos. Chips float gently (motion-safe). */
+.pocket-stage{position:relative;display:flex;justify-content:center;padding:18px 0 6px;}
+.phone{width:268px;flex:0 0 auto;border-radius:42px;padding:9px;background:oklch(0.09 0.015 310);border:1px solid var(--line-strong);box-shadow:var(--shadow);position:relative;z-index:1;}
+.ph-screen{position:relative;border-radius:34px;overflow:hidden;background:var(--bg);border:1px solid var(--line);display:flex;flex-direction:column;min-height:480px;}
+.ph-island{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:72px;height:19px;border-radius:999px;background:oklch(0.07 0.01 310);z-index:3;}
+.ph-status{display:flex;justify-content:space-between;align-items:center;padding:11px 20px 4px;font-size:.6rem;color:var(--ink-soft);}
+.ph-st-ics{display:inline-flex;gap:5px;}
+.ph-st-ics svg{width:11px;height:11px;}
+.ph-chat-head{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--line);}
+.ph-chat-head img{width:26px;height:26px;border-radius:8px;object-fit:cover;border:1px solid var(--line);}
+.ph-nm{font-weight:700;font-size:.84rem;}
+.ph-chat-head .dm-chip{margin-left:auto;}
+.ph-chat{flex:1;display:flex;flex-direction:column;gap:8px;padding:12px 10px;}
+.ph-chat .dm-row{padding:0;}
+.ph-chat .dm-bubble{font-size:.76rem;padding:7px 10px;line-height:1.45;}
+.ph-chat .dm-tool{font-size:.7rem;padding:5px 7px;}
+.ph-chat .dm-tool-ic{width:19px;height:19px;}
+.ph-chat .dm-tool-ic svg{width:11px;height:11px;}
+.ph-chat .dm-col{max-width:96%;gap:5px;}
+.ph-composer{padding:8px 10px 6px;border-top:1px solid var(--line);}
+.ph-composer .dm-input-box{padding:6px 6px 6px 11px;}
+.ph-composer .dm-input-ph{font-size:.74rem;}
+.ph-composer .dm-send{width:24px;height:24px;}
+.ph-composer .dm-send svg{width:13px;height:13px;}
+.ph-mic{display:grid;place-items:center;color:var(--ink-soft);}
+.ph-mic svg{width:15px;height:15px;}
+.ph-homebar{display:block;width:86px;height:4px;border-radius:999px;background:oklch(1 0 0/.22);margin:4px auto 8px;}
+/* floating feature chips around the phone */
+.pk-chip{position:absolute;z-index:2;display:flex;align-items:center;gap:9px;background:var(--glass);backdrop-filter:blur(12px) saturate(1.2);border:1px solid var(--line-strong);border-radius:12px;padding:9px 12px;box-shadow:0 8px 26px oklch(0 0 0/.35);font-size:.78rem;line-height:1.25;}
+.pk-chip>svg{width:16px;height:16px;color:var(--primary);flex:0 0 auto;}
+.pk-chip b{display:block;color:var(--ink);font-weight:700;font-size:.78rem;}
+.pk-chip i{display:block;font-style:normal;font-family:"JetBrains Mono",monospace;font-size:.58rem;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-soft);}
+.pk-app{position:relative;width:30px;height:30px;border-radius:9px;background:oklch(1 0 0/.06);border:1px solid var(--line-strong);display:grid;place-items:center;flex:0 0 auto;}
+.pk-app img{width:20px;height:20px;}
+.pk-badge{position:absolute;top:-6px;right:-7px;min-width:16px;height:16px;border-radius:999px;background:oklch(0.62 0.23 25);color:#fff;font-style:normal;font-size:.6rem;font-weight:700;display:grid;place-items:center;padding:0 4px;border:2px solid var(--bg);}
+/* phone sits left of the stage; the chips live in the free space at its right,
+   staggered, with only a gentle kiss onto the bezel — never over the screen. */
+.pocket-stage{justify-content:flex-start;}
+.pk-a{top:9%;right:4%;}
+.pk-b{top:42%;right:-2%;}
+.pk-c{bottom:10%;right:8%;}
+@media (min-width:861px) and (prefers-reduced-motion:no-preference){
+  .pk-chip{animation:pk-float 6.5s ease-in-out infinite alternate;}
+  .pk-b{animation-delay:1.6s;animation-duration:7.4s;}
+  .pk-c{animation-delay:3.1s;animation-duration:5.8s;}
+}
+@keyframes pk-float{from{transform:translateY(-4px);}to{transform:translateY(5px);}}
+@media (max-width:860px){
+  /* stacked layout: phone centered, chips become a static list below it */
+  .pocket-stage{flex-direction:column;align-items:center;gap:12px;}
+  .pk-chip{position:static;width:min(100%,320px);}
+}
+
 /* install video */
 .videoblock{padding:80px 0;}
 .videoframe{position:relative;max-width:920px;margin:0 auto;border-radius:var(--r-card);overflow:hidden;box-shadow:var(--shadow);border:1px solid var(--line-strong);}
