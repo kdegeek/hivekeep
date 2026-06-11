@@ -161,7 +161,7 @@ const fxCount = fxCategories.reduce((n, c) => n + c.cards.length, 0);
   </div></header>
 
   <!-- ===== hero ===== -->
-  <section class="hero"><div class="comb" aria-hidden="true"><span class="comb-dim"></span><span class="comb-lit-clip"><span class="comb-lit"></span></span></div><div class="glow a"></div><div class="glow b"></div>
+  <section class="hero"><div class="comb" aria-hidden="true"><span class="comb-dim"></span><span class="comb-lit-clip"><span class="comb-lit"></span></span><canvas class="comb-pulse"></canvas></div><div class="glow a"></div><div class="glow b"></div>
     <div class="wrap">
       <span class="meta">Hivekeep v{repoVersion} · self-hosted · MIT</span>
       <div class="hero-grid">
@@ -604,6 +604,246 @@ const fxCount = fxCategories.reduce((n, c) => n + c.cards.length, 0);
       if (!tb.contains(e.target as Node)) close()
     })
     window.addEventListener('resize', () => { if (window.innerWidth > 860) close() })
+  }
+</script>
+
+<script>
+  // Hero honeycomb "signal pulses": short luminous trails traveling along the
+  // edges of the hex grid, matching the .comb mask geometry exactly (the mask
+  // tiles comb-thin.svg at 45px × 78px). Theme aurora colors, never blue.
+  // Desktop + motion-safe only; pauses offscreen, on hidden tabs, and on resize
+  // rebuilds the lattice. Pure decoration: the canvas is aria-hidden inside the
+  // comb backdrop (z-index 0, behind the hero content).
+  const cv = document.querySelector<HTMLCanvasElement>('.hero .comb-pulse')
+  const hero = document.querySelector<HTMLElement>('.hero')
+  const ctx = cv?.getContext('2d')
+  if (cv && hero && ctx) {
+    const mqDesk = window.matchMedia('(min-width: 861px)')
+    const mqMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+
+    // Resolve oklch through the browser once so canvas gets exact theme colors.
+    const probe = document.createElement('span')
+    probe.style.display = 'none'
+    document.body.appendChild(probe)
+    const resolveColor = (c: string) => {
+      probe.style.color = c
+      return getComputedStyle(probe).color || c
+    }
+    // The three aurora gradient stops (--grad), slightly brightened for glow.
+    const COLORS = ['oklch(0.74 0.21 305)', 'oklch(0.78 0.2 342)', 'oklch(0.88 0.13 55)'].map(resolveColor)
+    probe.remove()
+
+    // ── hex lattice graph (45 × 78 tile: half-width 22.5, row pitch 39) ──
+    const HW = 22.5
+    const ROW = 39
+    const OFF = [[0, -26], [HW, -13], [HW, 13], [0, 26], [-HW, 13], [-HW, -13]]
+    let verts: { x: number; y: number }[] = []
+    let adj: number[][] = []
+    let W = 0
+    let H = 0
+
+    function buildGraph() {
+      verts = []
+      adj = []
+      const index = new Map<string, number>()
+      const vid = (x: number, y: number) => {
+        const k = `${Math.round(x * 2)}:${Math.round(y * 2)}`
+        let i = index.get(k)
+        if (i === undefined) {
+          i = verts.length
+          verts.push({ x, y })
+          adj.push([])
+          index.set(k, i)
+        }
+        return i
+      }
+      const rows = Math.ceil(H / ROW) + 1
+      const cols = Math.ceil(W / 45) + 1
+      for (let r = -1; r <= rows; r++) {
+        const xoff = r % 2 !== 0 ? HW : 0
+        for (let c = -1; c <= cols; c++) {
+          const cx = c * 45 + xoff
+          const cy = r * ROW
+          let first = -1
+          let prev = -1
+          for (let k = 0; k < 6; k++) {
+            const i = vid(cx + OFF[k][0], cy + OFF[k][1])
+            if (k === 0) first = i
+            if (prev >= 0 && !adj[prev].includes(i)) {
+              adj[prev].push(i)
+              adj[i].push(prev)
+            }
+            prev = i
+          }
+          if (prev >= 0 && first >= 0 && !adj[prev].includes(first)) {
+            adj[prev].push(first)
+            adj[first].push(prev)
+          }
+        }
+      }
+    }
+
+    // ── pulses: a head walking the graph + a fading trail behind it ──
+    interface Pulse {
+      a: number
+      b: number
+      t: number
+      speed: number
+      trail: { x: number; y: number }[]
+      color: string
+      age: number
+      ttl: number
+    }
+    let pulses: Pulse[] = []
+    const rand = (lo: number, hi: number) => lo + Math.random() * (hi - lo)
+
+    function spawn(): Pulse {
+      const a = Math.floor(Math.random() * verts.length)
+      const ns = adj[a]
+      const b = ns[Math.floor(Math.random() * ns.length)]
+      return {
+        a,
+        b,
+        t: 0,
+        speed: rand(240, 430),
+        trail: [verts[a]],
+        color: COLORS[Math.floor(Math.random() * COLORS.length)],
+        age: 0,
+        ttl: rand(4, 8),
+      }
+    }
+
+    const MAXTRAIL = 150
+    function step(p: Pulse, dt: number) {
+      p.age += dt
+      let A = verts[p.a]
+      let B = verts[p.b]
+      let seg = Math.hypot(B.x - A.x, B.y - A.y)
+      p.t += (p.speed * dt) / seg
+      while (p.t >= 1) {
+        const carry = (p.t - 1) * seg
+        p.trail.unshift(verts[p.b])
+        if (p.trail.length > 9) p.trail.pop()
+        const ns = adj[p.b].filter((n) => n !== p.a)
+        const next = ns.length ? ns[Math.floor(Math.random() * ns.length)] : p.a
+        p.a = p.b
+        p.b = next
+        A = verts[p.a]
+        B = verts[p.b]
+        seg = Math.hypot(B.x - A.x, B.y - A.y)
+        p.t = carry / seg
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H)
+      ctx.globalCompositeOperation = 'lighter'
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      for (const p of pulses) {
+        const A = verts[p.a]
+        const B = verts[p.b]
+        const head = { x: A.x + (B.x - A.x) * p.t, y: A.y + (B.y - A.y) * p.t }
+        // fade in over 0.35s, fade out over the last 0.6s of the pulse's life
+        const env = Math.max(0, Math.min(1, p.age / 0.35, (p.ttl - p.age) / 0.6))
+        let px = head.x
+        let py = head.y
+        let dist = 0
+        ctx.strokeStyle = p.color
+        ctx.lineWidth = 1.6
+        for (let i = 0; i < p.trail.length && dist < MAXTRAIL; i++) {
+          const q = p.trail[i]
+          const d = Math.hypot(q.x - px, q.y - py)
+          const a0 = 1 - dist / MAXTRAIL
+          const a1 = Math.max(0, 1 - (dist + d) / MAXTRAIL)
+          ctx.globalAlpha = env * 0.62 * ((a0 + a1) / 2)
+          ctx.beginPath()
+          ctx.moveTo(px, py)
+          ctx.lineTo(q.x, q.y)
+          ctx.stroke()
+          px = q.x
+          py = q.y
+          dist += d
+        }
+        ctx.globalAlpha = env * 0.95
+        ctx.shadowColor = p.color
+        ctx.shadowBlur = 7
+        ctx.fillStyle = p.color
+        ctx.beginPath()
+        ctx.arc(head.x, head.y, 1.7, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.shadowBlur = 0
+      }
+      ctx.globalAlpha = 1
+      ctx.globalCompositeOperation = 'source-over'
+    }
+
+    function size() {
+      const r = hero.getBoundingClientRect()
+      W = Math.ceil(r.width)
+      H = Math.ceil(r.height)
+      const dpr = Math.min(2, window.devicePixelRatio || 1)
+      cv.width = W * dpr
+      cv.height = H * dpr
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      buildGraph()
+      const n = Math.max(3, Math.min(8, Math.round(W / 230)))
+      pulses = Array.from({ length: n }, spawn)
+      // stagger lifetimes so the fade-ins don't sync up
+      pulses.forEach((p) => {
+        p.age = Math.random() * p.ttl * 0.5
+      })
+    }
+
+    let raf = 0
+    let last = 0
+    let running = false
+    function frame(t: number) {
+      if (!running) return
+      const dt = Math.min(0.05, (t - last) / 1000 || 0.016)
+      last = t
+      for (let i = 0; i < pulses.length; i++) {
+        step(pulses[i], dt)
+        if (pulses[i].age >= pulses[i].ttl) pulses[i] = spawn()
+      }
+      draw()
+      raf = requestAnimationFrame(frame)
+    }
+
+    let inView = false
+    let tabVisible = !document.hidden
+    const wanted = () => inView && tabVisible && mqDesk.matches && !mqMotion.matches
+    function sync() {
+      const w = wanted()
+      if (w && !running) {
+        running = true
+        size()
+        last = performance.now()
+        raf = requestAnimationFrame(frame)
+      } else if (!w && running) {
+        running = false
+        cancelAnimationFrame(raf)
+        ctx.clearRect(0, 0, W, H)
+      }
+    }
+    new IntersectionObserver((es) => {
+      inView = es[0].isIntersecting
+      sync()
+    }).observe(hero)
+    document.addEventListener('visibilitychange', () => {
+      tabVisible = !document.hidden
+      sync()
+    })
+    mqDesk.addEventListener('change', sync)
+    mqMotion.addEventListener('change', sync)
+    let rz = 0
+    window.addEventListener('resize', () => {
+      clearTimeout(rz)
+      rz = window.setTimeout(() => {
+        if (running) size()
+      }, 180)
+    })
+    sync()
   }
 </script>
 
