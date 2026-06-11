@@ -1,6 +1,6 @@
 {
   "name": "hivekeep",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "description": "Self-hosted platform of specialized AI agents (Agents) with persistent identity, memory, tools, and collaboration",
   "license": "MIT",
