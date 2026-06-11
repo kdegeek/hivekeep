@@ -479,6 +479,21 @@ html.js .reveal.in{opacity:1;transform:none;}
 .footer .m{font-family:"JetBrains Mono",monospace;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);}
 
 @media(max-width:860px){
+  /* hero readability: on narrow screens the text column spans the full width,
+     so the warm glow and the lit comb patches land straight behind the copy.
+     Calm the backdrop (smaller, fainter, pushed to the corners) and lift the
+     body type a notch so it reads against what remains. */
+  .hero .glow.a{width:360px;height:360px;top:-240px;right:-180px;opacity:.45;}
+  .hero .glow.b{opacity:.5;}
+  .hero .comb-lit{opacity:.35;}
+  .hero .comb-lit-clip{
+    -webkit-mask-image:radial-gradient(280px 200px at 6% 4%,#000 0%,transparent 62%),radial-gradient(260px 190px at 100% 100%,#000 0%,transparent 62%);
+    mask-image:radial-gradient(280px 200px at 6% 4%,#000 0%,transparent 62%),radial-gradient(260px 190px at 100% 100%,#000 0%,transparent 62%);
+  }
+  .hero .sub{color:oklch(0.88 0.018 316);}
+  .hero .meta{color:oklch(0.82 0.025 315);}
+  .colophon .row .v{color:oklch(0.96 0.012 320);}
+
   .hero-grid{grid-template-columns:1fr;gap:30px;}
   .section{grid-template-columns:1fr;gap:14px;}
   /* number cell goes inline (hex + label side by side); spine is desktop-only */
