@@ -157,6 +157,21 @@ All configurable values of the platform, grouped by domain. These values are def
 
 ---
 
+## Workspace files (Files section)
+
+Limits of the **Files** section (workspace browser/editor — see `files.md`).
+
+| Key | Env var | Default | Description |
+|---|---|---|---|
+| `workspaceFiles.maxEditableSizeMb` | `WORKSPACE_FILES_MAX_EDITABLE_SIZE` | `5` | Above this size (MB), a text file is served as `too-large` (download only, no in-browser editing) |
+| `workspaceFiles.maxUploadSizeMb` | `WORKSPACE_FILES_MAX_UPLOAD_SIZE` | `100` | Max size (MB) of a file uploaded to a workspace. `0` = unlimited (still capped by `MAX_REQUEST_BODY_MB`) |
+| `workspaceFiles.maxCopySizeMb` | `WORKSPACE_FILES_MAX_COPY_SIZE` | `500` | Byte budget of a recursive folder copy (the copy aborts mid-stream when exceeded — `413 COPY_TOO_LARGE`) |
+| `workspaceFiles.maxCopyEntries` | `WORKSPACE_FILES_COPY_MAX_ENTRIES` | `5000` | Entry-count budget of a recursive folder copy (millions of small files would bypass the byte cap) |
+| `workspaceFiles.searchMaxResults` | `WORKSPACE_FILES_SEARCH_MAX_RESULTS` | `50` | Hard cap of the `limit` param of `/workspace/search` |
+| `workspaceFiles.searchMaxEntries` | `WORKSPACE_FILES_SEARCH_MAX_ENTRIES` | `20000` | Budget of files walked per search request (giant workspaces) |
+
+---
+
 ## Upload
 
 | Key | Env var | Default | Description |

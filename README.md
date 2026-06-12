@@ -200,6 +200,7 @@ All capabilities are detailed on the [website](https://marlburrow.github.io/hive
 - 18 OKLch palettes (aurora, ocean, forest, sunset, monochrome, sakura, neon, lavender, midnight, copper, jade, crimson, galaxy, amber, slate, rose, mint, citrus) x light/dark/system x adaptive contrast
 - Glass/gradient design system, WCAG AA, i18n (English and French)
 - Rich tool renders inline, @mentions with autocomplete, real-time SSE streaming, auto-generated per-Agent avatars
+- Files: a built-in workspace browser/editor — browse, edit, upload, and share any file your Agents produce, with clickable file paths in chat
 
 **Conversational onboarding (Queenie)**
 - Minimal 3-screen onboarding, then full guided configuration by chat

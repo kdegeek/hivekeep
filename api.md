@@ -1016,6 +1016,245 @@ Upload multipart/form-data.
 
 ---
 
+## Workspace files (section Files)
+
+Routes de la section **Files** (explorateur/éditeur de workspaces — voir `files.md`). Montées sous `/api/agents/:agentId/workspace` ; `:agentId` accepte un id ou un slug. Agent introuvable → `404 KIN_NOT_FOUND`. Tous les `path` sont **relatifs à la racine du workspace** et strictement confinés (pas de chemin absolu, pas de `..`, pas d'évasion par symlink — feuille comprise).
+
+Codes d'erreur communs : `KIN_NOT_FOUND` (404), `PATH_FORBIDDEN` (400), `FILE_NOT_FOUND` (404), `IS_DIRECTORY` (400), `NOT_A_DIRECTORY` (400), `FILE_TOO_LARGE` (413), `INVALID_NAME` (400), `DEST_EXISTS` (409), `CONFLICT` (409), `COPY_TOO_LARGE` (413).
+
+### `GET /api/agents/:agentId/workspace/ls`
+
+Liste un dossier (lazy — jamais d'arbre récursif).
+
+```typescript
+// Query params : ?path=docs/reports        (défaut : racine "")
+
+// Response 200
+{
+  path: string,
+  entries: Array<{
+    name: string,
+    path: string,              // relatif à la racine
+    type: 'file' | 'dir',
+    size: number,              // 0 pour les dirs
+    modifiedAt: number,        // Unix ms
+    isSymlink: boolean
+  }>
+}
+// Workspace pas encore créé → 200 { path: "", entries: [] } (création lazy)
+
+// Error 404 FILE_NOT_FOUND (sous-dossier inexistant) · 400 NOT_A_DIRECTORY · 400 PATH_FORBIDDEN
+```
+
+> Tri serveur : dossiers d'abord, puis alphabétique insensible à la casse. Tout est listé, dotfiles compris (pas de filtre d'ignore).
+
+### `GET /api/agents/:agentId/workspace/file`
+
+Lecture d'un fichier : métadonnées + contenu texte.
+
+```typescript
+// Query params : ?path=docs/report.md
+
+// Response 200
+{
+  path: string,
+  name: string,
+  size: number,
+  modifiedAt: number,          // ← à renvoyer dans le PUT (concurrence optimiste)
+  mimeType: string,            // deviné par extension
+  kind: 'text' | 'image' | 'pdf' | 'binary' | 'too-large',
+  content: string | null       // null sauf kind === 'text'
+}
+
+// Error 404 FILE_NOT_FOUND · 400 IS_DIRECTORY · 400 PATH_FORBIDDEN
+```
+
+> `kind: 'too-large'` = fichier texte au-delà de `workspaceFiles.maxEditableSizeMb` (téléchargement seulement). `binary` = null-byte détecté dans les 8 premiers Ko.
+
+### `PUT /api/agents/:agentId/workspace/file`
+
+Écriture d'un fichier texte (crée le fichier et ses dossiers parents si absents). Émet `workspace:changed`.
+
+```typescript
+// Request
+{
+  path: string,
+  content: string,             // texte uniquement
+  baseModifiedAt?: number,     // mtime lu par le client ; absent = écrasement forcé
+  createOnly?: boolean         // true = création stricte (« Nouveau fichier »)
+}
+
+// Response 200
+{ path: string, size: number, modifiedAt: number }
+
+// Error 409 — concurrence optimiste : le mtime disque a changé depuis la lecture
+// (typiquement : l'agent a écrit le même fichier entre temps)
+{ error: { code: 'CONFLICT', message: '...' } }
+// Error 409 — createOnly et le chemin existe déjà
+{ error: { code: 'DEST_EXISTS', message: '...' } }
+// Error 413 FILE_TOO_LARGE · 400 PATH_FORBIDDEN · 400 INVALID_NAME · 400 IS_DIRECTORY
+```
+
+### `GET /api/agents/:agentId/workspace/raw`
+
+Stream des octets bruts (téléchargement / viewers image & PDF).
+
+```typescript
+// Query params : ?path=images/chart.png&inline=1
+
+// Response 200 : stream binaire
+//   Content-Type: <mime>                   (deviné par extension)
+//   Content-Length: <size>
+//   X-Content-Type-Options: nosniff        (toujours)
+//   Content-Disposition: attachment (défaut) | inline (si inline=1 ET MIME dans l'allowlist)
+
+// Error 404 FILE_NOT_FOUND · 400 IS_DIRECTORY · 400 PATH_FORBIDDEN
+```
+
+> **Allowlist inline** : `image/*` **sauf `image/svg+xml` et tout `image/*+xml`** (un SVG inline exécuterait ses scripts dans l'origine authentifiée), `application/pdf`, `text/plain`. Tout le reste — y compris SVG et `text/html` — est servi en `attachment`. Les réponses inline portent en plus `Content-Security-Policy: default-src 'none'; sandbox`.
+
+### `POST /api/agents/:agentId/workspace/mkdir`
+
+```typescript
+// Request
+{ path: string }
+
+// Response 200
+{ path: string }
+
+// Error 409 DEST_EXISTS · 400 INVALID_NAME · 400 PATH_FORBIDDEN
+```
+
+### `POST /api/agents/:agentId/workspace/move`
+
+Renommer / déplacer (renommer = move dans le même dossier). Inter-workspace via `fromAgentId`.
+
+```typescript
+// Request
+{
+  from: string,
+  to: string,
+  fromAgentId?: string         // id ou slug ≠ :agentId = déplacement inter-workspace (couper/coller).
+                               // `from` est validé contre la racine de fromAgentId, `to` contre celle de :agentId
+}
+
+// Response 200
+{ from: string, to: string }
+
+// Error 409 DEST_EXISTS · 404 FILE_NOT_FOUND · 400 INVALID_NAME · 400 PATH_FORBIDDEN
+```
+
+### `POST /api/agents/:agentId/workspace/copy`
+
+Même contrat que `move` ; collision résolue par suffixe automatique ` (copy)` / ` (copy 2)` …
+
+```typescript
+// Request
+{ from: string, to: string, fromAgentId?: string }
+
+// Response 200
+{ from: string, to: string }   // to = chemin final, suffixé le cas échéant
+
+// Error 413 — budget de copie récursive dépassé (octets workspaceFiles.maxCopySizeMb
+// OU entrées workspaceFiles.maxCopyEntries) ; copie streamée, abort en cours, copie partielle nettoyée
+{ error: { code: 'COPY_TOO_LARGE', message: '...' } }
+// Error 404 FILE_NOT_FOUND · 400 INVALID_NAME · 400 PATH_FORBIDDEN
+```
+
+### `DELETE /api/agents/:agentId/workspace/file`
+
+Supprime un fichier OU un dossier (récursif).
+
+```typescript
+// Query params : ?path=docs/old
+
+// Response 200
+{ deleted: true, path: string }
+
+// Error 404 FILE_NOT_FOUND · 400 PATH_FORBIDDEN
+```
+
+### `POST /api/agents/:agentId/workspace/upload`
+
+Upload multipart dans un dossier du workspace.
+
+```typescript
+// Request: multipart/form-data
+//   file: File          (répétable — multi-upload)
+//   path: string        (dossier destination, défaut racine "")
+
+// Response 201 — échec partiel possible : les fichiers acceptés sont écrits,
+// les refusés sont listés dans `errors`
+{
+  files: Array<{ path: string, size: number, modifiedAt: number }>,
+  errors: Array<{ name: string, code: string }>    // ex. FILE_TOO_LARGE, INVALID_NAME
+}
+
+// Error 400 NOT_A_DIRECTORY · 400 PATH_FORBIDDEN · 400 VALIDATION_ERROR (aucun fichier)
+```
+
+> Le filename multipart est contrôlé par le client : seul son **basename** survit (tout chemin embarqué est strippé), et le nom est validé (`INVALID_NAME`). Collision : suffixe automatique ` (copy N)` — un upload n'écrase jamais silencieusement. Cap `workspaceFiles.maxUploadSizeMb` par fichier.
+
+### `GET /api/agents/:agentId/workspace/search`
+
+Recherche de fichiers par nom/chemin (substring insensible à la casse). Sert la palette `@` du chat et le quick-open (Ctrl+P).
+
+```typescript
+// Query params : ?q=rapport&limit=20      (limit défaut 20, cap workspaceFiles.searchMaxResults)
+
+// Response 200
+{ hits: Array<{ path: string, name: string, size: number, modifiedAt: number }> }
+```
+
+> Walk serveur borné par `workspaceFiles.searchMaxEntries` ; ne descend jamais dans un répertoire symlinké ; ignore les dossiers lourds (`node_modules`, `.git`, …).
+
+### `POST /api/agents/:agentId/workspace/resolve-paths`
+
+Vérification d'existence batchée — utilisée par les chips de chemins cliquables du chat.
+
+```typescript
+// Request
+{ paths: string[] }            // ≤ 50 (tronqué au-delà)
+
+// Response 200
+{ existing: string[] }         // sous-ensemble qui existe (fichiers seulement)
+```
+
+> Les chemins invalides (traversal) sont silencieusement absents de `existing` — pas d'erreur, ce sont des candidats de regex.
+
+### `POST /api/file-storage/from-workspace`
+
+Partage : snapshot d'un fichier de workspace vers le file-storage (sémantique identique au tool `store_file` — copie figée, pas de lien vivant).
+
+```typescript
+// Request
+{
+  agentId: string,             // id ou slug
+  path: string,                // relatif au workspace
+  name?: string,               // défaut : basename
+  description?: string,
+  isPublic?: boolean,          // défaut true
+  password?: string,
+  expiresIn?: number,          // MINUTES — même unité que POST /api/file-storage et store_file
+  readAndBurn?: boolean
+}
+
+// Response 201
+{
+  file: {
+    id: string, name: string, originalName: string, mimeType: string, size: number,
+    url: string,               // URL de partage {publicUrl}/s/{token}
+    isPublic: boolean, hasPassword: boolean, readAndBurn: boolean,
+    expiresAt: number | null
+  }
+}
+
+// Error 404 KIN_NOT_FOUND · 404 FILE_NOT_FOUND · 400 PATH_FORBIDDEN
+// Error 413 FILE_TOO_LARGE (limite file-storage FILE_STORAGE_MAX_SIZE)
+```
+
+---
+
 ## Memories (gestion via UI)
 
 ### `GET /api/agents/:id/memories`
@@ -1487,6 +1726,24 @@ Connexion SSE **globale** (une seule par client). Le serveur multiplex les évé
 
 // Projet actif d'un Agent changé
 { event: 'agent:active-project', data: { agentId: string, activeProjectId: string | null } }
+
+// Workspace muté (section Files) — émis par les routes /workspace/* ET par les
+// tools natifs qui écrivent dans le workspace statique (write_file, edit_file,
+// multi_edit, download_stored_file, download_email_attachment). Une opération
+// récursive (delete/move/copy/upload de dossier) émet UN seul change grossier
+// sur le dossier (isDirectory: true), jamais une entrée par descendant ; le
+// tableau `changes` est borné (≤ 20 — au-delà, un seul change sur le parent commun).
+// `modifiedAt` (mtime résultant) permet à l'appareil émetteur d'ignorer son propre écho.
+{ event: 'workspace:changed', data: {
+  agentId: string,
+  changes: Array<{
+    path: string,
+    type: 'created' | 'modified' | 'deleted' | 'renamed',
+    isDirectory: boolean,
+    newPath?: string,         // pour renamed
+    modifiedAt?: number
+  }>
+} }
 
 // Projet créé / modifié / supprimé
 { event: 'project:created', data: { project: ProjectSummary } }

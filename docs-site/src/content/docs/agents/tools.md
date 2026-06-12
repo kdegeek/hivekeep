@@ -243,6 +243,8 @@ Agent management tools are powerful (they change platform structure). They are g
 | `list_directory` | List files and directories with optional glob pattern filtering |
 | `grep` | Regex search across files using ripgrep (with grep fallback). Supports 3 output modes: `content`, `files_with_matches`, `count`. Glob filtering, context lines, multiline mode |
 
+These tools operate on the Agent's **workspace**, a per-Agent directory on your server. You can browse and edit the same files yourself from the app's **Files** section — see [Files (Workspace Browser)](/docs/features/files/).
+
 :::tip[Tool selection guidance]
 The system prompt includes a tool selection table that steers Agents toward structured file tools over `run_shell`:
 

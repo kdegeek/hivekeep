@@ -104,6 +104,12 @@ Real-time message streaming and conversation events.
 | `agent:updated` | Agent metadata changed (avatar, provider, etc.) | Broadcast |
 | `agent:deleted` | Agent deleted | Broadcast |
 
+### Workspace Files
+
+| Event | Description | Scope |
+|-------|-------------|-------|
+| `workspace:changed` | Workspace mutated (REST routes and native file tools). Payload: `{ agentId, changes: [{ path, type: 'created' \| 'modified' \| 'deleted' \| 'renamed', isDirectory, newPath?, modifiedAt? }] }`. Recursive operations emit a single coarse change on the folder, and the array is bounded | Per-Agent |
+
 ### Providers
 
 | Event | Description | Scope |

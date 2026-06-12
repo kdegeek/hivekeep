@@ -83,6 +83,7 @@ export default defineConfig({
 						{ label: 'Scout', slug: 'features/scout' },
 						{ label: 'Connected Accounts', slug: 'features/connected-accounts' },
 						{ label: 'Projects and Tickets', slug: 'features/projects' },
+						{ label: 'Files (Workspace Browser)', slug: 'features/files' },
 						{ label: 'Automation, Crons and Webhooks', slug: 'features/automation' },
 						{ label: 'Vault and Secrets', slug: 'features/vault' },
 						{ label: 'Multi-User and the Household', slug: 'features/multi-user' },

@@ -375,6 +375,7 @@ Shared file hosting with optional expiration and passwords.
 |--------|----------|-------------|
 | `GET` | `/api/file-storage` | List stored files |
 | `POST` | `/api/file-storage` | Upload a file (multipart) |
+| `POST` | `/api/file-storage/from-workspace` | Snapshot a workspace file into the storage (share) |
 | `GET` | `/api/file-storage/:id` | Download a file |
 | `PATCH` | `/api/file-storage/:id` | Update file metadata |
 | `DELETE` | `/api/file-storage/:id` | Delete a file |
@@ -386,6 +387,24 @@ Internal file uploads (used by messages).
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/files/upload` | Upload a file (multipart) |
+
+## Workspace Files
+
+Direct access to an Agent's workspace from the [Files section](/docs/features/files/). All paths are relative to the workspace root and strictly contained (no traversal, no symlink escape).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/agents/:agentId/workspace/ls` | List a directory |
+| `GET` | `/api/agents/:agentId/workspace/file` | Read a file (metadata + text content) |
+| `PUT` | `/api/agents/:agentId/workspace/file` | Write a text file (optimistic concurrency via `baseModifiedAt`) |
+| `GET` | `/api/agents/:agentId/workspace/raw` | Stream raw bytes (download / inline view) |
+| `POST` | `/api/agents/:agentId/workspace/mkdir` | Create a folder |
+| `POST` | `/api/agents/:agentId/workspace/move` | Move / rename (cross-workspace via `fromAgentId`) |
+| `POST` | `/api/agents/:agentId/workspace/copy` | Copy (auto " (copy N)" suffix on collision) |
+| `DELETE` | `/api/agents/:agentId/workspace/file` | Delete a file or folder (recursive) |
+| `POST` | `/api/agents/:agentId/workspace/upload` | Upload files into a folder (multipart) |
+| `GET` | `/api/agents/:agentId/workspace/search` | Search files by name/path |
+| `POST` | `/api/agents/:agentId/workspace/resolve-paths` | Batched existence check (chat path chips) |
 
 ## Notifications
 

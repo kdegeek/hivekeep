@@ -5,6 +5,8 @@
 > Origine du besoin : un agent produit un fichier (« je l'ai posé dans mon workspace ») et l'utilisateur veut le modifier lui-même, immédiatement, dans le navigateur.
 >
 > Cette spec a été vérifiée contre le codebase (passe adversariale multi-agents) : chaque symbole/fichier cité existe sauf mention « nouveau » ou « à exporter ».
+>
+> **Statut : SHIPPED** — toutes les phases P1–P9 (§ 11) sont implémentées, livrables périphériques compris.
 
 ---
 

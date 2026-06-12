@@ -60,6 +60,19 @@ When using Docker, mount a volume to `/app/data` to persist data across containe
 | `UPLOAD_CHANNEL_RETENTION_DAYS` | `30` | Channel file retention period in days |
 | `UPLOAD_CHANNEL_CLEANUP_INTERVAL` | `60` | Channel file cleanup interval in minutes |
 
+## Workspace files (Files section)
+
+Limits of the [Files workspace browser](/docs/features/files/).
+
+| Variable | Default | Description |
+|---|---|---|
+| `WORKSPACE_FILES_MAX_EDITABLE_SIZE` | `5` | Max size (MB) of a text file editable in the browser; above this it becomes download-only |
+| `WORKSPACE_FILES_MAX_UPLOAD_SIZE` | `100` | Max size (MB) per file uploaded to a workspace (`0` = unlimited) |
+| `WORKSPACE_FILES_MAX_COPY_SIZE` | `500` | Byte budget (MB) of a recursive folder copy |
+| `WORKSPACE_FILES_COPY_MAX_ENTRIES` | `5000` | Entry-count budget of a recursive folder copy |
+| `WORKSPACE_FILES_SEARCH_MAX_RESULTS` | `50` | Hard cap on file-search results |
+| `WORKSPACE_FILES_SEARCH_MAX_ENTRIES` | `20000` | Files walked per search request |
+
 ## Version checking
 
 | Variable | Default | Description |
