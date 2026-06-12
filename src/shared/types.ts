@@ -8,7 +8,8 @@ export interface ModelRef {
 
 export type UserRole = 'admin' | 'member'
 
-export type Language = 'en' | 'fr'
+/** UI translation language codes (see SUPPORTED_LANGUAGES in constants.ts). */
+export type Language = 'en' | 'fr' | 'es' | 'de' | 'pt-BR' | 'zh-CN' | 'ja' | 'ru' | 'it' | 'pl'
 
 // ─── Notification types ────────────────────────────────────────────────────
 
@@ -18,19 +19,20 @@ export type NotificationType =
   | 'cron:pending-approval'
   | 'mcp:pending-approval'
   | 'email:pending-send-approval'
-  | 'kin:error'
-  | 'kin:alert'
+  | 'agent:error'
+  | 'agent:alert'
   | 'mention'
+  | 'miniapp:notify'
 
-export type NotificationRelatedType = 'prompt' | 'channel' | 'cron' | 'mcp' | 'email' | 'kin' | 'message'
+export type NotificationRelatedType = 'prompt' | 'channel' | 'cron' | 'mcp' | 'email' | 'agent' | 'message' | 'miniapp'
 
 /** An email send queued for human approval (account in send_mode='approval'). */
 export interface PendingEmailSend {
   id: string
   accountId: string
   accountEmail: string
-  kinId: string
-  kinName: string
+  agentId: string
+  agentName: string
   to: string[]
   cc?: string[]
   subject: string
@@ -45,10 +47,10 @@ export interface NotificationSummary {
   type: NotificationType
   title: string
   body: string | null
-  kinId: string | null
-  kinName: string | null
-  kinSlug: string | null
-  kinAvatarUrl: string | null
+  agentId: string | null
+  agentName: string | null
+  agentSlug: string | null
+  agentAvatarUrl: string | null
   relatedId: string | null
   relatedType: NotificationRelatedType | null
   isRead: boolean
@@ -76,7 +78,7 @@ export interface AvailableNotificationChannel {
   channelId: string
   channelName: string
   platform: ChannelPlatform
-  kinName: string
+  agentName: string
 }
 
 /** Contact with a platform ID, used for notification channel creation */
@@ -92,24 +94,24 @@ export type ProviderType = 'anthropic' | 'anthropic-oauth' | 'openai' | 'openai-
 // with plugin authors). The SDK version includes the forward-looking
 // 'rerank' family which the host doesn't yet implement but new
 // provider plugins might.
-export type { ProviderCapability } from '@kinbot-developer/sdk'
+export type { ProviderCapability } from '@hivekeep/sdk'
 
-export type MessageSource = 'user' | 'kin' | 'task' | 'cron' | 'system' | 'webhook' | 'channel'
+export type MessageSource = 'user' | 'agent' | 'task' | 'cron' | 'system' | 'webhook' | 'channel'
 
-export type TaskStatus = 'queued' | 'pending' | 'in_progress' | 'paused' | 'awaiting_human_input' | 'awaiting_kin_response' | 'awaiting_subtask' | 'completed' | 'failed' | 'cancelled'
+export type TaskStatus = 'queued' | 'pending' | 'in_progress' | 'paused' | 'awaiting_human_input' | 'awaiting_agent_response' | 'awaiting_subtask' | 'completed' | 'failed' | 'cancelled'
 
 export type TaskMode = 'await' | 'async'
 
 export type TaskTodoStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled'
 
-/** Structured plan item maintained by a sub-Kin during a task. */
+/** Structured plan item maintained by a sub-Agent during a task. */
 export interface TaskTodo {
   id: string
   subject: string
   status: TaskTodoStatus
 }
 
-export type InterKinMessageType = 'request' | 'inform' | 'reply'
+export type InterAgentMessageType = 'request' | 'inform' | 'reply'
 
 export type MemoryCategory = 'fact' | 'preference' | 'decision' | 'knowledge'
 
@@ -118,7 +120,7 @@ export type MemoryScope = 'private' | 'shared'
 /** Memory summary as returned by memory API endpoints */
 export interface MemorySummary {
   id: string
-  kinId: string
+  agentId: string
   content: string
   category: MemoryCategory
   subject: string | null
@@ -129,13 +131,13 @@ export interface MemorySummary {
   retrievalCount: number
   lastRetrievedAt: number | null
   consolidationGeneration: number
-  /** Author Kin name, populated when viewing shared memories from another Kin */
-  authorKinName?: string | null
+  /** Author Agent name, populated when viewing shared memories from another Agent */
+  authorAgentName?: string | null
   createdAt: number
   updatedAt: number
 }
 
-export type QueueItemPriority = 'user' | 'kin' | 'task'
+export type QueueItemPriority = 'user' | 'agent' | 'task'
 
 export type McpServerStatus = 'active' | 'pending_approval'
 
@@ -181,21 +183,21 @@ export type ToolLabel = string | Record<string, string>
 
 /** Where a catalog tool originates. Drives the source grouping/badges in the
  *  toolbox editor and the unified resolver's universe:
- *   - native : built into KinBot (toolRegistry, name has no special prefix)
+ *   - native : built into Hivekeep (toolRegistry, name has no special prefix)
  *   - plugin : contributed by an installed plugin (name `plugin_<plugin>_*`)
  *   - mcp    : exposed by a global MCP server (name `mcp_<server>_<tool>`)
- *   - custom : per-Kin user script (name `custom_<name>`)
+ *   - custom : per-Agent user script (name `custom_<name>`)
  *  "*" inside a toolbox still expands to NATIVE tools only — mcp/custom/plugin
  *  tools must be listed by their stable name. */
 export type ToolSource = 'native' | 'plugin' | 'mcp' | 'custom'
 
 /** A single entry of the tool catalog returned by GET /api/tools/catalog.
- *  Carries metadata only (no per-Kin enabled state) so the toolbox editor can
+ *  Carries metadata only (no per-Agent enabled state) so the toolbox editor can
  *  render every grantable tool with its source, domain, label, and a
- *  `hardExcludedFromSubKin` flag warning the tool can never run in a task.
+ *  `hardExcludedFromSubAgent` flag warning the tool can never run in a task.
  *
  *  Native + plugin tools come from the registry. MCP tools come from ALL global
- *  active servers (no per-Kin gate). Custom tools are GLOBAL too (no per-Kin
+ *  active servers (no per-Agent gate). Custom tools are GLOBAL too (no per-Agent
  *  gate) — each carries its own (possibly custom) domain via `domain`. */
 export interface ToolCatalogEntry {
   name: string
@@ -209,16 +211,16 @@ export interface ToolCatalogEntry {
   destructive: boolean
   /** True when the tool is in HARD_EXCLUDED_FROM_SUBKIN — it cannot run inside a
    *  task even if a toolbox lists it. The UI surfaces a soft warning. */
-  hardExcludedFromSubKin: boolean
+  hardExcludedFromSubAgent: boolean
   /** MCP only: the display name of the originating server. */
   mcpServerName?: string
   /** Custom only: whether the tool is currently enabled (disabled tools are
    *  listed in the catalog but never resolved into a toolset). */
   enabled?: boolean
-  /** @deprecated Per-Kin custom tools are gone; kept optional for back-compat. */
-  customKinId?: string
-  /** @deprecated Per-Kin custom tools are gone; kept optional for back-compat. */
-  customKinName?: string
+  /** @deprecated Per-Agent custom tools are gone; kept optional for back-compat. */
+  customAgentId?: string
+  /** @deprecated Per-Agent custom tools are gone; kept optional for back-compat. */
+  customAgentName?: string
 }
 
 /** UI-ONLY localized overrides for a custom tool, keyed by locale. NEVER sent to
@@ -236,7 +238,7 @@ export type CustomToolTranslations = Record<
 >
 
 /** A global custom tool (DB-backed metadata; the executable + deps live on disk
- *  under config.customTools.baseDir/<slug>/). Exposed to Kins as `custom_<slug>`
+ *  under config.customTools.baseDir/<slug>/). Exposed to Agents as `custom_<slug>`
  *  and granted via toolboxes. */
 export interface CustomTool {
   id: string
@@ -249,7 +251,7 @@ export interface CustomTool {
   domainSlug: string
   timeoutMs: number | null
   enabled: boolean
-  createdBy: string // 'user' | 'kin'
+  createdBy: string // 'user' | 'agent'
   /** UI-only localized overrides. Null/absent when none defined. */
   translations: CustomToolTranslations | null
 }
@@ -287,15 +289,15 @@ export interface ToolDomainMetaResolved {
   label: string | null
 }
 
-/** Kin kind discriminator. 'configurator' marks the seeded conversational
- *  onboarding guide (Sherpa) — drives its special prompt blocks, the
- *  `configurator` toolbox, and exclusion from "first real Kin" counts.
- *  All user-created Kins are 'regular'. See sherpa.md. */
-export type KinKind = 'regular' | 'configurator'
+/** Agent kind discriminator. 'configurator' marks the seeded conversational
+ *  onboarding guide (Queenie) — drives its special prompt blocks, the
+ *  `configurator` toolbox, and exclusion from "first real Agent" counts.
+ *  All user-created Agents are 'regular'. See queenie.md. */
+export type AgentKind = 'regular' | 'configurator'
 
-/** Per-Kin compacting configuration (stored as JSON in kins.compacting_config) */
-export interface KinCompactingConfig {
-  /** Model used for compaction (null = same as Kin's model) */
+/** Per-Agent compacting configuration (stored as JSON in agents.compacting_config) */
+export interface AgentCompactingConfig {
+  /** Model used for compaction (null = same as Agent's model) */
   compactingModel?: string | null
   /** Provider ID for compacting model (null = auto-resolve) */
   compactingProviderId?: string | null
@@ -315,15 +317,18 @@ export interface KinCompactingConfig {
   summaryMaxTokens?: number | null
 }
 
-/** Effort level for thinking/reasoning — maps to provider-specific budgets/flags. */
-export type KinThinkingEffort = 'low' | 'medium' | 'high' | 'max'
+/** Effort level for thinking/reasoning — maps to provider-specific budgets/flags.
+ *  Mirrors the SDK's `ThinkingEffort` union (kept inline so the client bundle
+ *  never imports SDK values). Canonical order in `THINKING_EFFORTS`
+ *  (shared/constants.ts). */
+export type AgentThinkingEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
-/** Per-Kin thinking/reasoning configuration (stored as JSON in kins.thinking_config) */
-export interface KinThinkingConfig {
-  /** Whether thinking/reasoning is enabled for this Kin */
+/** Per-Agent thinking/reasoning configuration (stored as JSON in agents.thinking_config) */
+export interface AgentThinkingConfig {
+  /** Whether thinking/reasoning is enabled for this Agent */
   enabled: boolean
   /** Effort level — mapped per-provider to budget tokens or reasoning_effort. Defaults to 'medium' when enabled and unset. */
-  effort?: KinThinkingEffort | null
+  effort?: AgentThinkingEffort | null
   /** @deprecated Use `effort` instead. Raw token budget kept for backwards compatibility on existing rows. */
   budgetTokens?: number | null
 }
@@ -331,12 +336,12 @@ export interface KinThinkingConfig {
 /** Task summary as returned by GET /api/tasks */
 export interface TaskSummary {
   id: string
-  parentKinId: string
-  parentKinName: string
-  parentKinAvatarUrl: string | null
-  sourceKinId: string | null
-  sourceKinName: string | null
-  sourceKinAvatarUrl: string | null
+  parentAgentId: string
+  parentAgentName: string
+  parentAgentAvatarUrl: string | null
+  sourceAgentId: string | null
+  sourceAgentName: string | null
+  sourceAgentAvatarUrl: string | null
   title: string | null
   description: string
   status: TaskStatus
@@ -349,7 +354,7 @@ export interface TaskSummary {
   cronId: string | null
   depth: number
   thinkingEnabled?: boolean
-  thinkingEffort?: KinThinkingEffort | null
+  thinkingEffort?: AgentThinkingEffort | null
   concurrencyGroup: string | null
   concurrencyMax: number | null
   queuePosition: number | null
@@ -370,19 +375,19 @@ export interface TaskSummary {
 /** Cron summary as returned by GET /api/crons */
 export interface CronSummary {
   id: string
-  kinId: string
-  kinName: string
-  kinAvatarUrl: string | null
+  agentId: string
+  agentName: string
+  agentAvatarUrl: string | null
   name: string
   schedule: string
   taskDescription: string
-  targetKinId: string | null
-  targetKinName: string | null
-  targetKinAvatarUrl: string | null
+  targetAgentId: string | null
+  targetAgentName: string | null
+  targetAgentAvatarUrl: string | null
   model: string | null
   providerId: string | null
   thinkingEnabled: boolean
-  thinkingEffort: KinThinkingEffort | null
+  thinkingEffort: AgentThinkingEffort | null
   /** Toolbox ids defining the native toolset of tasks spawned by this cron.
    *  Empty → full native surface ("all"). */
   toolboxIds: string[]
@@ -393,7 +398,7 @@ export interface CronSummary {
   lastTriggeredAt: number | null
   /** Number of tasks this cron has spawned so far (one per execution). */
   executionCount: number
-  createdBy: 'user' | 'kin'
+  createdBy: 'user' | 'agent'
   createdAt: number
 }
 
@@ -403,9 +408,9 @@ export type WebhookDispatchMode = 'conversation' | 'task'
 /** Webhook summary as returned by GET /api/webhooks */
 export interface WebhookSummary {
   id: string
-  kinId: string
-  kinName: string
-  kinAvatarUrl: string | null
+  agentId: string
+  agentName: string
+  agentAvatarUrl: string | null
   name: string
   description: string | null
   isActive: boolean
@@ -420,7 +425,7 @@ export interface WebhookSummary {
   taskTitleTemplate: string | null
   taskPromptTemplate: string | null
   maxConcurrentTasks: number
-  createdBy: 'user' | 'kin'
+  createdBy: 'user' | 'agent'
   createdAt: number
   /** Full incoming URL (scheme + host + path) */
   url: string
@@ -443,9 +448,74 @@ export interface WebhookFilterTestResult {
   error?: string
 }
 
+// ─── Account triggers ────────────────────────────────────────────────────────
+
+/** How a matched email reaches the target Agent. */
+export type TriggerDispatchMode = 'conversation' | 'task'
+
+/** A condition leaf field. Fields above the divider come free from the message
+ *  summary; `body` / `attachment_*` require fetching the full message. */
+export type ConditionField =
+  | 'sender_email' | 'sender_domain' | 'sender_name' | 'subject' | 'snippet'
+  | 'recipient' | 'has_attachment' | 'unread' | 'label'
+  | 'body' | 'attachment_name' | 'attachment_type'
+
+export type ConditionOp =
+  | 'equals' | 'contains' | 'starts_with' | 'ends_with' | 'matches' | 'in' | 'is_true' | 'is_false'
+
+export interface ConditionLeaf {
+  type: 'leaf'
+  field: ConditionField
+  op: ConditionOp
+  /** string for text ops, string[] for `in`, ignored for `is_true`/`is_false`. */
+  value: string | string[] | boolean
+  negate?: boolean
+}
+
+export interface ConditionGroup {
+  type: 'group'
+  op: 'and' | 'or'
+  children: ConditionNode[]
+}
+
+export type ConditionNode = ConditionGroup | ConditionLeaf
+
+/** Account trigger as returned by GET /api/account-triggers */
+export interface AccountTriggerSummary {
+  id: string
+  accountId: string
+  accountLabel: string
+  name: string
+  isActive: boolean
+  folder: string
+  conditions: ConditionNode
+  conditionsSummary: string
+  prompt: string
+  targetAgentId: string
+  targetAgentName: string
+  targetAgentAvatarUrl: string | null
+  dispatchMode: TriggerDispatchMode
+  maxConcurrentTasks: number
+  triggerCount: number
+  lastTriggeredAt: number | null
+  createdBy: 'user' | 'agent'
+  requiresApproval: boolean
+  createdAt: number
+}
+
+/** Trigger evaluation log entry as returned by GET /api/account-triggers/:id/logs */
+export interface TriggerLogEntry {
+  id: string
+  triggerId: string
+  summary: string | null
+  matched: boolean
+  action: TriggerDispatchMode | null
+  createdAt: number
+}
+
 // ─── Human Prompt types ──────────────────────────────────────────────────────
 
-export type HumanPromptType = 'confirm' | 'select' | 'multi_select' | 'text'
+export type HumanPromptType = 'confirm' | 'select' | 'multi_select' | 'text' | 'tool_access'
 
 export type HumanPromptStatus = 'pending' | 'answered' | 'expired' | 'cancelled'
 
@@ -460,7 +530,7 @@ export interface HumanPromptOption {
 
 export interface HumanPromptSummary {
   id: string
-  kinId: string
+  agentId: string
   taskId: string | null
   promptType: HumanPromptType
   question: string
@@ -491,7 +561,7 @@ export interface SecretPromptField {
 /** Payload of the `prompt:secret-request` SSE event — drives the secure-input modal. */
 export interface SecretPromptRequest {
   promptId: string
-  kinId: string
+  agentId: string
   purpose: SecretPromptPurpose
   title: string
   description?: string
@@ -513,13 +583,19 @@ export type QuickSessionStatus = 'active' | 'closed'
 
 export interface QuickSessionSummary {
   id: string
-  kinId: string
+  agentId: string
   title: string | null
   status: QuickSessionStatus
   createdAt: number
   closedAt: number | null
   expiresAt: number | null
   messageCount?: number
+  /** Per-session LLM override — null means "inherit the agent's model". */
+  model?: string | null
+  providerId?: string | null
+  /** Per-session thinking override — null means "inherit the agent's config". */
+  thinkingEnabled?: boolean | null
+  thinkingEffort?: AgentThinkingEffort | null
 }
 
 // ─── Channel types ──────────────────────────────────────────────────────────
@@ -542,14 +618,14 @@ export type ChannelUserMappingStatus = 'pending'
 // ChannelConfigField + ChannelConfigSchema live in the SDK now (single
 // source of truth shared with plugin authors). Re-exported here so
 // existing imports from `@/shared/types` keep working unchanged.
-export type { ChannelConfigField, ChannelConfigSchema } from '@kinbot-developer/sdk'
+export type { ChannelConfigField, ChannelConfigSchema } from '@hivekeep/sdk'
 
 /** Channel summary as returned by GET /api/channels */
 export interface ChannelSummary {
   id: string
-  kinId: string
-  kinName: string
-  kinAvatarUrl: string | null
+  agentId: string
+  agentName: string
+  agentAvatarUrl: string | null
   name: string
   platform: ChannelPlatform
   status: ChannelStatus
@@ -558,7 +634,7 @@ export interface ChannelSummary {
   messagesReceived: number
   messagesSent: number
   lastActivityAt: number | null
-  createdBy: 'user' | 'kin'
+  createdBy: 'user' | 'agent'
   createdAt: number
   pendingApprovalCount: number
   /**
@@ -612,7 +688,7 @@ export interface InvitationSummary {
   url: string
   createdBy: string
   creatorName: string
-  kinId: string | null
+  agentId: string | null
   expiresAt: number
   usedAt: number | null
   usedBy: string | null
@@ -648,7 +724,7 @@ export interface VaultTypeSummary {
   icon: string | null
   fields: VaultTypeField[]
   isBuiltIn: boolean
-  createdByKinId: string | null
+  createdByAgentId: string | null
   createdAt: number
 }
 
@@ -660,7 +736,7 @@ export interface VaultEntrySummary {
   entryType: VaultEntryType
   isFavorite: boolean
   attachmentCount: number
-  createdByKinId: string | null
+  createdByAgentId: string | null
   createdAt: number
   updatedAt: number
 }
@@ -677,10 +753,10 @@ export interface VaultAttachmentSummary {
 /** Mini-app summary as returned by GET /api/mini-apps */
 export interface MiniAppSummary {
   id: string
-  /** Kin responsible for the app (reassignable); any Kin can edit it. */
-  maintainerKinId: string
-  maintainerKinName: string
-  maintainerKinAvatarUrl: string | null
+  /** Agent responsible for the app (reassignable); any Agent can edit it. */
+  maintainerAgentId: string
+  maintainerAgentName: string
+  maintainerAgentAvatarUrl: string | null
   name: string
   slug: string
   description: string | null
@@ -695,15 +771,88 @@ export interface MiniAppSummary {
 }
 
 /** Tool domain categories for UI grouping and color coding */
+
+// ─── Platform update system ──────────────────────────────────────────────────
+
+/** Update channel: stable follows GitHub releases (tags), edge follows main HEAD. */
+export type UpdateChannel = 'stable' | 'edge'
+
+/** How this Hivekeep instance was installed (drives the update UX). */
+export type InstallationType = 'docker' | 'systemd-system' | 'systemd-user' | 'launchd' | 'manual'
+
+/** One entry of the cumulative changelog between the running version and the
+ *  proposed one. Stable channel: one entry per intermediate release (markdown
+ *  notes). Edge channel: one entry per commit on main. */
+export interface ChangelogEntry {
+  /** Release tag without the leading v (stable) or short commit sha (edge) */
+  version: string
+  /** Release title (stable) or commit subject (edge) */
+  title: string
+  /** Markdown release notes (stable only) */
+  notes: string | null
+  url: string | null
+  publishedAt: number | null
+}
+
 /** Version check info returned by the version-check API */
 export interface VersionInfo {
   currentVersion: string
+  /** Short git sha of the running code (null when not determinable) */
+  currentSha: string | null
+  channel: UpdateChannel
+  installationType: InstallationType
+  /** Latest release semver (stable) or main HEAD short sha (edge) */
   latestVersion: string | null
   isUpdateAvailable: boolean
+  /** Whether this install can apply the update itself from the UI.
+   *  False for docker (image repull) and dev/manual non-git setups. */
+  canSelfUpdate: boolean
+  /** When canSelfUpdate is false, a machine-readable reason for the UI */
+  selfUpdateBlockedReason: 'docker' | 'not-git' | 'dev-mode' | null
   releaseUrl: string | null
-  releaseNotes: string | null
+  /** Cumulative changelog from current → latest (newest first) */
+  changelog: ChangelogEntry[]
   publishedAt: number | null
   lastCheckedAt: number | null
+}
+
+/** Steps of a self-update run, in execution order. */
+export type UpdateStepId =
+  | 'preflight'
+  | 'snapshot'
+  | 'backup'
+  | 'download'
+  | 'apply'
+  | 'dependencies'
+  | 'assets'
+  | 'restart'
+
+export type UpdateRunStatus =
+  /** Update is being prepared (pre-restart steps running) */
+  | 'running'
+  /** Files swapped, server is restarting into the new version */
+  | 'restarting'
+  /** New version booted and is healthy */
+  | 'success'
+  /** Update aborted before restart; previous version still running */
+  | 'failed'
+  /** New version failed to boot; automatic rollback restored the previous one */
+  | 'rolled-back'
+
+/** Persisted record of the latest self-update attempt (data/update/journal.json).
+ *  Written by the orchestrator, finalized by the boot guard after restart. */
+export interface UpdateRunInfo {
+  id: string
+  channel: UpdateChannel
+  fromVersion: string
+  fromSha: string | null
+  toVersion: string
+  status: UpdateRunStatus
+  /** Step currently running (while status is 'running') */
+  currentStep: UpdateStepId | null
+  error: string | null
+  startedAt: number
+  finishedAt: number | null
 }
 
 /**
@@ -721,7 +870,7 @@ export type BuiltinToolDomain =
   | 'memory'
   | 'vault'
   | 'tasks'
-  | 'inter-kin'
+  | 'inter-agent'
   | 'crons'
   | 'custom'
   | 'images'
@@ -729,7 +878,7 @@ export type BuiltinToolDomain =
   | 'filesystem'
   | 'file-storage'
   | 'mcp'
-  | 'kin-management'
+  | 'agent-management'
   | 'webhooks'
   | 'channels'
   | 'email'
@@ -810,7 +959,7 @@ export type LlmUsageCallSite =
   | 'image-gen'
   | 'avatar-prompt'
   | 'icon-prompt'
-  | 'kin-generate'
+  | 'agent-generate'
 
 export type LlmUsageCallType = 'stream-text' | 'generate-text' | 'embed' | 'generate-image'
 
@@ -822,7 +971,7 @@ export interface LlmUsageRow {
   providerType: string | null
   providerId: string | null
   modelId: string | null
-  kinId: string | null
+  agentId: string | null
   taskId: string | null
   cronId: string | null
   sessionId: string | null
@@ -834,6 +983,9 @@ export interface LlmUsageRow {
   reasoningTokens: number | null
   embeddingTokens: number | null
   stepCount: number
+  /** Estimated USD cost, frozen at the registry price when recorded (null when
+   *  the model had no pricing). */
+  costUsd: number | null
 }
 
 /** Per-message token usage stored in message metadata and sent via SSE. */
@@ -868,6 +1020,8 @@ export interface UsageSummaryRow {
   totalTokens: number
   cacheReadTokens: number
   cacheWriteTokens: number
+  /** Estimated USD cost for the group (sum of per-row frozen costs). */
+  costUsd: number
   count: number
 }
 
@@ -884,7 +1038,7 @@ export interface ProjectTag {
 export interface ProjectSummary {
   id: string
   /** Stable, human-readable identifier used to qualify ticket numbers (e.g.
-   *  `kinbot#42`). Empty string ('') for legacy rows pre-dating the backfill. */
+   *  `hivekeep#42`). Empty string ('') for legacy rows pre-dating the backfill. */
   slug: string
   title: string
   githubUrl: string | null
@@ -941,22 +1095,27 @@ export interface Project {
   cloneError: string | null
   /** Unix ms of the last successful clone, or null if never cloned. */
   clonedAt: number | null
-  /** Optional default model for sub-Kin tasks spawned on tickets of this
-   *  project. Frozen into the task at spawn time; falls back to the Kin's
+  /** Optional default model for sub-Agent tasks spawned on tickets of this
+   *  project. Frozen into the task at spawn time; falls back to the Agent's
    *  own model when null. An explicit model passed at spawn still wins. */
   model: string | null
   providerId: string | null
-  /** Optional default scout model for sub-Kin tasks spawned on tickets of this
-   *  project. One tier of resolveScoutModel()'s chain (between the per-Kin
-   *  scout model and the global default). Coupled with `scoutProviderId`.
-   *  Null falls through to the global scout default → the Kin's main model. */
+  /** Optional default scout model for work in this project's context. One tier
+   *  of resolveScoutModel()'s chain, BETWEEN the per-call override and the
+   *  per-Agent scout (project beats Agent). Coupled with `scoutProviderId`.
+   *  Null falls through to the Agent scout → global default → Agent main model. */
   scoutModel: string | null
   scoutProviderId: string | null
-  /** Optional default thinking/reasoning config for sub-Kin tasks spawned on
+  /** Optional reasoning config for scouts dispatched in this project's context.
+   *  Same chain position as `scoutModel` (project beats Agent). Null = unset
+   *  tier (falls through to the Agent scout thinking → global default → the
+   *  calling Agent's own general config). */
+  scoutThinkingConfig: AgentThinkingConfig | null
+  /** Optional default thinking/reasoning config for sub-Agent tasks spawned on
    *  tickets of this project. Same freeze-at-spawn semantics as `model`.
-   *  Null means "inherit from each Kin". */
-  thinkingConfig: KinThinkingConfig | null
-  /** Optional default toolbox selection (toolbox ids) for sub-Kin tasks
+   *  Null means "inherit from each Agent". */
+  thinkingConfig: AgentThinkingConfig | null
+  /** Optional default toolbox selection (toolbox ids) for sub-Agent tasks
    *  spawned on tickets of this project. Frozen into the task at spawn when no
    *  explicit toolbox selection is provided. Null means "inherit the runtime
    *  default" ('code' for ticket tasks). An explicit selection at spawn wins. */
@@ -969,12 +1128,12 @@ export interface Project {
 
 /**
  * A curated piece of durable knowledge attached to a project (architectural
- * decisions, conventions, gotchas, domain facts). Shared across Kins acting
+ * decisions, conventions, gotchas, domain facts). Shared across Agents acting
  * on the project.
  *
  * Every entry's `title` always lands in the system-prompt knowledge index.
  * When `pinned` is true, the full markdown `content` is also injected
- * inline — no tool call needed to read it. When false, the Kin reads
+ * inline — no tool call needed to read it. When false, the Agent reads
  * the content via `get_project_knowledge(id)`.
  */
 export interface ProjectKnowledge {
@@ -987,10 +1146,10 @@ export interface ProjectKnowledge {
   /** Optional free-text bucket (e.g. 'arch', 'decision', 'gotcha'). */
   category: string | null
   pinned: boolean
-  /** Kin that created the entry, or null when created by the end-user via UI. */
-  authorKinId: string | null
-  /** Resolved Kin name for display (null when authorKinId is null = user). */
-  authorKinName: string | null
+  /** Agent that created the entry, or null when created by the end-user via UI. */
+  authorAgentId: string | null
+  /** Resolved Agent name for display (null when authorAgentId is null = user). */
+  authorAgentName: string | null
   createdAt: number
   updatedAt: number
 }
@@ -1002,7 +1161,7 @@ export interface ProjectKnowledgeIndexEntry {
   title: string
   category: string | null
   pinned: boolean
-  authorKinName: string | null
+  authorAgentName: string | null
 }
 
 /** A single hit returned by `searchProjectKnowledge`. */
@@ -1010,18 +1169,18 @@ export interface ProjectKnowledgeSearchHit extends ProjectKnowledge {
   score: number
 }
 
-export interface RunningKinOnTicket {
-  kinId: string
-  kinName: string
-  kinSlug: string | null
+export interface RunningAgentOnTicket {
+  agentId: string
+  agentName: string
+  agentSlug: string | null
   avatarUrl: string | null
   taskId: string
 }
 
-/** Whoever created a ticket — either a platform user (UI) or a Kin (tool). */
+/** Whoever created a ticket — either a platform user (UI) or an Agent (tool). */
 export type TicketReporter =
   | { type: 'user'; id: string; name: string; avatarUrl: string | null }
-  | { type: 'kin'; id: string; slug: string | null; name: string; avatarUrl: string | null }
+  | { type: 'agent'; id: string; slug: string | null; name: string; avatarUrl: string | null }
 
 export interface TicketSummary {
   id: string
@@ -1038,12 +1197,12 @@ export interface TicketSummary {
   taskCount: number
   runningTaskCount: number
   /** Number of tasks on this ticket currently in `awaiting_human_input` —
-   *  i.e. a sub-Kin is suspended on a prompt_human / request_input call and
+   *  i.e. a sub-Agent is suspended on a prompt_human / request_input call and
    *  needs the user to answer before resuming. */
   awaitingHumanInputCount: number
-  /** Kins currently executing a task on this ticket (status queued/pending/in_progress).
-   *  One entry per running task — same Kin can appear twice if it has multiple in flight. */
-  runningKins: RunningKinOnTicket[]
+  /** Agents currently executing a task on this ticket (status queued/pending/in_progress).
+   *  One entry per running task — same Agent can appear twice if it has multiple in flight. */
+  runningAgents: RunningAgentOnTicket[]
   /** Who created this ticket. Null for legacy rows. */
   reporter: TicketReporter | null
   /** Number of attachments on this ticket. Refreshes via SSE
@@ -1066,11 +1225,11 @@ export interface TicketSummary {
 
 export interface TicketTaskSummary {
   id: string
-  parentKinId: string
-  parentKinName: string
-  /** Avatar URL of the parent Kin (so the side panel can display the right
-   *  avatar when opened from a ticket). Null if the Kin has no avatar. */
-  parentKinAvatarUrl: string | null
+  parentAgentId: string
+  parentAgentName: string
+  /** Avatar URL of the parent Agent (so the side panel can display the right
+   *  avatar when opened from a ticket). Null if the Agent has no avatar. */
+  parentAgentAvatarUrl: string | null
   status: TaskStatus
   mode: TaskMode
   /** Task variant. 'execute' is a regular ticket task; 'enrich' is a
@@ -1093,11 +1252,11 @@ export interface Ticket extends Omit<TicketSummary, 'description'> {
 // ─── Ticket comments ────────────────────────────────────────────────────────
 
 export interface TicketCommentAuthor {
-  type: 'user' | 'kin'
+  type: 'user' | 'agent'
   id: string
   name: string
   avatarUrl: string | null
-  /** Kin slug, only set when type === 'kin' */
+  /** Agent slug, only set when type === 'agent' */
   slug?: string
 }
 
@@ -1122,12 +1281,12 @@ export interface TicketComment {
  *  shape needed by the UI (no slug). */
 export type TicketAttachmentUploader =
   | { type: 'user'; id: string; name: string; avatarUrl: string | null }
-  | { type: 'kin'; id: string; name: string; avatarUrl: string | null }
+  | { type: 'agent'; id: string; name: string; avatarUrl: string | null }
   | null
 
 /** A single file attached to a ticket. The `url` field points at the
  *  ticket-attachment raw stream and is safe to embed in `<img>` / `<iframe>`.
- *  `storedPath` is the absolute on-disk path; only exposed to Kin tools, never
+ *  `storedPath` is the absolute on-disk path; only exposed to Agent tools, never
  *  to the UI (server stripes it before serializing for REST). */
 export interface TicketAttachment {
   id: string
@@ -1141,4 +1300,49 @@ export interface TicketAttachment {
   url: string
   createdAt: number
   updatedAt: number
+}
+
+// ─── Workspace files (Files section, see files.md) ──────────────────────────
+
+/** How the server decided a workspace file should be presented. */
+export type WorkspaceFileKind = 'text' | 'image' | 'pdf' | 'binary' | 'too-large'
+
+/** One row of a workspace directory listing (GET /workspace/ls). */
+export interface WorkspaceEntry {
+  name: string
+  /** Path relative to the workspace root. */
+  path: string
+  type: 'file' | 'dir'
+  /** 0 for directories. */
+  size: number
+  /** Unix ms mtime. */
+  modifiedAt: number
+  isSymlink: boolean
+}
+
+/** Full read of a workspace file (GET /workspace/file). */
+export interface WorkspaceFileInfo {
+  path: string
+  name: string
+  size: number
+  /** Unix ms mtime — echo back as `baseModifiedAt` on PUT (optimistic concurrency). */
+  modifiedAt: number
+  mimeType: string
+  kind: WorkspaceFileKind
+  /** Only set when kind === 'text'. */
+  content: string | null
+}
+
+// ─── Terminal (admin web terminal — see api.md "Terminal") ──────────────────
+
+/** A live PTY session as shown in the Terminal page's sessions sidebar. */
+export interface TerminalSessionDTO {
+  id: string
+  name: string
+  /** Unix ms. */
+  createdAt: number
+  /** Unix ms — last PTY output or client input. */
+  lastActiveAt: number
+  /** True while a client (any device) is connected to this session. */
+  attached: boolean
 }

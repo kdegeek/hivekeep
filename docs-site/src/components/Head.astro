@@ -2,6 +2,17 @@
 import Default from '@astrojs/starlight/components/Head.astro';
 ---
 
+{/* Default the docs to dark to match the dark-only product. Seed the stored
+    theme before Starlight's ThemeProvider runs, but only when the visitor has
+    not made an explicit choice, so the picker keeps working. Inlined to avoid
+    a flash of the wrong theme. */}
+<script is:inline>
+	try {
+		if (typeof localStorage !== 'undefined' && !localStorage.getItem('starlight-theme')) {
+			localStorage.setItem('starlight-theme', 'dark');
+		}
+	} catch (e) {}
+</script>
 <Default><slot /></Default>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

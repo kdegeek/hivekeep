@@ -2,9 +2,9 @@ import { createLogger } from '@/server/logger'
 
 const log = createLogger('events')
 
-type EventHandler = (event: KinBotEvent) => void | Promise<void>
+type EventHandler = (event: HivekeepEvent) => void | Promise<void>
 
-export interface KinBotEvent {
+export interface HivekeepEvent {
   type: string
   data: Record<string, unknown>
   timestamp: number
@@ -13,7 +13,7 @@ export interface KinBotEvent {
 class EventBus {
   private listeners = new Map<string, Set<EventHandler>>()
 
-  emit(event: KinBotEvent): void {
+  emit(event: HivekeepEvent): void {
     const handlers = this.listeners.get(event.type)
     if (!handlers) return
 

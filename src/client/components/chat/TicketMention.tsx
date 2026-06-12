@@ -1,7 +1,7 @@
 /**
  * Inline ticket reference renderer.
  *
- * Replaces a `#42` or `kinbot#42` token in a markdown message with a small
+ * Replaces a `#42` or `hivekeep#42` token in a markdown message with a small
  * clickable badge that:
  *
  *   - shows the original ref text the author typed (no auto-qualification),
@@ -20,7 +20,7 @@ import { cn } from '@/client/lib/utils'
 import type { TicketStatus } from '@/shared/types'
 
 interface TicketMentionProps {
-  /** The exact string the author wrote (e.g. `#42` or `kinbot#42`). Used as the
+  /** The exact string the author wrote (e.g. `#42` or `hivekeep#42`). Used as the
    *  cache key and the rendered label. */
   raw: string
 }

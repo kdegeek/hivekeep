@@ -5,7 +5,7 @@ import type { ToolRegistration } from '@/server/tools/types'
 import type { Tool } from '@/server/tools/tool-helper'
 
 const fakeTool = (overrides: Partial<ToolRegistration> = {}): ToolRegistration => ({
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: () => ({ description: '', inputSchema: undefined as any, execute: async () => null } as unknown as Tool<any, any>),
   ...overrides,
 })

@@ -39,8 +39,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: KinBot version
-      description: Run `kinbot --version` or check the UI footer
+      label: Hivekeep version
+      description: Run `hivekeep --version` or check the UI footer
       placeholder: "v0.2.23"
     validations:
       required: true

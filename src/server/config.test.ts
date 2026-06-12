@@ -59,7 +59,7 @@ describe('config', () => {
       const expectedKeys = [
         'port', 'dataDir', 'encryptionKey', 'logLevel', 'db',
         'compacting', 'memory', 'queue', 'tasks', 'crons', 'tools',
-        'humanPrompts', 'interKin', 'mcp', 'vault', 'workspace',
+        'humanPrompts', 'interAgent', 'mcp', 'vault', 'workspace',
         'upload', 'fileStorage', 'webhooks', 'channels', 'quickSessions',
         'webBrowsing', 'invitations', 'notifications', 'wakeups', 'publicUrl',
       ]
@@ -88,7 +88,7 @@ describe('config', () => {
       expect(config.compacting.thresholdPercent).toBe(75)
       expect(config.compacting.keepPercent).toBe(25)
       expect(config.compacting.maxSummaries).toBe(10)
-      expect(config.compacting.maxSummariesPerKin).toBe(50)
+      expect(config.compacting.maxSummariesPerAgent).toBe(50)
     })
 
     it('memory defaults', () => {
@@ -100,7 +100,7 @@ describe('config', () => {
 
     it('queue defaults', () => {
       expect(config.queue.userPriority).toBe(100)
-      expect(config.queue.kinPriority).toBe(50)
+      expect(config.queue.agentPriority).toBe(50)
       expect(config.queue.taskPriority).toBe(50)
       expect(config.queue.pollIntervalMs).toBe(500)
     })
@@ -121,12 +121,12 @@ describe('config', () => {
     })
 
     it('humanPrompts defaults', () => {
-      expect(config.humanPrompts.maxPendingPerKin).toBe(5)
+      expect(config.humanPrompts.maxPendingPerAgent).toBe(5)
     })
 
-    it('interKin defaults', () => {
-      expect(config.interKin.maxChainDepth).toBe(5)
-      expect(config.interKin.rateLimitPerMinute).toBe(20)
+    it('interAgent defaults', () => {
+      expect(config.interAgent.maxChainDepth).toBe(5)
+      expect(config.interAgent.rateLimitPerMinute).toBe(20)
     })
 
     it('mcp defaults to requiring approval', () => {
@@ -155,19 +155,19 @@ describe('config', () => {
     })
 
     it('webhooks defaults', () => {
-      expect(config.webhooks.maxPerKin).toBe(20)
+      expect(config.webhooks.maxPerAgent).toBe(20)
       expect(config.webhooks.maxPayloadBytes).toBe(1_048_576)
       expect(config.webhooks.rateLimitPerMinute).toBe(60)
     })
 
     it('channels defaults', () => {
-      expect(config.channels.maxPerKin).toBe(5)
+      expect(config.channels.maxPerAgent).toBe(5)
       expect(config.channels.telegramWebhookPath).toBe('/api/channels/telegram')
     })
 
     it('quickSessions defaults', () => {
       expect(config.quickSessions.defaultExpirationHours).toBe(24)
-      expect(config.quickSessions.maxActivePerUserPerKin).toBe(1)
+      expect(config.quickSessions.maxActivePerUserPerAgent).toBe(1)
       expect(config.quickSessions.retentionDays).toBe(7)
       expect(config.quickSessions.cleanupIntervalMinutes).toBe(60)
     })
@@ -185,7 +185,7 @@ describe('config', () => {
     it('browserSessions defaults', () => {
       // Default-on; the browser_* tools are still defaultDisabled, so a toolbox must list them.
       expect(config.browserSessions.enabled).toBe(true)
-      expect(config.browserSessions.maxPerKin).toBe(1)
+      expect(config.browserSessions.maxPerAgent).toBe(1)
       expect(config.browserSessions.maxTotal).toBe(5)
     })
 
@@ -202,7 +202,7 @@ describe('config', () => {
     })
 
     it('wakeups defaults', () => {
-      expect(config.wakeups.maxPendingPerKin).toBe(20)
+      expect(config.wakeups.maxPendingPerAgent).toBe(20)
       expect(config.wakeups.minDelaySeconds).toBe(10)
       expect(config.wakeups.maxDelaySeconds).toBe(2_592_000)
     })
@@ -214,14 +214,14 @@ describe('config', () => {
       expect(c.port).toBe(9999)
     })
 
-    it('KINBOT_DATA_DIR overrides dataDir and dependent paths', async () => {
-      const c = await loadConfigWithEnv({ KINBOT_DATA_DIR: '/tmp/kinbot-test-data' })
-      expect(c.dataDir).toBe('/tmp/kinbot-test-data')
-      expect(c.db.path).toBe('/tmp/kinbot-test-data/kinbot.db')
-      expect(c.vault.attachmentDir).toBe('/tmp/kinbot-test-data/vault')
-      expect(c.workspace.baseDir).toBe('/tmp/kinbot-test-data/workspaces')
-      expect(c.upload.dir).toBe('/tmp/kinbot-test-data/uploads')
-      expect(c.fileStorage.dir).toBe('/tmp/kinbot-test-data/storage')
+    it('HIVEKEEP_DATA_DIR overrides dataDir and dependent paths', async () => {
+      const c = await loadConfigWithEnv({ HIVEKEEP_DATA_DIR: '/tmp/hivekeep-test-data' })
+      expect(c.dataDir).toBe('/tmp/hivekeep-test-data')
+      expect(c.db.path).toBe('/tmp/hivekeep-test-data/hivekeep.db')
+      expect(c.vault.attachmentDir).toBe('/tmp/hivekeep-test-data/vault')
+      expect(c.workspace.baseDir).toBe('/tmp/hivekeep-test-data/workspaces')
+      expect(c.upload.dir).toBe('/tmp/hivekeep-test-data/uploads')
+      expect(c.fileStorage.dir).toBe('/tmp/hivekeep-test-data/storage')
     })
 
     it('LOG_LEVEL override', async () => {
@@ -263,8 +263,8 @@ describe('config', () => {
     })
 
     it('PUBLIC_URL override', async () => {
-      const c = await loadConfigWithEnv({ PUBLIC_URL: 'https://kinbot.example.com' })
-      expect(c.publicUrl).toBe('https://kinbot.example.com')
+      const c = await loadConfigWithEnv({ PUBLIC_URL: 'https://hivekeep.example.com' })
+      expect(c.publicUrl).toBe('https://hivekeep.example.com')
     })
   })
 
@@ -318,14 +318,14 @@ describe('config', () => {
     })
 
     it('miniApps defaults', () => {
-      expect(config.miniApps.maxAppsPerKin).toBe(20)
+      expect(config.miniApps.maxAppsPerAgent).toBe(20)
       expect(config.miniApps.maxFileSizeMb).toBe(5)
       expect(config.miniApps.maxTotalSizeMbPerApp).toBe(50)
       expect(config.miniApps.backendEnabled).toBe(true)
     })
 
     it('versionCheck defaults', () => {
-      expect(config.versionCheck.repo).toBe('MarlBurroW/kinbot')
+      expect(config.versionCheck.repo).toBe('MarlBurroW/hivekeep')
       expect(config.versionCheck.intervalHours).toBe(1)
     })
 
@@ -374,7 +374,7 @@ describe('config', () => {
 
     it('MINI_APPS_MAX_PER_KIN override', async () => {
       const c = await loadConfigWithEnv({ MINI_APPS_MAX_PER_KIN: '50' })
-      expect(c.miniApps.maxAppsPerKin).toBe(50)
+      expect(c.miniApps.maxAppsPerAgent).toBe(50)
     })
 
     it('MINI_APPS_BACKEND_ENABLED=false disables backend', async () => {
@@ -394,12 +394,12 @@ describe('config', () => {
 
     it('COMPACTING_MAX_SUMMARIES_PER_KIN override', async () => {
       const c = await loadConfigWithEnv({ COMPACTING_MAX_SUMMARIES_PER_KIN: '25' })
-      expect(c.compacting.maxSummariesPerKin).toBe(25)
+      expect(c.compacting.maxSummariesPerAgent).toBe(25)
     })
 
     it('TASKS_MAX_INTER_KIN_REQUESTS override', async () => {
       const c = await loadConfigWithEnv({ TASKS_MAX_INTER_KIN_REQUESTS: '10' })
-      expect(c.tasks.maxInterKinRequests).toBe(10)
+      expect(c.tasks.maxInterAgentRequests).toBe(10)
     })
 
     it('TASKS_MAX_CONCURRENT override', async () => {
@@ -444,12 +444,12 @@ describe('config', () => {
 
     it('WAKEUPS_MAX_PENDING_PER_KIN override', async () => {
       const c = await loadConfigWithEnv({ WAKEUPS_MAX_PENDING_PER_KIN: '50' })
-      expect(c.wakeups.maxPendingPerKin).toBe(50)
+      expect(c.wakeups.maxPendingPerAgent).toBe(50)
     })
 
     it('INTER_KIN_MAX_CHAIN_DEPTH override', async () => {
       const c = await loadConfigWithEnv({ INTER_KIN_MAX_CHAIN_DEPTH: '10' })
-      expect(c.interKin.maxChainDepth).toBe(10)
+      expect(c.interAgent.maxChainDepth).toBe(10)
     })
 
     it('CHANNEL_PENDING_ORIGIN_TTL override', async () => {

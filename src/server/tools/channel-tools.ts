@@ -15,7 +15,7 @@ import {
   sendToChannelAs,
 } from '@/server/services/channels'
 import { searchContacts, getContactWithDetails } from '@/server/services/contacts'
-import { resolveKinId } from '@/server/services/kin-resolver'
+import { resolveAgentId } from '@/server/services/agent-resolver'
 import { channelAdapters } from '@/server/channels/index'
 import { createLogger } from '@/server/logger'
 import type { ToolRegistration } from '@/server/tools/types'
@@ -25,7 +25,7 @@ import type { ChannelPlatform } from '@/shared/types'
 const log = createLogger('tools:channel')
 
 /**
- * list_channels — list all messaging channels connected to this Kin.
+ * list_channels — list all messaging channels connected to this Agent.
  * Available to main agents only.
  */
 export const listChannelsTool: ToolRegistration = {
@@ -35,12 +35,12 @@ export const listChannelsTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'List messaging channels. By default (scope="mine") returns only channels bound to this Kin. Pass scope="all" to discover every channel on the platform, including those owned by other Kins (each result then carries ownerKinId/ownerKinSlug/ownerKinName). You can send through another Kin\'s channel via send_channel_message — your message is automatically prefixed with your Kin name.',
+        'List messaging channels. By default (scope="mine") returns only channels bound to this Agent. Pass scope="all" to discover every channel on the platform, including those owned by other Agents (each result then carries ownerAgentId/ownerAgentSlug/ownerAgentName). You can send through another Agent\'s channel via send_channel_message — your message is automatically prefixed with your Agent name.',
       inputSchema: z.object({
         scope: z
           .enum(['mine', 'all'])
           .optional()
-          .describe('"mine" (default) = only this Kin\'s channels. "all" = every channel on the platform.'),
+          .describe('"mine" (default) = only this Agent\'s channels. "all" = every channel on the platform.'),
       }),
       execute: async ({ scope }) => {
         if (scope === 'all') {
@@ -51,10 +51,10 @@ export const listChannelsTool: ToolRegistration = {
               name: ch.name,
               platform: ch.platform,
               status: ch.status,
-              ownerKinId: ch.kinId,
-              ownerKinSlug: ch.ownerKinSlug,
-              ownerKinName: ch.ownerKinName,
-              owned: ch.kinId === ctx.kinId,
+              ownerAgentId: ch.agentId,
+              ownerAgentSlug: ch.ownerAgentSlug,
+              ownerAgentName: ch.ownerAgentName,
+              owned: ch.agentId === ctx.agentId,
               messagesReceived: ch.messagesReceived,
               messagesSent: ch.messagesSent,
               lastActivityAt: ch.lastActivityAt
@@ -63,7 +63,7 @@ export const listChannelsTool: ToolRegistration = {
             })),
           }
         }
-        const items = await listChannels(ctx.kinId)
+        const items = await listChannels(ctx.agentId)
         return {
           channels: items.map((ch) => ({
             id: ch.id,
@@ -83,7 +83,7 @@ export const listChannelsTool: ToolRegistration = {
 
 /**
  * list_channel_conversations — list known users and chat IDs for a channel.
- * Useful for proactive messaging: the Kin needs a chat_id to send messages.
+ * Useful for proactive messaging: the Agent needs a chat_id to send messages.
  */
 export const listChannelConversationsTool: ToolRegistration = {
   availability: ['main'],
@@ -97,7 +97,7 @@ export const listChannelConversationsTool: ToolRegistration = {
         channel_id: z.string(),
       }),
       execute: async ({ channel_id }) => {
-        // Existence-only check: cross-Kin discovery is allowed (single-user
+        // Existence-only check: cross-Agent discovery is allowed (single-user
         // self-hosted instance). Ownership is not required to read a channel's
         // conversations.
         const channel = await getChannel(channel_id)
@@ -131,11 +131,11 @@ export const sendChannelMessageTool: ToolRegistration = {
         })).optional(),
       }),
       execute: async ({ channel_id, chat_id, message, attachments }) => {
-        log.debug({ kinId: ctx.kinId, channelId: channel_id, chatId: chat_id }, 'Channel message send requested')
+        log.debug({ agentId: ctx.agentId, channelId: channel_id, chatId: chat_id }, 'Channel message send requested')
 
-        // Existence-only check: a Kin may borrow another Kin's channel. When the
+        // Existence-only check: an Agent may borrow another Agent's channel. When the
         // caller is not the channel owner, sendToChannelAs prefixes the message
-        // with the caller's Kin name and records sentByKinId for audit.
+        // with the caller's Agent name and records sentByAgentId for audit.
         const outboundAttachments: OutboundAttachment[] | undefined = attachments?.map(a => ({
           source: a.source,
           mimeType: a.mimeType,
@@ -143,7 +143,7 @@ export const sendChannelMessageTool: ToolRegistration = {
         }))
         const sent = await sendToChannelAs({
           channelId: channel_id,
-          senderKinId: ctx.kinId,
+          senderAgentId: ctx.agentId,
           chatId: chat_id,
           content: message,
           attachments: outboundAttachments,
@@ -161,17 +161,17 @@ export const sendChannelMessageTool: ToolRegistration = {
 }
 
 /**
- * list_endpoints — surface the destinations a Kin can post to within a
+ * list_endpoints — surface the destinations an Agent can post to within a
  * connected channel. Examples: Discord guild channels + DM threads,
  * TeamSpeak rooms, Matrix joined rooms, Telegram groups.
  *
  * Cached per channel for 60s — most adapters round-trip the platform
  * API to enumerate, and the list rarely changes between back-to-back
- * Kin turns. Cache is in-memory; restart clears it.
+ * Agent turns. Cache is in-memory; restart clears it.
  *
  * Adapters where every destination is implicitly tied to a contact
  * (Twilio SMS, Signal) don't implement `listEndpoints` — the tool
- * returns a clear error pointing the Kin at `send_to_contact`.
+ * returns a clear error pointing the Agent at `send_to_contact`.
  */
 export const listEndpointsTool: ToolRegistration = {
   availability: ['main'],
@@ -185,7 +185,7 @@ export const listEndpointsTool: ToolRegistration = {
         channel_id: z.string(),
       }),
       execute: async ({ channel_id }) => {
-        // Existence-only check: cross-Kin endpoint discovery is allowed.
+        // Existence-only check: cross-Agent endpoint discovery is allowed.
         const channel = await getChannel(channel_id)
         if (!channel) {
           return { error: 'Channel not found' }
@@ -220,7 +220,7 @@ export const listEndpointsTool: ToolRegistration = {
 }
 
 /** Per-channel cache for listEndpoints — most platforms cost a REST
- *  round-trip to enumerate; the list rarely changes between Kin turns. */
+ *  round-trip to enumerate; the list rarely changes between Agent turns. */
 const ENDPOINTS_CACHE_TTL_MS = 60_000
 const endpointsCache = new Map<string, { data: unknown; fetchedAt: number }>()
 
@@ -230,7 +230,7 @@ const endpointsCache = new Map<string, { data: unknown; fetchedAt: number }>()
  * Higher-level wrapper around `send_channel_message`. Resolves the
  * contact by name/id, looks up their platform identifier (e.g. their
  * phone number for `twilio-sms`, Telegram user id, Matrix mxid, …),
- * finds an active channel of the right platform owned by this Kin,
+ * finds an active channel of the right platform owned by this Agent,
  * and dispatches the message.
  *
  * Available to main agents — enabled by default since the resolution
@@ -242,10 +242,10 @@ export const sendToContactTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Proactively send a message to a known contact on a specific platform. Resolves the contact + platform id automatically — give the contact name (or id) and the platform slug (e.g. "twilio-sms", "telegram", "matrix"). Returns an error if the contact is ambiguous, has no identifier for that platform, or this Kin has no active channel for it.',
+        'Proactively send a message to a known contact on a specific platform. Resolves the contact + platform id automatically — give the contact name (or id) and the platform slug (e.g. "twilio-sms", "telegram", "matrix"). Returns an error if the contact is ambiguous, has no identifier for that platform, or this Agent has no active channel for it.',
       inputSchema: z.object({
         contact: z.string().describe('Contact name, display name, nickname, or contact id'),
-        platform: z.string().describe('Platform slug, e.g. "twilio-sms", "telegram", "matrix", or a plugin platform like "plugin:kinbot-plugin-teamspeak:teamspeak"'),
+        platform: z.string().describe('Platform slug, e.g. "twilio-sms", "telegram", "matrix", or a plugin platform like "plugin:hivekeep-plugin-teamspeak:teamspeak"'),
         message: z.string(),
         attachments: z.array(z.object({
           source: z.string().describe('Absolute file path or URL'),
@@ -254,12 +254,12 @@ export const sendToContactTool: ToolRegistration = {
         })).optional(),
       }),
       execute: async ({ contact, platform, message, attachments }) => {
-        log.debug({ kinId: ctx.kinId, contact, platform }, 'send_to_contact requested')
+        log.debug({ agentId: ctx.agentId, contact, platform }, 'send_to_contact requested')
 
         // 1) Resolve the contact. Try id first, then a fuzzy search.
-        let contactRecord = await getContactWithDetails(contact, ctx.kinId)
+        let contactRecord = await getContactWithDetails(contact, ctx.agentId)
         if (!contactRecord) {
-          const matches = await searchContacts(contact, ctx.kinId)
+          const matches = await searchContacts(contact, ctx.agentId)
           if (matches.length === 0) {
             return { error: `No contact matches "${contact}". Use search_contacts or create_contact first.` }
           }
@@ -281,13 +281,13 @@ export const sendToContactTool: ToolRegistration = {
         }
 
         // 3) Find an active channel of this platform. Prefer one owned by the
-        //    calling Kin; fall back to any active channel of that platform on
-        //    the instance (cross-Kin send). listChannels() with no kinId returns
+        //    calling Agent; fall back to any active channel of that platform on
+        //    the instance (cross-Agent send). listChannels() with no agentId returns
         //    every channel.
         const allChannels = await listChannels()
         const platformChannels = allChannels.filter((c) => c.platform === platform)
         const channel =
-          platformChannels.find((c) => c.kinId === ctx.kinId && c.status === 'active') ??
+          platformChannels.find((c) => c.agentId === ctx.agentId && c.status === 'active') ??
           platformChannels.find((c) => c.status === 'active')
         if (!channel) {
           if (platformChannels.length === 0) {
@@ -296,9 +296,9 @@ export const sendToContactTool: ToolRegistration = {
           return { error: `No active channel for platform "${platform}" (statuses: ${platformChannels.map((c) => c.status).join(', ')}).` }
         }
 
-        // 4) Dispatch via the shared cross-Kin send path. When `channel` is owned
-        //    by another Kin, the message is prefixed with this Kin's name and
-        //    sentByKinId is recorded for audit.
+        // 4) Dispatch via the shared cross-Agent send path. When `channel` is owned
+        //    by another Agent, the message is prefixed with this Agent's name and
+        //    sentByAgentId is recorded for audit.
         const outboundAttachments: OutboundAttachment[] | undefined = attachments?.map((a) => ({
           source: a.source,
           mimeType: a.mimeType,
@@ -306,7 +306,7 @@ export const sendToContactTool: ToolRegistration = {
         }))
         const sent = await sendToChannelAs({
           channelId: channel.id,
-          senderKinId: ctx.kinId,
+          senderAgentId: ctx.agentId,
           chatId: platformLink.platformId,
           content: message,
           attachments: outboundAttachments,
@@ -325,7 +325,7 @@ export const sendToContactTool: ToolRegistration = {
 }
 
 /**
- * create_channel — create a new messaging channel for this Kin.
+ * create_channel — create a new messaging channel for this Agent.
  * Opt-in tool (defaultDisabled). Available to main agents only.
  */
 export const createChannelTool: ToolRegistration = {
@@ -345,7 +345,7 @@ export const createChannelTool: ToolRegistration = {
         auto_create_contacts: z.boolean().optional().describe('Default: true'),
       }),
       execute: async ({ name, platform, config, allowed_chat_ids, auto_create_contacts }) => {
-        log.debug({ kinId: ctx.kinId, platform, name, configKeys: Object.keys(config) }, 'Channel creation requested')
+        log.debug({ agentId: ctx.agentId, platform, name, configKeys: Object.keys(config) }, 'Channel creation requested')
 
         if (!channelAdapters.get(platform)) {
           return { error: `Unknown platform "${platform}". Available: ${channelAdapters.list().join(', ')}` }
@@ -353,13 +353,13 @@ export const createChannelTool: ToolRegistration = {
 
         try {
           const channel = await createChannel({
-            kinId: ctx.kinId,
+            agentId: ctx.agentId,
             name,
             platform: platform as ChannelPlatform,
             platformConfig: config,
             allowedChatIds: allowed_chat_ids,
             autoCreateContacts: auto_create_contacts,
-            createdBy: 'kin',
+            createdBy: 'agent',
           })
           return {
             success: true,
@@ -396,7 +396,7 @@ export const updateChannelTool: ToolRegistration = {
       }),
       execute: async ({ channel_id, name, allowed_chat_ids, auto_create_contacts }) => {
         const channel = await getChannel(channel_id)
-        if (!channel || channel.kinId !== ctx.kinId) {
+        if (!channel || channel.agentId !== ctx.agentId) {
           return { error: 'Channel not found' }
         }
 
@@ -440,7 +440,7 @@ export const deleteChannelTool: ToolRegistration = {
       }),
       execute: async ({ channel_id }) => {
         const channel = await getChannel(channel_id)
-        if (!channel || channel.kinId !== ctx.kinId) {
+        if (!channel || channel.agentId !== ctx.agentId) {
           return { error: 'Channel not found' }
         }
 
@@ -468,7 +468,7 @@ export const activateChannelTool: ToolRegistration = {
       }),
       execute: async ({ channel_id }) => {
         const channel = await getChannel(channel_id)
-        if (!channel || channel.kinId !== ctx.kinId) {
+        if (!channel || channel.agentId !== ctx.agentId) {
           return { error: 'Channel not found' }
         }
 
@@ -492,21 +492,21 @@ export const activateChannelTool: ToolRegistration = {
 }
 
 /**
- * transfer_channel — re-bind a channel to a different Kin at runtime.
+ * transfer_channel — re-bind a channel to a different Agent at runtime.
  *
- * Any Kin can call this (no "channel owner" restriction). Effects:
- *   - channels.kinId is mutated to the target Kin.
- *   - Two role='system' audit-trail messages are inserted, one per Kin, with
+ * Any Agent can call this (no "channel owner" restriction). Effects:
+ *   - channels.agentId is mutated to the target Agent.
+ *   - Two role='system' audit-trail messages are inserted, one per Agent, with
  *     metadata.systemEvent='channel_transferred_out' / 'channel_transferred_in'.
  *     buildMessageHistory filters these out of the LLM prompt; the UI renders
  *     them as a handoff banner.
  *   - A one-shot channelTransferHint is stashed in the sideband. The next
  *     inbound on the channel pops it and surfaces the handoff via
- *     <channel-context> to the new Kin on its first turn.
+ *     <channel-context> to the new Agent on its first turn.
  *   - SSE 'channel:transferred' is broadcast so any open UI tab updates the
  *     sidebar binding badge in real time.
  *
- * No turn is triggered on the new Kin at transfer time. The new Kin discovers
+ * No turn is triggered on the new Agent at transfer time. The new Agent discovers
  * the conversation when the user next sends a message.
  */
 export const transferChannelTool: ToolRegistration = {
@@ -514,13 +514,13 @@ export const transferChannelTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Transfer a channel binding to another Kin. The target Kin will receive the next inbound message on this channel (no immediate turn is triggered). Both Kins get a visible audit-trail row in their conversation. The new Kin also gets a structured note about the handoff (source Kin, optional reason) on its first inbound after the transfer.',
+        'Transfer a channel binding to another Agent. The target Agent will receive the next inbound message on this channel (no immediate turn is triggered). Both Agents get a visible audit-trail row in their conversation. The new Agent also gets a structured note about the handoff (source Agent, optional reason) on its first inbound after the transfer.',
       inputSchema: z.object({
         channelId: z.string().describe('Channel to transfer. Optional when called from a channel-driven turn; inferred from the current context (channelOriginId).').optional(),
-        targetKinSlug: z.string().describe('Slug (or UUID) of the Kin to transfer the channel to.'),
-        reason: z.string().max(200).optional().describe('Optional human-readable explanation, shown in the audit trail and surfaced to the new Kin as context.'),
+        targetAgentSlug: z.string().describe('Slug (or UUID) of the Agent to transfer the channel to.'),
+        reason: z.string().max(200).optional().describe('Optional human-readable explanation, shown in the audit trail and surfaced to the new Agent as context.'),
       }),
-      execute: async ({ channelId, targetKinSlug, reason }) => {
+      execute: async ({ channelId, targetAgentSlug, reason }) => {
         // Resolve channelId (explicit > inferred from the current channel turn).
         let resolvedChannelId = channelId
         if (!resolvedChannelId && ctx.channelOriginId) {
@@ -531,20 +531,20 @@ export const transferChannelTool: ToolRegistration = {
           return { error: 'channelId could not be inferred from the current context; please pass it explicitly.' }
         }
 
-        // Resolve the target Kin slug/UUID to a UUID; the service does the
-        // rest (channel + Kin row loads, mutation, audit rows, sideband hint,
+        // Resolve the target Agent slug/UUID to a UUID; the service does the
+        // rest (channel + Agent row loads, mutation, audit rows, sideband hint,
         // SSE broadcast, onIdentityChange).
-        const toKinId = resolveKinId(targetKinSlug)
-        if (!toKinId) {
-          return { error: `Kin "${targetKinSlug}" not found (unknown slug or UUID).` }
+        const toAgentId = resolveAgentId(targetAgentSlug)
+        if (!toAgentId) {
+          return { error: `Agent "${targetAgentSlug}" not found (unknown slug or UUID).` }
         }
 
         const result = await transferChannel({
           channelId: resolvedChannelId,
-          targetKinId: toKinId,
+          targetAgentId: toAgentId,
           reason,
           initiatedBy: 'tool',
-          calledByKinId: ctx.kinId,
+          calledByAgentId: ctx.agentId,
         })
 
         if (result.ok === false) {
@@ -556,8 +556,8 @@ export const transferChannelTool: ToolRegistration = {
         return {
           ok: true,
           transferredAt: result.transferredAt,
-          previousKinSlug: result.previousKinSlug,
-          newKinSlug: result.newKinSlug,
+          previousAgentSlug: result.previousAgentSlug,
+          newAgentSlug: result.newAgentSlug,
         }
       },
     }),
@@ -577,7 +577,7 @@ export const deactivateChannelTool: ToolRegistration = {
       }),
       execute: async ({ channel_id }) => {
         const channel = await getChannel(channel_id)
-        if (!channel || channel.kinId !== ctx.kinId) {
+        if (!channel || channel.agentId !== ctx.agentId) {
           return { error: 'Channel not found' }
         }
 

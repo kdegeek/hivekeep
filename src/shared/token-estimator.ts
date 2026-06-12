@@ -3,7 +3,7 @@
  *
  * Why this exists: a chars/4 heuristic is fine for English prose but is
  * 30-60% too lenient for the JSON / YAML / CLI output that dominates a
- * tool-heavy Kin's history. That under-counting cascaded into:
+ * tool-heavy Agent's history. That under-counting cascaded into:
  *   - The chat banner and visualizer showing 277k while the API received 700k
  *   - The compaction threshold check never firing (estimate < 75% of context
  *     window even though the real prefix was AT the threshold)

@@ -1,0 +1,1 @@
+ALTER TABLE `agents` ADD `extra_tool_names` text;

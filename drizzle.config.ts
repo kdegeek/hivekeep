@@ -5,6 +5,6 @@ export default defineConfig({
   out: './src/server/db/migrations',
   dialect: 'sqlite',
   dbCredentials: {
-    url: process.env.DB_PATH ?? './data/kinbot.db',
+    url: process.env.DB_PATH ?? './data/hivekeep.db',
   },
 })

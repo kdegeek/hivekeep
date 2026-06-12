@@ -54,7 +54,7 @@ mock.module('@/server/logger', () => ({
 
 mock.module('@/server/sse/index', () => ({
   sseManager: {
-    sendToKin: mock(() => {}),
+    sendToAgent: mock(() => {}),
   },
 }))
 
@@ -105,7 +105,7 @@ mock.module('@/server/db/schema', () => ({
   ...fullMockSchema,
   memories: {
     id: 'id',
-    kinId: 'kinId',
+    agentId: 'agentId',
     content: 'content',
     embedding: 'embedding',
     category: 'category',
@@ -913,56 +913,56 @@ describe('memory service', () => {
   // ─── Shared memory filtering logic ──────────────────────────────────────────
 
   describe('shared memory filtering logic', () => {
-    // The search results filter shared memories from other Kins:
-    //   const sharedFromOthers = sorted.filter(m => m.scope === 'shared' && m.authorKinId !== kinId)
+    // The search results filter shared memories from other Agents:
+    //   const sharedFromOthers = sorted.filter(m => m.scope === 'shared' && m.authorAgentId !== agentId)
     // This tests the contract.
 
     interface MemoryResult {
       id: string
       scope: string
-      authorKinId: string
+      authorAgentId: string
     }
 
-    function filterSharedFromOthers(results: MemoryResult[], currentKinId: string): MemoryResult[] {
-      return results.filter(m => m.scope === 'shared' && m.authorKinId !== currentKinId)
+    function filterSharedFromOthers(results: MemoryResult[], currentAgentId: string): MemoryResult[] {
+      return results.filter(m => m.scope === 'shared' && m.authorAgentId !== currentAgentId)
     }
 
-    it('returns shared memories from other Kins', () => {
+    it('returns shared memories from other Agents', () => {
       const results: MemoryResult[] = [
-        { id: '1', scope: 'shared', authorKinId: 'kin-b' },
-        { id: '2', scope: 'private', authorKinId: 'kin-a' },
-        { id: '3', scope: 'shared', authorKinId: 'kin-a' },
+        { id: '1', scope: 'shared', authorAgentId: 'agent-b' },
+        { id: '2', scope: 'private', authorAgentId: 'agent-a' },
+        { id: '3', scope: 'shared', authorAgentId: 'agent-a' },
       ]
-      const shared = filterSharedFromOthers(results, 'kin-a')
+      const shared = filterSharedFromOthers(results, 'agent-a')
       expect(shared).toHaveLength(1)
       expect(shared[0]!.id).toBe('1')
     })
 
     it('excludes own shared memories', () => {
       const results: MemoryResult[] = [
-        { id: '1', scope: 'shared', authorKinId: 'kin-a' },
+        { id: '1', scope: 'shared', authorAgentId: 'agent-a' },
       ]
-      expect(filterSharedFromOthers(results, 'kin-a')).toHaveLength(0)
+      expect(filterSharedFromOthers(results, 'agent-a')).toHaveLength(0)
     })
 
     it('excludes private memories from others', () => {
       const results: MemoryResult[] = [
-        { id: '1', scope: 'private', authorKinId: 'kin-b' },
+        { id: '1', scope: 'private', authorAgentId: 'agent-b' },
       ]
-      expect(filterSharedFromOthers(results, 'kin-a')).toHaveLength(0)
+      expect(filterSharedFromOthers(results, 'agent-a')).toHaveLength(0)
     })
 
     it('handles empty results', () => {
-      expect(filterSharedFromOthers([], 'kin-a')).toHaveLength(0)
+      expect(filterSharedFromOthers([], 'agent-a')).toHaveLength(0)
     })
 
-    it('handles multiple shared memories from different Kins', () => {
+    it('handles multiple shared memories from different Agents', () => {
       const results: MemoryResult[] = [
-        { id: '1', scope: 'shared', authorKinId: 'kin-b' },
-        { id: '2', scope: 'shared', authorKinId: 'kin-c' },
-        { id: '3', scope: 'shared', authorKinId: 'kin-d' },
+        { id: '1', scope: 'shared', authorAgentId: 'agent-b' },
+        { id: '2', scope: 'shared', authorAgentId: 'agent-c' },
+        { id: '3', scope: 'shared', authorAgentId: 'agent-d' },
       ]
-      const shared = filterSharedFromOthers(results, 'kin-a')
+      const shared = filterSharedFromOthers(results, 'agent-a')
       expect(shared).toHaveLength(3)
     })
   })

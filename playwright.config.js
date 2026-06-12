@@ -27,7 +27,7 @@ export default defineConfig({
       ...process.env,
       NODE_ENV: 'production',
       PORT: '3334',
-      DB_PATH: process.env.E2E_DB_PATH || './data/kinbot-e2e.db',
+      DB_PATH: process.env.E2E_DB_PATH || './data/hivekeep-e2e.db',
       E2E_SKIP_PROVIDER_TEST: 'true',
       // Stream a deterministic fake assistant response in tests that need it
       // (e.g. 28-stream-rehydration). Other specs ignore the response.

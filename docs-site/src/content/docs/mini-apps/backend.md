@@ -3,7 +3,7 @@ title: Backend (_server.js)
 description: Add server-side logic to mini-apps with Hono.
 ---
 
-Mini-apps can have a backend by creating a `_server.js` file. The backend runs server-side in KinBot's process and is accessible via a scoped API.
+Mini-apps can have a backend by creating a `_server.js` file. The backend runs server-side in Hivekeep's process and is accessible via a scoped API.
 
 ## Quick Start
 
@@ -24,8 +24,123 @@ export default function(ctx) {
 The file must default-export a function that receives a context object and returns a [Hono](https://hono.dev) app (or any object with a `.fetch()` method).
 
 :::note
-`_server.ts` is also supported. KinBot will use whichever exists.
+`_server.ts` is also supported. Hivekeep will use whichever exists.
 :::
+
+## Lifecycle Exports
+
+Besides the default export, a backend can export lifecycle hooks. All exports are optional, but at least one of `default` / `onStart` / `onStop` is required:
+
+```javascript
+export async function onStart(ctx) {
+  // Runs when the backend instance loads (boot or first request).
+  // Start jobs, warm caches, open watchers here.
+}
+
+export async function onStop(ctx) {
+  // Runs before the instance is unloaded or reloaded (5s budget).
+  // ctx.timers and ctx.schedule jobs are cleaned up automatically.
+}
+
+export function onClientEvent(ctx, event, data, meta) {
+  // Receives events sent from the UI via Hivekeep.events.send().
+  // meta = { userId, userName }. The return value is sent back to the caller.
+  if (event === "vote") return { accepted: true };
+}
+```
+
+## Background Mode
+
+By default a backend is loaded lazily on its first HTTP request and stays passive between requests. Declare background mode in `app.json` to make it a **live service**:
+
+```json
+{ "background": true }
+```
+
+A background backend:
+
+- loads at server boot (and `onStart` runs immediately),
+- is restarted automatically after every `_server.js` / `app.json` edit (stop → reload → `onStart`),
+- keeps its scheduled jobs and timers running with no UI open.
+
+## Scheduled Jobs
+
+`ctx.schedule(name, cronPattern, handler)` registers a named cron job (standard cron syntax, evaluated with the server's timezone):
+
+```javascript
+export async function onStart(ctx) {
+  ctx.schedule("poll-feed", "*/15 * * * *", async () => {
+    const res = await ctx.fetch("https://api.example.com/feed");
+    const items = await res.json();
+    await ctx.storage.set("items", items);
+    ctx.events.emit("feed:updated", { count: items.length });
+  });
+}
+```
+
+- Max 10 jobs per app; runs are overlap-protected and spaced at least 15 seconds apart.
+- Re-registering an existing name replaces the job. `ctx.schedule(...)` returns `{ stop() }`.
+- Jobs stop automatically when the instance stops or reloads.
+- Handler errors land in the app console (`get_mini_app_console`).
+
+## Timers and Cancellation
+
+Never use the global `setInterval`/`setTimeout` in a backend — they would survive reloads and leak. Use the managed equivalents:
+
+```javascript
+const id = ctx.timers.setInterval(() => { /* ... */ }, 60_000); // min 1s
+ctx.timers.clearInterval(id);
+
+// ctx.signal aborts when the instance stops — pass it to long work:
+await fetch(url, { signal: ctx.signal });
+```
+
+All managed timers are cleared automatically when the instance stops.
+
+## Notifications
+
+`ctx.notify(title, body?)` sends a persistent platform notification (notification center, SSE, and the user's configured external channels). Rate-limited to 10 per hour per app.
+
+```javascript
+await ctx.notify("Price alert", "AAPL crossed $200");
+```
+
+## Capability Permissions
+
+Backends can access platform capabilities after the user approves them. Declare what you need in `app.json`:
+
+```json
+{
+  "background": true,
+  "permissions": ["llm", "agent:inform", "secrets:OPENWEATHER_API_KEY"]
+}
+```
+
+When the app panel is open and permissions are missing, Hivekeep shows an approval banner. Until granted, the matching `ctx` members throw a descriptive error.
+
+| Capability | Permission | Limit | Description |
+|------------|------------|-------|-------------|
+| `ctx.secrets.get(name)` | `secrets:<NAME>` (per secret) | — | Read a vault secret. Never store API keys in code or storage. |
+| `ctx.llm.complete(prompt, opts?)` | `llm` | 30/hour | One-shot LLM completion via the platform's providers (defaults to the maintainer Agent's model). `opts`: `{ model, providerId, maxTokens }`. |
+| `ctx.agent.inform(text)` | `agent:inform` | 10/hour | Drop an informational message into the maintainer Agent's queue. |
+| `ctx.agent.task(description, opts?)` | `agent:task` | 5/hour | Spawn an async sub-task on the maintainer Agent. Returns `{ taskId }`. |
+
+`ctx.permissions` exposes `{ requested, granted, has(permission) }` for introspection.
+
+## Outbound HTTP and Files
+
+These are always available (no permission needed):
+
+- `ctx.fetch(url, options?)` — SSRF-guarded fetch: http/https only, private/internal hosts blocked, 30s default timeout.
+- `ctx.files` — file storage scoped to the app's `_data/` directory (excluded from snapshots and rollbacks):
+
+```javascript
+await ctx.files.write("cache/feed.json", JSON.stringify(items));
+const raw = await ctx.files.read("cache/feed.json"); // string | null
+await ctx.files.list();    // [{ path, size }]
+await ctx.files.exists("cache/feed.json");
+await ctx.files.delete("cache/feed.json");
+```
 
 ## Backend Context
 
@@ -35,8 +150,18 @@ The file must default-export a function that receives a context object and retur
 | `ctx.storage` | `object` | Key-value storage scoped to this app (see [Storage](#storage)) |
 | `ctx.events` | `object` | SSE event emitter (see [Real-Time Events](#real-time-events-sse)) |
 | `ctx.appId` | `string` | The mini-app's ID |
-| `ctx.kinId` | `string` | The parent Kin's ID |
+| `ctx.agentId` | `string` | The maintainer Agent's ID |
 | `ctx.appName` | `string` | The mini-app's display name |
+| `ctx.version` | `number` | App version this instance was loaded from |
+| `ctx.background` | `boolean` | Whether `app.json` declares `"background": true` |
+| `ctx.signal` | `AbortSignal` | Aborted when the instance stops (see [Timers](#timers-and-cancellation)) |
+| `ctx.timers` | `object` | Managed timers, auto-cleared on stop (see [Timers](#timers-and-cancellation)) |
+| `ctx.schedule` | `function` | Named cron jobs (see [Scheduled Jobs](#scheduled-jobs)) |
+| `ctx.notify` | `function` | Platform notifications (see [Notifications](#notifications)) |
+| `ctx.fetch` | `function` | SSRF-guarded outbound HTTP (see [Outbound HTTP and Files](#outbound-http-and-files)) |
+| `ctx.files` | `object` | Scoped `_data/` file storage (see [Outbound HTTP and Files](#outbound-http-and-files)) |
+| `ctx.secrets` / `ctx.llm` / `ctx.agent` | `object` | Permission-gated capabilities (see [Capability Permissions](#capability-permissions)) |
+| `ctx.permissions` | `object` | `{ requested, granted, has() }` introspection |
 | `ctx.log` | `object` | Scoped logger (see [Logging](#logging)) |
 
 ## Routes
@@ -82,13 +207,13 @@ export default function(ctx) {
 From React, use the `useApi` hook:
 
 ```jsx
-import { useApi } from "@kinbot/react";
+import { useApi } from "@hivekeep/react";
 
 function ItemList() {
   const { data: items, loading, error, refetch } = useApi("/items");
 
   const addItem = async (name) => {
-    await KinBot.api.post("/items", { name });
+    await Hivekeep.api.post("/items", { name });
     refetch();
   };
 
@@ -102,18 +227,18 @@ Or use the raw API client directly:
 
 ```javascript
 // GET + parse JSON
-const items = await KinBot.api.get("/items");
+const items = await Hivekeep.api.get("/items");
 
 // POST JSON
-await KinBot.api.post("/items", { name: "New item" });
+await Hivekeep.api.post("/items", { name: "New item" });
 
 // PUT, PATCH, DELETE
-await KinBot.api.put("/items/123", { name: "Updated" });
-await KinBot.api.patch("/items/123", { name: "Patched" });
-await KinBot.api.delete("/items/123");
+await Hivekeep.api.put("/items/123", { name: "Updated" });
+await Hivekeep.api.patch("/items/123", { name: "Patched" });
+await Hivekeep.api.delete("/items/123");
 
 // Raw fetch (returns Response object)
-const response = await KinBot.api("/items", { method: "GET" });
+const response = await Hivekeep.api("/items", { method: "GET" });
 ```
 
 ## Real-Time Events (SSE)
@@ -152,14 +277,14 @@ export default function(ctx) {
 ### Frontend: Subscribe with Hook
 
 ```jsx
-import { useEventStream } from "@kinbot/react";
+import { useEventStream } from "@hivekeep/react";
 
 function ProcessMonitor() {
   const { messages, connected, clear } = useEventStream("progress");
 
   // Or with a callback (no accumulation):
   useEventStream("done", (data) => {
-    KinBot.toast(data.result, "success");
+    Hivekeep.toast(data.result, "success");
   });
 
   return (
@@ -179,20 +304,52 @@ Each message in `messages` has the shape `{ event, data, ts }`.
 
 ```javascript
 // Listen for a specific event
-KinBot.events.on("progress", (data) => {
+Hivekeep.events.on("progress", (data) => {
   console.log(`Step ${data.step}/${data.total}`);
 });
 
 // Listen for all events
-KinBot.events.subscribe(({ event, data }) => {
+Hivekeep.events.subscribe(({ event, data }) => {
   console.log(event, data);
 });
 
 // Check connection status
-console.log(KinBot.events.connected);
+console.log(Hivekeep.events.connected);
 
 // Disconnect
-KinBot.events.close();
+Hivekeep.events.close();
+```
+
+### Targeting a Single User
+
+`ctx.events.emit(event, data, { userId })` delivers only to that user's connections (useful for per-user state in shared apps):
+
+```javascript
+ctx.events.emit("your-turn", { board }, { userId: meta.userId });
+```
+
+### Frontend → Backend Events
+
+The upstream half of the realtime channel: the UI sends an event, the backend's `onClientEvent` export handles it and can answer.
+
+```javascript
+// Frontend
+const ack = await Hivekeep.events.send("vote", { choice: "A" });
+// ack = { handled: true, result: { accepted: true } }
+
+// or from React:
+const { send } = useEventStream();
+await send("vote", { choice: "A" });
+```
+
+```javascript
+// Backend (_server.js)
+export function onClientEvent(ctx, event, data, meta) {
+  if (event === "vote") {
+    ctx.events.emit("votes-changed", { by: meta.userName });
+    return { accepted: true };
+  }
+}
 ```
 
 ## Storage
@@ -222,7 +379,9 @@ const [config] = useStorage("config");
 
 ## Caching & Invalidation
 
-Backends are cached by version number. When you update `_server.js` via `write_mini_app_file`, the version increments and KinBot automatically reloads the backend on the next request. No manual restart needed.
+Backends are cached by version number. When you update `_server.js` via `write_mini_app_file`, the running instance is stopped cleanly (`onStop`, jobs and timers cleared) and reloaded — immediately for background apps, on the next request otherwise. No manual restart needed.
+
+Use the `get_mini_app_backend_status` tool to inspect the live instance: loaded state, background mode, scheduled jobs with next run times, active timers, SSE subscribers, and the permission state.
 
 ## Logging
 
@@ -233,4 +392,4 @@ ctx.log.error("Something went wrong:", err.message);
 ctx.log.debug("Received data:", data);
 ```
 
-Logs appear in KinBot's server logs tagged with the app ID. The logger accepts simple string arguments (not structured objects like pino).
+Logs appear in Hivekeep's server logs tagged with the app ID, and `info`/`warn`/`error` entries also land in the app console (readable with `get_mini_app_console`, marked `source: backend`). The logger accepts simple string arguments (not structured objects like pino).

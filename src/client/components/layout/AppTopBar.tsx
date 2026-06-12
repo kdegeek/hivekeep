@@ -1,9 +1,16 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Home, FolderKanban, ListTodo, CalendarClock, Blocks } from 'lucide-react'
+import { Home, FolderKanban, ListTodo, CalendarClock, Folder, Blocks, Boxes, SquareTerminal, ChevronDown } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/client/components/ui/dropdown-menu'
 import { cn } from '@/client/lib/utils'
 import { useAuth } from '@/client/hooks/useAuth'
 import { useTasksContext } from '@/client/contexts/TasksContext'
+import { HivekeepLogo } from '@/client/components/common/HivekeepLogo'
 import { ThemeToggle } from '@/client/components/common/ThemeToggle'
 import { PaletteToggle } from '@/client/components/common/PaletteToggle'
 import { UserMenu } from '@/client/components/common/UserMenu'
@@ -11,22 +18,23 @@ import { NotificationBell } from '@/client/components/notifications/Notification
 import { SSEStatusIndicator } from '@/client/components/common/SSEStatusIndicator'
 import { QueueIndicator } from '@/client/components/layout/QueueIndicator'
 import { SetupChecklistButton } from '@/client/components/layout/SetupChecklistButton'
+import { UpdateAvailableButton } from '@/client/components/layout/UpdateAvailableButton'
 
 interface AppTopBarProps {
   /** Open a settings section (or the default tab). */
-  onOpenSettings: (section?: string, filters?: { kinId?: string }) => void
+  onOpenSettings: (section?: string, filters?: { agentId?: string }) => void
   /** Open the account dialog. */
   onOpenAccount: () => void
 }
 
 /**
- * Persistent top bar shown across all authenticated pages (Kins, Projets, etc.).
+ * Persistent top bar shown across all authenticated pages (Agents, Projets, etc.).
  *
  * Hosts global actions: brand, SSE indicator, palette/theme toggles, notifications,
  * user menu. Lives at the App.tsx layout level so it doesn't disappear when the
  * user navigates between modes via the ActivityBar.
  *
- * The Kins-specific SidebarTrigger (toggle for the shadcn Sidebar) stays inside
+ * The Agents-specific SidebarTrigger (toggle for the shadcn Sidebar) stays inside
  * ChatPage's local header — it depends on SidebarProvider context which is scoped
  * to that page.
  */
@@ -38,43 +46,96 @@ export function AppTopBar({ onOpenSettings, onOpenAccount }: AppTopBarProps) {
   const { activeTasks } = useTasksContext()
   const activeTaskCount = activeTasks.length
   const hasAwaitingTask = activeTasks.some(
-    (task) => task.status === 'awaiting_human_input' || task.status === 'awaiting_kin_response',
+    (task) => task.status === 'awaiting_human_input' || task.status === 'awaiting_agent_response',
   )
 
   // Mobile mode switch — the left ActivityBar rail is hidden below md, so the
   // section nav moves into this always-present top bar as a compact icon-only
-  // segmented control mirroring the ActivityBar destinations.
+  // segmented control mirroring the ActivityBar destinations (incl. the
+  // admin-only Models entry).
+  const isAdmin = user?.role === 'admin'
   const path = location.pathname
-  const sectionPrefixes = ['/projects', '/tasks', '/crons', '/mini-apps']
+  const sectionPrefixes = ['/projects', '/tasks', '/crons', '/files', '/mini-apps', '/models', '/terminal']
   const isSection = (prefix: string) => path.startsWith(prefix)
-  const modeItems = [
-    { key: 'kins', to: '/', icon: Home, active: !sectionPrefixes.some(isSection), label: t('activityBar.kins'), badge: false },
+  const modeItems: Array<{ key: string; to: string; icon: typeof Home; active: boolean; label: string; badge: boolean }> = [
+    { key: 'agents', to: '/', icon: Home, active: !sectionPrefixes.some(isSection), label: t('activityBar.agents'), badge: false },
     { key: 'projects', to: '/projects', icon: FolderKanban, active: isSection('/projects'), label: t('activityBar.projects'), badge: false },
     { key: 'tasks', to: '/tasks', icon: ListTodo, active: isSection('/tasks'), label: t('activityBar.tasks'), badge: true },
     { key: 'crons', to: '/crons', icon: CalendarClock, active: isSection('/crons'), label: t('activityBar.crons'), badge: false },
+    { key: 'files', to: '/files', icon: Folder, active: isSection('/files'), label: t('activityBar.files'), badge: false },
     { key: 'apps', to: '/mini-apps', icon: Blocks, active: isSection('/mini-apps'), label: t('activityBar.apps'), badge: false },
-  ] as const
+    ...(isAdmin
+      ? [
+          { key: 'models', to: '/models', icon: Boxes, active: isSection('/models'), label: t('activityBar.models'), badge: false },
+          { key: 'terminal', to: '/terminal', icon: SquareTerminal, active: isSection('/terminal'), label: t('activityBar.terminal'), badge: false },
+        ]
+      : []),
+  ]
 
   return (
-    <header className="surface-header sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b px-4">
+    <header className="surface-header sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b px-2.5 sm:gap-3 sm:px-4">
       <button
         type="button"
-        className="flex shrink-0 items-center gap-2.5"
+        className="flex shrink-0 items-center"
         onClick={() => navigate('/')}
+        aria-label="Hivekeep"
       >
-        <img src="/kinbot.svg" alt="" width={28} height={28} className="rounded-lg" />
-        {/* Logo wordmark collides with the right cluster at very narrow widths
-            (<=375px). Hide the text on mobile; the icon alone keeps the brand. */}
-        <span className="hidden sm:inline gradient-primary-text text-xl font-bold tracking-tight">
-          KinBot
-        </span>
+        {/* Single themable lockup: the mark follows the active palette gradient.
+            The wordmark collides with the right cluster at very narrow widths
+            (<=375px), so it's hidden on mobile; the mark alone keeps the brand. */}
+        <HivekeepLogo size={28} withWordmark wordmarkClassName="hidden sm:inline" title={null} />
       </button>
 
-      {/* Mobile mode switch (Kins / Projects) — replaces the hidden ActivityBar
-          rail below md. Icon-only segmented control to stay compact. */}
+      {/* Phone (<sm): the section icons can't all fit next to the right cluster,
+          so they collapse into a single dropdown — current section icon + chevron. */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="relative flex h-8 shrink-0 items-center gap-1 rounded-lg bg-muted/60 px-2 text-primary sm:hidden"
+            aria-label={t('appTopBar.sections', 'Sections')}
+          >
+            {(() => {
+              const active = modeItems.find((item) => item.active) ?? modeItems[0]!
+              const ActiveIcon = active.icon
+              return <ActiveIcon className="size-4" strokeWidth={1.75} />
+            })()}
+            <ChevronDown className="size-3 text-muted-foreground" />
+            {activeTaskCount > 0 && (
+              <span
+                className={cn(
+                  'absolute -right-1 -top-1 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[8px] font-semibold leading-none',
+                  hasAwaitingTask ? 'animate-pulse bg-warning text-warning-foreground' : 'bg-primary text-primary-foreground',
+                )}
+              >
+                {activeTaskCount}
+              </span>
+            )}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-48">
+          {modeItems.map((item) => {
+            const Icon = item.icon
+            return (
+              <DropdownMenuItem key={item.key} onClick={() => navigate(item.to)} className={item.active ? 'text-primary' : undefined}>
+                <Icon className="size-4" />
+                {item.label}
+                {item.badge && activeTaskCount > 0 && (
+                  <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-none text-primary-foreground">
+                    {activeTaskCount}
+                  </span>
+                )}
+              </DropdownMenuItem>
+            )
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* sm → md: the icon-only segmented control (the left ActivityBar rail
+          takes over at md+). */}
       <nav
-        className="flex shrink-0 items-center gap-0.5 rounded-lg bg-muted/60 p-0.5 md:hidden"
-        aria-label={t('activityBar.kins')}
+        className="hidden shrink-0 items-center gap-0.5 rounded-lg bg-muted/60 p-0.5 sm:flex md:hidden"
+        aria-label={t('appTopBar.sections', 'Sections')}
       >
         {modeItems.map((item) => {
           const Icon = item.icon
@@ -87,7 +148,9 @@ export function AppTopBar({ onOpenSettings, onOpenAccount }: AppTopBarProps) {
               aria-label={item.label}
               aria-current={item.active ? 'page' : undefined}
               className={cn(
-                'relative flex size-8 items-center justify-center rounded-md transition-colors',
+                // size-7 keeps six items within the width five size-8 items
+                // used to take — the control only renders below md anyway.
+                'relative flex size-7 items-center justify-center rounded-md transition-colors',
                 item.active
                   ? 'bg-background text-primary shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
@@ -110,7 +173,8 @@ export function AppTopBar({ onOpenSettings, onOpenAccount }: AppTopBarProps) {
           )
         })}
       </nav>
-      <div className="flex min-w-0 flex-1 items-center justify-end gap-1">
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-0.5 sm:gap-1">
+        {user && <UpdateAvailableButton />}
         {user && <QueueIndicator />}
         <SSEStatusIndicator />
         {user && <SetupChecklistButton onOpenSettings={onOpenSettings} />}

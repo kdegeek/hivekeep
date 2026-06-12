@@ -9,7 +9,7 @@ async function* fakeStream(chunks: ChatChunk[]): AsyncIterable<ChatChunk> {
 
 function baseCtx(over: Partial<StreamStepContext> = {}): StreamStepContext {
   return {
-    kinId: 'kin-test',
+    agentId: 'agent-test',
     assistantMessageId: 'msg-test',
     abortController: new AbortController(),
     ...over,

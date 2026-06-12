@@ -32,8 +32,8 @@ test.describe.serial('Settings — Notifications', () => {
       'User pending approval',
       'Cron pending approval',
       'MCP pending approval',
-      'Kin error',
-      'Kin alert',
+      'Agent error',
+      'Agent alert',
       'Mention',
     ]
     for (const label of types) {
@@ -57,20 +57,20 @@ test.describe.serial('Settings — Notifications', () => {
     await navigateToNotifications(page)
     const dialog = page.getByRole('dialog')
 
-    // Find the "Kin alert" switch
-    const kinAlertSwitch = dialog.locator('#notif-kin\\:alert')
-    await expect(kinAlertSwitch).toBeVisible()
+    // Find the "Agent alert" switch
+    const agentAlertSwitch = dialog.locator('#notif-agent\\:alert')
+    await expect(agentAlertSwitch).toBeVisible()
 
     // It should be checked by default
-    await expect(kinAlertSwitch).toBeChecked()
+    await expect(agentAlertSwitch).toBeChecked()
 
     // Toggle off
-    await kinAlertSwitch.click()
-    await expect(kinAlertSwitch).not.toBeChecked()
+    await agentAlertSwitch.click()
+    await expect(agentAlertSwitch).not.toBeChecked()
 
     // Toggle back on
-    await kinAlertSwitch.click()
-    await expect(kinAlertSwitch).toBeChecked()
+    await agentAlertSwitch.click()
+    await expect(agentAlertSwitch).toBeChecked()
   })
 
   test('should display external delivery section', async ({ page }) => {
@@ -147,7 +147,7 @@ test.describe.serial('Settings — Notifications', () => {
 
     // Help panel should be present (collapsed or expanded)
     // Look for the help content text
-    const helpContent = dialog.getByText('Notifications keep you informed about important events in KinBot')
+    const helpContent = dialog.getByText('Notifications keep you informed about important events in Hivekeep')
     // It may be collapsed - if there's a toggle, click it
     const helpToggle = dialog.locator('button:has(.lucide-circle-help)')
     if (await helpToggle.isVisible()) {
@@ -161,7 +161,7 @@ test.describe.serial('Settings — Notifications', () => {
     const dialog = page.getByRole('dialog')
 
     // Check a few descriptions are visible
-    await expect(dialog.getByText('A Kin is waiting for your response to continue')).toBeVisible()
+    await expect(dialog.getByText('An Agent is waiting for your response to continue')).toBeVisible()
     await expect(dialog.getByText('Someone mentioned you in a conversation')).toBeVisible()
   })
 })

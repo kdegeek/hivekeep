@@ -10,7 +10,7 @@ async function openMcpSettings(page: Page) {
 
   await page.getByRole('dialog').getByText('MCP Servers', { exact: true }).click()
   await expect(
-    page.getByText('Manage Model Context Protocol servers that provide external tools to your Kins.'),
+    page.getByText('Manage Model Context Protocol servers that provide external tools to your Agents.'),
   ).toBeVisible({ timeout: 5_000 })
 }
 
@@ -36,9 +36,9 @@ test.describe.serial('MCP server management', () => {
     await mockMcpApis(page)
 
     await page.goto('/')
-    await expect(page.getByText('Sign in to your KinBot workspace')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Sign in to your Hivekeep workspace')).toBeVisible({ timeout: 10_000 })
     await loginAs(page)
-    await expect(page.getByText('Kins', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Agents', { exact: true })).toBeVisible({ timeout: 10_000 })
   })
 
   test('should clean up any existing MCP servers and show empty state', async ({ page }) => {
@@ -60,7 +60,7 @@ test.describe.serial('MCP server management', () => {
 
     await expect(page.getByText('No MCP servers configured')).toBeVisible({ timeout: 5_000 })
     await expect(
-      page.getByText('MCP servers extend your Kins with external tools and data sources.'),
+      page.getByText('MCP servers extend your Agents with external tools and data sources.'),
     ).toBeVisible()
   })
 
@@ -172,7 +172,7 @@ test.describe.serial('MCP server management', () => {
 
     // Confirmation dialog
     await expect(
-      page.getByText('This will permanently remove this MCP server and disconnect it from all Kins.'),
+      page.getByText('This will permanently remove this MCP server and disconnect it from all Agents.'),
     ).toBeVisible({ timeout: 5_000 })
     await page.getByRole('button', { name: 'Delete' }).click()
 
@@ -188,7 +188,7 @@ test.describe.serial('MCP server management', () => {
     await deleteButton.click()
 
     await expect(
-      page.getByText('This will permanently remove this MCP server and disconnect it from all Kins.'),
+      page.getByText('This will permanently remove this MCP server and disconnect it from all Agents.'),
     ).toBeVisible({ timeout: 5_000 })
     await page.getByRole('button', { name: 'Delete' }).click()
 

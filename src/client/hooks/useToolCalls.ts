@@ -40,7 +40,7 @@ function deriveStatus(entry: ToolCallEntry): ToolCallStatus {
   return 'success'
 }
 
-export function useToolCalls(kinId: string | null, messages: ChatMessage[]) {
+export function useToolCalls(agentId: string | null, messages: ChatMessage[]) {
   const [streamingToolCalls, setStreamingToolCalls] = useState<
     Map<string, ToolCallViewItem>
   >(new Map())
@@ -73,7 +73,7 @@ export function useToolCalls(kinId: string | null, messages: ChatMessage[]) {
     // Fires early — as soon as the LLM starts generating a tool call
     // (before arguments are fully parsed). Not all models emit this.
     'chat:tool-call-start': (data) => {
-      if (data.kinId !== kinId) return
+      if (data.agentId !== agentId) return
       const item: ToolCallViewItem = {
         id: data.toolCallId as string,
         messageId: data.messageId as string,
@@ -90,7 +90,7 @@ export function useToolCalls(kinId: string | null, messages: ChatMessage[]) {
     // Fires when the full tool call is parsed (arguments complete), before execution.
     // Creates a new entry if tool-call-streaming-start was not emitted.
     'chat:tool-call': (data) => {
-      if (data.kinId !== kinId) return
+      if (data.agentId !== agentId) return
       setStreamingToolCalls((prev) => {
         const next = new Map(prev)
         const existing = next.get(data.toolCallId as string)
@@ -116,7 +116,7 @@ export function useToolCalls(kinId: string | null, messages: ChatMessage[]) {
     },
 
     'chat:tool-result': (data) => {
-      if (data.kinId !== kinId) return
+      if (data.agentId !== agentId) return
       setStreamingToolCalls((prev) => {
         const next = new Map(prev)
         const existing = next.get(data.toolCallId as string)
@@ -140,7 +140,7 @@ export function useToolCalls(kinId: string | null, messages: ChatMessage[]) {
     },
 
     'chat:done': (data) => {
-      if (data.kinId !== kinId) return
+      if (data.agentId !== agentId) return
       // Clear streaming tool calls — they'll be in the refreshed messages
       setStreamingToolCalls(new Map())
     },

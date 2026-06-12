@@ -299,7 +299,7 @@ export class SlackAdapter implements ChannelAdapter {
   ): Promise<{ platformMessageId: string }> {
     const token = await resolveToken(cfg)
 
-    // Identity override: when transfer_channel flipped the bound Kin, we
+    // Identity override: when transfer_channel flipped the bound Agent, we
     // surface the new identity here on each chat.postMessage. Slack files
     // uploads do not accept username/icon_url, so attachment-only messages
     // still appear under the bot app's default identity (documented).
@@ -412,16 +412,16 @@ export class SlackAdapter implements ChannelAdapter {
   async onIdentityChange(
     channelId: string,
     _cfg: Record<string, unknown>,
-    newIdentity: { kinSlug: string; kinName: string; avatarUrl?: string },
+    newIdentity: { agentSlug: string; agentName: string; avatarUrl?: string },
   ): Promise<void> {
     // No Slack API call: Slack only supports per-message identity via the
     // chat.postMessage `username` + `icon_url` fields. We stash the override
     // here and sendMessage injects it on every outbound (text messages only;
     // files.upload does not accept those fields, see sendMessage comments).
     slackIdentityOverrides.set(channelId, {
-      username: newIdentity.kinName,
+      username: newIdentity.agentName,
       iconUrl: newIdentity.avatarUrl,
     })
-    log.info({ channelId, kinSlug: newIdentity.kinSlug }, 'Slack identity override updated for channel')
+    log.info({ channelId, agentSlug: newIdentity.agentSlug }, 'Slack identity override updated for channel')
   }
 }

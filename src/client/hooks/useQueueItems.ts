@@ -4,7 +4,7 @@ import { useSSE, useSSEResync } from '@/client/hooks/useSSE'
 
 export interface QueueItem {
   id: string
-  kinId: string
+  agentId: string
   messageType: string
   content: string
   sourceType: string
@@ -13,27 +13,27 @@ export interface QueueItem {
   createdAt: string
 }
 
-export function useQueueItems(kinId: string | null) {
+export function useQueueItems(agentId: string | null) {
   const [items, setItems] = useState<QueueItem[]>([])
   const [isRemoving, setIsRemoving] = useState<string | null>(null)
-  const currentKinIdRef = useRef(kinId)
-  currentKinIdRef.current = kinId
+  const currentAgentIdRef = useRef(agentId)
+  currentAgentIdRef.current = agentId
 
   const fetchItems = useCallback(async () => {
-    if (!kinId) {
+    if (!agentId) {
       setItems([])
       return
     }
     try {
-      const data = await api.get<{ items: QueueItem[] }>(`/kins/${kinId}/messages/queue`)
-      // Only update if we're still on the same kin
-      if (currentKinIdRef.current === kinId) {
+      const data = await api.get<{ items: QueueItem[] }>(`/agents/${agentId}/messages/queue`)
+      // Only update if we're still on the same agent
+      if (currentAgentIdRef.current === agentId) {
         setItems(data.items)
       }
     } catch {
       // Non-fatal
     }
-  }, [kinId])
+  }, [agentId])
 
   useEffect(() => {
     fetchItems()
@@ -43,7 +43,7 @@ export function useQueueItems(kinId: string | null) {
   // Refetch when queue state changes
   useSSE({
     'queue:update': (data) => {
-      if (data.kinId !== kinId) return
+      if (data.agentId !== agentId) return
       fetchItems()
     },
   })
@@ -53,10 +53,10 @@ export function useQueueItems(kinId: string | null) {
   useSSEResync(fetchItems)
 
   const removeItem = useCallback(async (itemId: string) => {
-    if (!kinId) return
+    if (!agentId) return
     setIsRemoving(itemId)
     try {
-      await api.delete(`/kins/${kinId}/messages/queue/${itemId}`)
+      await api.delete(`/agents/${agentId}/messages/queue/${itemId}`)
       // Optimistic removal — SSE will also trigger a refetch
       setItems((prev) => prev.filter((i) => i.id !== itemId))
     } catch {
@@ -64,15 +64,15 @@ export function useQueueItems(kinId: string | null) {
     } finally {
       setIsRemoving(null)
     }
-  }, [kinId])
+  }, [agentId])
 
   const injectItem = useCallback(async (itemId: string) => {
-    if (!kinId) return
+    if (!agentId) return
     const item = items.find((i) => i.id === itemId)
     if (!item) return
     setIsRemoving(itemId)
     try {
-      await api.post(`/kins/${kinId}/messages/inject`, {
+      await api.post(`/agents/${agentId}/messages/inject`, {
         content: item.content,
         queueItemId: itemId,
       })
@@ -82,7 +82,7 @@ export function useQueueItems(kinId: string | null) {
     } finally {
       setIsRemoving(null)
     }
-  }, [kinId, items])
+  }, [agentId, items])
 
   return { items, removeItem, injectItem, isRemoving }
 }

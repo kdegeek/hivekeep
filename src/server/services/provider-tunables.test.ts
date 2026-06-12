@@ -41,12 +41,12 @@ describe('getMaxToolsForProvider', () => {
   })
 
   it('falls back to the conservative default for an unknown provider type', () => {
-    // 128 matches DEFAULT_MAX_LLM_TOOLS in kin-engine.ts. Bumping that
+    // 128 matches DEFAULT_MAX_LLM_TOOLS in agent-engine.ts. Bumping that
     // constant requires bumping this assertion in lockstep.
     expect(getMaxToolsForProvider('plugin:made-up-vendor')).toBe(128)
   })
 
-  it('falls back when providerType is null (no Kin model selected yet)', () => {
+  it('falls back when providerType is null (no Agent model selected yet)', () => {
     expect(getMaxToolsForProvider(null)).toBe(128)
   })
 })
@@ -63,7 +63,7 @@ describe('getMaxToolsForRequest (per-model override)', () => {
   })
 
   it('honours a per-model cap above the provider default', () => {
-    // Trust the provider's declaration — KinBot caps based on what the
+    // Trust the provider's declaration — Hivekeep caps based on what the
     // provider says, not on a stricter ceiling.
     expect(getMaxToolsForRequest('openai', { maxTools: 256 })).toBe(256)
   })

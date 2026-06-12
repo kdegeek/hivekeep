@@ -1,6 +1,6 @@
 ---
 title: Slack
-description: Connect your Kin to Slack using a bot.
+description: Connect your Agent to Slack using a bot.
 ---
 
 Slack integration uses the [Events API](https://api.slack.com/apis/events-api) with webhooks for inbound messages and the [Web API](https://api.slack.com/web) for sending.
@@ -13,10 +13,10 @@ Slack integration uses the [Events API](https://api.slack.com/apis/events-api) w
    - `files:read` — Read file attachments
    - `files:write` — Upload files
 3. Install the app to your workspace and copy the **Bot User OAuth Token**
-4. Under **Event Subscriptions**, enable events and set the request URL to your KinBot webhook endpoint
+4. Under **Event Subscriptions**, enable events and set the request URL to your Hivekeep webhook endpoint
 5. Subscribe to bot events: `message.channels`, `message.groups`, `message.im`
 6. Copy the **Signing Secret** from Basic Information
-7. In KinBot, add a Slack channel with both the bot token and signing secret
+7. In Hivekeep, add a Slack channel with both the bot token and signing secret
 
 ## Configuration
 
@@ -28,7 +28,7 @@ Slack integration uses the [Events API](https://api.slack.com/apis/events-api) w
 
 ## How It Works
 
-- **Inbound:** Slack sends events to KinBot's webhook endpoint. The adapter verifies the request signature (v0), handles URL verification challenges, and routes messages to the Kin.
+- **Inbound:** Slack sends events to Hivekeep's webhook endpoint. The adapter verifies the request signature (v0), handles URL verification challenges, and routes messages to the Agent.
 - **Outbound:** Messages are sent via `chat.postMessage`. Long messages (>4,000 chars) are split automatically. Files are uploaded via `files.upload`.
 
 ## Features
@@ -42,5 +42,5 @@ Slack integration uses the [Events API](https://api.slack.com/apis/events-api) w
 
 ## Requirements
 
-- Your KinBot instance must be publicly reachable for Slack event webhooks
-- Configure `PUBLIC_URL` in your KinBot environment
+- Your Hivekeep instance must be publicly reachable for Slack event webhooks
+- Configure `PUBLIC_URL` in your Hivekeep environment

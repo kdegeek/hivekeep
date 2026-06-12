@@ -109,8 +109,8 @@ export class WhatsAppAdapter implements ChannelAdapter {
   // name dynamically: the verified business display name is fixed at the
   // Business Manager level and propagates to every chat. Profile updates
   // exist but require a re-verification flow and are out of scope.
-  // Fall back to the core's "[Kin Name] " prefix on every outbound text
-  // so the user knows which Kin is speaking after a transfer.
+  // Fall back to the core's "[Agent Name] " prefix on every outbound text
+  // so the user knows which Agent is speaking after a transfer.
   readonly identitySwitchMode = 'prefix' as const
 
   async start(channelId: string, cfg: Record<string, unknown>): Promise<void> {

@@ -18,7 +18,7 @@ import { getFreshAccessToken, invalidateAccessToken } from '@/server/services/em
 import { getDefaultEmailProviderId } from '@/server/services/app-settings'
 import { createLogger } from '@/server/logger'
 import type { EmailProvider } from '@/server/email/types'
-import type { ProviderConfig } from '@kinbot-developer/sdk'
+import type { ProviderConfig } from '@hivekeep/sdk'
 
 const log = createLogger('email-accounts')
 
@@ -35,9 +35,9 @@ interface EmailAccountConfig {
    *  exposed in prompts; spread into the ProviderConfig at resolve time. */
   credentials?: Record<string, string>
   send_mode?: SendMode
-  /** null / absent / empty = global (any Kin with the email toolbox). A
-   *  non-empty list restricts the account to those Kin ids. */
-  allowed_kin_ids?: string[] | null
+  /** null / absent / empty = global (any Agent with the email toolbox). A
+   *  non-empty list restricts the account to those Agent ids. */
+  allowed_agent_ids?: string[] | null
 }
 
 /** Public, secret-free view of an email account. */
@@ -48,7 +48,7 @@ export interface EmailAccount {
   type: string
   emailAddress: string
   sendMode: SendMode
-  allowedKinIds: string[] | null
+  allowedAgentIds: string[] | null
   isValid: boolean
   lastError: string | null
 }
@@ -72,7 +72,7 @@ async function decryptConfig(row: ProviderRow): Promise<EmailAccountConfig> {
 }
 
 function toAccount(row: ProviderRow, cfg: EmailAccountConfig): EmailAccount {
-  const allowed = cfg.allowed_kin_ids && cfg.allowed_kin_ids.length > 0 ? cfg.allowed_kin_ids : null
+  const allowed = cfg.allowed_agent_ids && cfg.allowed_agent_ids.length > 0 ? cfg.allowed_agent_ids : null
   return {
     id: row.id,
     slug: row.slug,
@@ -80,25 +80,25 @@ function toAccount(row: ProviderRow, cfg: EmailAccountConfig): EmailAccount {
     type: row.type,
     emailAddress: cfg.email_address,
     sendMode: cfg.send_mode ?? 'direct',
-    allowedKinIds: allowed,
+    allowedAgentIds: allowed,
     isValid: row.isValid,
     lastError: row.lastError,
   }
 }
 
-/** A Kin may use an account when it's global, or when its id is on the
+/** An Agent may use an account when it's global, or when its id is on the
  *  account's allow-list. */
-function kinAllowed(cfg: EmailAccountConfig, kinId?: string): boolean {
-  if (!cfg.allowed_kin_ids || cfg.allowed_kin_ids.length === 0) return true
-  return kinId != null && cfg.allowed_kin_ids.includes(kinId)
+function agentAllowed(cfg: EmailAccountConfig, agentId?: string): boolean {
+  if (!cfg.allowed_agent_ids || cfg.allowed_agent_ids.length === 0) return true
+  return agentId != null && cfg.allowed_agent_ids.includes(agentId)
 }
 
-/** List email accounts. With a `kinId`, only the accounts that Kin may use. */
-export async function listEmailAccounts(kinId?: string): Promise<EmailAccount[]> {
+/** List email accounts. With a `agentId`, only the accounts that Agent may use. */
+export async function listEmailAccounts(agentId?: string): Promise<EmailAccount[]> {
   const out: EmailAccount[] = []
   for (const row of loadEmailRows()) {
     const cfg = await decryptConfig(row)
-    if (!kinAllowed(cfg, kinId)) continue
+    if (!agentAllowed(cfg, agentId)) continue
     out.push(toAccount(row, cfg))
   }
   return out
@@ -118,7 +118,7 @@ export interface ResolvedEmail {
  * default → first valid), enforce the allow-list, and inject a fresh access
  * token. Throws with a clear message when nothing usable resolves.
  */
-export async function resolveEmailProvider(opts: { slug?: string; kinId?: string }): Promise<ResolvedEmail> {
+export async function resolveEmailProvider(opts: { slug?: string; agentId?: string }): Promise<ResolvedEmail> {
   const rows = loadEmailRows()
   if (rows.length === 0) throw new Error('No email account is connected')
 
@@ -133,8 +133,8 @@ export async function resolveEmailProvider(opts: { slug?: string; kinId?: string
   if (!row) throw new Error('No usable email account')
 
   const cfg = await decryptConfig(row)
-  if (!kinAllowed(cfg, opts.kinId)) {
-    throw new Error(`This Kin is not allowed to use the email account "${row.slug}"`)
+  if (!agentAllowed(cfg, opts.agentId)) {
+    throw new Error(`This Agent is not allowed to use the email account "${row.slug}"`)
   }
   const provider = getEmailProvider(row.type)
   if (!provider) throw new Error(`Email provider not registered: ${row.type}`)
@@ -148,6 +148,32 @@ export async function resolveEmailProvider(opts: { slug?: string; kinId?: string
     })
   } else if (cfg.credentials) {
     // Non-OAuth (IMAP/SMTP): hand the provider its connection fields.
+    Object.assign(config, cfg.credentials)
+  }
+  return { account: toAccount(row, cfg), provider, config, sendMode: cfg.send_mode ?? 'direct' }
+}
+
+/**
+ * Resolve an email account by its provider-row id, WITHOUT the agent allow-list.
+ * Used by account-scoped machinery (the trigger poller, the folder picker) where
+ * access is governed by the account itself, not a calling Agent.
+ */
+export async function resolveEmailProviderByAccountId(accountId: string): Promise<ResolvedEmail> {
+  const row = loadEmailRows().find((r) => r.id === accountId)
+  if (!row) throw new Error(`Email account not found: ${accountId}`)
+
+  const cfg = await decryptConfig(row)
+  const provider = getEmailProvider(row.type)
+  if (!provider) throw new Error(`Email provider not registered: ${row.type}`)
+
+  const config: ProviderConfig = { email_address: cfg.email_address }
+  if (provider.oauth) {
+    config.accessToken = await getFreshAccessToken({
+      id: row.id,
+      type: row.type,
+      refreshToken: cfg.refresh_token ?? '',
+    })
+  } else if (cfg.credentials) {
     Object.assign(config, cfg.credentials)
   }
   return { account: toAccount(row, cfg), provider, config, sendMode: cfg.send_mode ?? 'direct' }
@@ -221,7 +247,7 @@ export async function createOAuthEmailAccount(opts: {
     refresh_token: opts.refreshToken,
     scopes: opts.scopes,
     send_mode: 'direct',
-    allowed_kin_ids: null,
+    allowed_agent_ids: null,
   }
   await db.insert(providers).values({
     id,
@@ -275,7 +301,7 @@ export async function createConfigEmailAccount(opts: {
     email_address: opts.emailAddress,
     credentials: opts.credentials,
     send_mode: 'direct',
-    allowed_kin_ids: null,
+    allowed_agent_ids: null,
   }
   await db.insert(providers).values({
     id,
@@ -319,8 +345,8 @@ export function setSendMode(id: string, mode: SendMode): Promise<EmailAccount> {
   })
 }
 
-export function setAllowList(id: string, kinIds: string[] | null): Promise<EmailAccount> {
+export function setAllowList(id: string, agentIds: string[] | null): Promise<EmailAccount> {
   return mutateConfig(id, (cfg) => {
-    cfg.allowed_kin_ids = kinIds && kinIds.length > 0 ? kinIds : null
+    cfg.allowed_agent_ids = agentIds && agentIds.length > 0 ? agentIds : null
   })
 }

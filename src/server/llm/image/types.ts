@@ -7,4 +7,4 @@ export type {
   ImageRequest,
   ImageResult,
   ImageProvider,
-} from '@kinbot-developer/sdk'
+} from '@hivekeep/sdk'

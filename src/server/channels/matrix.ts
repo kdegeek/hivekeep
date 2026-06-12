@@ -273,7 +273,7 @@ export class MatrixAdapter implements ChannelAdapter {
     // human-readable name + room type via /state/m.room.name and
     // /state/m.room.canonical_alias. We fan those out in parallel and
     // skip rooms whose name lookup fails (they still appear as the
-    // raw id so the Kin can still target them).
+    // raw id so the Agent can still target them).
     const { joined_rooms } = await matrixApi(homeserver, token, 'GET', '/joined_rooms') as { joined_rooms: string[] }
 
     const endpoints = await Promise.all(joined_rooms.map(async (roomId): Promise<ChannelEndpoint> => {
@@ -341,7 +341,7 @@ export class MatrixAdapter implements ChannelAdapter {
   async onIdentityChange(
     _channelId: string,
     cfg: Record<string, unknown>,
-    newIdentity: { kinSlug: string; kinName: string; avatarUrl?: string },
+    newIdentity: { agentSlug: string; agentName: string; avatarUrl?: string },
   ): Promise<void> {
     const homeserver = getHomeserverUrl(cfg)
     const token = await resolveToken(cfg)
@@ -352,7 +352,7 @@ export class MatrixAdapter implements ChannelAdapter {
 
     // 1) Display name (always attempted).
     await matrixApi(homeserver, token, 'PUT', `/profile/${userId}/displayname`, {
-      displayname: newIdentity.kinName,
+      displayname: newIdentity.agentName,
     })
 
     // 2) Avatar: fetch the URL the core provided, upload to the Matrix media
@@ -382,7 +382,7 @@ export class MatrixAdapter implements ChannelAdapter {
         })
       } catch (err) {
         log.warn(
-          { err: String(err), kinSlug: newIdentity.kinSlug, avatarUrl: newIdentity.avatarUrl },
+          { err: String(err), agentSlug: newIdentity.agentSlug, avatarUrl: newIdentity.avatarUrl },
           'Matrix avatar update skipped: fetch or upload failed; display name was still updated',
         )
       }

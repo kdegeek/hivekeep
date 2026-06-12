@@ -1,6 +1,6 @@
 /**
  * In-memory ring buffer for platform logs.
- * Captures Pino log entries so Kins can query recent system logs via the
+ * Captures Pino log entries so Agents can query recent system logs via the
  * `get_platform_logs` tool. No DB overhead — entries are ephemeral.
  */
 

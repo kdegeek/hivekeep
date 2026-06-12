@@ -4,11 +4,11 @@ mock.module('@/server/logger', () => ({
   createLogger: () => ({ info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }),
 }))
 
-const sseSent: Array<{ kinId: string; event: { type: string; data: Record<string, unknown> } }> = []
+const sseSent: Array<{ agentId: string; event: { type: string; data: Record<string, unknown> } }> = []
 mock.module('@/server/sse/index', () => ({
   sseManager: {
-    sendToKin: (kinId: string, event: { type: string; data: Record<string, unknown> }) => {
-      sseSent.push({ kinId, event })
+    sendToAgent: (agentId: string, event: { type: string; data: Record<string, unknown> }) => {
+      sseSent.push({ agentId, event })
     },
     broadcast: () => {},
   },
@@ -16,7 +16,7 @@ mock.module('@/server/sse/index', () => ({
 
 const { setTodosForTask, getTodosForTask, forgetTaskTodos, _resetAllTodos } = await import('./task-todos')
 
-const META = { parentKinId: 'kin-1', ticketId: 'ticket-1' }
+const META = { parentAgentId: 'agent-1', ticketId: 'ticket-1' }
 
 beforeEach(() => {
   _resetAllTodos()
@@ -34,14 +34,14 @@ describe('setTodosForTask', () => {
     expect(getTodosForTask('task-1')).toEqual(stored)
   })
 
-  it('broadcasts a task:todos SSE event to the parent Kin', () => {
+  it('broadcasts a task:todos SSE event to the parent Agent', () => {
     setTodosForTask(
       'task-1',
       [{ id: 'a', subject: 'do', status: 'pending' }],
       META,
     )
     expect(sseSent).toHaveLength(1)
-    expect(sseSent[0]?.kinId).toBe('kin-1')
+    expect(sseSent[0]?.agentId).toBe('agent-1')
     expect(sseSent[0]?.event.type).toBe('task:todos')
     expect(sseSent[0]?.event.data).toMatchObject({ taskId: 'task-1', ticketId: 'ticket-1' })
   })

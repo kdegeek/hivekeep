@@ -50,7 +50,7 @@ export function CronCard({
   cron,
   llmModels = [],
   toolboxes = [],
-  kins = [],
+  agents = [],
   onClick,
   onApprove,
   onToggleActive,
@@ -59,9 +59,9 @@ export function CronCard({
   cron: CronSummary
   llmModels?: LLMModel[]
   toolboxes?: Toolbox[]
-  /** Owner/target Kins (id + default model) — used to resolve the effective
+  /** Owner/target Agents (id + default model) — used to resolve the effective
    *  model when the cron doesn't pin one of its own. */
-  kins?: { id: string; model: string }[]
+  agents?: { id: string; model: string }[]
   onClick: () => void
   onApprove?: () => void
   onToggleActive?: (isActive: boolean) => void
@@ -70,18 +70,18 @@ export function CronCard({
   const { t, i18n } = useTranslation()
   const { user } = useAuth()
   const serverTimezone = user?.serverTimezone
-  const initials = cron.kinName.slice(0, 2).toUpperCase()
+  const initials = cron.agentName.slice(0, 2).toUpperCase()
   const isPaused = !cron.isActive && !cron.requiresApproval
   const humanSchedule = cronToHuman(cron.schedule, i18n.language)
   const nextRun = cron.isActive && !cron.requiresApproval ? cronNextRun(cron.schedule, serverTimezone) : null
 
-  const hasDifferentTarget = !!cron.targetKinName && cron.targetKinId !== cron.kinId
+  const hasDifferentTarget = !!cron.targetAgentName && cron.targetAgentId !== cron.agentId
   const lastRunValue = cron.lastTriggeredAt ? formatRelativeTime(cron.lastTriggeredAt) : t('sidebar.crons.never')
 
-  // Effective model: the cron's own override, else the model of the Kin the task
+  // Effective model: the cron's own override, else the model of the Agent the task
   // runs as (delegated target if any, otherwise the owner). Shown on every card.
-  const runKinId = cron.targetKinId ?? cron.kinId
-  const effectiveModelId = cron.model ?? kins.find((k) => k.id === runKinId)?.model ?? null
+  const runAgentId = cron.targetAgentId ?? cron.agentId
+  const effectiveModelId = cron.model ?? agents.find((k) => k.id === runAgentId)?.model ?? null
   const resolvedModel = effectiveModelId ? llmModels.find((m) => m.id === effectiveModelId) : undefined
   const modelLabel = resolvedModel?.name ?? effectiveModelId
 
@@ -122,7 +122,7 @@ export function CronCard({
       {/* Header — owner identity */}
       <div className="flex min-w-0 items-center gap-2.5">
         <Avatar className="size-9 shrink-0">
-          {cron.kinAvatarUrl && <AvatarImage src={cron.kinAvatarUrl} alt={cron.kinName} />}
+          {cron.agentAvatarUrl && <AvatarImage src={cron.agentAvatarUrl} alt={cron.agentName} />}
           <AvatarFallback className="bg-secondary text-[11px]">{initials}</AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
@@ -130,12 +130,12 @@ export function CronCard({
             <p className="truncate text-sm font-semibold leading-tight text-foreground">{cron.name}</p>
             {isRunning && <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" />}
           </div>
-          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{cron.kinName}</p>
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{cron.agentName}</p>
         </div>
       </div>
 
       {/* Badges */}
-      {(cron.requiresApproval || cron.runOnce || cron.triggerParentTurn || cron.createdBy === 'kin') && (
+      {(cron.requiresApproval || cron.runOnce || cron.triggerParentTurn || cron.createdBy === 'agent') && (
         <div className="flex flex-wrap items-center gap-1">
           {cron.requiresApproval && (
             <Badge variant="outline" className="h-5 px-1.5 text-[10px] text-warning border-warning/40">
@@ -153,7 +153,7 @@ export function CronCard({
               <span className="max-sm:hidden">{t('cron.triggerParentTurn.badge')}</span>
             </Badge>
           )}
-          {cron.createdBy === 'kin' && (
+          {cron.createdBy === 'agent' && (
             <Badge variant="outline" className="h-5 gap-1 px-1.5 text-[10px] text-muted-foreground">
               <Bot className="size-2.5" />
               {t('sidebar.crons.autoBadge')}
@@ -224,15 +224,15 @@ export function CronCard({
         )}
       </div>
 
-      {/* Target kin (when the task runs as a different Kin) — hidden on small */}
+      {/* Target agent (when the task runs as a different Agent) — hidden on small */}
       {hasDifferentTarget && (
         <div className="hidden items-center gap-1.5 text-[11px] text-muted-foreground sm:flex">
           <span className="shrink-0">{t('sidebar.crons.targetLabel')}</span>
           <Avatar className="size-4 shrink-0">
-            {cron.targetKinAvatarUrl && <AvatarImage src={cron.targetKinAvatarUrl} alt={cron.targetKinName ?? ''} />}
-            <AvatarFallback className="text-[6px]">{(cron.targetKinName ?? '').slice(0, 2).toUpperCase()}</AvatarFallback>
+            {cron.targetAgentAvatarUrl && <AvatarImage src={cron.targetAgentAvatarUrl} alt={cron.targetAgentName ?? ''} />}
+            <AvatarFallback className="text-[6px]">{(cron.targetAgentName ?? '').slice(0, 2).toUpperCase()}</AvatarFallback>
           </Avatar>
-          <span className="truncate font-medium text-foreground">{cron.targetKinName}</span>
+          <span className="truncate font-medium text-foreground">{cron.targetAgentName}</span>
         </div>
       )}
 
@@ -275,7 +275,7 @@ export function SortableCronCard({
   cron,
   llmModels,
   toolboxes,
-  kins,
+  agents,
   onClick,
   onToggleActive,
   isRunning,
@@ -283,7 +283,7 @@ export function SortableCronCard({
   cron: CronSummary
   llmModels?: LLMModel[]
   toolboxes?: Toolbox[]
-  kins?: { id: string; model: string }[]
+  agents?: { id: string; model: string }[]
   onClick: () => void
   onToggleActive?: (isActive: boolean) => void
   isRunning?: boolean
@@ -319,7 +319,7 @@ export function SortableCronCard({
         cron={cron}
         llmModels={llmModels}
         toolboxes={toolboxes}
-        kins={kins}
+        agents={agents}
         onClick={onClick}
         onToggleActive={onToggleActive}
         isRunning={isRunning}

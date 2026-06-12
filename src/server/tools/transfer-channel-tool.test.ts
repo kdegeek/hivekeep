@@ -6,16 +6,16 @@ import type { ToolRegistration } from '@/server/tools/types'
 //
 // The tool is now a thin wrapper around the transferChannel() service: it
 // resolves channelId (from the explicit arg or from ctx.channelOriginId),
-// resolves the target Kin slug to a UUID, and forwards everything to the
+// resolves the target Agent slug to a UUID, and forwards everything to the
 // service. The service owns the DB mutation, audit rows, sideband hint,
 // SSE broadcast, and adapter.onIdentityChange. Those side effects belong to
 // the service test surface (services/channels.ts), not this file.
 
 const mockGetChannelOriginMeta = mock(() => undefined as any)
-const mockResolveKinId = mock(() => null as string | null)
+const mockResolveAgentId = mock(() => null as string | null)
 
 type TransferResult =
-  | { ok: true; noop?: false; transferredAt: number; previousKinSlug: string; newKinSlug: string; fromKinId: string; fromKinName: string; toKinId: string; toKinName: string }
+  | { ok: true; noop?: false; transferredAt: number; previousAgentSlug: string; newAgentSlug: string; fromAgentId: string; fromAgentName: string; toAgentId: string; toAgentName: string }
   | { ok: true; noop: true; message: string }
   | { ok: false; error: string }
 
@@ -24,12 +24,12 @@ const mockTransferChannel = mock<(...args: any[]) => Promise<TransferResult>>(()
   Promise.resolve({
     ok: true,
     transferredAt: 1700000000000,
-    previousKinSlug: 'kinbot-master',
-    newKinSlug: 'kube-master',
-    fromKinId: 'kin-source',
-    fromKinName: 'KinBot Master',
-    toKinId: 'kin-target',
-    toKinName: 'Kube Master',
+    previousAgentSlug: 'hivekeep-master',
+    newAgentSlug: 'kube-master',
+    fromAgentId: 'agent-source',
+    fromAgentName: 'Hivekeep Master',
+    toAgentId: 'agent-target',
+    toAgentName: 'Kube Master',
   } as TransferResult),
 )
 
@@ -88,21 +88,21 @@ mock.module('@/server/services/channels', () => ({
   listContactPlatformIds: mock(() => []),
   addContactPlatformId: mock(() => ({})),
   removeContactPlatformId: mock(() => true),
-  getActiveChannelsForKin: () => [],
+  getActiveChannelsForAgent: () => [],
   restoreActiveChannels: async () => {},
   resolveChannelLocale: () => 'en',
 }))
 
-mock.module('@/server/services/kin-resolver', () => ({
-  resolveKinId: mockResolveKinId,
-  resolveKinByIdOrSlug: mock(() => null),
+mock.module('@/server/services/agent-resolver', () => ({
+  resolveAgentId: mockResolveAgentId,
+  resolveAgentByIdOrSlug: mock(() => null),
 }))
 
 mock.module('@/server/db/index', () => ({ db: {} }))
 
 mock.module('@/server/db/schema', () => ({
   ...fullMockSchema,
-  kins: { id: 'id', slug: 'slug', name: 'name' },
+  agents: { id: 'id', slug: 'slug', name: 'name' },
   messages: { id: 'id' },
   channels: { id: 'id' },
 }))
@@ -127,7 +127,7 @@ mock.module('@/server/channels/index', () => ({
 }))
 
 mock.module('@/server/sse/index', () => ({
-  sseManager: { broadcast: () => undefined, sendToKin: () => undefined },
+  sseManager: { broadcast: () => undefined, sendToAgent: () => undefined },
 }))
 
 mock.module('@/server/logger', () => ({
@@ -159,8 +159,8 @@ const itMocked = _mocksWorking ? it : it.skip
 
 function executeTool(registration: ToolRegistration, input: Record<string, unknown> = {}, ctxOverrides: Record<string, unknown> = {}) {
   const t = registration.create({
-    kinId: 'caller-kin',
-    isSubKin: false,
+    agentId: 'caller-agent',
+    isSubAgent: false,
     ...ctxOverrides,
   })
   return (t as any).execute(input, { toolCallId: 'tc-1', messages: [], abortSignal: new AbortController().signal })
@@ -168,57 +168,57 @@ function executeTool(registration: ToolRegistration, input: Record<string, unkno
 
 beforeEach(() => {
   mockGetChannelOriginMeta.mockReset()
-  mockResolveKinId.mockReset()
+  mockResolveAgentId.mockReset()
   mockTransferChannel.mockReset()
   // Default: happy path, returns a successful transfer payload.
   mockTransferChannel.mockResolvedValue({
     ok: true,
     transferredAt: 1700000000000,
-    previousKinSlug: 'kinbot-master',
-    newKinSlug: 'kube-master',
-    fromKinId: 'kin-source',
-    fromKinName: 'KinBot Master',
-    toKinId: 'kin-target',
-    toKinName: 'Kube Master',
+    previousAgentSlug: 'hivekeep-master',
+    newAgentSlug: 'kube-master',
+    fromAgentId: 'agent-source',
+    fromAgentName: 'Hivekeep Master',
+    toAgentId: 'agent-target',
+    toAgentName: 'Kube Master',
   } as TransferResult)
 })
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('transferChannelTool (wrapper around transferChannel service)', () => {
-  itMocked('forwards explicit channelId + resolved Kin UUID + reason + initiatedBy="tool" to the service', async () => {
-    mockResolveKinId.mockReturnValue('kin-target')
+  itMocked('forwards explicit channelId + resolved Agent UUID + reason + initiatedBy="tool" to the service', async () => {
+    mockResolveAgentId.mockReturnValue('agent-target')
 
     const result = await executeTool(transferChannelTool, {
       channelId: 'ch-1',
-      targetKinSlug: 'kube-master',
+      targetAgentSlug: 'kube-master',
       reason: 'Nicolas wants to talk to Kube Master about the cluster',
     })
 
     expect(result.ok).toBe(true)
-    expect(result.previousKinSlug).toBe('kinbot-master')
-    expect(result.newKinSlug).toBe('kube-master')
+    expect(result.previousAgentSlug).toBe('hivekeep-master')
+    expect(result.newAgentSlug).toBe('kube-master')
 
     expect(mockTransferChannel).toHaveBeenCalledTimes(1)
     const args = (mockTransferChannel.mock.calls as any[])[0][0]
     expect(args.channelId).toBe('ch-1')
-    expect(args.targetKinId).toBe('kin-target')
+    expect(args.targetAgentId).toBe('agent-target')
     expect(args.reason).toBe('Nicolas wants to talk to Kube Master about the cluster')
     expect(args.initiatedBy).toBe('tool')
-    expect(args.calledByKinId).toBe('caller-kin')
+    expect(args.calledByAgentId).toBe('caller-agent')
   })
 
   itMocked('propagates the service no-op result to the caller', async () => {
-    mockResolveKinId.mockReturnValue('kin-target')
+    mockResolveAgentId.mockReturnValue('agent-target')
     mockTransferChannel.mockResolvedValue({
       ok: true,
       noop: true,
-      message: 'Channel is already bound to this Kin.',
+      message: 'Channel is already bound to this Agent.',
     })
 
     const result = await executeTool(transferChannelTool, {
       channelId: 'ch-1',
-      targetKinSlug: 'kube-master',
+      targetAgentSlug: 'kube-master',
     })
 
     expect(result.ok).toBe(true)
@@ -227,7 +227,7 @@ describe('transferChannelTool (wrapper around transferChannel service)', () => {
   })
 
   itMocked('returns the service error verbatim when transferChannel fails', async () => {
-    mockResolveKinId.mockReturnValue('kin-target')
+    mockResolveAgentId.mockReturnValue('agent-target')
     mockTransferChannel.mockResolvedValue({
       ok: false,
       error: 'Channel "ch-missing" not found.',
@@ -235,27 +235,27 @@ describe('transferChannelTool (wrapper around transferChannel service)', () => {
 
     const result = await executeTool(transferChannelTool, {
       channelId: 'ch-missing',
-      targetKinSlug: 'kube-master',
+      targetAgentSlug: 'kube-master',
     })
 
     expect(result.error).toContain('Channel "ch-missing" not found')
   })
 
-  itMocked('returns an error and does NOT call the service when the target Kin slug is unknown', async () => {
-    mockResolveKinId.mockReturnValue(null)
+  itMocked('returns an error and does NOT call the service when the target Agent slug is unknown', async () => {
+    mockResolveAgentId.mockReturnValue(null)
 
     const result = await executeTool(transferChannelTool, {
       channelId: 'ch-1',
-      targetKinSlug: 'no-such-kin',
+      targetAgentSlug: 'no-such-agent',
     })
 
-    expect(result.error).toContain('Kin "no-such-kin" not found')
+    expect(result.error).toContain('Agent "no-such-agent" not found')
     expect(mockTransferChannel).not.toHaveBeenCalled()
   })
 
   itMocked('errors out when channelId is missing and cannot be inferred from context', async () => {
     const result = await executeTool(transferChannelTool, {
-      targetKinSlug: 'kube-master',
+      targetAgentSlug: 'kube-master',
     })
 
     expect(result.error).toContain('channelId could not be inferred')
@@ -271,11 +271,11 @@ describe('transferChannelTool (wrapper around transferChannel service)', () => {
       createdAt: Date.now(),
       ttlMs: 60000,
     })
-    mockResolveKinId.mockReturnValue('kin-target')
+    mockResolveAgentId.mockReturnValue('agent-target')
 
     const result = await executeTool(
       transferChannelTool,
-      { targetKinSlug: 'kube-master' },
+      { targetAgentSlug: 'kube-master' },
       { channelOriginId: 'queue-item-42' },
     )
 
@@ -286,8 +286,8 @@ describe('transferChannelTool (wrapper around transferChannel service)', () => {
 
   itMocked('rejects a reason longer than 200 characters via the Zod schema (before reaching the service)', async () => {
     const tooLong = 'x'.repeat(201)
-    const t = transferChannelTool.create({ kinId: 'caller-kin', isSubKin: false })
-    const parsed = t.inputSchema.safeParse({ channelId: 'ch-1', targetKinSlug: 's', reason: tooLong })
+    const t = transferChannelTool.create({ agentId: 'caller-agent', isSubAgent: false })
+    const parsed = t.inputSchema.safeParse({ channelId: 'ch-1', targetAgentSlug: 's', reason: tooLong })
     expect(parsed.success).toBe(false)
   })
 })

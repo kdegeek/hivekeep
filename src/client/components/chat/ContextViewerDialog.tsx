@@ -112,7 +112,7 @@ interface ContextPreviewData {
    *  When present, the visualizer shows it alongside the local breakdown
    *  estimate with a vertical marker and a "non attribué" gap segment. */
   apiContextTokens?: number
-  /** Per-Kin EMA-smoothed factor (api / raw_BPE) applied to the section + per-message
+  /** Per-Agent EMA-smoothed factor (api / raw_BPE) applied to the section + per-message
    *  estimates above. 1.0 = no calibration yet. UI surfaces it as a small chip
    *  on the estimate row when meaningfully different from 1. */
   calibrationFactor?: number | null
@@ -257,12 +257,12 @@ function formatDateRange(from: string, to: string): string {
 interface ContextViewerDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  kinId: string
+  agentId: string
   taskId?: string
   sessionId?: string
 }
 
-export function ContextViewerDialog({ open, onOpenChange, kinId, taskId, sessionId }: ContextViewerDialogProps) {
+export function ContextViewerDialog({ open, onOpenChange, agentId, taskId, sessionId }: ContextViewerDialogProps) {
   const { t } = useTranslation()
   const { copy, copied } = useCopyToClipboard()
   const [data, setData] = useState<ContextPreviewData | null>(null)
@@ -315,7 +315,7 @@ export function ContextViewerDialog({ open, onOpenChange, kinId, taskId, session
       if (taskId) params.set('taskId', taskId)
       if (sessionId) params.set('sessionId', sessionId)
       const qs = params.toString()
-      const res = await fetch(`/api/kins/${kinId}/context-preview${qs ? `?${qs}` : ''}`)
+      const res = await fetch(`/api/agents/${agentId}/context-preview${qs ? `?${qs}` : ''}`)
       if (!res.ok) {
         const body = await res.json().catch(() => null)
         throw new Error(body?.error?.message ?? `HTTP ${res.status}`)
@@ -427,7 +427,7 @@ export function ContextViewerDialog({ open, onOpenChange, kinId, taskId, session
                       ~ {t('chat.contextSource.estimate', { defaultValue: 'est.' })}
                     </span>
                     <span>{t('chat.contextSource.estimateLabel', { defaultValue: 'Local estimate' })}</span>
-                    {/* Calibration chip — visible only when the per-Kin learned
+                    {/* Calibration chip — visible only when the per-Agent learned
                         factor meaningfully diverges from 1 (>=10% adjustment).
                         Tells the user the displayed estimate is auto-corrected
                         against past API observations, not raw BPE output. */}

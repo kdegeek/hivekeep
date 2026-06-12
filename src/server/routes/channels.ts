@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { db } from '@/server/db/index'
-import { kins } from '@/server/db/schema'
+import { agents } from '@/server/db/schema'
 import {
   createChannel,
   getChannel,
@@ -19,7 +19,7 @@ import {
   applyChannelDeliveryStatusUpdate,
   transferChannel,
 } from '@/server/services/channels'
-import { resolveKinId } from '@/server/services/kin-resolver'
+import { resolveAgentId } from '@/server/services/agent-resolver'
 import type { AppVariables } from '@/server/app'
 import { channelAdapters } from '@/server/channels/index'
 import {
@@ -34,13 +34,13 @@ const log = createLogger('routes:channels')
 
 export const channelRoutes = new Hono<{ Variables: AppVariables }>()
 
-function kinAvatarUrl(kinId: string, avatarPath: string | null): string | null {
+function agentAvatarUrl(agentId: string, avatarPath: string | null): string | null {
   if (!avatarPath) return null
   const ext = avatarPath.split('.').pop() ?? 'png'
-  return `/api/uploads/kins/${kinId}/avatar.${ext}`
+  return `/api/uploads/agents/${agentId}/avatar.${ext}`
 }
 
-interface KinInfo { name: string; avatarPath: string | null }
+interface AgentInfo { name: string; avatarPath: string | null }
 
 /**
  * The public URL Twilio (or any webhook-driven plugin platform) must call to
@@ -57,12 +57,12 @@ function channelWebhookUrl(platform: string, channelId: string): string | null {
   return `${base}/api/channels/plugin/${platform}/webhook/${channelId}`
 }
 
-function serializeChannel(channel: any, kinInfo?: KinInfo, pendingApprovalCount = 0): ChannelSummary {
+function serializeChannel(channel: any, agentInfo?: AgentInfo, pendingApprovalCount = 0): ChannelSummary {
   return {
     id: channel.id,
-    kinId: channel.kinId,
-    kinName: kinInfo?.name ?? 'Unknown',
-    kinAvatarUrl: kinInfo ? kinAvatarUrl(channel.kinId, kinInfo.avatarPath) : null,
+    agentId: channel.agentId,
+    agentName: agentInfo?.name ?? 'Unknown',
+    agentAvatarUrl: agentInfo ? agentAvatarUrl(channel.agentId, agentInfo.avatarPath) : null,
     name: channel.name,
     platform: channel.platform,
     status: channel.status,
@@ -78,17 +78,17 @@ function serializeChannel(channel: any, kinInfo?: KinInfo, pendingApprovalCount 
   }
 }
 
-// GET /api/channels — list channels with optional kinId filter
+// GET /api/channels — list channels with optional agentId filter
 channelRoutes.get('/', async (c) => {
-  const kinId = c.req.query('kinId')
-  const allChannels = await listChannels(kinId ?? undefined)
+  const agentId = c.req.query('agentId')
+  const allChannels = await listChannels(agentId ?? undefined)
 
-  // Fetch kin info
-  const kinIds = [...new Set(allChannels.map((ch) => ch.kinId))]
-  const kinMap = new Map<string, KinInfo>()
-  for (const id of kinIds) {
-    const kin = await db.select({ name: kins.name, avatarPath: kins.avatarPath }).from(kins).where(eq(kins.id, id)).get()
-    if (kin) kinMap.set(id, kin)
+  // Fetch agent info
+  const agentIds = [...new Set(allChannels.map((ch) => ch.agentId))]
+  const agentMap = new Map<string, AgentInfo>()
+  for (const id of agentIds) {
+    const agent = await db.select({ name: agents.name, avatarPath: agents.avatarPath }).from(agents).where(eq(agents.id, id)).get()
+    if (agent) agentMap.set(id, agent)
   }
 
   // Fetch pending approval counts per channel
@@ -98,7 +98,7 @@ channelRoutes.get('/', async (c) => {
   }
 
   return c.json({
-    channels: allChannels.map((ch) => serializeChannel(ch, kinMap.get(ch.kinId), pendingCounts.get(ch.id) ?? 0)),
+    channels: allChannels.map((ch) => serializeChannel(ch, agentMap.get(ch.agentId), pendingCounts.get(ch.id) ?? 0)),
   })
 })
 
@@ -174,7 +174,7 @@ channelRoutes.post('/plugin/:platform/webhook/:channelId', async (c) => {
 // POST /api/channels — create a channel
 channelRoutes.post('/', async (c) => {
   const body = await c.req.json<{
-    kinId: string
+    agentId: string
     name: string
     platform: string
     platformConfig?: Record<string, unknown>
@@ -182,9 +182,9 @@ channelRoutes.post('/', async (c) => {
     autoCreateContacts?: boolean
   }>()
 
-  if (!body.kinId || !body.name || !body.platform) {
+  if (!body.agentId || !body.name || !body.platform) {
     return c.json(
-      { error: { code: 'VALIDATION_ERROR', message: 'kinId, name, and platform are required' } },
+      { error: { code: 'VALIDATION_ERROR', message: 'agentId, name, and platform are required' } },
       400,
     )
   }
@@ -218,15 +218,15 @@ channelRoutes.post('/', async (c) => {
     }
   }
 
-  // Verify Kin exists
-  const kin = await db.select({ name: kins.name, avatarPath: kins.avatarPath }).from(kins).where(eq(kins.id, body.kinId)).get()
-  if (!kin) {
-    return c.json({ error: { code: 'NOT_FOUND', message: 'Kin not found' } }, 404)
+  // Verify Agent exists
+  const agent = await db.select({ name: agents.name, avatarPath: agents.avatarPath }).from(agents).where(eq(agents.id, body.agentId)).get()
+  if (!agent) {
+    return c.json({ error: { code: 'NOT_FOUND', message: 'Agent not found' } }, 404)
   }
 
   try {
     const channel = await createChannel({
-      kinId: body.kinId,
+      agentId: body.agentId,
       name: body.name,
       platform: body.platform,
       platformConfig,
@@ -235,7 +235,7 @@ channelRoutes.post('/', async (c) => {
       createdBy: 'user',
     })
 
-    return c.json({ channel: serializeChannel(channel, kin) }, 201)
+    return c.json({ channel: serializeChannel(channel, agent) }, 201)
   } catch (err) {
     return c.json(
       { error: { code: 'CHANNEL_CREATE_ERROR', message: err instanceof Error ? err.message : 'Unknown error' } },
@@ -252,8 +252,8 @@ channelRoutes.get('/:id', async (c) => {
     return c.json({ error: { code: 'NOT_FOUND', message: 'Channel not found' } }, 404)
   }
 
-  const kin = await db.select({ name: kins.name, avatarPath: kins.avatarPath }).from(kins).where(eq(kins.id, channel.kinId)).get()
-  return c.json({ channel: serializeChannel(channel, kin ?? undefined) })
+  const agent = await db.select({ name: agents.name, avatarPath: agents.avatarPath }).from(agents).where(eq(agents.id, channel.agentId)).get()
+  return c.json({ channel: serializeChannel(channel, agent ?? undefined) })
 })
 
 // PATCH /api/channels/:id — update a channel
@@ -266,31 +266,31 @@ channelRoutes.patch('/:id', async (c) => {
 
   const body = await c.req.json<{
     name?: string
-    kinId?: string
+    agentId?: string
     allowedChatIds?: string[] | null
     autoCreateContacts?: boolean
   }>()
 
-  // Block silent kinId mutations: re-binding a channel triggers system
+  // Block silent agentId mutations: re-binding a channel triggers system
   // events, the sideband hint, the SSE broadcast, and onIdentityChange.
-  // Any caller that bypassed this and PATCHed kinId directly would skip
+  // Any caller that bypassed this and PATCHed agentId directly would skip
   // all of that and leave the system in a half-state. Route them to the
   // transfer endpoint (or the transfer_channel tool).
-  if (body.kinId !== undefined && body.kinId !== existing.kinId) {
+  if (body.agentId !== undefined && body.agentId !== existing.agentId) {
     return c.json(
       {
         error: {
           code: 'KINID_NOT_PATCHABLE',
-          message: 'To change the bound Kin, use POST /api/channels/:id/transfer or the transfer_channel tool.',
+          message: 'To change the bound Agent, use POST /api/channels/:id/transfer or the transfer_channel tool.',
         },
       },
       400,
     )
   }
 
-  // Strip kinId from the patch even when it matches (no-op) so updateChannel
-  // never sees a kinId at all on this code path.
-  const { kinId: _ignoreKinId, ...patch } = body
+  // Strip agentId from the patch even when it matches (no-op) so updateChannel
+  // never sees a agentId at all on this code path.
+  const { agentId: _ignoreAgentId, ...patch } = body
 
   try {
     const updated = await updateChannel(channelId, patch)
@@ -298,8 +298,8 @@ channelRoutes.patch('/:id', async (c) => {
       return c.json({ error: { code: 'NOT_FOUND', message: 'Channel not found' } }, 404)
     }
 
-    const kin = await db.select({ name: kins.name, avatarPath: kins.avatarPath }).from(kins).where(eq(kins.id, updated.kinId)).get()
-    return c.json({ channel: serializeChannel(updated, kin ?? undefined) })
+    const agent = await db.select({ name: agents.name, avatarPath: agents.avatarPath }).from(agents).where(eq(agents.id, updated.agentId)).get()
+    return c.json({ channel: serializeChannel(updated, agent ?? undefined) })
   } catch (err) {
     return c.json(
       { error: { code: 'CHANNEL_UPDATE_ERROR', message: err instanceof Error ? err.message : 'Unknown error' } },
@@ -308,7 +308,7 @@ channelRoutes.patch('/:id', async (c) => {
   }
 })
 
-// POST /api/channels/:id/transfer — re-bind a channel to a different Kin
+// POST /api/channels/:id/transfer — re-bind a channel to a different Agent
 //
 // Shared entry point for UI driven transfers. Calls the same
 // transferChannel() service that the transfer_channel tool uses, so the
@@ -322,14 +322,14 @@ channelRoutes.post('/:id/transfer', async (c) => {
   }
 
   const body = await c.req.json<{
-    targetKinId?: string
-    targetKinSlug?: string
+    targetAgentId?: string
+    targetAgentSlug?: string
     reason?: string
   }>()
 
-  if (!body.targetKinId && !body.targetKinSlug) {
+  if (!body.targetAgentId && !body.targetAgentSlug) {
     return c.json(
-      { error: { code: 'VALIDATION_ERROR', message: 'targetKinId or targetKinSlug is required.' } },
+      { error: { code: 'VALIDATION_ERROR', message: 'targetAgentId or targetAgentSlug is required.' } },
       400,
     )
   }
@@ -341,19 +341,19 @@ channelRoutes.post('/:id/transfer', async (c) => {
     )
   }
 
-  // Resolve to a UUID; accept either targetKinId (UUID expected) or
-  // targetKinSlug (slug or UUID, normalized via the resolver).
-  const targetKinId = body.targetKinId ?? (body.targetKinSlug ? resolveKinId(body.targetKinSlug) : null)
-  if (!targetKinId) {
+  // Resolve to a UUID; accept either targetAgentId (UUID expected) or
+  // targetAgentSlug (slug or UUID, normalized via the resolver).
+  const targetAgentId = body.targetAgentId ?? (body.targetAgentSlug ? resolveAgentId(body.targetAgentSlug) : null)
+  if (!targetAgentId) {
     return c.json(
-      { error: { code: 'NOT_FOUND', message: `Target Kin "${body.targetKinId ?? body.targetKinSlug}" not found.` } },
+      { error: { code: 'NOT_FOUND', message: `Target Agent "${body.targetAgentId ?? body.targetAgentSlug}" not found.` } },
       404,
     )
   }
 
   const result = await transferChannel({
     channelId,
-    targetKinId,
+    targetAgentId,
     reason: body.reason,
     initiatedBy: 'ui',
   })
@@ -372,18 +372,18 @@ channelRoutes.post('/:id/transfer', async (c) => {
   // On success, return the updated channel envelope plus the transfer info
   // so the caller can update its local state without an extra GET.
   const updated = await getChannel(channelId)
-  const kin = updated
-    ? await db.select({ name: kins.name, avatarPath: kins.avatarPath }).from(kins).where(eq(kins.id, updated.kinId)).get()
+  const agent = updated
+    ? await db.select({ name: agents.name, avatarPath: agents.avatarPath }).from(agents).where(eq(agents.id, updated.agentId)).get()
     : undefined
 
   return c.json({
     ok: true,
     transferredAt: result.transferredAt,
-    previousKinSlug: result.previousKinSlug,
-    newKinSlug: result.newKinSlug,
-    fromKinName: result.fromKinName,
-    toKinName: result.toKinName,
-    channel: updated ? serializeChannel(updated, kin ?? undefined) : null,
+    previousAgentSlug: result.previousAgentSlug,
+    newAgentSlug: result.newAgentSlug,
+    fromAgentName: result.fromAgentName,
+    toAgentName: result.toAgentName,
+    channel: updated ? serializeChannel(updated, agent ?? undefined) : null,
   })
 })
 
@@ -419,8 +419,8 @@ channelRoutes.post('/:id/activate', async (c) => {
     return c.json({ error: { code: 'ACTIVATE_ERROR', message: 'Failed to activate channel' } }, 500)
   }
 
-  const kin = await db.select({ name: kins.name, avatarPath: kins.avatarPath }).from(kins).where(eq(kins.id, channel.kinId)).get()
-  return c.json({ channel: serializeChannel(channel, kin ?? undefined) })
+  const agent = await db.select({ name: agents.name, avatarPath: agents.avatarPath }).from(agents).where(eq(agents.id, channel.agentId)).get()
+  return c.json({ channel: serializeChannel(channel, agent ?? undefined) })
 })
 
 // POST /api/channels/:id/deactivate — deactivate a channel
@@ -436,8 +436,8 @@ channelRoutes.post('/:id/deactivate', async (c) => {
     return c.json({ error: { code: 'DEACTIVATE_ERROR', message: 'Failed to deactivate channel' } }, 500)
   }
 
-  const kin = await db.select({ name: kins.name, avatarPath: kins.avatarPath }).from(kins).where(eq(kins.id, channel.kinId)).get()
-  return c.json({ channel: serializeChannel(channel, kin ?? undefined) })
+  const agent = await db.select({ name: agents.name, avatarPath: agents.avatarPath }).from(agents).where(eq(agents.id, channel.agentId)).get()
+  return c.json({ channel: serializeChannel(channel, agent ?? undefined) })
 })
 
 // POST /api/channels/:id/test — test channel connection

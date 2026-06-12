@@ -9,8 +9,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/client/components/ui/collapsible'
-import { KinSelector } from '@/client/components/common/KinSelector'
-import type { KinOption } from '@/client/components/common/KinSelectItem'
+import { AgentSelector } from '@/client/components/common/AgentSelector'
+import type { AgentOption } from '@/client/components/common/AgentSelectItem'
 import { PlatformSelector } from '@/client/components/common/PlatformSelector'
 import { DynamicField } from '@/client/components/common/DynamicField'
 import { AlertTriangle, ChevronRight, HelpCircle, Lightbulb } from 'lucide-react'
@@ -68,27 +68,27 @@ interface ChannelFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSave: (data: {
-    kinId: string
+    agentId: string
     name: string
     platform: string
     platformConfig: Record<string, unknown>
   }) => Promise<void>
   /**
    * Patch handler for the in-place edits (name, allowedChatIds, etc).
-   * Must NOT receive a kinId: the server now rejects PATCH /channels/:id
-   * when kinId differs from the current binding; the dialog routes the
-   * kin change through `onTransfer` instead.
+   * Must NOT receive a agentId: the server now rejects PATCH /channels/:id
+   * when agentId differs from the current binding; the dialog routes the
+   * agent change through `onTransfer` instead.
    */
   onUpdate?: (channelId: string, data: { name?: string }) => Promise<void>
   /**
-   * Transfer handler invoked when the user picks a different Kin in the
+   * Transfer handler invoked when the user picks a different Agent in the
    * selector and saves. Fires POST /api/channels/:id/transfer through the
    * shared transferChannel service (system events, sideband hint, SSE,
    * adapter.onIdentityChange).
    */
-  onTransfer?: (channelId: string, data: { targetKinId: string; reason?: string }) => Promise<void>
+  onTransfer?: (channelId: string, data: { targetAgentId: string; reason?: string }) => Promise<void>
   channel?: ChannelSummary | null
-  kins: KinOption[]
+  agents: AgentOption[]
 }
 
 /**
@@ -118,23 +118,23 @@ export function ChannelFormDialog({
   onUpdate,
   onTransfer,
   channel,
-  kins,
+  agents,
 }: ChannelFormDialogProps) {
   const { t } = useTranslation()
   const isEdit = !!channel
   const { platforms } = usePlatforms()
 
-  const [selectedKinId, setSelectedKinId] = useState('')
+  const [selectedAgentId, setSelectedAgentId] = useState('')
   const [name, setName] = useState('')
   const [platform, setPlatform] = useState('')
   const [formValues, setFormValues] = useState<Record<string, unknown>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Transfer reason (only used when the user changes the Kin on edit).
+  // Transfer reason (only used when the user changes the Agent on edit).
   const [transferReason, setTransferReason] = useState('')
 
-  // Kin change detection in edit mode: anything bound to onTransfer below.
-  const kinChanged = isEdit && !!channel && selectedKinId !== '' && selectedKinId !== channel.kinId
+  // Agent change detection in edit mode: anything bound to onTransfer below.
+  const agentChanged = isEdit && !!channel && selectedAgentId !== '' && selectedAgentId !== channel.agentId
 
   const activePlatform = useMemo(
     () => platforms.find((p) => p.platform === platform) ?? null,
@@ -153,12 +153,12 @@ export function ChannelFormDialog({
     if (channel) {
       setName(channel.name)
       setPlatform(channel.platform)
-      setSelectedKinId(channel.kinId)
+      setSelectedAgentId(channel.agentId)
       setFormValues({})
     } else {
       setName('')
       setPlatform(platforms[0]?.platform ?? '')
-      setSelectedKinId('')
+      setSelectedAgentId('')
       setFormValues({})
     }
     // Always reset the transfer reason when the dialog re-opens or the
@@ -182,7 +182,7 @@ export function ChannelFormDialog({
     try {
       if (isEdit && channel) {
         // Edit flow: name (and other patchable fields) go through PATCH;
-        // the Kin change goes through the transfer endpoint so the system
+        // the Agent change goes through the transfer endpoint so the system
         // events, sideband hint, SSE broadcast, and adapter identity
         // switch all fire. If both changed, PATCH first then transfer so
         // the audit-trail rows reference the final channel name.
@@ -190,16 +190,16 @@ export function ChannelFormDialog({
         if (nameChanged && onUpdate) {
           await onUpdate(channel.id, { name })
         }
-        if (kinChanged && onTransfer) {
+        if (agentChanged && onTransfer) {
           await onTransfer(channel.id, {
-            targetKinId: selectedKinId,
+            targetAgentId: selectedAgentId,
             reason: transferReason.trim() ? transferReason.trim() : undefined,
           })
         }
       } else {
-        if (!selectedKinId) return
+        if (!selectedAgentId) return
         await onSave({
-          kinId: selectedKinId,
+          agentId: selectedAgentId,
           name,
           platform,
           platformConfig: formValues,
@@ -219,7 +219,7 @@ export function ChannelFormDialog({
 
   const canSubmit = isEdit
     ? !!name.trim()
-    : !!name.trim() && !!selectedKinId && !!platform && !requiredFieldsMissing
+    : !!name.trim() && !!selectedAgentId && !!platform && !requiredFieldsMissing
 
   return (
     <FormDialog
@@ -249,28 +249,28 @@ export function ChannelFormDialog({
         />
       </FormField>
 
-      {/* Kin selector */}
+      {/* Agent selector */}
       <FormField
-        label={t('settings.channels.kinLabel')}
-        htmlFor="channel-kin"
-        tip={t('settings.channels.kinTip')}
+        label={t('settings.channels.agentLabel')}
+        htmlFor="channel-agent"
+        tip={t('settings.channels.agentTip')}
       >
-        <KinSelector
-          value={selectedKinId}
-          onValueChange={setSelectedKinId}
-          kins={kins}
-          placeholder={t('settings.channels.kinPlaceholder')}
+        <AgentSelector
+          value={selectedAgentId}
+          onValueChange={setSelectedAgentId}
+          agents={agents}
+          placeholder={t('settings.channels.agentPlaceholder')}
         />
-        {kinChanged && (
+        {agentChanged && (
           <p className="flex items-start gap-1.5 text-xs text-warning">
             <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
-            <span>{t('settings.channels.transferWarning', 'Selecting a different Kin will transfer this channel. The previous Kin loses the binding and both Kins get an audit-trail row in their conversation.')}</span>
+            <span>{t('settings.channels.transferWarning', 'Selecting a different Agent will transfer this channel. The previous Agent loses the binding and both Agents get an audit-trail row in their conversation.')}</span>
           </p>
         )}
       </FormField>
 
-      {/* Optional reason: only shown when the user picked a different Kin */}
-      {kinChanged && (
+      {/* Optional reason: only shown when the user picked a different Agent */}
+      {agentChanged && (
         <FormField
           label={t('settings.channels.transferReasonLabel', 'Transfer reason (optional)')}
           htmlFor="channel-transfer-reason"

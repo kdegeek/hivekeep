@@ -14,7 +14,7 @@ const BATCH_SIZE = 20
  * Uses an LLM to rate each memory 1-10 in batches.
  * Returns the number of memories updated.
  */
-export async function backfillImportance(kinId?: string): Promise<{ updated: number; skipped: number }> {
+export async function backfillImportance(agentId?: string): Promise<{ updated: number; skipped: number }> {
   // Same resolution chain as consolidation: explicit consolidation
   // model, then shared compacting model, then any available LLM.
   // Never hardcode a specific provider's model id in core.
@@ -37,7 +37,7 @@ export async function backfillImportance(kinId?: string): Promise<{ updated: num
 
   // Find all memories with null importance
   const conditions = [isNull(memories.importance)]
-  if (kinId) conditions.push(eq(memories.kinId, kinId))
+  if (agentId) conditions.push(eq(memories.agentId, agentId))
 
   const unscored = await db
     .select({ id: memories.id, content: memories.content, category: memories.category, subject: memories.subject })
@@ -46,11 +46,11 @@ export async function backfillImportance(kinId?: string): Promise<{ updated: num
     .all()
 
   if (unscored.length === 0) {
-    log.info({ kinId }, 'No unscored memories found')
+    log.info({ agentId }, 'No unscored memories found')
     return { updated: 0, skipped: 0 }
   }
 
-  log.info({ kinId, count: unscored.length }, 'Starting importance backfill')
+  log.info({ agentId, count: unscored.length }, 'Starting importance backfill')
 
   let updated = 0
   let skipped = 0
@@ -81,7 +81,7 @@ export async function backfillImportance(kinId?: string): Promise<{ updated: num
         resolved,
         prompt,
         callSite: 'importance-backfill',
-        kinId,
+        agentId,
       })
 
       const jsonMatch = result.text.match(/\[[\s\S]*\]/)
@@ -108,6 +108,6 @@ export async function backfillImportance(kinId?: string): Promise<{ updated: num
     }
   }
 
-  log.info({ kinId, updated, skipped }, 'Importance backfill complete')
+  log.info({ agentId, updated, skipped }, 'Importance backfill complete')
   return { updated, skipped }
 }

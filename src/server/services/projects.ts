@@ -1,7 +1,7 @@
 import { eq, and, count, desc, inArray, sql, ne } from 'drizzle-orm'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/server/db/index'
-import { projects, projectTags, tickets, ticketTags, kins } from '@/server/db/schema'
+import { projects, projectTags, tickets, ticketTags, agents } from '@/server/db/schema'
 import { sseManager } from '@/server/sse/index'
 import { config } from '@/server/config'
 import { DEFAULT_PROJECT_TAGS, TICKET_STATUSES, PROJECT_SLUG_REGEX } from '@/shared/constants'
@@ -9,7 +9,7 @@ import { generateSlug, ensureUniqueSlug } from '@/server/utils/slug'
 import { GITHUB_REPO_REGEX, isValidGitBranch } from '@/shared/constants'
 import { startClone, deleteClone } from '@/server/services/repo-clone'
 import { createLogger } from '@/server/logger'
-import type { Project, ProjectSummary, ProjectTag, TicketStatus, KinThinkingConfig, CloneStatus } from '@/shared/types'
+import type { Project, ProjectSummary, ProjectTag, TicketStatus, AgentThinkingConfig, CloneStatus } from '@/shared/types'
 
 const log = createLogger('projects')
 import type { ActiveProjectPromptInfo } from '@/server/services/prompt-builder'
@@ -112,12 +112,21 @@ export async function getProject(projectId: string): Promise<Project | null> {
     fetchTicketCounts(projectId),
   ])
 
-  let thinkingConfig: KinThinkingConfig | null = null
+  let thinkingConfig: AgentThinkingConfig | null = null
   if (row.thinkingConfig) {
     try {
-      thinkingConfig = JSON.parse(row.thinkingConfig) as KinThinkingConfig
+      thinkingConfig = JSON.parse(row.thinkingConfig) as AgentThinkingConfig
     } catch {
       thinkingConfig = null
+    }
+  }
+
+  let scoutThinkingConfig: AgentThinkingConfig | null = null
+  if (row.scoutThinkingConfig) {
+    try {
+      scoutThinkingConfig = JSON.parse(row.scoutThinkingConfig) as AgentThinkingConfig
+    } catch {
+      scoutThinkingConfig = null
     }
   }
 
@@ -150,6 +159,7 @@ export async function getProject(projectId: string): Promise<Project | null> {
     providerId: row.providerId,
     scoutModel: row.scoutModel,
     scoutProviderId: row.scoutProviderId,
+    scoutThinkingConfig,
     thinkingConfig,
     defaultToolboxIds,
     tags,
@@ -182,17 +192,19 @@ export interface CreateProjectInput {
   /** Override the branch sub-task worktrees are created from. Defaults to
    *  'main' at the DB layer; sub-ticket 4 will auto-detect from the repo. */
   defaultBranch?: string
-  /** Default model id for sub-Kin tasks of this project. Must be paired
+  /** Default model id for sub-Agent tasks of this project. Must be paired
    *  with `providerId` — clearing one clears both. */
   model?: string | null
   providerId?: string | null
-  /** Default scout model id for sub-Kin tasks of this project. Must be paired
+  /** Default scout model id for sub-Agent tasks of this project. Must be paired
    *  with `scoutProviderId` — clearing one clears both. */
   scoutModel?: string | null
   scoutProviderId?: string | null
-  /** Default thinking config for sub-Kin tasks of this project. */
-  thinkingConfig?: KinThinkingConfig | null
-  /** Default toolbox selection (toolbox ids) for sub-Kin tasks of this
+  /** Reasoning config for scouts dispatched in this project's context. */
+  scoutThinkingConfig?: AgentThinkingConfig | null
+  /** Default thinking config for sub-Agent tasks of this project. */
+  thinkingConfig?: AgentThinkingConfig | null
+  /** Default toolbox selection (toolbox ids) for sub-Agent tasks of this
    *  project. Empty array / null both mean "inherit the runtime default". */
   defaultToolboxIds?: string[] | null
   /** Optional explicit slug. If omitted, slug is auto-generated from title.
@@ -238,7 +250,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
   }
 
   // model + providerId are tightly coupled at the DB layer (one being set
-  // without the other means "inherit from Kin"). Refuse the partial case.
+  // without the other means "inherit from Agent"). Refuse the partial case.
   const modelSet = input.model !== undefined && input.model !== null && input.model !== ''
   const providerSet = input.providerId !== undefined && input.providerId !== null && input.providerId !== ''
   if (modelSet !== providerSet) {
@@ -267,6 +279,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       providerId: providerSet ? input.providerId : null,
       scoutModel: scoutModelSet ? input.scoutModel : null,
       scoutProviderId: scoutProviderSet ? input.scoutProviderId : null,
+      scoutThinkingConfig: input.scoutThinkingConfig ? JSON.stringify(input.scoutThinkingConfig) : null,
       thinkingConfig: input.thinkingConfig ? JSON.stringify(input.thinkingConfig) : null,
       defaultToolboxIds:
         input.defaultToolboxIds && input.defaultToolboxIds.length > 0
@@ -326,21 +339,24 @@ export interface UpdateProjectInput {
   /** Override the default branch. */
   defaultBranch?: string
   /** New slug. Editable only while the project has zero tickets (avoids
-   *  breaking any external reference like `kinbot#42`). */
+   *  breaking any external reference like `hivekeep#42`). */
   slug?: string
-  /** Default model for sub-Kin tasks of this project. Pass null to clear
-   *  (fall back to each Kin's own model). Must be paired with providerId. */
+  /** Default model for sub-Agent tasks of this project. Pass null to clear
+   *  (fall back to each Agent's own model). Must be paired with providerId. */
   model?: string | null
   providerId?: string | null
-  /** Default scout model for sub-Kin tasks of this project. Pass null to clear
-   *  (fall back to the global scout default → each Kin's own model). Must be
+  /** Default scout model for sub-Agent tasks of this project. Pass null to clear
+   *  (fall back to the global scout default → each Agent's own model). Must be
    *  paired with scoutProviderId. */
   scoutModel?: string | null
   scoutProviderId?: string | null
-  /** Default thinking config for sub-Kin tasks of this project. Pass null
-   *  to clear (fall back to each Kin's own config). */
-  thinkingConfig?: KinThinkingConfig | null
-  /** Default toolbox selection (toolbox ids) for sub-Kin tasks of this
+  /** Reasoning config for scouts dispatched in this project's context. Pass
+   *  null to clear (fall back to the Agent scout thinking → global default). */
+  scoutThinkingConfig?: AgentThinkingConfig | null
+  /** Default thinking config for sub-Agent tasks of this project. Pass null
+   *  to clear (fall back to each Agent's own config). */
+  thinkingConfig?: AgentThinkingConfig | null
+  /** Default toolbox selection (toolbox ids) for sub-Agent tasks of this
    *  project. Pass null or an empty array to clear (inherit the runtime
    *  default). */
   defaultToolboxIds?: string[] | null
@@ -375,6 +391,9 @@ export async function updateProject(
   if (input.providerId !== undefined) update.providerId = input.providerId
   if (input.scoutModel !== undefined) update.scoutModel = input.scoutModel
   if (input.scoutProviderId !== undefined) update.scoutProviderId = input.scoutProviderId
+  if (input.scoutThinkingConfig !== undefined) {
+    update.scoutThinkingConfig = input.scoutThinkingConfig === null ? null : JSON.stringify(input.scoutThinkingConfig)
+  }
   if (input.thinkingConfig !== undefined) {
     update.thinkingConfig = input.thinkingConfig === null ? null : JSON.stringify(input.thinkingConfig)
   }
@@ -509,7 +528,7 @@ export async function deleteProject(projectId: string): Promise<boolean> {
   if (!existing) return false
 
   // Cascades handled by FK ON DELETE CASCADE for tickets/project_tags/ticket_tags.
-  // kins.active_project_id and tasks.ticket_id are reset to NULL by FK ON DELETE SET NULL.
+  // agents.active_project_id and tasks.ticket_id are reset to NULL by FK ON DELETE SET NULL.
   db.delete(projects).where(eq(projects.id, projectId)).run()
 
   sseManager.broadcast({
@@ -520,10 +539,10 @@ export async function deleteProject(projectId: string): Promise<boolean> {
   return true
 }
 
-// ─── Active project per Kin ───────────────────────────────────────────────────
+// ─── Active project per Agent ───────────────────────────────────────────────────
 
 export async function setActiveProject(
-  kinId: string,
+  agentId: string,
   projectId: string | null,
 ): Promise<{ activeProjectId: string | null }> {
   // Validate project exists if non-null
@@ -532,33 +551,33 @@ export async function setActiveProject(
     if (!project) throw new Error('PROJECT_NOT_FOUND')
   }
 
-  const existing = db.select({ id: kins.id }).from(kins).where(eq(kins.id, kinId)).get()
+  const existing = db.select({ id: agents.id }).from(agents).where(eq(agents.id, agentId)).get()
   if (!existing) throw new Error('KIN_NOT_FOUND')
 
-  db.update(kins)
+  db.update(agents)
     .set({ activeProjectId: projectId, updatedAt: new Date() })
-    .where(eq(kins.id, kinId))
+    .where(eq(agents.id, agentId))
     .run()
 
   sseManager.broadcast({
-    type: 'kin:active-project',
-    data: { kinId, activeProjectId: projectId },
+    type: 'agent:active-project',
+    data: { agentId, activeProjectId: projectId },
   })
 
   return { activeProjectId: projectId }
 }
 
-export async function getActiveProjectIdsByKin(): Promise<Map<string, string[]>> {
+export async function getActiveProjectIdsByAgent(): Promise<Map<string, string[]>> {
   const rows = db
-    .select({ kinId: kins.id, projectId: kins.activeProjectId })
-    .from(kins)
-    .where(sql`${kins.activeProjectId} IS NOT NULL`)
+    .select({ agentId: agents.id, projectId: agents.activeProjectId })
+    .from(agents)
+    .where(sql`${agents.activeProjectId} IS NOT NULL`)
     .all()
   const result = new Map<string, string[]>()
   for (const row of rows) {
     if (!row.projectId) continue
     const list = result.get(row.projectId) ?? []
-    list.push(row.kinId)
+    list.push(row.agentId)
     result.set(row.projectId, list)
   }
   return result
@@ -641,7 +660,7 @@ export async function buildActiveProjectInfo(projectId: string): Promise<ActiveP
       title: p.title,
       content: p.content,
       category: p.category,
-      authorKinName: p.authorKinName,
+      authorAgentName: p.authorAgentName,
     }))
     knowledgeIndex = index
     totalKnowledgeCount = total

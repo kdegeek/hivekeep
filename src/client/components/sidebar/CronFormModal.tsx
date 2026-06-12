@@ -10,10 +10,9 @@ import { MarkdownEditor } from '@/client/components/ui/markdown-editor'
 import { ModelPicker, modelPickerValue } from '@/client/components/common/ModelPicker'
 import { ToolboxMultiSelect } from '@/client/components/toolbox/ToolboxMultiSelect'
 import { useToolboxes } from '@/client/hooks/useToolboxes'
-import { KinSelector } from '@/client/components/common/KinSelector'
-import { KinSelectItem, type KinOption } from '@/client/components/common/KinSelectItem'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/client/components/ui/select'
-import type { KinThinkingEffort } from '@/shared/types'
+import { AgentSelector } from '@/client/components/common/AgentSelector'
+import { AgentSelectItem, type AgentOption } from '@/client/components/common/AgentSelectItem'
+import type { AgentThinkingEffort } from '@/shared/types'
 import { Switch } from '@/client/components/ui/switch'
 import { Sparkles, Trash2, Bell, AlertTriangle } from 'lucide-react'
 import { UnsavedChangesDialog } from '@/client/components/common/UnsavedChangesDialog'
@@ -24,35 +23,30 @@ import { getErrorMessage } from '@/client/lib/api'
 import { cronToHuman, isISODatetime } from '@/client/lib/cron-human'
 import { cronNextRuns } from '@/client/lib/cron-next'
 import type { CronSummary } from '@/shared/types'
-
-interface LLMModel {
-  id: string
-  name: string
-  providerId: string
-  providerName: string
-  providerType: string
-  capability: string
-}
+import type { ProviderModel } from '@/client/hooks/useModels'
+import { modelReasoningInfo, clampEffort } from '@/client/lib/model-efforts'
+import { ThinkingEffortSelect } from '@/client/components/common/ThinkingEffortSelect'
+import type { ThinkingChoice } from '@/client/lib/thinking-choice'
 
 interface CronFormModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  kins: KinOption[]
-  llmModels: LLMModel[]
+  agents: AgentOption[]
+  llmModels: ProviderModel[]
   cron?: CronSummary | null
   /** Pre-fill values for create mode (used when duplicating). */
   defaults?: Partial<CronSummary> | null
   onCreate?: (data: {
-    kinId: string
+    agentId: string
     name: string
     schedule: string
     taskDescription: string
-    targetKinId?: string
+    targetAgentId?: string
     model?: string
     providerId?: string
     runOnce?: boolean
     triggerParentTurn?: boolean
-    thinkingEffort?: KinThinkingEffort | null
+    thinkingEffort?: AgentThinkingEffort | null
     toolboxIds?: string[]
   }) => Promise<CronSummary>
   onUpdate?: (id: string, updates: Record<string, unknown>) => Promise<CronSummary>
@@ -74,7 +68,7 @@ const CRON_PRESETS = [
 export function CronFormModal({
   open,
   onOpenChange,
-  kins,
+  agents,
   llmModels,
   cron,
   defaults,
@@ -94,26 +88,58 @@ export function CronFormModal({
   })
 
   const [name, setName] = useState('')
-  const [kinId, setKinId] = useState('')
+  const [agentId, setAgentId] = useState('')
   const [schedule, setSchedule] = useState('')
   const [runOnce, setRunOnce] = useState(false)
   const [triggerParentTurn, setTriggerParentTurn] = useState(false)
   const [scheduleDatetime, setScheduleDatetime] = useState('')
   const [taskDescription, setTaskDescription] = useState('')
-  const [targetKinId, setTargetKinId] = useState<string>('')
+  const [targetAgentId, setTargetAgentId] = useState<string>('')
   const [model, setModel] = useState('')
   const [modelProviderId, setModelProviderId] = useState('')
-  const [thinkingEffort, setThinkingEffort] = useState<KinThinkingEffort | 'off'>('medium')
+  const [thinkingEffort, setThinkingEffort] = useState<AgentThinkingEffort | 'off'>('medium')
   const [selectedToolboxIds, setSelectedToolboxIds] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Effort options follow the model override's registry metadata. No override →
+  // the executing model is resolved server-side (target agent / defaults), so
+  // offer the generic ladder and let the provider clamp at run time.
+  const modelReasoning = useMemo(
+    () => (model
+      ? modelReasoningInfo(llmModels.find((m) => m.id === model && (!modelProviderId || m.providerId === modelProviderId)))
+      : undefined),
+    [model, modelProviderId, llmModels],
+  )
+  // Toggle-only models have no effort dial: an enabled cron shows as 'on'.
+  const thinkingChoice: ThinkingChoice = thinkingEffort === 'off'
+    ? 'off'
+    : modelReasoning?.kind === 'toggle' ? 'on' : thinkingEffort
+  const handleThinkingChoice = (v: ThinkingChoice) => {
+    // 'on' (toggle-only) keeps a concrete effort in state — the provider
+    // ignores granularity for those models; 'inherit' never offered here.
+    if (v === 'off') setThinkingEffort('off')
+    else if (v === 'on') setThinkingEffort('medium')
+    else if (v !== 'inherit') setThinkingEffort(v)
+    markDirty()
+  }
+  // Clamp a stale effort when the model override changes under it.
+  useEffect(() => {
+    if (!modelReasoning || thinkingEffort === 'off') return
+    if (modelReasoning.kind === 'unsupported') { setThinkingEffort('off'); return }
+    if (modelReasoning.kind === 'levels' && !modelReasoning.efforts.includes(thinkingEffort)) {
+      const clamped = clampEffort(thinkingEffort, modelReasoning)
+      if (clamped) setThinkingEffort(clamped)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelReasoning])
 
   // Populate form when editing or reset for create
   useEffect(() => {
     if (open) {
       if (cron) {
         setName(cron.name)
-        setKinId(cron.kinId)
+        setAgentId(cron.agentId)
         const isOneShot = cron.runOnce && isISODatetime(cron.schedule)
         setRunOnce(cron.runOnce ?? false)
         setTriggerParentTurn(cron.triggerParentTurn ?? false)
@@ -125,33 +151,33 @@ export function CronFormModal({
           setScheduleDatetime('')
         }
         setTaskDescription(cron.taskDescription)
-        setTargetKinId(cron.targetKinId ?? '')
+        setTargetAgentId(cron.targetAgentId ?? '')
         setModel(cron.model ?? '')
         setModelProviderId(cron.providerId ?? '')
         setThinkingEffort(cron.thinkingEffort ?? (cron.thinkingEnabled ? 'medium' : 'off'))
         setSelectedToolboxIds(cron.toolboxIds ?? [])
       } else if (defaults) {
         setName(defaults.name ?? '')
-        setKinId(defaults.kinId ?? (kins.length === 1 ? kins[0]!.id : ''))
+        setAgentId(defaults.agentId ?? (agents.length === 1 ? agents[0]!.id : ''))
         setRunOnce(defaults.runOnce ?? false)
         setTriggerParentTurn(defaults.triggerParentTurn ?? false)
         setSchedule(defaults.schedule ?? '')
         setScheduleDatetime('')
         setTaskDescription(defaults.taskDescription ?? '')
-        setTargetKinId(defaults.targetKinId ?? '')
+        setTargetAgentId(defaults.targetAgentId ?? '')
         setModel(defaults.model ?? '')
         setModelProviderId(defaults.providerId ?? '')
         setThinkingEffort(defaults.thinkingEffort ?? (defaults.thinkingEnabled ? 'medium' : 'off'))
         setSelectedToolboxIds(defaults.toolboxIds ?? [])
       } else {
         setName('')
-        setKinId(kins.length === 1 ? kins[0]!.id : '')
+        setAgentId(agents.length === 1 ? agents[0]!.id : '')
         setRunOnce(false)
         setTriggerParentTurn(false)
         setSchedule('')
         setScheduleDatetime('')
         setTaskDescription('')
-        setTargetKinId('')
+        setTargetAgentId('')
         setModel('')
         setModelProviderId('')
         setThinkingEffort('medium')
@@ -160,7 +186,7 @@ export function CronFormModal({
       setError(null)
       resetDirty()
     }
-  }, [open, cron, defaults, kins, resetDirty])
+  }, [open, cron, defaults, agents, resetDirty])
 
   async function handleSubmit() {
     setError(null)
@@ -168,7 +194,7 @@ export function CronFormModal({
 
     const effectiveSchedule = runOnce && scheduleDatetime ? scheduleDatetime : schedule
 
-    const effortPayload: KinThinkingEffort | null = thinkingEffort === 'off' ? null : thinkingEffort
+    const effortPayload: AgentThinkingEffort | null = thinkingEffort === 'off' ? null : thinkingEffort
 
     try {
       if (isEdit && onUpdate && cron) {
@@ -176,7 +202,7 @@ export function CronFormModal({
           name,
           schedule: effectiveSchedule,
           taskDescription,
-          targetKinId: targetKinId || null,
+          targetAgentId: targetAgentId || null,
           model: model || null,
           providerId: modelProviderId || null,
           runOnce,
@@ -186,11 +212,11 @@ export function CronFormModal({
         })
       } else if (onCreate) {
         await onCreate({
-          kinId,
+          agentId,
           name,
           schedule: effectiveSchedule,
           taskDescription,
-          targetKinId: targetKinId || undefined,
+          targetAgentId: targetAgentId || undefined,
           model: model || undefined,
           providerId: modelProviderId || undefined,
           runOnce: runOnce || undefined,
@@ -222,7 +248,7 @@ export function CronFormModal({
     }
   }
 
-  const selectedKin = kins.find((k) => k.id === kinId)
+  const selectedAgent = agents.find((k) => k.id === agentId)
   const effectiveScheduleForDisplay = runOnce && scheduleDatetime ? scheduleDatetime : schedule
   const scheduleHuman = useMemo(() => cronToHuman(effectiveScheduleForDisplay, i18n.language), [effectiveScheduleForDisplay, i18n.language])
   const scheduleInvalid = useMemo(() => {
@@ -243,7 +269,7 @@ export function CronFormModal({
     (runOnce ? !scheduleDatetime : !schedule) ||
     scheduleInvalid ||
     !taskDescription ||
-    (!isEdit && !kinId)
+    (!isEdit && !agentId)
 
   return (
     <>
@@ -310,18 +336,18 @@ export function CronFormModal({
           />
         </FormField>
 
-        {/* Owner Kin */}
-        <FormField label={t('cron.create.kin')} tip={t('cron.create.kinTip')}>
+        {/* Owner Agent */}
+        <FormField label={t('cron.create.agent')} tip={t('cron.create.agentTip')}>
           {isEdit ? (
             <div className="flex items-center gap-2.5 rounded-md border border-input bg-muted/30 px-3 py-2">
-              {selectedKin && <KinSelectItem kin={selectedKin} />}
+              {selectedAgent && <AgentSelectItem agent={selectedAgent} />}
             </div>
           ) : (
-            <KinSelector
-              value={kinId}
-              onValueChange={setKinId}
-              kins={kins}
-              placeholder={t('cron.create.kinPlaceholder')}
+            <AgentSelector
+              value={agentId}
+              onValueChange={setAgentId}
+              agents={agents}
+              placeholder={t('cron.create.agentPlaceholder')}
               required
             />
           )}
@@ -445,16 +471,16 @@ export function CronFormModal({
           />
         </FormField>
 
-        {/* Target Kin (optional) */}
+        {/* Target Agent (optional) */}
         <FormField
-          label={t('cron.create.targetKin')}
-          tip={t('cron.create.targetKinTip')}
-          hint={t('cron.create.targetKinHint')}
+          label={t('cron.create.targetAgent')}
+          tip={t('cron.create.targetAgentTip')}
+          hint={t('cron.create.targetAgentHint')}
         >
-          <KinSelector
-            value={targetKinId}
-            onValueChange={setTargetKinId}
-            kins={kins}
+          <AgentSelector
+            value={targetAgentId}
+            onValueChange={setTargetAgentId}
+            agents={agents}
             placeholder="—"
             noneLabel="—"
           />
@@ -480,21 +506,11 @@ export function CronFormModal({
             </>
           }
         >
-          <Select
-            value={thinkingEffort}
-            onValueChange={(v) => { setThinkingEffort(v as KinThinkingEffort | 'off'); markDirty() }}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="off">{t('chat.thinkingPicker.effort.off')}</SelectItem>
-              <SelectItem value="low">{t('chat.thinkingPicker.effort.low')}</SelectItem>
-              <SelectItem value="medium">{t('chat.thinkingPicker.effort.medium')}</SelectItem>
-              <SelectItem value="high">{t('chat.thinkingPicker.effort.high')}</SelectItem>
-              <SelectItem value="max">{t('chat.thinkingPicker.effort.max')}</SelectItem>
-            </SelectContent>
-          </Select>
+          <ThinkingEffortSelect
+            value={thinkingChoice}
+            onChange={handleThinkingChoice}
+            reasoning={modelReasoning}
+          />
         </FormField>
 
         {/* Toolboxes */}

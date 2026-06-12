@@ -20,10 +20,10 @@ mock.module('@/server/services/wakeup-scheduler', () => ({
   listPendingWakeups: mockListPendingWakeups,
 }))
 
-const mockResolveKinId = mock(() => null as string | null)
+const mockResolveAgentId = mock(() => null as string | null)
 
-mock.module('@/server/services/kin-resolver', () => ({
-  resolveKinId: mockResolveKinId,
+mock.module('@/server/services/agent-resolver', () => ({
+  resolveAgentId: mockResolveAgentId,
 }))
 
 mock.module('@/server/config', () => ({
@@ -48,7 +48,7 @@ const { wakeMeInTool, wakeMeEveryTool, cancelWakeupTool, listWakeupsTool } = awa
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const ctx = { kinId: 'kin-abc', taskId: undefined, isSubKin: false }
+const ctx = { agentId: 'agent-abc', taskId: undefined, isSubAgent: false }
 
 function getExecute(registration: ToolRegistration) {
   const t = registration.create(ctx)
@@ -64,7 +64,7 @@ describe('wakeup-tools', () => {
     mockScheduleRecurringWakeup.mockClear()
     mockCancelWakeup.mockClear()
     mockListPendingWakeups.mockClear()
-    mockResolveKinId.mockClear()
+    mockResolveAgentId.mockClear()
   })
 
   // ── Availability ────────────────────────────────────────────────────────
@@ -85,8 +85,8 @@ describe('wakeup-tools', () => {
       const result = await execute({ seconds: 300 })
 
       expect(mockScheduleWakeup).toHaveBeenCalledWith({
-        callerKinId: 'kin-abc',
-        targetKinId: 'kin-abc',
+        callerAgentId: 'agent-abc',
+        targetAgentId: 'agent-abc',
         seconds: 300,
         reason: undefined,
       })
@@ -101,34 +101,34 @@ describe('wakeup-tools', () => {
       await execute({ seconds: 60, reason: 'Check email' })
 
       expect(mockScheduleWakeup).toHaveBeenCalledWith({
-        callerKinId: 'kin-abc',
-        targetKinId: 'kin-abc',
+        callerAgentId: 'agent-abc',
+        targetAgentId: 'agent-abc',
         seconds: 60,
         reason: 'Check email',
       })
     })
 
-    it('resolves target_kin_slug to a different Kin', async () => {
-      mockResolveKinId.mockImplementation(() => 'kin-xyz')
+    it('resolves target_agent_slug to a different Agent', async () => {
+      mockResolveAgentId.mockImplementation(() => 'agent-xyz')
       const execute = getExecute(wakeMeInTool)
-      const result = await execute({ seconds: 120, target_kin_slug: 'my-other-kin' })
+      const result = await execute({ seconds: 120, target_agent_slug: 'my-other-agent' })
 
-      expect(mockResolveKinId).toHaveBeenCalledWith('my-other-kin')
+      expect(mockResolveAgentId).toHaveBeenCalledWith('my-other-agent')
       expect(mockScheduleWakeup).toHaveBeenCalledWith({
-        callerKinId: 'kin-abc',
-        targetKinId: 'kin-xyz',
+        callerAgentId: 'agent-abc',
+        targetAgentId: 'agent-xyz',
         seconds: 120,
         reason: undefined,
       })
-      expect(result.target).toBe('my-other-kin')
+      expect(result.target).toBe('my-other-agent')
     })
 
-    it('returns error when target_kin_slug is not found', async () => {
-      mockResolveKinId.mockImplementation(() => null)
+    it('returns error when target_agent_slug is not found', async () => {
+      mockResolveAgentId.mockImplementation(() => null)
       const execute = getExecute(wakeMeInTool)
-      const result = await execute({ seconds: 60, target_kin_slug: 'nonexistent' })
+      const result = await execute({ seconds: 60, target_agent_slug: 'nonexistent' })
 
-      expect(result.error).toContain('Kin not found')
+      expect(result.error).toContain('Agent not found')
       expect(result.error).toContain('nonexistent')
       expect(mockScheduleWakeup).not.toHaveBeenCalled()
     })
@@ -164,8 +164,8 @@ describe('wakeup-tools', () => {
       const result = await execute({ interval_seconds: 300, expires_in_seconds: 3600 })
 
       expect(mockScheduleRecurringWakeup).toHaveBeenCalledWith({
-        callerKinId: 'kin-abc',
-        targetKinId: 'kin-abc',
+        callerAgentId: 'agent-abc',
+        targetAgentId: 'agent-abc',
         intervalSeconds: 300,
         reason: undefined,
         expiresInSeconds: 3600,
@@ -189,23 +189,23 @@ describe('wakeup-tools', () => {
       expect(result.message).toContain('No expiry')
     })
 
-    it('resolves target_kin_slug', async () => {
-      mockResolveKinId.mockImplementation(() => 'kin-xyz')
+    it('resolves target_agent_slug', async () => {
+      mockResolveAgentId.mockImplementation(() => 'agent-xyz')
       const execute = getExecute(wakeMeEveryTool)
-      const result = await execute({ interval_seconds: 120, target_kin_slug: 'other-kin' })
+      const result = await execute({ interval_seconds: 120, target_agent_slug: 'other-agent' })
 
       expect(mockScheduleRecurringWakeup).toHaveBeenCalledWith(
-        expect.objectContaining({ targetKinId: 'kin-xyz' }),
+        expect.objectContaining({ targetAgentId: 'agent-xyz' }),
       )
-      expect(result.target).toBe('other-kin')
+      expect(result.target).toBe('other-agent')
     })
 
-    it('returns error for unknown target kin', async () => {
-      mockResolveKinId.mockImplementation(() => null)
+    it('returns error for unknown target agent', async () => {
+      mockResolveAgentId.mockImplementation(() => null)
       const execute = getExecute(wakeMeEveryTool)
-      const result = await execute({ interval_seconds: 60, target_kin_slug: 'nope' })
+      const result = await execute({ interval_seconds: 60, target_agent_slug: 'nope' })
 
-      expect(result.error).toContain('Kin not found')
+      expect(result.error).toContain('Agent not found')
       expect(mockScheduleRecurringWakeup).not.toHaveBeenCalled()
     })
 
@@ -228,7 +228,7 @@ describe('wakeup-tools', () => {
       const execute = getExecute(cancelWakeupTool)
       const result = await execute({ wakeup_id: 'wk-1' })
 
-      expect(mockCancelWakeup).toHaveBeenCalledWith('wk-1', 'kin-abc')
+      expect(mockCancelWakeup).toHaveBeenCalledWith('wk-1', 'agent-abc')
       expect(result.success).toBe(true)
       expect(result.wakeup_id).toBe('wk-1')
     })
@@ -250,7 +250,7 @@ describe('wakeup-tools', () => {
       const execute = getExecute(listWakeupsTool)
       const result = await execute({})
 
-      expect(mockListPendingWakeups).toHaveBeenCalledWith('kin-abc')
+      expect(mockListPendingWakeups).toHaveBeenCalledWith('agent-abc')
       expect(result.count).toBe(0)
       expect(result.wakeups).toEqual([])
     })
@@ -263,7 +263,7 @@ describe('wakeup-tools', () => {
         Promise.resolve([
           {
             id: 'wk-1',
-            targetKinId: 'kin-abc',
+            targetAgentId: 'agent-abc',
             reason: 'Check inbox',
             intervalSeconds: null,
             expiresAt: null,
@@ -272,7 +272,7 @@ describe('wakeup-tools', () => {
           },
           {
             id: 'wk-r1',
-            targetKinId: 'kin-xyz',
+            targetAgentId: 'agent-xyz',
             reason: 'Monitor deploy',
             intervalSeconds: 300,
             expiresAt: expiresAt.getTime(),
@@ -288,7 +288,7 @@ describe('wakeup-tools', () => {
       expect(result.count).toBe(2)
       expect(result.wakeups[0]).toEqual({
         id: 'wk-1',
-        target_kin_id: 'kin-abc',
+        target_agent_id: 'agent-abc',
         reason: 'Check inbox',
         type: 'one-shot',
         interval_seconds: undefined,

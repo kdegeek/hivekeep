@@ -102,7 +102,7 @@ function clusterPairs(pairs: Array<[MemoryRow, MemoryRow]>): MemoryRow[][] {
 async function mergeCluster(
   cluster: MemoryRow[],
   resolved: Awaited<ReturnType<typeof import('@/server/llm/core/resolve').resolveLLM>> | null,
-  kinId?: string,
+  agentId?: string,
 ): Promise<{ content: string; category: string; subject: string | null; importance: number } | null> {
   if (!resolved) return null
 
@@ -134,10 +134,10 @@ async function mergeCluster(
       // Hard timeout per pair. consolidateMemories iterates over many pairs
       // of near-duplicate memories — without per-call timeout, one stuck
       // provider call would hang the whole consolidation, which is itself
-      // awaited inside runCompacting under the compactingKins lock.
+      // awaited inside runCompacting under the compactingAgents lock.
       timeoutMs: 2 * 60 * 1000,
       callSite: 'consolidation',
-      kinId,
+      agentId,
     })
 
     const jsonMatch = result.text.match(/\{[\s\S]*\}/)
@@ -172,11 +172,11 @@ async function mergeCluster(
 }
 
 /**
- * Run memory consolidation for a Kin.
+ * Run memory consolidation for an Agent.
  * Finds near-duplicate memories, merges them via LLM, replaces originals.
  * Returns the number of memories consolidated (removed).
  */
-export async function consolidateMemories(kinId: string): Promise<number> {
+export async function consolidateMemories(agentId: string): Promise<number> {
   const maxGen = config.memory.consolidationMaxGeneration
   const threshold = config.memory.consolidationSimilarityThreshold
 
@@ -184,7 +184,7 @@ export async function consolidateMemories(kinId: string): Promise<number> {
   const allMemories = await db
     .select()
     .from(memories)
-    .where(eq(memories.kinId, kinId))
+    .where(eq(memories.agentId, agentId))
     .all()
 
   const eligible = allMemories.filter(
@@ -192,11 +192,11 @@ export async function consolidateMemories(kinId: string): Promise<number> {
   ) as MemoryRow[]
 
   if (eligible.length < 2) {
-    log.debug({ kinId, count: eligible.length }, 'Not enough eligible memories for consolidation')
+    log.debug({ agentId, count: eligible.length }, 'Not enough eligible memories for consolidation')
     return 0
   }
 
-  log.info({ kinId, eligible: eligible.length }, 'Starting memory consolidation')
+  log.info({ agentId, eligible: eligible.length }, 'Starting memory consolidation')
 
   // Phase 1: Find similar pairs, partitioned by subject for efficiency
   // Memories with the same subject are compared at the configured threshold.
@@ -237,7 +237,7 @@ export async function consolidateMemories(kinId: string): Promise<number> {
     }
   }
   if (pairs.length === 0) {
-    log.info({ kinId }, 'No near-duplicate memories found')
+    log.info({ agentId }, 'No near-duplicate memories found')
     return 0
   }
 
@@ -261,7 +261,7 @@ export async function consolidateMemories(kinId: string): Promise<number> {
     }
   }
 
-  log.info({ kinId, rawClusters: rawClusters.length, clusters: clusters.length, pairs: pairs.length }, 'Found memory clusters')
+  log.info({ agentId, rawClusters: rawClusters.length, clusters: clusters.length, pairs: pairs.length }, 'Found memory clusters')
 
   // Phase 2: Merge each cluster via LLM. Resolution preference:
   // 1. explicit memory-consolidation settings
@@ -283,7 +283,7 @@ export async function consolidateMemories(kinId: string): Promise<number> {
   let totalRemoved = 0
 
   for (const cluster of clusters) {
-    const merged = await mergeCluster(cluster, resolved, kinId)
+    const merged = await mergeCluster(cluster, resolved, agentId)
     if (!merged) continue
 
     // Compute the new generation: max of sources + 1
@@ -295,7 +295,7 @@ export async function consolidateMemories(kinId: string): Promise<number> {
     const sourceIds = cluster.map((m) => m.id)
 
     // Create the merged memory
-    const newMemory = await createMemory(kinId, {
+    const newMemory = await createMemory(agentId, {
       content: merged.content,
       category: merged.category as 'fact' | 'preference' | 'decision' | 'knowledge',
       subject: merged.subject,
@@ -316,16 +316,16 @@ export async function consolidateMemories(kinId: string): Promise<number> {
 
     // Delete the source memories
     for (const sourceId of sourceIds) {
-      await deleteMemory(sourceId, kinId)
+      await deleteMemory(sourceId, agentId)
     }
 
     totalRemoved += cluster.length - 1 // net reduction (cluster.length removed, 1 added)
     log.info(
-      { kinId, merged: cluster.length, newGen, newMemoryId: newMemory.id },
+      { agentId, merged: cluster.length, newGen, newMemoryId: newMemory.id },
       'Consolidated memory cluster',
     )
   }
 
-  log.info({ kinId, totalRemoved, clusters: clusters.length }, 'Memory consolidation complete')
+  log.info({ agentId, totalRemoved, clusters: clusters.length }, 'Memory consolidation complete')
   return totalRemoved
 }

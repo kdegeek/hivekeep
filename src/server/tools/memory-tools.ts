@@ -9,7 +9,7 @@ import {
   listMemories,
 } from '@/server/services/memory'
 import { db } from '@/server/db/index'
-import { kins } from '@/server/db/schema'
+import { agents } from '@/server/db/schema'
 import { createLogger } from '@/server/logger'
 import { config } from '@/server/config'
 import { getExtractionModel, getExtractionProviderId } from '@/server/services/app-settings'
@@ -40,7 +40,7 @@ function formatMemoryAge(updatedAt: Date | null): string | null {
 }
 
 /**
- * recall — semantic + keyword search in the Kin's long-term memory.
+ * recall — semantic + keyword search in the Agent's long-term memory.
  * Available to main agents only.
  */
 export const recallTool: ToolRegistration = {
@@ -62,8 +62,8 @@ export const recallTool: ToolRegistration = {
           .describe('Default: 10'),
       }),
       execute: async ({ query, limit }) => {
-        log.debug({ kinId: ctx.kinId, query }, 'Recall invoked')
-        const results = await searchMemories(ctx.kinId, query, limit)
+        log.debug({ agentId: ctx.agentId, query }, 'Recall invoked')
+        const results = await searchMemories(ctx.agentId, query, limit)
         return {
           memories: results.map((m) => ({
             id: m.id,
@@ -72,7 +72,7 @@ export const recallTool: ToolRegistration = {
             subject: m.subject,
             importance: m.importance,
             scope: m.scope,
-            ...(m.scope === 'shared' && m.authorKinName ? { authorKinName: m.authorKinName } : {}),
+            ...(m.scope === 'shared' && m.authorAgentName ? { authorAgentName: m.authorAgentName } : {}),
             age: formatMemoryAge(m.updatedAt),
             ...(m.sourceContext ? { sourceContext: m.sourceContext } : {}),
           })),
@@ -112,16 +112,16 @@ export const memorizeTool: ToolRegistration = {
           .describe(
             '"private" (default) = only you can recall this memory. Use for: your own observations, ' +
             'task-specific context, personal interaction notes, anything only relevant to your domain. ' +
-            '"shared" = all Kins can recall this memory. Use ONLY for information that would genuinely ' +
-            'help other Kins: cross-domain facts (infrastructure details, user-wide preferences, ' +
+            '"shared" = all Agents can recall this memory. Use ONLY for information that would genuinely ' +
+            'help other Agents: cross-domain facts (infrastructure details, user-wide preferences, ' +
             'project decisions affecting everyone), shared context (user availability, organizational ' +
             'changes). Do NOT share: your internal reasoning, task-specific details, domain-specific ' +
-            'knowledge that other Kins would never need.',
+            'knowledge that other Agents would never need.',
           ),
       }),
       execute: async ({ content, category, subject, importance, scope }) => {
-        log.debug({ kinId: ctx.kinId, category, subject, scope }, 'Memorize invoked')
-        const memory = await createMemory(ctx.kinId, {
+        log.debug({ agentId: ctx.agentId, category, subject, scope }, 'Memorize invoked')
+        const memory = await createMemory(ctx.agentId, {
           content,
           category: category as MemoryCategory,
           subject,
@@ -156,10 +156,10 @@ export const updateMemoryTool: ToolRegistration = {
         scope: z
           .enum(['private', 'shared'])
           .optional()
-          .describe('Change scope: "private" = only you, "shared" = all Kins'),
+          .describe('Change scope: "private" = only you, "shared" = all Agents'),
       }),
       execute: async ({ memory_id, content, category, subject, scope }) => {
-        const updated = await updateMemory(memory_id, ctx.kinId, {
+        const updated = await updateMemory(memory_id, ctx.agentId, {
           content,
           category: category as MemoryCategory | undefined,
           subject,
@@ -186,7 +186,7 @@ export const forgetTool: ToolRegistration = {
         memory_id: z.string(),
       }),
       execute: async ({ memory_id }) => {
-        const deleted = await deleteMemory(memory_id, ctx.kinId)
+        const deleted = await deleteMemory(memory_id, ctx.agentId)
         return deleted ? { success: true } : { error: 'Memory not found' }
       },
     }),
@@ -212,21 +212,21 @@ export const listMemoriesTool: ToolRegistration = {
         scope: z
           .enum(['private', 'shared'])
           .optional()
-          .describe('Filter by scope. Omit to list own private memories. "shared" lists all shared memories from all Kins.'),
+          .describe('Filter by scope. Omit to list own private memories. "shared" lists all shared memories from all Agents.'),
       }),
       execute: async ({ subject, category, scope }) => {
-        const results = await listMemories(ctx.kinId, {
+        const results = await listMemories(ctx.agentId, {
           subject,
           category: category as MemoryCategory | undefined,
           scope: scope as MemoryScope | undefined,
         })
 
-        // Resolve author Kin names for shared memories from other Kins
-        const otherKinIds = [...new Set(results.filter((m) => m.scope === 'shared' && m.kinId !== ctx.kinId).map((m) => m.kinId))]
-        const kinNameMap = new Map<string, string>()
-        if (otherKinIds.length > 0) {
-          const kinRows = await db.select({ id: kins.id, name: kins.name }).from(kins).where(inArray(kins.id, otherKinIds)).all()
-          for (const k of kinRows) kinNameMap.set(k.id, k.name)
+        // Resolve author Agent names for shared memories from other Agents
+        const otherAgentIds = [...new Set(results.filter((m) => m.scope === 'shared' && m.agentId !== ctx.agentId).map((m) => m.agentId))]
+        const agentNameMap = new Map<string, string>()
+        if (otherAgentIds.length > 0) {
+          const agentRows = await db.select({ id: agents.id, name: agents.name }).from(agents).where(inArray(agents.id, otherAgentIds)).all()
+          for (const k of agentRows) agentNameMap.set(k.id, k.name)
         }
 
         return {
@@ -237,7 +237,7 @@ export const listMemoriesTool: ToolRegistration = {
             subject: m.subject,
             importance: m.importance,
             scope: m.scope,
-            ...(m.scope === 'shared' && m.kinId !== ctx.kinId ? { authorKinName: kinNameMap.get(m.kinId) ?? null } : {}),
+            ...(m.scope === 'shared' && m.agentId !== ctx.agentId ? { authorAgentName: agentNameMap.get(m.agentId) ?? null } : {}),
             age: formatMemoryAge(m.updatedAt),
             ...(m.sourceContext ? { sourceContext: m.sourceContext } : {}),
           })),
@@ -270,9 +270,9 @@ export const reviewMemoriesTool: ToolRegistration = {
           .describe('Review only private or shared memories. Omit to review your own memories.'),
       }),
       execute: async ({ subject, scope }) => {
-        log.debug({ kinId: ctx.kinId, subject, scope }, 'Review memories invoked')
+        log.debug({ agentId: ctx.agentId, subject, scope }, 'Review memories invoked')
 
-        const allMemories = await listMemories(ctx.kinId, {
+        const allMemories = await listMemories(ctx.agentId, {
           subject: subject || undefined,
           scope: scope as MemoryScope | undefined,
         })
@@ -316,7 +316,7 @@ export const reviewMemoriesTool: ToolRegistration = {
           `Rules:\n` +
           `- Only flag genuine issues. Don't be overzealous.\n` +
           `- For duplicates, suggest merging into the better-worded version.\n` +
-          `- For contradictions, flag both memories and let the Kin decide which is correct.\n` +
+          `- For contradictions, flag both memories and let the Agent decide which is correct.\n` +
           `- If everything looks clean, return an empty issues array with a positive summary.\n` +
           `- Be conservative: when in doubt, don't flag it.\n\n` +
           `## Memories to review (${memoriesToReview.length} total)\n\n${memoriesList}`
@@ -325,7 +325,7 @@ export const reviewMemoriesTool: ToolRegistration = {
         // extraction model, then env-configured extraction model, then
         // pickAnyLLMModel as last resort. Never hardcode a specific
         // provider's model id in core — the previous fallback
-        // ('gpt-4.1-mini') made KinBot OpenAI-dependent for memory review.
+        // ('gpt-4.1-mini') made Hivekeep OpenAI-dependent for memory review.
         const { resolveLLM, pickAnyLLMModel } = await import('@/server/llm/core/resolve')
         const { runOneShot } = await import('@/server/llm/core/run-oneshot')
         const settingsExtractionModel = await getExtractionModel()
@@ -357,7 +357,7 @@ export const reviewMemoriesTool: ToolRegistration = {
             providerType: resolved.providerRow.type,
             providerId: resolved.providerRow.id,
             modelId: resolved.model.id,
-            kinId: ctx.kinId,
+            agentId: ctx.agentId,
             usage: {
               inputTokens: result.usage.inputTokens,
               outputTokens: result.usage.outputTokens,
@@ -384,7 +384,7 @@ export const reviewMemoriesTool: ToolRegistration = {
 
           return parsed
         } catch (err) {
-          log.error({ kinId: ctx.kinId, err }, 'Memory review LLM error')
+          log.error({ agentId: ctx.agentId, err }, 'Memory review LLM error')
           return { issues: [], summary: 'Review failed due to an error.' }
         }
       },

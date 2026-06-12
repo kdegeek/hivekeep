@@ -18,7 +18,7 @@ const log = createLogger('tools:browse')
 // ─── browse_url ─────────────────────────────────────────────────────────────
 
 export const browseUrlTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: () =>
@@ -78,7 +78,7 @@ export const browseUrlTool: ToolRegistration = {
 // ─── extract_links ──────────────────────────────────────────────────────────
 
 export const extractLinksTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: () =>
@@ -144,7 +144,7 @@ export const screenshotUrlTool: ToolRegistration = {
           .describe('Capture full scrollable page. Default: false'),
       }),
       execute: async ({ url, viewport_width, viewport_height, full_page }) => {
-        log.debug({ url, kinId: ctx.kinId }, 'screenshot_url invoked')
+        log.debug({ url, agentId: ctx.agentId }, 'screenshot_url invoked')
 
         try {
           const blocked = await isBlockedUrl(url)
@@ -163,11 +163,11 @@ export const screenshotUrlTool: ToolRegistration = {
           const name = `screenshot-${hostname}-${Date.now()}`
           const base64 = result.buffer.toString('base64')
 
-          const file = await createFileFromContent(ctx.kinId, name, base64, 'image/png', {
+          const file = await createFileFromContent(ctx.agentId, name, base64, 'image/png', {
             isBase64: true,
             description: `Screenshot of ${url}`,
             isPublic: true,
-            createdByKinId: ctx.kinId,
+            createdByAgentId: ctx.agentId,
           })
 
           return {

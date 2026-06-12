@@ -31,7 +31,7 @@ function mapAuthFieldToFormField(authField: string): FieldName | null {
 }
 
 /**
- * Parse an error thrown by Better Auth (or KinBot's wrapped routes)
+ * Parse an error thrown by Better Auth (or Hivekeep's wrapped routes)
  * into a per-field map. Better Auth's HTTP body is only
  * `{ message, code }` — the `issues` array exists on the server-side
  * APIError but is dropped during serialization. So we recover the
@@ -112,7 +112,7 @@ function extractFieldErrors(err: unknown): {
 }
 
 export function StepIdentity({ onComplete }: StepIdentityProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { register, login } = useAuth()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -168,7 +168,7 @@ export function StepIdentity({ onComplete }: StepIdentityProps) {
       // 1. Register via Better Auth (or login if already registered)
       try {
         await register({
-          name: `${firstName} ${lastName}`,
+          name: `${firstName} ${lastName}`.trim(),
           email,
           password,
         })
@@ -190,7 +190,9 @@ export function StepIdentity({ onComplete }: StepIdentityProps) {
           firstName,
           lastName,
           pseudonym,
-          language: 'en',
+          // Auto-detected browser language (see lib/i18n.ts); the user can
+          // change it on the next step (Preferences).
+          language: i18n.language || 'en',
         })
       } catch (profileErr: unknown) {
         const profileMsg = getErrorMessage(profileErr) || ''
@@ -285,12 +287,14 @@ export function StepIdentity({ onComplete }: StepIdentityProps) {
           )}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="lastName">{t('onboarding.identity.lastName')}</Label>
+          <Label htmlFor="lastName">
+            {t('onboarding.identity.lastName')}
+            <span className="ml-1 font-normal text-muted-foreground">({t('common.optional')})</span>
+          </Label>
           <Input
             id="lastName"
             value={lastName}
             onChange={(e) => { setLastName(e.target.value); clearFieldError('lastName') }}
-            required
             aria-invalid={!!fieldErrors.lastName}
             aria-describedby={fieldErrors.lastName ? 'lastName-error' : undefined}
           />

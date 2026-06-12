@@ -35,7 +35,7 @@ function rowClasses(status: TaskTodoStatus): string {
 }
 
 /**
- * Compact banner the sub-Kin's `task_todos` plan: a single line by default
+ * Compact banner the sub-Agent's `task_todos` plan: a single line by default
  * showing `(done/total) <current step>`. Clicking expands into a full
  * checklist in-place — no inner side panel — so it stays inside the task
  * panel's existing horizontal real estate.

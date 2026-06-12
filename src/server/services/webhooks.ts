@@ -3,7 +3,7 @@ import { v4 as uuid } from 'uuid'
 import { randomBytes, timingSafeEqual } from 'crypto'
 import { db } from '@/server/db/index'
 import { createLogger } from '@/server/logger'
-import { webhooks, webhookLogs, kins } from '@/server/db/schema'
+import { webhooks, webhookLogs, agents } from '@/server/db/schema'
 import { enqueueMessage } from '@/server/services/queue'
 import { spawnTask } from '@/server/services/tasks'
 import { sseManager } from '@/server/sse/index'
@@ -34,10 +34,10 @@ export function buildWebhookUrl(webhookId: string): string {
 // ─── CRUD ───────────────────────────────────────────────────────────────────
 
 interface CreateWebhookParams {
-  kinId: string
+  agentId: string
   name: string
   description?: string
-  createdBy: 'user' | 'kin'
+  createdBy: 'user' | 'agent'
   filterMode?: string | null
   filterField?: string | null
   filterAllowedValues?: string | null
@@ -49,15 +49,15 @@ interface CreateWebhookParams {
 }
 
 export async function createWebhook(params: CreateWebhookParams) {
-  // Check max per Kin limit
+  // Check max per Agent limit
   const existing = await db
     .select()
     .from(webhooks)
-    .where(eq(webhooks.kinId, params.kinId))
+    .where(eq(webhooks.agentId, params.agentId))
     .all()
 
-  if (existing.length >= config.webhooks.maxPerKin) {
-    throw new Error(`Max webhooks per Kin (${config.webhooks.maxPerKin}) reached`)
+  if (existing.length >= config.webhooks.maxPerAgent) {
+    throw new Error(`Max webhooks per Agent (${config.webhooks.maxPerAgent}) reached`)
   }
 
   const id = uuid()
@@ -66,7 +66,7 @@ export async function createWebhook(params: CreateWebhookParams) {
 
   await db.insert(webhooks).values({
     id,
-    kinId: params.kinId,
+    agentId: params.agentId,
     name: params.name,
     token,
     description: params.description ?? null,
@@ -90,12 +90,12 @@ export async function createWebhook(params: CreateWebhookParams) {
   if (created) {
     sseManager.broadcast({
       type: 'webhook:created',
-      kinId: created.kinId,
-      data: { webhookId: created.id, kinId: created.kinId },
+      agentId: created.agentId,
+      data: { webhookId: created.id, agentId: created.agentId },
     })
   }
 
-  log.info({ webhookId: id, kinId: params.kinId, name: params.name }, 'Webhook created')
+  log.info({ webhookId: id, agentId: params.agentId, name: params.name }, 'Webhook created')
 
   // Return the full record including the token (only time it's exposed)
   return { ...created!, token }
@@ -127,8 +127,8 @@ export async function updateWebhook(
 
   sseManager.broadcast({
     type: 'webhook:updated',
-    kinId: updated.kinId,
-    data: { webhookId: updated.id, kinId: updated.kinId },
+    agentId: updated.agentId,
+    data: { webhookId: updated.id, agentId: updated.agentId },
   })
 
   return updated
@@ -141,10 +141,10 @@ export async function deleteWebhook(webhookId: string) {
   if (existing) {
     sseManager.broadcast({
       type: 'webhook:deleted',
-      kinId: existing.kinId,
-      data: { webhookId, kinId: existing.kinId },
+      agentId: existing.agentId,
+      data: { webhookId, agentId: existing.agentId },
     })
-    log.info({ webhookId, kinId: existing.kinId }, 'Webhook deleted')
+    log.info({ webhookId, agentId: existing.agentId }, 'Webhook deleted')
   }
 }
 
@@ -152,9 +152,9 @@ export async function getWebhook(webhookId: string) {
   return db.select().from(webhooks).where(eq(webhooks.id, webhookId)).get()
 }
 
-export async function listWebhooks(kinId?: string) {
-  if (kinId) {
-    return db.select().from(webhooks).where(eq(webhooks.kinId, kinId)).all()
+export async function listWebhooks(agentId?: string) {
+  if (agentId) {
+    return db.select().from(webhooks).where(eq(webhooks.agentId, agentId)).all()
   }
   return db.select().from(webhooks).all()
 }
@@ -172,8 +172,8 @@ export async function regenerateToken(webhookId: string) {
 
   sseManager.broadcast({
     type: 'webhook:updated',
-    kinId: updated.kinId,
-    data: { webhookId: updated.id, kinId: updated.kinId },
+    agentId: updated.agentId,
+    data: { webhookId: updated.id, agentId: updated.agentId },
   })
 
   log.info({ webhookId }, 'Webhook token regenerated')
@@ -360,10 +360,10 @@ export async function triggerWebhook(webhookId: string, payload: string, sourceI
       createdAt: now,
     })
 
-    sseManager.sendToKin(webhook.kinId, {
+    sseManager.sendToAgent(webhook.agentId, {
       type: 'webhook:updated',
-      kinId: webhook.kinId,
-      data: { webhookId, kinId: webhook.kinId },
+      agentId: webhook.agentId,
+      data: { webhookId, agentId: webhook.agentId },
     })
 
     log.debug({ webhookId, webhookName: webhook.name }, 'Webhook payload filtered out')
@@ -406,21 +406,21 @@ async function triggerWebhookAsConversation(
   const content = `[Webhook: ${webhook.name}]\n${payload}`
 
   const { id: queueItemId } = await enqueueMessage({
-    kinId: webhook.kinId,
+    agentId: webhook.agentId,
     messageType: 'webhook',
     content,
     sourceType: 'webhook',
     sourceId: webhookId,
-    priority: config.queue.kinPriority,
+    priority: config.queue.agentPriority,
   })
 
-  sseManager.sendToKin(webhook.kinId, {
+  sseManager.sendToAgent(webhook.agentId, {
     type: 'webhook:triggered',
-    kinId: webhook.kinId,
-    data: { webhookId: webhook.id, kinId: webhook.kinId, queueItemId },
+    agentId: webhook.agentId,
+    data: { webhookId: webhook.id, agentId: webhook.agentId, queueItemId },
   })
 
-  log.info({ webhookId, kinId: webhook.kinId, webhookName: webhook.name }, 'Webhook triggered (conversation)')
+  log.info({ webhookId, agentId: webhook.agentId, webhookName: webhook.name }, 'Webhook triggered (conversation)')
   return { queueItemId }
 }
 
@@ -432,7 +432,7 @@ async function triggerWebhookAsTask(
   const description = resolveTemplate(webhook.taskPromptTemplate, payload) ?? payload
 
   const { taskId, queued } = await spawnTask({
-    parentKinId: webhook.kinId,
+    parentAgentId: webhook.agentId,
     title,
     description,
     mode: 'async',
@@ -442,14 +442,14 @@ async function triggerWebhookAsTask(
     concurrencyMax: webhook.maxConcurrentTasks,
   })
 
-  sseManager.sendToKin(webhook.kinId, {
+  sseManager.sendToAgent(webhook.agentId, {
     type: 'webhook:triggered',
-    kinId: webhook.kinId,
-    data: { webhookId: webhook.id, kinId: webhook.kinId, taskId, queued },
+    agentId: webhook.agentId,
+    data: { webhookId: webhook.id, agentId: webhook.agentId, taskId, queued },
   })
 
   log.info(
-    { webhookId: webhook.id, kinId: webhook.kinId, webhookName: webhook.name, taskId, queued },
+    { webhookId: webhook.id, agentId: webhook.agentId, webhookName: webhook.name, taskId, queued },
     'Webhook triggered (task)',
   )
 

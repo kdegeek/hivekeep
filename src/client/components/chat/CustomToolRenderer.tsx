@@ -1,7 +1,7 @@
 import { Component, Suspense, lazy, type ComponentType, type ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
 import { JsonViewer } from '@/client/components/common/JsonViewer'
-import { UI_KIT, type CustomToolUiKit } from '@/client/components/chat/custom-tool-ui-kit'
+import { UI_KIT, type CustomToolUiKit } from '@/shared/custom-tool-ui-kit'
 import { useCustomToolMeta } from '@/client/lib/custom-tool-names'
 import i18n from '@/client/lib/i18n'
 
@@ -11,7 +11,7 @@ import i18n from '@/client/lib/i18n'
  *
  * The renderer module is fetched at runtime from
  * `/api/custom-tools/:slug/renderer.js?v=<version>`. It shares the host's single
- * React instance (window.__KINBOT_REACT__, set in main.tsx) so hooks work and it
+ * React instance (window.__HIVEKEEP_REACT__, set in main.tsx) so hooks work and it
  * inherits the app theme via cascading `--color-*` CSS variables. It receives
  * `{ result, args, ui }` where `ui` is the themed primitives kit.
  *
@@ -30,7 +30,7 @@ import i18n from '@/client/lib/i18n'
  * change.
  *
  * Threat model: host-context renderers run with full host privileges (no
- * isolation) — acceptable because custom tools are trusted (user/Kin-authored,
+ * isolation) — acceptable because custom tools are trusted (user/Agent-authored,
  * self-hosted) and this is for result DISPLAY only.
  */
 

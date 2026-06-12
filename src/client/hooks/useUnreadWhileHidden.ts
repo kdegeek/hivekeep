@@ -6,9 +6,9 @@ import { useSSE } from '@/client/hooks/useSSE'
  *
  * Returns the current unread count, which resets to 0 when the user
  * returns to the tab. The count only increments for assistant messages
- * in the given kin (ignores tasks and quick sessions).
+ * in the given agent (ignores tasks and quick sessions).
  */
-export function useUnreadWhileHidden(kinId: string | null): number {
+export function useUnreadWhileHidden(agentId: string | null): number {
   const [unreadCount, setUnreadCount] = useState(0)
   const hiddenRef = useRef(document.hidden)
 
@@ -29,8 +29,8 @@ export function useUnreadWhileHidden(kinId: string | null): number {
   // Listen for new chat messages via SSE
   const handleMessage = useCallback(
     (data: Record<string, unknown>) => {
-      // Only count messages for the active kin
-      if (data.kinId !== kinId) return
+      // Only count messages for the active agent
+      if (data.agentId !== agentId) return
       // Skip task and quick session messages
       if (data.taskId || data.sessionId) return
       // Only count assistant messages (not user echo)
@@ -40,7 +40,7 @@ export function useUnreadWhileHidden(kinId: string | null): number {
         setUnreadCount((c) => c + 1)
       }
     },
-    [kinId],
+    [agentId],
   )
 
   useSSE({

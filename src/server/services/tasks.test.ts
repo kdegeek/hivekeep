@@ -7,7 +7,7 @@ import { fullMockSchema, fullMockDrizzleOrm } from '../../test-helpers'
 interface FakeState {
   taskRows: any[]
   messageRows: any[]
-  kinRows: any[]
+  agentRows: any[]
   // captured args
   lastWhere: any
   lastSelect: any
@@ -20,7 +20,7 @@ interface FakeState {
 const state: FakeState = {
   taskRows: [],
   messageRows: [],
-  kinRows: [],
+  agentRows: [],
   lastWhere: undefined,
   lastSelect: undefined,
   lastOrderBy: undefined,
@@ -32,13 +32,13 @@ const state: FakeState = {
 function tableName(t: any): string {
   if (t === fakeTasks) return 'tasks'
   if (t === fakeMessages) return 'messages'
-  if (t === fakeKins) return 'kins'
+  if (t === fakeAgents) return 'agents'
   return 'unknown'
 }
 
 const fakeTasks = { __t: 'tasks' }
 const fakeMessages = { __t: 'messages' }
-const fakeKins = { __t: 'kins' }
+const fakeAgents = { __t: 'agents' }
 
 const fakeDb: any = {
   select(sel?: any) {
@@ -78,7 +78,7 @@ const fakeDb: any = {
 function pickRows(): any[] {
   if (state.lastFrom === 'tasks') return state.taskRows
   if (state.lastFrom === 'messages') return state.messageRows
-  if (state.lastFrom === 'kins') return state.kinRows
+  if (state.lastFrom === 'agents') return state.agentRows
   return []
 }
 
@@ -154,7 +154,7 @@ mock.module('@/server/db/schema', () => ({
   ...fullMockSchema,
   tasks: new Proxy({}, { get: (_t, prop) => ({ __col: String(prop), __table: 'tasks' }) }),
   messages: new Proxy({}, { get: (_t, prop) => ({ __col: String(prop), __table: 'messages' }) }),
-  kins: new Proxy({}, { get: (_t, prop) => ({ __col: String(prop), __table: 'kins' }) }),
+  agents: new Proxy({}, { get: (_t, prop) => ({ __col: String(prop), __table: 'agents' }) }),
 }))
 
 mock.module('drizzle-orm', () => ({
@@ -176,10 +176,10 @@ mock.module('drizzle-orm', () => ({
   })(),
 }))
 
-// Override fakeTasks/fakeMessages/fakeKins identity so tableName() can detect them
+// Override fakeTasks/fakeMessages/fakeAgents identity so tableName() can detect them
 ;(fakeTasks as any).__t = 'tasks'
 ;(fakeMessages as any).__t = 'messages'
-;(fakeKins as any).__t = 'kins'
+;(fakeAgents as any).__t = 'agents'
 
 // Import after mocks. Bun's mock.module() leaks across test files, so a sibling
 // test that stubbed @/server/services/tasks may have replaced this module
@@ -220,8 +220,8 @@ function makeTask(overrides: Partial<any> = {}): any {
   const now = new Date('2026-05-01T00:00:00Z')
   return {
     id: 'task-' + Math.random().toString(36).slice(2, 8),
-    parentKinId: 'kin-a',
-    sourceKinId: null,
+    parentAgentId: 'agent-a',
+    sourceAgentId: null,
     spawnType: 'self',
     mode: 'await',
     title: 'A task',
@@ -243,7 +243,7 @@ function makeTask(overrides: Partial<any> = {}): any {
 function reset() {
   state.taskRows = []
   state.messageRows = []
-  state.kinRows = []
+  state.agentRows = []
   state.lastWhere = undefined
   state.lastSelect = undefined
   state.lastOrderBy = undefined
@@ -264,7 +264,7 @@ function _computeTaskKindLocal(row: SpawnKindRow): string {
   if (row.cronId) return 'cron'
   if (row.webhookId) return 'webhook'
   if (row.spawnType === 'self') return 'spawn_self'
-  if (row.spawnType === 'other') return 'spawn_kin'
+  if (row.spawnType === 'other') return 'spawn_agent'
   return 'unknown'
 }
 
@@ -290,7 +290,7 @@ describe('tasks service: pure helpers (inline duplicates)', () => {
     expect(_computeTaskKindLocal({ spawnType: 'self', webhookId: null, cronId: 'c1' })).toBe('cron')
     expect(_computeTaskKindLocal({ spawnType: 'self', webhookId: 'w', cronId: null })).toBe('webhook')
     expect(_computeTaskKindLocal({ spawnType: 'self', webhookId: null, cronId: null })).toBe('spawn_self')
-    expect(_computeTaskKindLocal({ spawnType: 'other', webhookId: null, cronId: null })).toBe('spawn_kin')
+    expect(_computeTaskKindLocal({ spawnType: 'other', webhookId: null, cronId: null })).toBe('spawn_agent')
     expect(_computeTaskKindLocal({ spawnType: '?', webhookId: null, cronId: null })).toBe('unknown')
   })
 
@@ -316,7 +316,7 @@ describe('tasks service: pure helpers', () => {
     expect(svc.computeTaskKind({ spawnType: 'self', webhookId: null, cronId: 'c1' })).toBe('cron')
     expect(svc.computeTaskKind({ spawnType: 'self', webhookId: 'w1', cronId: null })).toBe('webhook')
     expect(svc.computeTaskKind({ spawnType: 'self', webhookId: null, cronId: null })).toBe('spawn_self')
-    expect(svc.computeTaskKind({ spawnType: 'other', webhookId: null, cronId: null })).toBe('spawn_kin')
+    expect(svc.computeTaskKind({ spawnType: 'other', webhookId: null, cronId: null })).toBe('spawn_agent')
     expect(svc.computeTaskKind({ spawnType: 'weird', webhookId: null, cronId: null })).toBe('unknown')
   })
 

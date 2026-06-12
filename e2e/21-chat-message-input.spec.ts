@@ -2,9 +2,9 @@ import { test, expect, type Page } from '@playwright/test'
 import { loginAs, mockProviderModels } from './helpers/auth'
 
 /**
- * Navigate to the Test Assistant kin chat and wait for the message input.
+ * Navigate to the Test Assistant agent chat and wait for the message input.
  */
-async function openKinChat(page: Page) {
+async function openAgentChat(page: Page) {
   await page.getByText('Test Assistant').first().click()
   const input = page.getByPlaceholder('Send a message...')
   await expect(input).toBeVisible({ timeout: 10_000 })
@@ -17,11 +17,11 @@ test.describe.serial('Chat message input features', () => {
     await page.goto('/')
     await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible({ timeout: 10_000 })
     await loginAs(page)
-    await expect(page.getByText('Kins', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Agents', { exact: true })).toBeVisible({ timeout: 10_000 })
   })
 
   test('should show formatting toolbar when input is focused', async ({ page }) => {
-    const input = await openKinChat(page)
+    const input = await openAgentChat(page)
     await input.click()
 
     // Formatting buttons should be visible (Bold, Italic, Strikethrough, Code, Code block)
@@ -33,7 +33,7 @@ test.describe.serial('Chat message input features', () => {
   })
 
   test('should apply bold formatting via toolbar button', async ({ page }) => {
-    const input = await openKinChat(page)
+    const input = await openAgentChat(page)
 
     // Type text, select it, then apply bold
     await input.fill('hello world')
@@ -46,7 +46,7 @@ test.describe.serial('Chat message input features', () => {
   })
 
   test('should apply italic formatting via toolbar button', async ({ page }) => {
-    const input = await openKinChat(page)
+    const input = await openAgentChat(page)
 
     await input.fill('hello world')
     await input.click()
@@ -57,7 +57,7 @@ test.describe.serial('Chat message input features', () => {
   })
 
   test('should apply strikethrough formatting via toolbar button', async ({ page }) => {
-    const input = await openKinChat(page)
+    const input = await openAgentChat(page)
 
     await input.fill('hello world')
     await input.click()
@@ -68,7 +68,7 @@ test.describe.serial('Chat message input features', () => {
   })
 
   test('should apply inline code formatting via toolbar button', async ({ page }) => {
-    const input = await openKinChat(page)
+    const input = await openAgentChat(page)
 
     await input.fill('hello world')
     await input.click()
@@ -79,7 +79,7 @@ test.describe.serial('Chat message input features', () => {
   })
 
   test('should apply code block formatting via toolbar button', async ({ page }) => {
-    const input = await openKinChat(page)
+    const input = await openAgentChat(page)
 
     await input.fill('hello world')
     await input.click()
@@ -90,7 +90,7 @@ test.describe.serial('Chat message input features', () => {
   })
 
   test('should apply bold formatting via keyboard shortcut', async ({ page }) => {
-    const input = await openKinChat(page)
+    const input = await openAgentChat(page)
 
     await input.click()
     await page.keyboard.type('shortcut test')
@@ -101,7 +101,7 @@ test.describe.serial('Chat message input features', () => {
   })
 
   test('should apply italic formatting via keyboard shortcut', async ({ page }) => {
-    const input = await openKinChat(page)
+    const input = await openAgentChat(page)
 
     await input.click()
     await page.keyboard.type('shortcut test')
@@ -112,14 +112,14 @@ test.describe.serial('Chat message input features', () => {
   })
 
   test('should show attachment button', async ({ page }) => {
-    await openKinChat(page)
+    await openAgentChat(page)
 
     // Paperclip icon for file attachments
     await expect(page.locator('button:has(svg.lucide-paperclip)')).toBeVisible({ timeout: 3_000 })
   })
 
   test('should send message with Enter key', async ({ page }) => {
-    const input = await openKinChat(page)
+    const input = await openAgentChat(page)
 
     await input.fill('Enter key test message')
     await page.keyboard.press('Enter')
@@ -129,7 +129,7 @@ test.describe.serial('Chat message input features', () => {
   })
 
   test('should allow multiline input with Shift+Enter', async ({ page }) => {
-    const input = await openKinChat(page)
+    const input = await openAgentChat(page)
 
     await input.click()
     await page.keyboard.type('Line one')
@@ -143,7 +143,7 @@ test.describe.serial('Chat message input features', () => {
   })
 
   test('should disable send button when input is empty', async ({ page }) => {
-    await openKinChat(page)
+    await openAgentChat(page)
 
     // Send button should not be clickable with empty input
     const sendBtn = page.locator('button:has(svg.lucide-send-horizontal)')

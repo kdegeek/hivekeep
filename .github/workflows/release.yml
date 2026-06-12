@@ -4,25 +4,31 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
 
 jobs:
-  release:
-    name: Create GitHub Release
+  # Single typecheck + build gate, so we don't spend runner time on Docker
+  # builds for code that doesn't compile.
+  gate:
+    name: Typecheck & build gate
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.3.10"
+          bun-version: "1.3.13"
 
       - name: Cache Bun dependencies
         uses: actions/cache@v5
@@ -34,6 +40,8 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+        env:
+          HUSKY: 0
 
       - name: Type check
         run: bun run typecheck
@@ -41,46 +49,237 @@ jobs:
       - name: Build
         run: bun run build
 
-      - name: Extract changelog from CHANGELOG.md
+      # Reused by the release job: the prebuilt client is attached to the
+      # GitHub release so self-updating installs can skip the local build.
+      - name: Upload client build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-build
+          path: dist/client
+          if-no-files-found: error
+          retention-days: 1
+
+  # Build each architecture on its NATIVE runner (no QEMU emulation) and push
+  # by digest. The multi-arch manifest is assembled in the merge job.
+  build:
+    name: Build (${{ matrix.arch }})
+    needs: gate
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Compute image name (lowercased)
+        id: image
+        run: echo "name=${REPO,,}" >> "$GITHUB_OUTPUT"
+        env:
+          REPO: ${{ github.repository }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ steps.image.outputs.name }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Assemble the per-arch digests into a single multi-arch manifest and tag it.
+  merge:
+    name: Merge multi-arch manifest
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compute image name (lowercased)
+        id: image
+        run: echo "name=${REPO,,}" >> "$GITHUB_OUTPUT"
+        env:
+          REPO: ${{ github.repository }}
+
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags)
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-') }}
+            type=raw,value=edge,enable=${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+
+      - name: Create and push manifest list
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY }}/${{ steps.image.outputs.name }}@sha256:%s ' *)
+
+      - name: Inspect
+        run: |
+          docker buildx imagetools inspect "${{ env.REGISTRY }}/${{ steps.image.outputs.name }}:${{ steps.meta.outputs.version }}"
+
+  release:
+    name: Create GitHub Release
+    needs: merge
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Download client build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: client-build
+          path: dist/client
+
+      # Package the prebuilt frontend exactly as the self-updater expects it:
+      # hivekeep-client-vX.Y.Z.tar.gz containing dist/client/, plus a sha256
+      # checksum file ("<hex>  <filename>") used to verify the download.
+      - name: Package prebuilt client assets
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF#refs/tags/}"
+          ASSET="hivekeep-client-${TAG}.tar.gz"
+          test -f dist/client/index.html
+          tar -czf "$ASSET" dist/client
+          sha256sum "$ASSET" > "$ASSET.sha256"
+          ls -lh "$ASSET"*
+
+      - name: Generate changelog
         id: changelog
         run: |
+          set -uo pipefail
           VERSION="${GITHUB_REF#refs/tags/v}"
 
-          # Try to extract the section for this version from CHANGELOG.md
-          # Matches "## [X.Y.Z]" and captures everything until the next "## [" or EOF
-          # Try to extract from CHANGELOG.md if it exists
-          SECTION=""
-          if [ -f CHANGELOG.md ]; then
-            SECTION=$(awk -v ver="$VERSION" '
-              /^## \[/ {
-                if (found) exit
-                if (index($0, "[" ver "]")) { found=1; next }
-              }
-              found { print }
-            ' CHANGELOG.md)
+          # No CHANGELOG.md in this repo: build the changelog from git history,
+          # grouped by conventional-commit type so release notes read cleanly
+          # instead of dumping a raw, unsorted git log.
+          # Find the previous tag (the one before the tag being released).
+          PREV_TAG=$(git describe --tags --abbrev=0 "${GITHUB_REF}^" 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..${GITHUB_REF}"
+            CAP=400
+          else
+            RANGE="${GITHUB_REF}"
+            CAP=80
           fi
+          RAW=$(git log "$RANGE" --pretty=format:'%s' --no-merges | head -n "$CAP")
 
-          # Fallback to git log if no CHANGELOG.md or version not found
-          if [ -z "$SECTION" ]; then
-            PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-            if [ -n "$PREV_TAG" ]; then
-              SECTION=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --no-merges | head -50)
-            else
-              SECTION=$(git log --pretty=format:"- %s" --no-merges | head -30)
+          # Emit a "### Title" section for the commits matching $1, with the
+          # conventional-commit prefix stripped. No-op when the section is empty.
+          emit_section () {
+            local pattern="$1" title="$2" body
+            body=$(printf '%s\n' "$RAW" | grep -E "$pattern" \
+              | sed -E 's/^[a-zA-Z]+(\([^)]*\))?!?:[[:space:]]*//' \
+              | sed -E 's/^/- /') || true
+            if [ -n "$body" ]; then
+              printf '### %s\n%s\n\n' "$title" "$body"
             fi
-          fi
+          }
 
           {
-            echo "changelog<<EOF"
-            echo "$SECTION"
-            echo "EOF"
+            emit_section '^feat(\(|!|:)'     'Features'
+            emit_section '^fix(\(|!|:)'      'Fixes'
+            emit_section '^perf(\(|!|:)'     'Performance'
+            emit_section '^refactor(\(|!|:)' 'Refactor'
+            emit_section '^docs(\(|!|:)'     'Documentation'
+            # Anything that is not one of the user-facing types above
+            # (chore/test/ci/build/style/unprefixed) keeps its prefix for context.
+            OTHER=$(printf '%s\n' "$RAW" \
+              | grep -vE '^(feat|fix|perf|refactor|docs)(\(|!|:)' \
+              | sed -E 's/^/- /') || true
+            if [ -n "$OTHER" ]; then
+              printf '### Other changes\n%s\n\n' "$OTHER"
+            fi
+          } > changelog.md
+
+          # The :latest tag is only published for stable (non-prerelease) tags.
+          # Prerelease tags contain a '-' (e.g. v1.0.0-rc.1), so point their
+          # docker-run example at the concrete version instead of :latest.
+          case "$VERSION" in
+            *-*) DOCKER_TAG="$VERSION" ;;
+            *)   DOCKER_TAG="latest" ;;
+          esac
+
+          {
+            echo "changelog<<HIVEKEEP_EOF"
+            cat changelog.md
+            echo "HIVEKEEP_EOF"
           } >> "$GITHUB_OUTPUT"
           echo "version=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "docker_tag=${DOCKER_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          name: KinBot ${{ steps.changelog.outputs.version }}
+          name: Hivekeep ${{ steps.changelog.outputs.version }}
           body: |
             ## What's Changed
 
@@ -92,27 +291,22 @@ jobs:
 
             **One-liner (Linux/macOS):**
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/MarlBurroW/kinbot/main/install.sh | bash
+            curl -fsSL https://raw.githubusercontent.com/MarlBurroW/hivekeep/main/install.sh | bash
             ```
 
-            **Docker:**
+            **Docker (amd64 + arm64):**
             ```bash
             docker run -d \
-              --name kinbot \
+              --name hivekeep \
               -p 3000:3000 \
-              -v kinbot-data:/app/data \
-              ghcr.io/MarlBurroW/kinbot:${{ github.ref_name }}
+              -v hivekeep-data:/app/data \
+              ghcr.io/marlburrow/hivekeep:${{ steps.changelog.outputs.docker_tag }}
             ```
 
-            **Manual:**
-            ```bash
-            git clone https://github.com/MarlBurroW/kinbot.git
-            cd kinbot && bun install && bun run build && bun run db:migrate
-            NODE_ENV=production bun run start
-            ```
-
-            Open `http://localhost:3000` — the setup wizard will guide you through the rest.
+            For all installation methods and an interactive configurator, see the [install guide](https://marlburrow.github.io/hivekeep/install).
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             install.sh
+            hivekeep-client-*.tar.gz
+            hivekeep-client-*.tar.gz.sha256

@@ -3,12 +3,12 @@ import { api } from '@/client/lib/api'
 import { useSSE, useSSEResync } from '@/client/hooks/useSSE'
 import { getToolDomain as lookupToolDomain } from '@/client/lib/tool-domain-lookup'
 import { isTerminalStatus } from '@/client/lib/task-status'
-import type { TaskStatus, ToolCallEntry, ToolDomain, MessageTokenUsage, KinThinkingEffort, TaskTodo, TaskTokenUsage } from '@/shared/types'
+import type { TaskStatus, ToolCallEntry, ToolDomain, MessageTokenUsage, AgentThinkingEffort, TaskTodo, TaskTokenUsage } from '@/shared/types'
 import type { ToolCallViewItem, ToolCallStatus } from '@/client/hooks/useToolCalls'
 
 interface TaskDetail {
   id: string
-  parentKinId: string
+  parentAgentId: string
   title: string | null
   description: string
   status: TaskStatus
@@ -18,7 +18,7 @@ interface TaskDetail {
    *  the effective model. Surfaced as a label on the token usage tooltip. */
   providerType?: string | null
   thinkingEnabled?: boolean
-  thinkingEffort?: KinThinkingEffort | null
+  thinkingEffort?: AgentThinkingEffort | null
   depth: number
   result: string | null
   error: string | null
@@ -26,7 +26,7 @@ interface TaskDetail {
   concurrencyMax: number | null
   cronId: string | null
   /** Parent ticket this task was spawned on, if any. Null for non-ticket
-   *  tasks. Used by the task panel to show the ticket ref (e.g. kinbot#42)
+   *  tasks. Used by the task panel to show the ticket ref (e.g. hivekeep#42)
    *  and offer a jump-back to the ticket. */
   ticket?: { id: string; number: number | null; projectSlug: string | null } | null
   /** Optional run-specific sur-prompt captured at spawn time for ticket tasks.
@@ -259,7 +259,7 @@ export function useTaskDetail(taskId: string | null) {
       id: messageId,
       role: 'assistant',
       content: baseContent,
-      sourceType: 'kin',
+      sourceType: 'agent',
       sourceId: null,
       isRedacted: false,
       toolCalls: null,
@@ -302,7 +302,7 @@ export function useTaskDetail(taskId: string | null) {
       // Skip events already incorporated into streamingContentRef. The server
       // tags each chat:token with the fullContent length AFTER appending — and
       // the live snapshot returned by fetchDetail is always at a token boundary
-      // (see executeSubKin) — so this comparison is exact and rejects only
+      // (see executeSubAgent) — so this comparison is exact and rejects only
       // tokens the snapshot already covered.
       if (contentLength !== undefined && contentLength <= streamingContentRef.current.length) {
         return
@@ -379,7 +379,7 @@ export function useTaskDetail(taskId: string | null) {
             id: doneMessageId,
             role: 'assistant' as const,
             content: finalContent,
-            sourceType: 'kin',
+            sourceType: 'agent',
             sourceId: null,
             isRedacted: false,
             toolCalls: null,

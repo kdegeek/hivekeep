@@ -9,7 +9,7 @@ import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { mkdirSync, existsSync } from 'fs'
 import { dirname, resolve } from 'path'
 
-const dbPath = process.env.DB_PATH ?? './data/kinbot.db'
+const dbPath = process.env.DB_PATH ?? './data/hivekeep.db'
 
 // Ensure data directory exists
 const dbDir = dirname(dbPath)

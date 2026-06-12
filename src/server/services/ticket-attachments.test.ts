@@ -24,7 +24,7 @@ mock.module('@/server/sse/index', () => ({
 // the REAL config (rather than mocking it) so transitive imports (tasks →
 // vault → config.vault.*) keep working. The SUT only reads `dataDir`,
 // `upload.*`, and `workspace.baseDir`, so a runtime mutation is enough.
-const tmpDataDir = mkdtempSync(join(tmpdir(), 'kinbot-attachments-test-'))
+const tmpDataDir = mkdtempSync(join(tmpdir(), 'hivekeep-attachments-test-'))
 const { config: realConfig } = await import('@/server/config') as {
   config: {
     dataDir: string
@@ -84,12 +84,12 @@ beforeAll(() => {
       pseudonym TEXT NOT NULL,
       language TEXT NOT NULL DEFAULT 'fr',
       role TEXT NOT NULL DEFAULT 'member',
-      kin_order TEXT,
+      agent_order TEXT,
       cron_order TEXT
     )
   `)
   sqlite.run(`
-    CREATE TABLE kins (
+    CREATE TABLE agents (
       id TEXT PRIMARY KEY,
       slug TEXT UNIQUE,
       name TEXT NOT NULL,
@@ -130,7 +130,7 @@ beforeAll(() => {
       status TEXT NOT NULL DEFAULT 'backlog',
       position INTEGER NOT NULL DEFAULT 0,
       reporter_user_id TEXT,
-      reporter_kin_id TEXT,
+      reporter_agent_id TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     )
@@ -155,8 +155,8 @@ beforeAll(() => {
   sqlite.run(`
     CREATE TABLE tasks (
       id TEXT PRIMARY KEY,
-      parent_kin_id TEXT,
-      target_kin_id TEXT,
+      parent_agent_id TEXT,
+      target_agent_id TEXT,
       ticket_id TEXT,
       description TEXT,
       title TEXT,
@@ -178,9 +178,9 @@ beforeAll(() => {
       tool_preset TEXT,
       kind_origin TEXT,
       request_input_count INTEGER DEFAULT 0,
-      inter_kin_request_count INTEGER DEFAULT 0,
-      inter_kin_request_chain_id TEXT,
-      inter_kin_origin_task_id TEXT,
+      inter_agent_request_count INTEGER DEFAULT 0,
+      inter_agent_request_chain_id TEXT,
+      inter_agent_origin_task_id TEXT,
       thinking_config TEXT,
       effective_thinking TEXT,
       manual_run TEXT,
@@ -197,7 +197,7 @@ beforeAll(() => {
       size INTEGER NOT NULL,
       description TEXT,
       uploaded_by_user_id TEXT REFERENCES user(id) ON DELETE SET NULL,
-      uploaded_by_kin_id TEXT REFERENCES kins(id) ON DELETE SET NULL,
+      uploaded_by_agent_id TEXT REFERENCES agents(id) ON DELETE SET NULL,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     )
@@ -220,7 +220,7 @@ beforeEach(() => {
   sqlite.run('DELETE FROM project_tags')
   sqlite.run('DELETE FROM tickets')
   sqlite.run('DELETE FROM projects')
-  sqlite.run('DELETE FROM kins')
+  sqlite.run('DELETE FROM agents')
   sqlite.run('DELETE FROM user_profiles')
   sqlite.run('DELETE FROM user')
   broadcasted.length = 0
@@ -236,8 +236,8 @@ beforeEach(() => {
      VALUES ('user-1', 'Alice', 'Doe', 'alice')`,
   )
   sqlite.run(
-    `INSERT INTO kins (id, slug, name, role, character, expertise, model, workspace_path, created_at, updated_at)
-     VALUES ('kin-1', 'k', 'KinAttach', 'r', 'c', 'e', 'm', '/tmp/kin-1', ?, ?)`,
+    `INSERT INTO agents (id, slug, name, role, character, expertise, model, workspace_path, created_at, updated_at)
+     VALUES ('agent-1', 'k', 'AgentAttach', 'r', 'c', 'e', 'm', '/tmp/agent-1', ?, ?)`,
     [now, now],
   )
   sqlite.run(
@@ -293,7 +293,7 @@ describe('ticket-attachments service', () => {
         buffer: Buffer.alloc(0),
         mimeType: 'text/plain',
         description: null,
-        uploader: { type: 'kin', id: 'kin-1' },
+        uploader: { type: 'agent', id: 'agent-1' },
       }),
     ).rejects.toThrow('FILE_EMPTY')
   })
@@ -325,7 +325,7 @@ describe('ticket-attachments service', () => {
       buffer: Buffer.from('x', 'utf8'),
       mimeType: 'text/plain',
       description: null,
-      uploader: { type: 'kin', id: 'kin-1' },
+      uploader: { type: 'agent', id: 'agent-1' },
     })
     const updated = await updateAttachment(created.id, {
       name: 'after.txt',
@@ -390,7 +390,7 @@ describe('ticket-attachments service', () => {
   })
 
   itMocked('createAttachmentFromPath copies a workspace file', async () => {
-    const wsDir = join(tmpDataDir, 'workspaces', 'kin-1')
+    const wsDir = join(tmpDataDir, 'workspaces', 'agent-1')
     require('fs').mkdirSync(wsDir, { recursive: true })
     const srcPath = join(wsDir, 'report.csv')
     writeFileSync(srcPath, 'col1,col2\n1,2\n', 'utf8')
@@ -400,7 +400,7 @@ describe('ticket-attachments service', () => {
       sourcePath: srcPath,
       originalName: 'report.csv',
       description: 'from workspace',
-      uploader: { type: 'kin', id: 'kin-1' },
+      uploader: { type: 'agent', id: 'agent-1' },
     })
 
     expect(attachment.name).toBe('report.csv')
@@ -412,14 +412,14 @@ describe('ticket-attachments service', () => {
   })
 
   itMocked('resolveAttachmentSource accepts workspace paths and rejects traversal', () => {
-    const wsDir = join(tmpDataDir, 'workspaces', 'kin-1')
+    const wsDir = join(tmpDataDir, 'workspaces', 'agent-1')
     require('fs').mkdirSync(wsDir, { recursive: true })
     writeFileSync(join(wsDir, 'a.txt'), 'x', 'utf8')
 
-    const ok = resolveAttachmentSource('kin-1', 'a.txt')
+    const ok = resolveAttachmentSource('agent-1', 'a.txt')
     expect(ok.kind).toBe('path')
 
-    const traversal = resolveAttachmentSource('kin-1', '../../etc/passwd')
+    const traversal = resolveAttachmentSource('agent-1', '../../etc/passwd')
     expect(traversal.kind).toBe('error')
   })
 })

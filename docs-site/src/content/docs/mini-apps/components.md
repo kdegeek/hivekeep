@@ -1,14 +1,14 @@
 ---
 title: Components
-description: 50+ themed React components from @kinbot/components.
+description: 50+ themed React components from @hivekeep/components.
 ---
 
-Import from `@kinbot/components` after adding it to your `app.json` dependencies:
+Import from `@hivekeep/components` after adding it to your `app.json` dependencies:
 
 ```json
 {
   "dependencies": {
-    "@kinbot/components": "/api/mini-apps/sdk/kinbot-components.js"
+    "@hivekeep/components": "/api/mini-apps/sdk/hivekeep-components.js"
   }
 }
 ```
@@ -537,7 +537,7 @@ Drag-and-drop kanban board.
 Hash-based routing for multi-page apps.
 
 ```jsx
-import { Router, Route, NavLink, useHashRouter } from "@kinbot/components";
+import { Router, Route, NavLink, useHashRouter } from "@hivekeep/components";
 
 function App() {
   return (

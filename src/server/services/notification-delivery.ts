@@ -1,7 +1,7 @@
 import { eq, and, isNotNull } from 'drizzle-orm'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/server/db/index'
-import { notificationChannels, channels, kins, contacts, contactPlatformIds } from '@/server/db/schema'
+import { notificationChannels, channels, agents, contacts, contactPlatformIds } from '@/server/db/schema'
 import { channelAdapters } from '@/server/channels/index'
 import { config } from '@/server/config'
 import { createLogger } from '@/server/logger'
@@ -39,33 +39,33 @@ const NOTIFICATION_EMOJI: Record<string, string> = {
   'channel:user-pending': '\uD83D\uDC64',
   'cron:pending-approval': '\u23F0',
   'mcp:pending-approval': '\uD83E\uDDE9',
-  'kin:error': '\u26A0\uFE0F',
+  'agent:error': '\u26A0\uFE0F',
 }
 
 interface NotificationPayload {
   type: NotificationType
   title: string
   body?: string | null
-  kinName?: string | null
+  agentName?: string | null
 }
 
 function formatNotification(payload: NotificationPayload, platform: string): string {
   const emoji = NOTIFICATION_EMOJI[payload.type] ?? '\uD83D\uDD14'
-  const kinSuffix = payload.kinName ? `\n\u2014 ${payload.kinName}` : ''
+  const agentSuffix = payload.agentName ? `\n\u2014 ${payload.agentName}` : ''
 
   switch (platform) {
     case 'telegram':
       return [
         `${emoji} *${escapeTelegramMarkdown(payload.title)}*`,
         payload.body ? escapeTelegramMarkdown(payload.body) : null,
-        kinSuffix ? escapeTelegramMarkdown(kinSuffix) : null,
+        agentSuffix ? escapeTelegramMarkdown(agentSuffix) : null,
       ].filter(Boolean).join('\n')
 
     default:
       return [
         `${emoji} ${payload.title}`,
         payload.body,
-        kinSuffix,
+        agentSuffix,
       ].filter(Boolean).join('\n')
   }
 }
@@ -309,7 +309,7 @@ export async function testNotificationChannel(id: string, userId: string): Promi
     const cfg = JSON.parse(channel.platformConfig) as Record<string, unknown>
     await adapter.sendMessage(channel.id, cfg, {
       chatId: nc.platformChatId,
-      content: '\uD83D\uDD14 This is a test notification from KinBot.',
+      content: '\uD83D\uDD14 This is a test notification from Hivekeep.',
     })
 
     // Reset errors on successful test
@@ -333,10 +333,10 @@ export async function listAvailableChannels(): Promise<AvailableNotificationChan
       channelId: channels.id,
       channelName: channels.name,
       platform: channels.platform,
-      kinName: kins.name,
+      agentName: agents.name,
     })
     .from(channels)
-    .innerJoin(kins, eq(channels.kinId, kins.id))
+    .innerJoin(agents, eq(channels.agentId, agents.id))
     .where(eq(channels.status, 'active'))
     .all()
 
@@ -344,7 +344,7 @@ export async function listAvailableChannels(): Promise<AvailableNotificationChan
     channelId: r.channelId,
     channelName: r.channelName,
     platform: r.platform ,
-    kinName: r.kinName,
+    agentName: r.agentName,
   }))
 }
 

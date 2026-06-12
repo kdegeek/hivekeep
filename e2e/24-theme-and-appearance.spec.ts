@@ -27,12 +27,12 @@ test.describe('Theme and appearance', () => {
     await page.goto('/')
     // Handle both fresh login and already-authenticated states
     const signIn = page.getByRole('button', { name: 'Sign in' })
-    const kins = page.getByText('Kins', { exact: true })
-    await expect(signIn.or(kins)).toBeVisible({ timeout: 10_000 })
+    const agents = page.getByText('Agents', { exact: true })
+    await expect(signIn.or(agents)).toBeVisible({ timeout: 10_000 })
     if (await signIn.isVisible().catch(() => false)) {
       await loginAs(page)
     }
-    await expect(kins).toBeVisible({ timeout: 10_000 })
+    await expect(agents).toBeVisible({ timeout: 10_000 })
   })
 
   test('should display theme toggle button in header', async ({ page }) => {
@@ -110,7 +110,7 @@ test.describe('Theme and appearance', () => {
 
     // Reload page
     await page.reload()
-    await expect(page.getByText('Kins', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Agents', { exact: true })).toBeVisible({ timeout: 10_000 })
 
     // Should still be dark
     const theme = await getHtmlThemeClass(page)

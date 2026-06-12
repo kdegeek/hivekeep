@@ -35,8 +35,8 @@ import { startClone } from '@/server/services/repo-clone'
 import { config } from '@/server/config'
 import type { AppVariables } from '@/server/app'
 import { createLogger } from '@/server/logger'
-import { TICKET_STATUSES, GITHUB_REPO_REGEX, isValidGitBranch } from '@/shared/constants'
-import type { TicketStatus, KinThinkingConfig, KinThinkingEffort } from '@/shared/types'
+import { TICKET_STATUSES, GITHUB_REPO_REGEX, isValidGitBranch, THINKING_EFFORTS } from '@/shared/constants'
+import type { TicketStatus, AgentThinkingConfig, AgentThinkingEffort } from '@/shared/types'
 
 const log = createLogger('routes:projects')
 
@@ -147,14 +147,15 @@ projectRoutes.post('/', async (c) => {
     scoutModel = body.scoutModel
     scoutProviderId = body.scoutProviderId
   }
-  let thinkingConfig: KinThinkingConfig | null | undefined
+  let thinkingConfig: AgentThinkingConfig | null | undefined
   if (body.thinkingConfig && typeof body.thinkingConfig === 'object') {
-    const cfg = body.thinkingConfig as Record<string, unknown>
-    const enabled = cfg.enabled === true
-    const effort = typeof cfg.effort === 'string' && (VALID_EFFORTS as readonly string[]).includes(cfg.effort)
-      ? (cfg.effort as KinThinkingEffort)
-      : null
-    thinkingConfig = { enabled, ...(effort !== null ? { effort } : {}) }
+    thinkingConfig = sanitizeThinkingConfig(body.thinkingConfig)
+  }
+  // Scout reasoning — same shape, dedicated column (project tier of
+  // resolveScoutThinking()'s chain).
+  let scoutThinkingConfig: AgentThinkingConfig | null | undefined
+  if (body.scoutThinkingConfig && typeof body.scoutThinkingConfig === 'object') {
+    scoutThinkingConfig = sanitizeThinkingConfig(body.scoutThinkingConfig)
   }
   // Default toolbox selection: array of toolbox ids. null / [] both mean
   // "inherit the runtime default" — normalized to null by the service layer.
@@ -179,6 +180,7 @@ projectRoutes.post('/', async (c) => {
       providerId,
       scoutModel,
       scoutProviderId,
+      scoutThinkingConfig,
       thinkingConfig,
       defaultToolboxIds,
     })
@@ -202,7 +204,19 @@ projectRoutes.post('/', async (c) => {
   }
 })
 
-const VALID_EFFORTS: readonly KinThinkingEffort[] = ['low', 'medium', 'high', 'max']
+const VALID_EFFORTS: readonly AgentThinkingEffort[] = THINKING_EFFORTS
+
+/** Validate a thinking-config body into the canonical shape (unknown efforts
+ *  dropped → enabled-with-default-effort). Shared by `thinkingConfig` and
+ *  `scoutThinkingConfig` on both verbs. */
+function sanitizeThinkingConfig(value: unknown): AgentThinkingConfig {
+  const cfg = value as Record<string, unknown>
+  const enabled = cfg.enabled === true
+  const effort = typeof cfg.effort === 'string' && (VALID_EFFORTS as readonly string[]).includes(cfg.effort)
+    ? (cfg.effort as AgentThinkingEffort)
+    : null
+  return { enabled, ...(effort !== null ? { effort } : {}) }
+}
 
 projectRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id')
@@ -218,7 +232,8 @@ projectRoutes.patch('/:id', async (c) => {
     providerId?: string | null
     scoutModel?: string | null
     scoutProviderId?: string | null
-    thinkingConfig?: KinThinkingConfig | null
+    scoutThinkingConfig?: AgentThinkingConfig | null
+    thinkingConfig?: AgentThinkingConfig | null
     defaultToolboxIds?: string[] | null
   } = {}
   if (typeof body.title === 'string') update.title = body.title
@@ -263,16 +278,17 @@ projectRoutes.patch('/:id', async (c) => {
     update.scoutModel = body.scoutModel
     update.scoutProviderId = body.scoutProviderId
   }
-  // thinkingConfig: null clears (inherit from Kin); object validates shape.
+  // thinkingConfig: null clears (inherit from Agent); object validates shape.
   if (body.thinkingConfig === null) {
     update.thinkingConfig = null
   } else if (body.thinkingConfig && typeof body.thinkingConfig === 'object') {
-    const cfg = body.thinkingConfig as Record<string, unknown>
-    const enabled = cfg.enabled === true
-    const effort = typeof cfg.effort === 'string' && (VALID_EFFORTS as readonly string[]).includes(cfg.effort)
-      ? (cfg.effort as KinThinkingEffort)
-      : null
-    update.thinkingConfig = { enabled, ...(effort !== null ? { effort } : {}) }
+    update.thinkingConfig = sanitizeThinkingConfig(body.thinkingConfig)
+  }
+  // scoutThinkingConfig: same clearing/validation semantics.
+  if (body.scoutThinkingConfig === null) {
+    update.scoutThinkingConfig = null
+  } else if (body.scoutThinkingConfig && typeof body.scoutThinkingConfig === 'object') {
+    update.scoutThinkingConfig = sanitizeThinkingConfig(body.scoutThinkingConfig)
   }
   // defaultToolboxIds: null clears (inherit runtime default); array validates
   // shape ([] is normalized to null by the service layer).
@@ -425,8 +441,8 @@ projectRoutes.post('/:projectId/tickets', async (c) => {
 
 // ─── Project knowledge ────────────────────────────────────────────────────────
 //
-// Entries created here have `authorKinId = null`, marking them as user-authored
-// (vs. entries created by Kin tool calls). UI/prompt rendering shows `by user`
+// Entries created here have `authorAgentId = null`, marking them as user-authored
+// (vs. entries created by Agent tool calls). UI/prompt rendering shows `by user`
 // for these.
 
 projectRoutes.get('/:projectId/knowledge', async (c) => {
@@ -487,7 +503,7 @@ projectRoutes.post('/:projectId/knowledge', async (c) => {
   const pinned = body.pinned === true
 
   try {
-    const entry = await createProjectKnowledge({ projectId, title, content, category, pinned, authorKinId: null })
+    const entry = await createProjectKnowledge({ projectId, title, content, category, pinned, authorAgentId: null })
     return c.json({ entry }, 201)
   } catch (err) {
     if (err instanceof PinCapExceededError) {

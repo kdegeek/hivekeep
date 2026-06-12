@@ -126,7 +126,7 @@ describe('authMiddleware', () => {
     })
 
     it('skips auth for frontend routes', async () => {
-      const res = await app.request('/kins/my-kin/chat')
+      const res = await app.request('/agents/my-agent/chat')
       expect(res.status).toBe(200)
     })
   })
@@ -135,8 +135,8 @@ describe('authMiddleware', () => {
 
   describe('protected API paths', () => {
     const protectedPaths = [
-      '/api/kins',
-      '/api/kins/123',
+      '/api/agents',
+      '/api/agents/123',
       '/api/providers',
       '/api/settings',
       '/api/files',
@@ -168,7 +168,7 @@ describe('authMiddleware', () => {
     })
 
     it('passes through and attaches user to context', async () => {
-      const res = await app.request('/api/kins')
+      const res = await app.request('/api/agents')
       expect(res.status).toBe(200)
       const body = await res.json()
       expect(body.ok).toBe(true)
@@ -177,14 +177,14 @@ describe('authMiddleware', () => {
 
     it('works for all HTTP methods', async () => {
       for (const method of ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as const) {
-        const res = await app.request('/api/kins', { method })
+        const res = await app.request('/api/agents', { method })
         expect(res.status).toBe(200)
       }
     })
 
     it('returns 403 when session exists but no profile', async () => {
       mockDbGet = mock(() => Promise.resolve(null))
-      const res = await app.request('/api/kins')
+      const res = await app.request('/api/agents')
       expect(res.status).toBe(403)
       const body = await res.json()
       expect(body.error.code).toBe('PROFILE_REQUIRED')
@@ -196,7 +196,7 @@ describe('authMiddleware', () => {
   describe('edge cases', () => {
     it('getSession is called with request headers', async () => {
       mockGetSession = mock(() => Promise.resolve(null))
-      await app.request('/api/kins', {
+      await app.request('/api/agents', {
         headers: { 'Authorization': 'Bearer test-token' },
       })
       expect(mockGetSession).toHaveBeenCalledTimes(1)

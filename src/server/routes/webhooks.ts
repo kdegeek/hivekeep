@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { eq, inArray } from 'drizzle-orm'
 import { db } from '@/server/db/index'
-import { kins } from '@/server/db/schema'
+import { agents } from '@/server/db/schema'
 import {
   createWebhook,
   updateWebhook,
@@ -25,20 +25,20 @@ const log = createLogger('routes:webhooks')
 
 export const webhookRoutes = new Hono<{ Variables: AppVariables }>()
 
-function kinAvatarUrl(kinId: string, avatarPath: string | null): string | null {
+function agentAvatarUrl(agentId: string, avatarPath: string | null): string | null {
   if (!avatarPath) return null
   const ext = avatarPath.split('.').pop() ?? 'png'
-  return `/api/uploads/kins/${kinId}/avatar.${ext}`
+  return `/api/uploads/agents/${agentId}/avatar.${ext}`
 }
 
-interface KinInfo { name: string; avatarPath: string | null }
+interface AgentInfo { name: string; avatarPath: string | null }
 
-function serializeWebhook(webhook: any, kinInfo?: KinInfo, filteredCount = 0) {
+function serializeWebhook(webhook: any, agentInfo?: AgentInfo, filteredCount = 0) {
   return {
     id: webhook.id,
-    kinId: webhook.kinId,
-    kinName: kinInfo?.name ?? 'Unknown',
-    kinAvatarUrl: kinInfo ? kinAvatarUrl(webhook.kinId, kinInfo.avatarPath) : null,
+    agentId: webhook.agentId,
+    agentName: agentInfo?.name ?? 'Unknown',
+    agentAvatarUrl: agentInfo ? agentAvatarUrl(webhook.agentId, agentInfo.avatarPath) : null,
     name: webhook.name,
     description: webhook.description,
     isActive: webhook.isActive,
@@ -59,22 +59,22 @@ function serializeWebhook(webhook: any, kinInfo?: KinInfo, filteredCount = 0) {
   }
 }
 
-// GET /api/webhooks — list webhooks with optional kinId filter
+// GET /api/webhooks — list webhooks with optional agentId filter
 webhookRoutes.get('/', async (c) => {
-  const kinId = c.req.query('kinId')
-  const allWebhooks = await listWebhooks(kinId ?? undefined)
+  const agentId = c.req.query('agentId')
+  const allWebhooks = await listWebhooks(agentId ?? undefined)
 
-  // Fetch kin info in a single query
-  const kinIds = [...new Set(allWebhooks.map((w) => w.kinId))]
-  const kinMap = new Map<string, KinInfo>()
-  if (kinIds.length > 0) {
-    const kinRows = await db
-      .select({ id: kins.id, name: kins.name, avatarPath: kins.avatarPath })
-      .from(kins)
-      .where(inArray(kins.id, kinIds))
+  // Fetch agent info in a single query
+  const agentIds = [...new Set(allWebhooks.map((w) => w.agentId))]
+  const agentMap = new Map<string, AgentInfo>()
+  if (agentIds.length > 0) {
+    const agentRows = await db
+      .select({ id: agents.id, name: agents.name, avatarPath: agents.avatarPath })
+      .from(agents)
+      .where(inArray(agents.id, agentIds))
       .all()
-    for (const k of kinRows) {
-      kinMap.set(k.id, { name: k.name, avatarPath: k.avatarPath })
+    for (const k of agentRows) {
+      agentMap.set(k.id, { name: k.name, avatarPath: k.avatarPath })
     }
   }
 
@@ -82,14 +82,14 @@ webhookRoutes.get('/', async (c) => {
   const filteredCounts = await getFilteredCounts(allWebhooks.map((w) => w.id))
 
   return c.json({
-    webhooks: allWebhooks.map((w) => serializeWebhook(w, kinMap.get(w.kinId), filteredCounts[w.id] ?? 0)),
+    webhooks: allWebhooks.map((w) => serializeWebhook(w, agentMap.get(w.agentId), filteredCounts[w.id] ?? 0)),
   })
 })
 
 // POST /api/webhooks — create a webhook (user-created)
 webhookRoutes.post('/', async (c) => {
   const body = await c.req.json<{
-    kinId: string
+    agentId: string
     name: string
     description?: string
     dispatchMode?: string
@@ -99,9 +99,9 @@ webhookRoutes.post('/', async (c) => {
   }>()
 
   const trimmedName = body.name?.trim()
-  if (!body.kinId || !trimmedName) {
+  if (!body.agentId || !trimmedName) {
     return c.json(
-      { error: { code: 'VALIDATION_ERROR', message: 'kinId and name are required' } },
+      { error: { code: 'VALIDATION_ERROR', message: 'agentId and name are required' } },
       400,
     )
   }
@@ -135,18 +135,18 @@ webhookRoutes.post('/', async (c) => {
     )
   }
 
-  // Validate that the Kin exists before attempting to create the webhook
-  const targetKin = await db.select({ id: kins.id }).from(kins).where(eq(kins.id, body.kinId)).get()
-  if (!targetKin) {
+  // Validate that the Agent exists before attempting to create the webhook
+  const targetAgent = await db.select({ id: agents.id }).from(agents).where(eq(agents.id, body.agentId)).get()
+  if (!targetAgent) {
     return c.json(
-      { error: { code: 'NOT_FOUND', message: 'Kin not found' } },
+      { error: { code: 'NOT_FOUND', message: 'Agent not found' } },
       404,
     )
   }
 
   try {
     const webhook = await createWebhook({
-      kinId: body.kinId,
+      agentId: body.agentId,
       name: trimmedName,
       description: body.description,
       createdBy: 'user',
@@ -156,12 +156,12 @@ webhookRoutes.post('/', async (c) => {
       maxConcurrentTasks: body.maxConcurrentTasks,
     })
 
-    log.info({ webhookId: webhook.id, kinId: webhook.kinId, name: webhook.name }, 'Webhook created via API')
+    log.info({ webhookId: webhook.id, agentId: webhook.agentId, name: webhook.name }, 'Webhook created via API')
 
-    const kin = await db.select({ name: kins.name, avatarPath: kins.avatarPath }).from(kins).where(eq(kins.id, webhook.kinId)).get()
+    const agent = await db.select({ name: agents.name, avatarPath: agents.avatarPath }).from(agents).where(eq(agents.id, webhook.agentId)).get()
     return c.json({
       webhook: {
-        ...serializeWebhook(webhook, kin ?? undefined),
+        ...serializeWebhook(webhook, agent ?? undefined),
         token: webhook.token, // Only returned at creation time
       },
     }, 201)
@@ -320,9 +320,9 @@ webhookRoutes.patch('/:id', async (c) => {
       return c.json({ error: { code: 'NOT_FOUND', message: 'Webhook not found' } }, 404)
     }
 
-    const kin = await db.select({ name: kins.name, avatarPath: kins.avatarPath }).from(kins).where(eq(kins.id, updated.kinId)).get()
+    const agent = await db.select({ name: agents.name, avatarPath: agents.avatarPath }).from(agents).where(eq(agents.id, updated.agentId)).get()
     const fc = await getFilteredCount(webhookId)
-    return c.json({ webhook: serializeWebhook(updated, kin ?? undefined, fc) })
+    return c.json({ webhook: serializeWebhook(updated, agent ?? undefined, fc) })
   } catch (err) {
     return c.json(
       { error: { code: 'WEBHOOK_UPDATE_ERROR', message: err instanceof Error ? err.message : 'Unknown error' } },
@@ -341,7 +341,7 @@ webhookRoutes.delete('/:id', async (c) => {
 
   try {
     await deleteWebhook(webhookId)
-    log.info({ webhookId, kinId: existing.kinId, name: existing.name }, 'Webhook deleted via API')
+    log.info({ webhookId, agentId: existing.agentId, name: existing.name }, 'Webhook deleted via API')
     return c.json({ success: true })
   } catch (err) {
     return c.json(

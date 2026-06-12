@@ -2,7 +2,7 @@ import { tool } from '@/server/tools/tool-helper'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { db } from '@/server/db/index'
-import { kins, tasks, tickets } from '@/server/db/schema'
+import { agents, tasks, tickets } from '@/server/db/schema'
 import { createLogger } from '@/server/logger'
 import { config } from '@/server/config'
 import {
@@ -23,8 +23,8 @@ const log = createLogger('tools:project-knowledge')
 // ─── Gating ─────────────────────────────────────────────────────────────────
 
 /**
- * Available to main Kins (no taskId) and to sub-Kins of ticket-bound tasks.
- * Free sub-Kins (task but no ticket) are filtered out — they have no project
+ * Available to main Agents (no taskId) and to sub-Agents of ticket-bound tasks.
+ * Free sub-Agents (task but no ticket) are filtered out — they have no project
  * context to act on.
  *
  * Mirrors the gate used by the existing project/ticket tools in
@@ -37,20 +37,20 @@ const mainOrTicketBoundCondition = (ctx: ToolExecutionContext): boolean =>
 
 interface ResolvedContext {
   projectId: string | null
-  /** When called from a sub-Kin task, the Kin id stored on the task row (the
-   *  spawned Kin's own id, which equals ctx.kinId at execution time). For main
-   *  Kins it's still ctx.kinId. We surface it explicitly to make audit/author
+  /** When called from a sub-Agent task, the Agent id stored on the task row (the
+   *  spawned Agent's own id, which equals ctx.agentId at execution time). For main
+   *  Agents it's still ctx.agentId. We surface it explicitly to make audit/author
    *  attribution explicit at the call site. */
-  authorKinId: string
+  authorAgentId: string
   /** Structured error code suitable for surfacing back to the LLM. */
   error?: 'NO_ACTIVE_PROJECT' | 'NO_PROJECT_CONTEXT'
 }
 
 /**
  * Resolve the project the tool should act on, based on the caller's context:
- * - Main Kin → `kins.active_project_id`
- * - Ticket-bound sub-Kin → `tickets.project_id` (looked up from `task.ticketId`)
- * - Free sub-Kin → blocked by the availability gate, but defended here too.
+ * - Main Agent → `agents.active_project_id`
+ * - Ticket-bound sub-Agent → `tickets.project_id` (looked up from `task.ticketId`)
+ * - Free sub-Agent → blocked by the availability gate, but defended here too.
  *
  * Returns a typed error when no project can be resolved so the tool can
  * return a structured error to the agent.
@@ -58,7 +58,7 @@ interface ResolvedContext {
 function resolveProjectContext(ctx: ToolExecutionContext): ResolvedContext {
   if (ctx.taskId) {
     if (!ctx.ticketId) {
-      return { projectId: null, authorKinId: ctx.kinId, error: 'NO_PROJECT_CONTEXT' }
+      return { projectId: null, authorAgentId: ctx.agentId, error: 'NO_PROJECT_CONTEXT' }
     }
     const ticket = db
       .select({ projectId: tickets.projectId })
@@ -66,20 +66,20 @@ function resolveProjectContext(ctx: ToolExecutionContext): ResolvedContext {
       .where(eq(tickets.id, ctx.ticketId))
       .get()
     if (!ticket) {
-      return { projectId: null, authorKinId: ctx.kinId, error: 'NO_PROJECT_CONTEXT' }
+      return { projectId: null, authorAgentId: ctx.agentId, error: 'NO_PROJECT_CONTEXT' }
     }
-    return { projectId: ticket.projectId, authorKinId: ctx.kinId }
+    return { projectId: ticket.projectId, authorAgentId: ctx.agentId }
   }
 
-  const kin = db
-    .select({ activeProjectId: kins.activeProjectId })
-    .from(kins)
-    .where(eq(kins.id, ctx.kinId))
+  const agent = db
+    .select({ activeProjectId: agents.activeProjectId })
+    .from(agents)
+    .where(eq(agents.id, ctx.agentId))
     .get()
-  if (!kin?.activeProjectId) {
-    return { projectId: null, authorKinId: ctx.kinId, error: 'NO_ACTIVE_PROJECT' }
+  if (!agent?.activeProjectId) {
+    return { projectId: null, authorAgentId: ctx.agentId, error: 'NO_ACTIVE_PROJECT' }
   }
-  return { projectId: kin.activeProjectId, authorKinId: ctx.kinId }
+  return { projectId: agent.activeProjectId, authorAgentId: ctx.agentId }
 }
 
 function pinCapMessage(): string {
@@ -90,7 +90,7 @@ function pinCapMessage(): string {
 
 const addDescription =
   'Capture a durable fact about the current project: an architectural decision, a convention, ' +
-  'a gotcha, a domain rule. Visible to ALL Kins working on this project. ' +
+  'a gotcha, a domain rule. Visible to ALL Agents working on this project. ' +
   'Every entry\'s title lands in your system-prompt knowledge index. ' +
   'Set pinned=true to additionally inline the full markdown content in the prompt ' +
   '(capped at 10 pins per project — unpin one first if full). Unpinned entries ' +
@@ -106,7 +106,7 @@ export const addProjectKnowledgeTool: ToolRegistration = {
         title: z
           .string()
           .min(1)
-          .describe('Short, human-readable title. Lands in every Kin\'s prompt index so make it self-explanatory.'),
+          .describe('Short, human-readable title. Lands in every Agent\'s prompt index so make it self-explanatory.'),
         content: z
           .string()
           .min(1)
@@ -118,7 +118,7 @@ export const addProjectKnowledgeTool: ToolRegistration = {
         pinned: z
           .boolean()
           .optional()
-          .describe('Default: false. When true, the full content is also injected inline into every Kin\'s system prompt for this project (cap: 10).'),
+          .describe('Default: false. When true, the full content is also injected inline into every Agent\'s system prompt for this project (cap: 10).'),
       }),
       execute: async ({ title, content, category, pinned }) => {
         const resolved = resolveProjectContext(ctx)
@@ -131,9 +131,9 @@ export const addProjectKnowledgeTool: ToolRegistration = {
             content,
             category: category ?? null,
             pinned: pinned ?? false,
-            authorKinId: resolved.authorKinId,
+            authorAgentId: resolved.authorAgentId,
           })
-          log.debug({ kinId: ctx.kinId, knowledgeId: created.id, pinned: created.pinned }, 'Knowledge added')
+          log.debug({ agentId: ctx.agentId, knowledgeId: created.id, pinned: created.pinned }, 'Knowledge added')
           return {
             knowledge: {
               id: created.id,
@@ -182,7 +182,7 @@ export const searchProjectKnowledgeTool: ToolRegistration = {
             content: h.content,
             category: h.category,
             pinned: h.pinned,
-            authorKinName: h.authorKinName,
+            authorAgentName: h.authorAgentName,
             score: h.score,
           })),
         }
@@ -216,7 +216,7 @@ export const listProjectKnowledgeTool: ToolRegistration = {
           offset: offset ?? 0,
         })
         // Return titles only (no body) so the tool result stays light —
-        // the Kin can call get_project_knowledge(id) for any entry it wants
+        // the Agent can call get_project_knowledge(id) for any entry it wants
         // to read in full.
         return {
           entries: entries.map((e) => ({
@@ -224,7 +224,7 @@ export const listProjectKnowledgeTool: ToolRegistration = {
             title: e.title,
             category: e.category,
             pinned: e.pinned,
-            authorKinName: e.authorKinName,
+            authorAgentName: e.authorAgentName,
             updatedAt: e.updatedAt,
           })),
         }
@@ -263,7 +263,7 @@ export const getProjectKnowledgeTool: ToolRegistration = {
             content: entry.content,
             category: entry.category,
             pinned: entry.pinned,
-            authorKinName: entry.authorKinName,
+            authorAgentName: entry.authorAgentName,
             updatedAt: entry.updatedAt,
           },
         }
@@ -291,7 +291,7 @@ export const updateProjectKnowledgeTool: ToolRegistration = {
         if (resolved.error) return { error: resolved.error }
 
         // Cross-project guardrail: an entry must belong to the project the
-        // caller is currently acting on. Without it, a Kin with an active
+        // caller is currently acting on. Without it, an Agent with an active
         // project could be tricked into editing another project's entries.
         const existing = await getProjectKnowledge(id)
         if (!existing) return { error: 'KNOWLEDGE_NOT_FOUND' }
@@ -368,7 +368,7 @@ export const pinProjectKnowledgeTool: ToolRegistration = {
     tool({
       description:
         'Pin or unpin a project knowledge entry. Pinned entries appear in the system prompt for ' +
-        `every Kin acting on this project (cap: ${config.projectKnowledge.pinCap} pins per project).`,
+        `every Agent acting on this project (cap: ${config.projectKnowledge.pinCap} pins per project).`,
       inputSchema: z.object({
         id: z.string(),
         pinned: z.boolean(),

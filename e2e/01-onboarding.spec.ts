@@ -146,7 +146,7 @@ test.describe.serial('Onboarding flow', () => {
     await page.getByRole('button', { name: 'Skip for now' }).click()
 
     // ── Should land on main app ──
-    await expect(page.getByText('Kins', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Agents', { exact: true })).toBeVisible({ timeout: 10_000 })
   })
 
   test('should redirect to login after onboarding is complete', async ({ page }) => {

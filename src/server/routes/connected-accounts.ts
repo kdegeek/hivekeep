@@ -14,7 +14,7 @@ import {
   setAccountAllowList,
 } from '@/server/services/connected-accounts'
 import { sseManager } from '@/server/sse/index'
-import type { ConfigField, ProviderConfig } from '@kinbot-developer/sdk'
+import type { ConfigField, ProviderConfig } from '@hivekeep/sdk'
 
 const log = createLogger('routes:connected-accounts')
 const connectedAccountRoutes = new Hono()
@@ -121,11 +121,11 @@ connectedAccountRoutes.post('/connect-config/:type', async (c) => {
 // PATCH /api/connected-accounts/:id — send mode (email) / allow-list.
 connectedAccountRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id')
-  const body = await c.req.json<{ sendMode?: 'direct' | 'approval'; allowedKinIds?: string[] | null }>()
+  const body = await c.req.json<{ sendMode?: 'direct' | 'approval'; allowedAgentIds?: string[] | null }>()
   try {
     if (body.sendMode) await setAccountSendMode(id, body.sendMode)
-    if (body.allowedKinIds !== undefined) await setAccountAllowList(id, body.allowedKinIds)
-    if (!body.sendMode && body.allowedKinIds === undefined) {
+    if (body.allowedAgentIds !== undefined) await setAccountAllowList(id, body.allowedAgentIds)
+    if (!body.sendMode && body.allowedAgentIds === undefined) {
       return c.json({ error: { code: 'INVALID_INPUT', message: 'Nothing to update' } }, 400)
     }
     sseManager.broadcast({ type: 'connected-account:updated', data: { accountId: id } })

@@ -27,7 +27,7 @@ import type { TaskStatus } from '@/shared/types'
  *   queued               → queued  (global orange token)
  *   paused               → paused  (global amber token)
  *   awaiting_human_input → warning  (pulse)
- *   awaiting_kin_response → info    (pulse)
+ *   awaiting_agent_response → info    (pulse)
  *   awaiting_subtask     → info     (pulse)
  *   completed            → success
  *   failed               → destructive
@@ -120,8 +120,8 @@ export const TASK_STATUS_META: Record<TaskStatus, TaskStatusMeta> = {
     ringClass: 'ring-warning/30',
     pulse: true,
   },
-  awaiting_kin_response: {
-    labelKey: 'sidebar.tasks.status.awaiting_kin_response',
+  awaiting_agent_response: {
+    labelKey: 'sidebar.tasks.status.awaiting_agent_response',
     group: 'suspended',
     icon: MessageSquare,
     textClass: 'text-info',

@@ -120,7 +120,7 @@ export class SignalAdapter implements ChannelAdapter {
   // signal-cli and the underlying Signal protocol do not expose an API to
   // change the bot account's display name per chat (and updating the
   // profile name globally requires re-registration). Fall back to the
-  // core's "[Kin Name] " prefix.
+  // core's "[Agent Name] " prefix.
   readonly identitySwitchMode = 'prefix' as const
 
   /** Store message handlers for webhook processing */

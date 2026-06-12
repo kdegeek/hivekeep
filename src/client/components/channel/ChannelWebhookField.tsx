@@ -12,7 +12,7 @@ interface ChannelWebhookFieldProps {
  * Read-only display of a plugin channel's inbound-webhook URL with a copy
  * button. Shown in the expanded channel card for webhook-driven plugin
  * platforms (e.g. Twilio SMS) so the user knows exactly which URL to paste
- * into the provider's console — KinBot never registers it automatically.
+ * into the provider's console — Hivekeep never registers it automatically.
  */
 export function ChannelWebhookField({ url }: ChannelWebhookFieldProps) {
   const { t } = useTranslation()

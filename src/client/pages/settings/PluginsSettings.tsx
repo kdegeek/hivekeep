@@ -677,7 +677,7 @@ export function PluginsSettings() {
         >
           <Input
             id="git-url"
-            placeholder="https://github.com/user/kinbot-plugin-xxx.git"
+            placeholder="https://github.com/user/hivekeep-plugin-xxx.git"
             value={installUrl}
             onChange={(e) => setInstallUrl(e.target.value)}
           />

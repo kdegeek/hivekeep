@@ -12,7 +12,7 @@
  *
  * Since April 2026, Anthropic re-routes OAuth requests detected as coming from
  * non-official Claude Code clients to a separate "extra usage" billing pool
- * (instead of consuming the user's plan quota). KinBot replicates the wire
+ * (instead of consuming the user's plan quota). Hivekeep replicates the wire
  * shape of the official CLI as faithfully as practical to stay on the regular
  * pool:
  *   - `user-agent` matches the latest published Claude Code version
@@ -21,7 +21,7 @@
  *     (the official CLI only opts into this on the one-shot key verification
  *     path; sending it on every request was a strong "not Claude Code" signal)
  *   - `metadata.user_id` is injected on each request body (the OAuth fetch
- *     wrapper in `kin-engine.ts` calls `getOAuthUserId()` for this)
+ *     wrapper in `agent-engine.ts` calls `getOAuthUserId()` for this)
  *
  * Anthropic actively iterates on detection — these mitigations are best-effort
  * and may need to be refreshed.
@@ -185,7 +185,7 @@ async function doRefresh(credsPath: string): Promise<string> {
 
 /**
  * Get a fresh OAuth access token for the Anthropic API.
- * Useful for external callers (e.g. the Kin engine) that need
+ * Useful for external callers (e.g. the Agent engine) that need
  * the token to pass to the Vercel AI SDK.
  */
 export async function getOAuthAccessToken(overridePath?: string): Promise<string> {
@@ -267,7 +267,7 @@ export const OAUTH_HEADERS = {
   // request param is used — they're included to match CC's fingerprint (which
   // helps stay on the subscription billing pool) and to unlock features we do
   // use. We intentionally do NOT send the `context_management` request param
-  // (KinBot has its own compacting), only the header. `context-1m` actually
+  // (Hivekeep has its own compacting), only the header. `context-1m` actually
   // enables the 1M context window for the [1m] models.
   'anthropic-beta': [
     'claude-code-20250219',
@@ -313,7 +313,7 @@ function getInstallationId(): string {
   // Persist alongside the credentials file so the ID survives restarts but is
   // tied to the same machine/install. Falls back to in-memory if the disk
   // write fails (read-only FS, missing dir, etc.).
-  const idPath = join(REAL_HOME, '.claude', '.kinbot-installation-id')
+  const idPath = join(REAL_HOME, '.claude', '.hivekeep-installation-id')
   try {
     if (existsSync(idPath)) {
       const value = readFileSync(idPath, 'utf8').trim()

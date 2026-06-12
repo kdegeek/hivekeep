@@ -105,7 +105,7 @@ interface GatewayState {
  * Discord's WebSocket throws `InvalidStateError` from `send()` when the
  * socket is CONNECTING or CLOSING. If that throw escapes a timer callback
  * (the heartbeat interval) it is an uncaught exception that crashes the
- * entire Bun process — taking down the whole KinBot server, not just Discord.
+ * entire Bun process — taking down the whole Hivekeep server, not just Discord.
  * A gateway send must never be able to crash the host.
  */
 function wsSend(ws: WebSocket | null, payload: Record<string, unknown>, channelId: string): boolean {
@@ -188,8 +188,8 @@ function createGateway(state: GatewayState): void {
               intents: INTENTS,
               properties: {
                 os: 'linux',
-                browser: 'kinbot',
-                device: 'kinbot',
+                browser: 'hivekeep',
+                device: 'hivekeep',
               },
             },
           }, state.channelId)
@@ -619,13 +619,13 @@ export class DiscordAdapter implements ChannelAdapter {
   async onIdentityChange(
     _channelId: string,
     cfg: Record<string, unknown>,
-    newIdentity: { kinSlug: string; kinName: string; avatarUrl?: string },
+    newIdentity: { agentSlug: string; agentName: string; avatarUrl?: string },
   ): Promise<void> {
     const token = await resolveToken(cfg)
     // Discord usernames are capped at 32 chars and must avoid certain
     // characters; truncate defensively. Slugs are always ASCII so this
-    // mostly affects long Kin display names.
-    const username = newIdentity.kinName.slice(0, 32).trim() || newIdentity.kinSlug
+    // mostly affects long Agent display names.
+    const username = newIdentity.agentName.slice(0, 32).trim() || newIdentity.agentSlug
     const body: Record<string, unknown> = { username }
 
     // Avatar is optional: PATCH /users/@me accepts a data: URI in the

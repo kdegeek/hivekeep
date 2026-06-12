@@ -5,7 +5,7 @@ import { rm } from 'fs/promises'
  * Deletes the database so the showcase starts from a fresh onboarding.
  */
 export default async function globalSetup() {
-  const dbPath = process.env.E2E_DB_PATH || './data/kinbot-showcase.db'
+  const dbPath = process.env.E2E_DB_PATH || './data/hivekeep-showcase.db'
   await Promise.all([
     rm(dbPath, { force: true }),
     rm(`${dbPath}-wal`, { force: true }),

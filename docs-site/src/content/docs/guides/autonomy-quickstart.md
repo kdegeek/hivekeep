@@ -1,38 +1,38 @@
 ---
 title: Autonomy Quickstart
-description: Get a Kin running autonomously in 15–30 minutes — crons, webhooks, and sub-tasks explained.
+description: Get an Agent running autonomously in 15–30 minutes — crons, webhooks, and sub-tasks explained.
 ---
 
-KinBot Kins aren't just chatbots — they can work autonomously on schedules, react to external events, and delegate work to sub-agents. This guide takes you from zero to a working autonomous Kin.
+Hivekeep Agents aren't just chatbots — they can work autonomously on schedules, react to external events, and delegate work to sub-agents. This guide takes you from zero to a working autonomous Agent.
 
-## What "autonomy" means in KinBot
+## What "autonomy" means in Hivekeep
 
-Three mechanisms make Kins autonomous:
+Three mechanisms make Agents autonomous:
 
 | Mechanism | What it does | Example |
 |---|---|---|
 | **Cron jobs** | Run a task on a schedule | "Every morning at 8 AM, check my GitHub issues" |
 | **Webhooks** | React to external events in real-time | "When a new issue is opened, triage it" |
-| **Sub-tasks** | Delegate work to focused sub-agents | "Spawn a sub-Kin to research this topic" |
+| **Sub-tasks** | Delegate work to focused sub-agents | "Spawn a sub-Agent to research this topic" |
 
-These can be combined. A cron job can spawn sub-tasks. A webhook can trigger a chain of sub-agents. The Kin orchestrates everything.
+These can be combined. A cron job can spawn sub-tasks. A webhook can trigger a chain of sub-agents. The Agent orchestrates everything.
 
 ## Prerequisites
 
 Before starting, make sure you have:
 
-- A working KinBot installation ([Installation guide](/kinbot/docs/getting-started/installation/))
-- At least one **LLM provider** configured (Anthropic recommended — see [Model Selection](/kinbot/docs/guides/model-selection/))
+- A working Hivekeep installation ([Installation guide](/docs/getting-started/installation/))
+- At least one **LLM provider** configured (Anthropic recommended — see [Model Selection](/docs/guides/model-selection/))
 - At least one **embedding provider** configured (for memory)
-- A Kin created ([Your First Kin](/kinbot/docs/getting-started/first-kin/))
+- An Agent created ([Your First Agent](/docs/getting-started/first-agent/))
 
 :::caution[Model choice matters]
-Autonomous Kins **must** use a model with strong tool-calling capabilities. Claude Sonnet 4 or Claude Sonnet 3.5 are strongly recommended. Models that default to "text mode" (describing actions instead of executing them) will fail silently. See [Model Selection](/kinbot/docs/guides/model-selection/) for details.
+Autonomous Agents **must** use a model with strong tool-calling capabilities. Claude Sonnet 4 or Claude Sonnet 3.5 are strongly recommended. Models that default to "text mode" (describing actions instead of executing them) will fail silently. See [Model Selection](/docs/guides/model-selection/) for details.
 :::
 
-## Step 1: Create an autonomy-ready Kin
+## Step 1: Create an autonomy-ready Agent
 
-Create a new Kin (or update an existing one) with a system prompt designed for autonomous work. The key is being **explicit about actions**:
+Create a new Agent (or update an existing one) with a system prompt designed for autonomous work. The key is being **explicit about actions**:
 
 ### Character field
 
@@ -46,35 +46,35 @@ You always use tools to accomplish tasks. You never simulate or roleplay tool us
 
 ```
 You are an expert at task automation, data processing, and systematic workflows.
-You know how to use all KinBot tools: web search, file operations, memory, HTTP requests.
+You know how to use all Hivekeep tools: web search, file operations, memory, HTTP requests.
 When a task is complete, you summarize what was done and what the results were.
 ```
 
 :::tip
-The "you ACT, you never describe" pattern is critical for autonomous Kins. Without it, some models will write essays about what they _would_ do instead of actually calling tools.
+The "you ACT, you never describe" pattern is critical for autonomous Agents. Without it, some models will write essays about what they _would_ do instead of actually calling tools.
 :::
 
 ## Step 2: Set up your first cron job
 
 Cron jobs are the simplest path to autonomy. Let's create one that runs daily.
 
-### Option A: Ask the Kin to create it
+### Option A: Ask the Agent to create it
 
-Simply tell your Kin:
+Simply tell your Agent:
 
 > Create a cron job that runs every day at 8:00 AM UTC. The task should: search the web for the latest news about "artificial intelligence", summarize the top 3 stories, and save the summary to memory.
 
-The Kin will call `create_cron` with the appropriate configuration. You'll see a **pending approval** notification — cron jobs created by Kins always require human approval before they run.
+The Agent will call `create_cron` with the appropriate configuration. You'll see a **pending approval** notification — cron jobs created by Agents always require human approval before they run.
 
 ### Option B: Understand the cron structure
 
-When a Kin creates a cron, it specifies:
+When an Agent creates a cron, it specifies:
 
 | Parameter | Description | Example |
 |---|---|---|
 | `title` | Short name for the job | `"Daily AI News Digest"` |
 | `schedule` | Cron expression (standard 5-field) | `"0 8 * * *"` (8 AM daily) |
-| `task_description` | Full prompt for the sub-Kin that runs | The detailed instructions |
+| `task_description` | Full prompt for the sub-Agent that runs | The detailed instructions |
 
 Common cron schedules:
 
@@ -88,26 +88,26 @@ Common cron schedules:
 
 ### What happens when a cron fires
 
-1. KinBot spawns a **sub-Kin** (a temporary copy of your Kin)
-2. The sub-Kin receives the `task_description` as its mission
-3. The sub-Kin executes using all available tools
-4. Results are saved — the sub-Kin **must** call `update_task_status("completed", result)` when done
-5. The result appears in your Kin's conversation as an informational message
-6. On the next run, the sub-Kin receives the **previous run's result** for continuity
+1. Hivekeep spawns a **sub-Agent** (a temporary copy of your Agent)
+2. The sub-Agent receives the `task_description` as its mission
+3. The sub-Agent executes using all available tools
+4. Results are saved — the sub-Agent **must** call `update_task_status("completed", result)` when done
+5. The result appears in your Agent's conversation as an informational message
+6. On the next run, the sub-Agent receives the **previous run's result** for continuity
 
 :::note
-Cron results are informational — they don't trigger an LLM turn on the parent Kin. This means your Kin won't "react" to cron results automatically. If you need the Kin to process results, design the cron task to be self-contained.
+Cron results are informational — they don't trigger an LLM turn on the parent Agent. This means your Agent won't "react" to cron results automatically. If you need the Agent to process results, design the cron task to be self-contained.
 :::
 
 ## Step 3: Verify it's working
 
 ### Check the cron is registered
 
-Ask your Kin:
+Ask your Agent:
 
 > List all my cron jobs and their status.
 
-The Kin will call `list_crons` and show you the registered jobs, including their schedule, status (active/pending), and last run time.
+The Agent will call `list_crons` and show you the registered jobs, including their schedule, status (active/pending), and last run time.
 
 ### Check execution history
 
@@ -115,7 +115,7 @@ After the first run:
 
 > Show me the execution history for my daily news cron.
 
-The Kin will call `get_cron_journal` to show past executions with timestamps, status (success/failure), and results.
+The Agent will call `get_cron_journal` to show past executions with timestamps, status (success/failure), and results.
 
 ### Manual trigger for testing
 
@@ -127,25 +127,25 @@ This runs the cron right now without affecting the regular schedule.
 
 ### What to look for in the UI
 
-- **Task indicators**: When a cron fires, you'll see a sub-task appear in the Kin's conversation
+- **Task indicators**: When a cron fires, you'll see a sub-task appear in the Agent's conversation
 - **Tool call markers**: Successful autonomous execution shows tool calls (web search, memory writes, etc.) — not just text responses
 - **Status**: The task should end with `completed` status and a result summary
 
 :::caution
-If you see the sub-task producing only text (no tool calls), your model is running in "text mode." Switch to Claude Sonnet or see [Model Selection](/kinbot/docs/guides/model-selection/) for fixes.
+If you see the sub-task producing only text (no tool calls), your model is running in "text mode." Switch to Claude Sonnet or see [Model Selection](/docs/guides/model-selection/) for fixes.
 :::
 
 ## Step 4: Add webhook reactions (optional)
 
-Webhooks let your Kin react to external events in real-time. Each webhook gets a unique URL you can point external services at.
+Webhooks let your Agent react to external events in real-time. Each webhook gets a unique URL you can point external services at.
 
 ### Creating a webhook
 
-Ask your Kin:
+Ask your Agent:
 
 > Create a webhook called "GitHub Events" that listens for GitHub webhook payloads. Filter to only accept payloads where the "action" field is "opened" or "labeled". Use task dispatch mode so each event spawns a sub-task.
 
-The Kin will create a webhook with:
+The Agent will create a webhook with:
 - **Payload filtering** — drops irrelevant events before they cost LLM tokens
 - **Task dispatch mode** — each matching payload spawns an isolated sub-task
 
@@ -153,24 +153,24 @@ The Kin will create a webhook with:
 
 | Mode | Behavior | Best for |
 |---|---|---|
-| `conversation` | Payload injected into the Kin's main chat | Low-volume events you want to discuss |
+| `conversation` | Payload injected into the Agent's main chat | Low-volume events you want to discuss |
 | `task` | Each payload spawns an autonomous sub-task | High-volume events that need processing |
 
 Task mode supports **concurrency control** — you can limit how many webhook-spawned tasks run in parallel to avoid overwhelming your LLM provider.
 
 ### Connecting to external services
 
-After creating the webhook, the Kin returns a URL like:
+After creating the webhook, the Agent returns a URL like:
 
 ```
-https://your-kinbot-instance/api/webhooks/incoming/<token>
+https://your-hivekeep-instance/api/webhooks/incoming/<token>
 ```
 
-Point your external service (GitHub, GitLab, Linear, etc.) to this URL. KinBot accepts any JSON payload via POST.
+Point your external service (GitHub, GitLab, Linear, etc.) to this URL. Hivekeep accepts any JSON payload via POST.
 
 ## Step 5: Design self-contained tasks
 
-The secret to reliable autonomy is **self-contained task descriptions**. The sub-Kin that executes a cron or webhook task has no memory of previous conversations — it only knows what's in the task description.
+The secret to reliable autonomy is **self-contained task descriptions**. The sub-Agent that executes a cron or webhook task has no memory of previous conversations — it only knows what's in the task description.
 
 ### Good task description
 
@@ -199,7 +199,7 @@ A good task description includes:
 - ✅ Clear context (what triggered this task)
 - ✅ Numbered steps with specific tool expectations
 - ✅ What "done" looks like (expected `update_task_status` call)
-- ✅ Any data the sub-Kin needs (payload, URLs, IDs)
+- ✅ Any data the sub-Agent needs (payload, URLs, IDs)
 - ❌ No vague instructions ("handle", "deal with", "process as needed")
 :::
 
@@ -208,7 +208,7 @@ A good task description includes:
 ### 1. Wrong model
 
 **Symptom**: Cron tasks produce text responses instead of tool calls.
-**Fix**: Use Claude Sonnet 4 or Claude Sonnet 3.5. See [Model Selection](/kinbot/docs/guides/model-selection/).
+**Fix**: Use Claude Sonnet 4 or Claude Sonnet 3.5. See [Model Selection](/docs/guides/model-selection/).
 
 ### 2. Missing `update_task_status`
 
@@ -217,21 +217,21 @@ A good task description includes:
 
 ### 3. Vague task descriptions
 
-**Symptom**: Sub-Kins do random or incomplete work.
+**Symptom**: Sub-Agents do random or incomplete work.
 **Fix**: Be specific. List exact steps. Include the data they need.
 
 ### 4. No payload filtering on webhooks
 
-**Symptom**: Your Kin processes every webhook event, burning through LLM tokens.
+**Symptom**: Your Agent processes every webhook event, burning through LLM tokens.
 **Fix**: Use `filter_mode: "simple"` with `filter_field` and `filter_allowed_values` to only process relevant events.
 
 ### 5. Cron stuck in "pending approval"
 
 **Symptom**: The cron was created but never runs.
-**Fix**: Kin-created crons require admin approval. Check the pending approvals in the UI and approve it.
+**Fix**: Agent-created crons require admin approval. Check the pending approvals in the UI and approve it.
 
 ## Next steps
 
-- **[GitHub Issue Processor](/kinbot/docs/guides/blueprints/github-issue-processor/)** — A complete, production-tested blueprint
-- **[Daily Digest](/kinbot/docs/guides/blueprints/daily-digest/)** — Automated tech watch and reporting
-- **[Model Selection](/kinbot/docs/guides/model-selection/)** — Deep dive into model choice and troubleshooting
+- **[GitHub Issue Processor](/docs/guides/blueprints/github-issue-processor/)** — A complete, production-tested blueprint
+- **[Daily Digest](/docs/guides/blueprints/daily-digest/)** — Automated tech watch and reporting
+- **[Model Selection](/docs/guides/model-selection/)** — Deep dive into model choice and troubleshooting

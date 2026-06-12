@@ -1,5 +1,5 @@
 /**
- * Cross-family provider types — re-exports from the SDK so KinBot's
+ * Cross-family provider types — re-exports from the SDK so Hivekeep's
  * internal code and plugin authors share a single source of truth.
  * The definitions live in `packages/sdk/src/index.ts`.
  */
@@ -12,10 +12,10 @@ export type {
   FinishReason,
   ProviderUIHints,
   ProviderCapability,
-} from '@kinbot-developer/sdk'
+} from '@hivekeep/sdk'
 
 export {
-  KinbotProviderError,
+  HivekeepProviderError,
   AuthError,
   RateLimitError,
   ContextOverflowError,
@@ -23,4 +23,4 @@ export {
   NetworkError,
   ProviderServerError,
   UnsupportedCapabilityError,
-} from '@kinbot-developer/sdk'
+} from '@hivekeep/sdk'

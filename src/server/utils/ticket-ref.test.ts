@@ -14,8 +14,8 @@ describe('parseTicketRef', () => {
   })
 
   describe('qualified slug#number', () => {
-    it('parses kinbot#42', () => {
-      expect(parseTicketRef('kinbot#42')).toEqual({ kind: 'qualified', slug: 'kinbot', number: 42 })
+    it('parses hivekeep#42', () => {
+      expect(parseTicketRef('hivekeep#42')).toEqual({ kind: 'qualified', slug: 'hivekeep', number: 42 })
     })
     it('parses a slug with hyphens', () => {
       expect(parseTicketRef('soupcon-de-magie#1')).toEqual({
@@ -25,13 +25,13 @@ describe('parseTicketRef', () => {
       })
     })
     it('rejects an empty number', () => {
-      expect(parseTicketRef('kinbot#').kind).toBe('invalid')
+      expect(parseTicketRef('hivekeep#').kind).toBe('invalid')
     })
     it('rejects a slug starting with a digit', () => {
-      expect(parseTicketRef('1kinbot#42').kind).toBe('invalid')
+      expect(parseTicketRef('1hivekeep#42').kind).toBe('invalid')
     })
     it('rejects uppercase in slug', () => {
-      expect(parseTicketRef('KinBot#42').kind).toBe('invalid')
+      expect(parseTicketRef('Hivekeep#42').kind).toBe('invalid')
     })
   })
 
@@ -61,7 +61,7 @@ describe('parseTicketRef', () => {
       expect(parseTicketRef('foo bar').kind).toBe('invalid')
     })
     it('flags slug without number', () => {
-      expect(parseTicketRef('kinbot').kind).toBe('invalid')
+      expect(parseTicketRef('hivekeep').kind).toBe('invalid')
     })
   })
 })
@@ -71,12 +71,12 @@ describe('ticketResolutionMessage', () => {
     expect(ticketResolutionMessage('INVALID_TICKET_REF', { raw: 'foo bar' })).toContain('"foo bar"')
   })
   it('formats PROJECT_NOT_FOUND with the slug', () => {
-    expect(ticketResolutionMessage('PROJECT_NOT_FOUND', { slug: 'kinbot' })).toContain("'kinbot'")
+    expect(ticketResolutionMessage('PROJECT_NOT_FOUND', { slug: 'hivekeep' })).toContain("'hivekeep'")
   })
   it('formats TICKET_NOT_FOUND with project + number', () => {
-    const msg = ticketResolutionMessage('TICKET_NOT_FOUND', { slug: 'kinbot', number: 42 })
+    const msg = ticketResolutionMessage('TICKET_NOT_FOUND', { slug: 'hivekeep', number: 42 })
     expect(msg).toContain('#42')
-    expect(msg).toContain("'kinbot'")
+    expect(msg).toContain("'hivekeep'")
   })
   it('mentions set_active_project on NO_ACTIVE_PROJECT', () => {
     const msg = ticketResolutionMessage('NO_ACTIVE_PROJECT')

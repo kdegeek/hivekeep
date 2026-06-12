@@ -35,10 +35,10 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
     ],
   },
   {
-    titleKey: 'shortcuts.group.kins',
+    titleKey: 'shortcuts.group.agents',
     shortcuts: [
-      { keys: [MOD, '1-9'], labelKey: 'shortcuts.switchKin' },
-      { keys: [MOD, 'Shift', 'N'], labelKey: 'shortcuts.createKin' },
+      { keys: [MOD, '1-9'], labelKey: 'shortcuts.switchAgent' },
+      { keys: [MOD, 'Shift', 'N'], labelKey: 'shortcuts.createAgent' },
     ],
   },
   {
@@ -49,6 +49,17 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: ['Esc'], labelKey: 'shortcuts.focusInput' },
       { keys: [MOD, 'F'], labelKey: 'shortcuts.searchConversation' },
       { keys: ['↑'], labelKey: 'shortcuts.inputHistory' },
+    ],
+  },
+  {
+    titleKey: 'shortcuts.group.files',
+    shortcuts: [
+      { keys: [MOD, 'S'], labelKey: 'shortcuts.filesSave' },
+      { keys: [MOD, 'P'], labelKey: 'shortcuts.filesQuickOpen' },
+      { keys: ['F2'], labelKey: 'shortcuts.filesRename' },
+      { keys: ['Del'], labelKey: 'shortcuts.filesDelete' },
+      { keys: [MOD, 'C/X/V'], labelKey: 'shortcuts.filesClipboard' },
+      { keys: ['Alt', 'W'], labelKey: 'shortcuts.filesCloseTab' },
     ],
   },
   {

@@ -1,4 +1,4 @@
-# KinBot — Schéma de base de données
+# Hivekeep — Schéma de base de données
 
 Schéma SQLite détaillé, conçu pour Drizzle ORM. Toutes les tables utilisent des UUID (text) comme clés primaires et des timestamps Unix (integer) pour les dates.
 
@@ -53,11 +53,11 @@ Table interne Better Auth pour les tokens de vérification email, reset password
 
 ---
 
-## Tables custom KinBot
+## Tables custom Hivekeep
 
 ### `user_profiles`
 
-Extension du `user` Better Auth avec les champs spécifiques KinBot.
+Extension du `user` Better Auth avec les champs spécifiques Hivekeep.
 
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
@@ -65,9 +65,10 @@ Extension du `user` Better Auth avec les champs spécifiques KinBot.
 | `first_name` | text | NOT NULL | Prénom |
 | `last_name` | text | NOT NULL | Nom |
 | `pseudonym` | text | NOT NULL | Pseudonyme affiché dans le chat |
-| `language` | text | NOT NULL, DEFAULT 'fr' | 'fr' ou 'en' |
+| `language` | text | NOT NULL, DEFAULT 'fr' | Langue de l'UI (code de `SUPPORTED_LANGUAGES`) |
+| `agent_language` | text | | Langue parlée par les Agents (code de `AGENT_LANGUAGES`, plus large que l'UI) ; NULL = suit `language` |
 | `role` | text | NOT NULL, DEFAULT 'member' | 'admin' ou 'member' |
-| `kin_order` | text | | JSON array des IDs de Kins (ordre d'affichage) |
+| `agent_order` | text | | JSON array des IDs de Agents (ordre d'affichage) |
 | `cron_order` | text | | JSON array des IDs de crons (ordre d'affichage) |
 
 ---
@@ -90,7 +91,7 @@ Configuration des providers IA (LLM, embeddings, images).
 
 ---
 
-### `kins`
+### `agents`
 
 Agents IA de la plateforme.
 
@@ -98,18 +99,18 @@ Agents IA de la plateforme.
 |---|---|---|---|
 | `id` | text PK | UUID | |
 | `slug` | text | UNIQUE | Identifiant URL-friendly (ex: 'my-assistant') |
-| `name` | text | NOT NULL | Nom du Kin |
+| `name` | text | NOT NULL | Nom du Agent |
 | `role` | text | NOT NULL | Description courte de sa fonction |
 | `avatar_path` | text | | Chemin vers l'image avatar |
 | `character` | text | NOT NULL | Personnalité / SOUL |
 | `expertise` | text | NOT NULL | Connaissances et objectif |
 | `model` | text | NOT NULL | Identifiant du modèle LLM (ex: 'claude-sonnet-4-20250514') |
-| `provider_id` | text | FK → providers.id, ON DELETE SET NULL | Provider explicite pour le modèle du Kin |
+| `provider_id` | text | FK → providers.id, ON DELETE SET NULL | Provider explicite pour le modèle du Agent |
 | `workspace_path` | text | NOT NULL | Chemin du dossier de travail |
-| `tool_config` | text | | JSON : KinToolConfig (outils désactivés, accès MCP, opt-in, search provider) |
-| `compacting_config` | text | | JSON : KinCompactingConfig (seuil de tours, modèle de compacting, provider) |
-| `active_project_id` | text | FK → projects.id, ON DELETE SET NULL | Projet actif du Kin. NULL si aucun. Injecté dans le bloc volatile du prompt système. Voir `projects.md` |
-| `created_by` | text | FK → user.id | Utilisateur qui a créé le Kin |
+| `tool_config` | text | | JSON : AgentToolConfig (outils désactivés, accès MCP, opt-in, search provider) |
+| `compacting_config` | text | | JSON : AgentCompactingConfig (seuil de tours, modèle de compacting, provider) |
+| `active_project_id` | text | FK → projects.id, ON DELETE SET NULL | Projet actif du Agent. NULL si aucun. Injecté dans le bloc volatile du prompt système. Voir `projects.md` |
+| `created_by` | text | FK → user.id | Utilisateur qui a créé le Agent |
 | `created_at` | integer | NOT NULL | |
 | `updated_at` | integer | NOT NULL | |
 
@@ -127,22 +128,22 @@ Serveurs MCP configurés au niveau de la plateforme.
 | `args` | text | | JSON array des arguments |
 | `env` | text | | JSON object des variables d'environnement |
 | `status` | text | NOT NULL, DEFAULT 'active' | 'active' ou 'pending_approval' |
-| `created_by_kin_id` | text | FK → kins.id, ON DELETE SET NULL | Kin qui a créé le serveur (si auto-géré) |
+| `created_by_agent_id` | text | FK → agents.id, ON DELETE SET NULL | Agent qui a créé le serveur (si auto-géré) |
 | `created_at` | integer | NOT NULL | |
 | `updated_at` | integer | NOT NULL | |
 
 ---
 
-### `kin_mcp_servers`
+### `agent_mcp_servers`
 
-Table de liaison Kins ↔ Serveurs MCP (many-to-many).
+Table de liaison Agents ↔ Serveurs MCP (many-to-many).
 
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
-| `kin_id` | text | FK → kins.id, ON DELETE CASCADE | |
+| `agent_id` | text | FK → agents.id, ON DELETE CASCADE | |
 | `mcp_server_id` | text | FK → mcp_servers.id, ON DELETE CASCADE | |
 
-**PK composite** : (`kin_id`, `mcp_server_id`)
+**PK composite** : (`agent_id`, `mcp_server_id`)
 
 ---
 
@@ -153,16 +154,16 @@ Tous les messages de toutes les sessions (principales et tâches).
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
 | `id` | text PK | UUID | |
-| `kin_id` | text | FK → kins.id, NOT NULL | Kin propriétaire de la session |
+| `agent_id` | text | FK → agents.id, NOT NULL | Agent propriétaire de la session |
 | `task_id` | text | FK → tasks.id | NULL = session principale, sinon session de tâche |
 | `session_id` | text | FK → quick_sessions.id, ON DELETE CASCADE | NULL = main conversation, sinon quick session |
 | `role` | text | NOT NULL | 'user', 'assistant', 'system', 'tool' |
 | `content` | text | | Contenu textuel du message |
-| `source_type` | text | NOT NULL | 'user', 'kin', 'task', 'cron', 'system' |
-| `source_id` | text | | ID de la source (user_id, kin_id, task_id, cron_id) |
+| `source_type` | text | NOT NULL | 'user', 'agent', 'task', 'cron', 'system' |
+| `source_id` | text | | ID de la source (user_id, agent_id, task_id, cron_id) |
 | `tool_calls` | text | | JSON array des appels d'outils (messages assistant) |
 | `tool_call_id` | text | | ID de l'appel d'outil (messages tool) |
-| `request_id` | text | | Pour corrélation inter-Kins (request/reply) |
+| `request_id` | text | | Pour corrélation inter-Agents (request/reply) |
 | `in_reply_to` | text | | request_id auquel ce message répond |
 | `channel_origin_id` | text | | ID de la chaîne causale canal — propage l'origine pour auto-delivery |
 | `is_redacted` | integer | NOT NULL, DEFAULT 0 | Message caviardé (secret retiré) |
@@ -171,9 +172,9 @@ Tous les messages de toutes les sessions (principales et tâches).
 | `created_at` | integer | NOT NULL | |
 
 **Index** :
-- `idx_messages_kin_id` sur `kin_id`
+- `idx_messages_agent_id` sur `agent_id`
 - `idx_messages_task_id` sur `task_id`
-- `idx_messages_kin_created` sur (`kin_id`, `created_at`)
+- `idx_messages_agent_created` sur (`agent_id`, `created_at`)
 - `idx_messages_source` sur (`source_type`, `source_id`)
 - `idx_messages_session_id` sur `session_id`
 
@@ -186,14 +187,14 @@ Tous les messages de toutes les sessions (principales et tâches).
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
 | `id` | text PK | UUID | |
-| `kin_id` | text | FK → kins.id, NOT NULL | |
+| `agent_id` | text | FK → agents.id, NOT NULL | |
 | `summary` | text | NOT NULL | Résumé compacté des échanges |
 | `messages_up_to_id` | text | FK → messages.id, NOT NULL | Dernier message couvert par ce snapshot |
-| `is_active` | integer | NOT NULL, DEFAULT 1 | Snapshot actuellement utilisé (un seul actif par Kin) |
+| `is_active` | integer | NOT NULL, DEFAULT 1 | Snapshot actuellement utilisé (un seul actif par Agent) |
 | `created_at` | integer | NOT NULL | |
 
 **Index** :
-- `idx_compacting_kin_active` sur (`kin_id`, `is_active`)
+- `idx_compacting_agent_active` sur (`agent_id`, `is_active`)
 
 ---
 
@@ -204,7 +205,7 @@ Résumés de compacting avec accumulation multi-summary et merge télescopique.
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
 | `id` | text PK | UUID | |
-| `kin_id` | text | FK → kins.id, NOT NULL | |
+| `agent_id` | text | FK → agents.id, NOT NULL | |
 | `summary` | text | NOT NULL | Résumé structuré des échanges |
 | `first_message_at` | integer | NOT NULL | Timestamp du premier message couvert |
 | `last_message_at` | integer | NOT NULL | Timestamp du dernier message couvert |
@@ -218,18 +219,18 @@ Résumés de compacting avec accumulation multi-summary et merge télescopique.
 | `created_at` | integer | NOT NULL | |
 
 **Index** :
-- `idx_compacting_summaries_kin` sur (`kin_id`, `is_in_context`)
+- `idx_compacting_summaries_agent` sur (`agent_id`, `is_in_context`)
 
 ---
 
 ### `memories`
 
-Mémoire long terme des Kins (faits, préférences, décisions, connaissances).
+Mémoire long terme des Agents (faits, préférences, décisions, connaissances).
 
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
 | `id` | text PK | UUID | |
-| `kin_id` | text | FK → kins.id, NOT NULL | |
+| `agent_id` | text | FK → agents.id, NOT NULL | |
 | `content` | text | NOT NULL | Le fait ou la connaissance |
 | `embedding` | blob | | Vecteur float32 pour sqlite-vec |
 | `category` | text | NOT NULL | 'fact', 'preference', 'decision', 'knowledge' |
@@ -242,14 +243,14 @@ Mémoire long terme des Kins (faits, préférences, décisions, connaissances).
 | `last_retrieved_at` | integer | | Dernière récupération |
 | `consolidation_generation` | integer | NOT NULL, DEFAULT 0 | 0 = originale, 1+ = consolidée |
 | `consolidated_from_ids` | text | | JSON array des IDs source (null pour les originales) |
-| `scope` | text | NOT NULL, DEFAULT 'private' | 'private' (Kin seul) ou 'shared' (visible par tous les Kins) |
+| `scope` | text | NOT NULL, DEFAULT 'private' | 'private' (Agent seul) ou 'shared' (visible par tous les Agents) |
 | `created_at` | integer | NOT NULL | |
 | `updated_at` | integer | NOT NULL | |
 
 **Index** :
-- `idx_memories_kin_id` sur `kin_id`
-- `idx_memories_kin_category` sur (`kin_id`, `category`)
-- `idx_memories_kin_subject` sur (`kin_id`, `subject`)
+- `idx_memories_agent_id` sur `agent_id`
+- `idx_memories_agent_category` sur (`agent_id`, `category`)
+- `idx_memories_agent_subject` sur (`agent_id`, `subject`)
 - `idx_memories_scope` sur `scope`
 - `idx_memories_scope_category` sur (`scope`, `category`)
 
@@ -257,7 +258,7 @@ Mémoire long terme des Kins (faits, préférences, décisions, connaissances).
 
 ### `contacts`
 
-Registre de contacts partagé entre tous les Kins. Le nom affiché est calculé : `firstName lastName`, ou à défaut le premier pseudo, ou « Unnamed contact ».
+Registre de contacts partagé entre tous les Agents. Le nom affiché est calculé : `firstName lastName`, ou à défaut le premier pseudo, ou « Unnamed contact ».
 
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
@@ -329,29 +330,29 @@ IDs de plateforme de messagerie pour auto-identification des contacts.
 
 ### `contact_notes`
 
-Notes des Kins sur les contacts (privées ou globales).
+Notes des Agents sur les contacts (privées ou globales).
 
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
 | `id` | text PK | UUID | |
 | `contact_id` | text | FK → contacts.id, ON DELETE CASCADE, NOT NULL | |
-| `kin_id` | text | FK → kins.id, NOT NULL | Kin auteur de la note |
-| `scope` | text | NOT NULL | 'private' (ce Kin seul) ou 'global' (tous les Kins) |
+| `agent_id` | text | FK → agents.id, NOT NULL | Agent auteur de la note |
+| `scope` | text | NOT NULL | 'private' (ce Agent seul) ou 'global' (tous les Agents) |
 | `content` | text | NOT NULL | Contenu de la note |
 | `created_at` | integer | NOT NULL | |
 | `updated_at` | integer | NOT NULL | |
 
-**Contrainte UNIQUE** : (`contact_id`, `kin_id`, `scope`)
+**Contrainte UNIQUE** : (`contact_id`, `agent_id`, `scope`)
 
 **Index** :
 - `idx_contact_notes_contact_id` sur `contact_id`
-- `idx_contact_notes_kin_id` sur `kin_id`
+- `idx_contact_notes_agent_id` sur `agent_id`
 
 ---
 
 ### `custom_tools`
 
-Outils custom **globaux** (platform-wide, plus de scope per-Kin). L'accès est filtré par les toolboxes (une toolbox liste `custom_<slug>` par son nom), exactement comme les outils MCP. Le script exécutable + ses dépendances vivent sur disque sous `config.customTools.baseDir/<slug>/` ; cette table ne stocke que les métadonnées.
+Outils custom **globaux** (platform-wide, plus de scope per-Agent). L'accès est filtré par les toolboxes (une toolbox liste `custom_<slug>` par son nom), exactement comme les outils MCP. Le script exécutable + ses dépendances vivent sur disque sous `config.customTools.baseDir/<slug>/` ; cette table ne stocke que les métadonnées.
 
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
@@ -366,7 +367,7 @@ Outils custom **globaux** (platform-wide, plus de scope per-Kin). L'accès est f
 | `domain_slug` | text | NOT NULL, défaut `'custom'`, FK → tool_domains.slug | Domaine de regroupement |
 | `timeout_ms` | integer | | Timeout d'exécution par outil (plafonné) |
 | `enabled` | integer (bool) | NOT NULL, défaut 1 | Désactivé → listé mais jamais résolu dans un toolset |
-| `created_by` | text | NOT NULL, défaut `'user'` | `'user'` (UI) ou `'kin'` |
+| `created_by` | text | NOT NULL, défaut `'user'` | `'user'` (UI) ou `'agent'` |
 | `created_at` | integer | NOT NULL | |
 | `updated_at` | integer | NOT NULL | |
 
@@ -376,7 +377,7 @@ Outils custom **globaux** (platform-wide, plus de scope per-Kin). L'accès est f
 
 ### `tool_domains`
 
-Domaines d'outils dynamiques (catégories icône + couleur + label pour regrouper les outils dans l'UI). Les 26 domaines built-in sont seedés idempotemment au boot depuis `TOOL_DOMAIN_META` (`builtin=1`, read-only) ; l'utilisateur/les Kins peuvent créer des domaines custom. Le `slug` est référencé par `custom_tools.domain_slug` et par la map name→domain du registry.
+Domaines d'outils dynamiques (catégories icône + couleur + label pour regrouper les outils dans l'UI). Les 26 domaines built-in sont seedés idempotemment au boot depuis `TOOL_DOMAIN_META` (`builtin=1`, read-only) ; l'utilisateur/les Agents peuvent créer des domaines custom. Le `slug` est référencé par `custom_tools.domain_slug` et par la map name→domain du registry.
 
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
@@ -401,7 +402,7 @@ Sessions éphémères pour interactions rapides.
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
 | `id` | text PK | UUID | |
-| `kin_id` | text | FK → kins.id, ON DELETE CASCADE, NOT NULL | |
+| `agent_id` | text | FK → agents.id, ON DELETE CASCADE, NOT NULL | |
 | `created_by` | text | FK → user.id, ON DELETE CASCADE, NOT NULL | |
 | `title` | text | | Titre de la session |
 | `status` | text | NOT NULL, DEFAULT 'active' | 'active' ou 'closed' |
@@ -410,35 +411,35 @@ Sessions éphémères pour interactions rapides.
 | `expires_at` | integer | | |
 
 **Index** :
-- `idx_quick_sessions_kin_status` sur (`kin_id`, `status`)
+- `idx_quick_sessions_agent_status` sur (`agent_id`, `status`)
 - `idx_quick_sessions_user` sur `created_by`
 
 ---
 
 ### `tasks`
 
-Sous-Kins éphémères (tâches déléguées).
+Sous-Agents éphémères (tâches déléguées).
 
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
 | `id` | text PK | UUID | |
-| `parent_kin_id` | text | FK → kins.id, NOT NULL | Kin qui a spawné la tâche |
-| `source_kin_id` | text | FK → kins.id | Kin dont la tâche est une instance (si spawn_type = 'other') |
+| `parent_agent_id` | text | FK → agents.id, NOT NULL | Agent qui a spawné la tâche |
+| `source_agent_id` | text | FK → agents.id | Agent dont la tâche est une instance (si spawn_type = 'other') |
 | `spawn_type` | text | NOT NULL | 'self' ou 'other' |
 | `mode` | text | NOT NULL, DEFAULT 'await' | 'await' ou 'async' |
 | `model` | text | | Override du modèle LLM (NULL = héritage) |
 | `provider_id` | text | | Override du provider pour le modèle |
 | `title` | text | | Titre optionnel de la tâche |
 | `description` | text | NOT NULL | Instructions de la tâche |
-| `status` | text | NOT NULL, DEFAULT 'pending' | 'queued', 'pending', 'in_progress', 'paused', 'awaiting_human_input', 'awaiting_kin_response', 'completed', 'failed', 'cancelled' |
+| `status` | text | NOT NULL, DEFAULT 'pending' | 'queued', 'pending', 'in_progress', 'paused', 'awaiting_human_input', 'awaiting_agent_response', 'completed', 'failed', 'cancelled' |
 | `result` | text | | Résultat final de la tâche |
 | `error` | text | | Détail de l'erreur si failed |
 | `depth` | integer | NOT NULL, DEFAULT 1 | Profondeur de nesting |
 | `parent_task_id` | text | FK → tasks.id | Tâche parente (si sous-tâche d'une tâche) |
 | `cron_id` | text | FK → crons.id | Si spawné par un cron |
 | `request_input_count` | integer | NOT NULL, DEFAULT 0 | Nombre d'appels request_input (max 3) |
-| `inter_kin_request_count` | integer | NOT NULL, DEFAULT 0 | Nombre d'appels send_message(request) depuis cette tâche |
-| `pending_request_id` | text | | request_id en attente de réponse inter-Kin |
+| `inter_agent_request_count` | integer | NOT NULL, DEFAULT 0 | Nombre d'appels send_message(request) depuis cette tâche |
+| `pending_request_id` | text | | request_id en attente de réponse inter-Agent |
 | `channel_origin_id` | text | | ID de la chaîne causale canal pour auto-delivery |
 | `webhook_id` | text | FK → webhooks.id, ON DELETE SET NULL | Webhook qui a spawné cette tâche (mode dispatch "task") |
 | `ticket_id` | text | FK → tickets.id, ON DELETE SET NULL | Ticket auquel la tâche est liée. NULL si task non-projet. Voir `projects.md` |
@@ -450,7 +451,7 @@ Sous-Kins éphémères (tâches déléguées).
 | `updated_at` | integer | NOT NULL | |
 
 **Index** :
-- `idx_tasks_parent_kin` sur `parent_kin_id`
+- `idx_tasks_parent_agent` sur `parent_agent_id`
 - `idx_tasks_status` sur `status`
 - `idx_tasks_cron` sur `cron_id`
 - `idx_tasks_concurrency` sur (`concurrency_group`, `status`, `queued_at`)
@@ -466,19 +467,19 @@ Tâches planifiées récurrentes.
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
 | `id` | text PK | UUID | |
-| `kin_id` | text | FK → kins.id, NOT NULL | Kin propriétaire |
+| `agent_id` | text | FK → agents.id, NOT NULL | Agent propriétaire |
 | `name` | text | NOT NULL | Libellé de la tâche planifiée |
 | `schedule` | text | NOT NULL | Expression cron (ex: '0 9 * * *') |
-| `task_description` | text | NOT NULL | Instructions données au sous-Kin |
-| `target_kin_id` | text | FK → kins.id | Kin cible (NULL = soi-même) |
+| `task_description` | text | NOT NULL | Instructions données au sous-Agent |
+| `target_agent_id` | text | FK → agents.id | Agent cible (NULL = soi-même) |
 | `model` | text | | Override du modèle LLM |
 | `provider_id` | text | | Override du provider pour le modèle |
 | `toolbox_ids` | text | | JSON `string[]` d'IDs de toolboxes — toolset natif des tâches spawnées par ce cron (figé sur la task au spawn). NULL → défaut `'all'` (surface native complète) |
 | `is_active` | integer | NOT NULL, DEFAULT 1 | Actif / Inactif |
-| `requires_approval` | integer | NOT NULL, DEFAULT 0 | Si créé par le Kin, nécessite validation utilisateur |
+| `requires_approval` | integer | NOT NULL, DEFAULT 0 | Si créé par le Agent, nécessite validation utilisateur |
 | `run_once` | integer | NOT NULL, DEFAULT 0 | Si activé, le cron se désactive automatiquement après la première exécution |
 | `last_triggered_at` | integer | | Dernier déclenchement |
-| `created_by` | text | | 'user' ou 'kin' — qui a créé le cron |
+| `created_by` | text | | 'user' ou 'agent' — qui a créé le cron |
 | `created_at` | integer | NOT NULL | |
 | `updated_at` | integer | NOT NULL | |
 
@@ -509,7 +510,7 @@ Webhooks entrants pour recevoir des événements externes.
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
 | `id` | text PK | UUID | |
-| `kin_id` | text | FK → kins.id, NOT NULL | Kin destinataire |
+| `agent_id` | text | FK → agents.id, NOT NULL | Agent destinataire |
 | `name` | text | NOT NULL | Nom d'affichage |
 | `token` | text | UNIQUE, NOT NULL | Token secret pour l'URL |
 | `description` | text | | Description du webhook |
@@ -524,12 +525,12 @@ Webhooks entrants pour recevoir des événements externes.
 | `task_title_template` | text | | Template pour le titre de tâche (mode task). Supporte `{{field.path}}` comme placeholders |
 | `task_prompt_template` | text | | Template pour la description/prompt de tâche (mode task). Supporte `{{field.path}}` et `{{__payload__}}` |
 | `max_concurrent_tasks` | integer | NOT NULL, DEFAULT 1 | Nombre max de tâches concurrentes (mode task). 0 = illimité |
-| `created_by` | text | | 'user' ou 'kin' |
+| `created_by` | text | | 'user' ou 'agent' |
 | `created_at` | integer | NOT NULL | |
 | `updated_at` | integer | NOT NULL | |
 
 **Index** :
-- `idx_webhooks_kin_id` sur `kin_id`
+- `idx_webhooks_agent_id` sur `agent_id`
 
 ---
 
@@ -543,11 +544,76 @@ Journal des appels webhook reçus.
 | `webhook_id` | text | FK → webhooks.id, ON DELETE CASCADE | |
 | `payload` | text | | Payload reçu (JSON sérialisé) |
 | `source_ip` | text | | IP de l'appelant |
-| `filtered` | integer | NOT NULL, DEFAULT 0 | 1 si le payload a été filtré (non transmis au Kin) |
+| `filtered` | integer | NOT NULL, DEFAULT 0 | 1 si le payload a été filtré (non transmis au Agent) |
 | `created_at` | integer | NOT NULL | |
 
 **Index** :
 - `idx_webhook_logs_webhook_created` sur (`webhook_id`, `created_at`)
+
+---
+
+### `account_triggers`
+
+Déclencheurs par compte email connecté : quand un nouvel email correspond à l'arbre de conditions, l'Agent cible est sollicité (conversation ou tâche). Polling (aucun provider ne fait de push simple en mono-conteneur).
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | text PK | UUID | |
+| `account_id` | text | FK → providers.id, ON DELETE CASCADE, NOT NULL | Compte email connecté (capability `email`) |
+| `name` | text | NOT NULL | Nom d'affichage |
+| `is_active` | integer | NOT NULL, DEFAULT 1 | Actif / Inactif |
+| `folder` | text | NOT NULL, DEFAULT 'INBOX' | Dossier/label surveillé |
+| `conditions` | text | NOT NULL | Arbre de conditions (JSON : nœud `{type:'group', op:'and'\|'or', children[]}` ou `{type:'leaf', field, op, value, negate?}`) |
+| `prompt` | text | NOT NULL | Instruction transmise à l'Agent cible |
+| `target_agent_id` | text | FK → agents.id, NOT NULL | Agent sollicité |
+| `dispatch_mode` | text | NOT NULL, DEFAULT 'conversation' | 'conversation' (injecté dans la session principale, avec contexte) ou 'task' (sous-tâche isolée, sans historique) |
+| `max_concurrent_tasks` | integer | NOT NULL, DEFAULT 1 | Max tâches concurrentes (mode task). 0 = illimité |
+| `needs_body` | integer | NOT NULL, DEFAULT 0 | 1 si une condition vise le corps/pièces jointes (fetch du message complet requis au polling) |
+| `last_triggered_at` | integer | | Dernier déclenchement |
+| `trigger_count` | integer | NOT NULL, DEFAULT 0 | Nombre de déclenchements |
+| `created_by` | text | NOT NULL, DEFAULT 'user' | 'user' ou 'agent' |
+| `requires_approval` | integer | NOT NULL, DEFAULT 0 | 1 si en attente d'approbation (trigger créé par un Agent, réglage global `agent_triggers_require_approval` activé) |
+| `created_at` | integer | NOT NULL | |
+| `updated_at` | integer | NOT NULL | |
+
+**Index** :
+- `idx_account_triggers_account` sur `account_id`
+- `idx_account_triggers_target_agent` sur `target_agent_id`
+
+---
+
+### `account_sync_state`
+
+Curseur de polling + déduplication, **par (compte, dossier)** — chaque dossier est un flux distinct.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `account_id` | text | FK → providers.id, ON DELETE CASCADE | |
+| `folder` | text | NOT NULL | |
+| `last_seen_date` | integer | NOT NULL | Watermark (Unix ms). Initialisé à NOW à la création du 1er trigger sur ce flux (cold-start : jamais de rejeu de l'historique) |
+| `seen_ids` | text | NOT NULL, DEFAULT '[]' | Anneau JSON des derniers provider-message-ids traités (anti-doublon de bord, le filtre `after` étant à la seconde / inclusif) |
+| `last_polled_at` | integer | | |
+| `last_error` | text | | Dernière erreur de polling |
+
+**PK** : (`account_id`, `folder`)
+
+---
+
+### `trigger_logs`
+
+Journal d'évaluation/déclenchement des triggers.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | text PK | UUID | |
+| `trigger_id` | text | FK → account_triggers.id, ON DELETE CASCADE, NOT NULL | |
+| `summary` | text | | Résumé du mail (« from · subject ») |
+| `matched` | integer | NOT NULL | 1 si le trigger a matché |
+| `action` | text | | 'conversation' \| 'task' (null si non matché) |
+| `created_at` | integer | NOT NULL | |
+
+**Index** :
+- `idx_trigger_logs_trigger_created` sur (`trigger_id`, `created_at`)
 
 ---
 
@@ -564,7 +630,7 @@ Coffre-fort de secrets chiffrés.
 | `entry_type` | text | NOT NULL, DEFAULT 'text' | Type de l'entrée : 'text', 'credential', 'card', 'note', 'identity', ou slug custom |
 | `vault_type_id` | text | FK → vault_types.id, ON DELETE SET NULL | Type custom associé |
 | `is_favorite` | integer | NOT NULL, DEFAULT 0 | Marqué comme favori |
-| `created_by_kin_id` | text | FK → kins.id | Kin qui a créé le secret |
+| `created_by_agent_id` | text | FK → agents.id | Agent qui a créé le secret |
 | `created_at` | integer | NOT NULL | |
 | `updated_at` | integer | NOT NULL | |
 
@@ -585,7 +651,7 @@ Types personnalisés pour les entrées du coffre-fort.
 | `icon` | text | | Nom d'icône Lucide |
 | `fields` | text | NOT NULL | JSON : VaultTypeField[] |
 | `is_built_in` | integer | NOT NULL, DEFAULT 0 | Type intégré (non supprimable) |
-| `created_by_kin_id` | text | FK → kins.id, ON DELETE SET NULL | |
+| `created_by_agent_id` | text | FK → agents.id, ON DELETE SET NULL | |
 | `created_at` | integer | NOT NULL | |
 | `updated_at` | integer | NOT NULL | |
 
@@ -612,19 +678,19 @@ Pièces jointes aux entrées du coffre-fort.
 
 ### `queue_items`
 
-Queue FIFO par Kin pour sérialiser le traitement des messages.
+Queue FIFO par Agent pour sérialiser le traitement des messages.
 
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
 | `id` | text PK | UUID | |
-| `kin_id` | text | FK → kins.id, NOT NULL | Kin destinataire |
-| `message_type` | text | NOT NULL | 'user', 'kin_request', 'kin_inform', 'kin_reply', 'task_result', 'task_input' |
+| `agent_id` | text | FK → agents.id, NOT NULL | Agent destinataire |
+| `message_type` | text | NOT NULL | 'user', 'agent_request', 'agent_inform', 'agent_reply', 'task_result', 'task_input' |
 | `content` | text | NOT NULL | Contenu du message |
-| `source_type` | text | NOT NULL | 'user', 'kin', 'task' |
+| `source_type` | text | NOT NULL | 'user', 'agent', 'task' |
 | `source_id` | text | | ID de la source |
 | `priority` | integer | NOT NULL, DEFAULT 0 | Plus élevé = traité en premier (user > automatique) |
-| `request_id` | text | | Pour corrélation inter-Kins |
-| `in_reply_to` | text | | Pour réponses inter-Kins |
+| `request_id` | text | | Pour corrélation inter-Agents |
+| `in_reply_to` | text | | Pour réponses inter-Agents |
 | `task_id` | text | FK → tasks.id | Pour messages liés à une tâche |
 | `session_id` | text | | ID de quick session (si applicable) |
 | `channel_origin_id` | text | | ID de la chaîne causale canal pour auto-delivery |
@@ -634,20 +700,20 @@ Queue FIFO par Kin pour sérialiser le traitement des messages.
 | `processed_at` | integer | | |
 
 **Index** :
-- `idx_queue_kin_status_priority` sur (`kin_id`, `status`, `priority` DESC, `created_at` ASC)
+- `idx_queue_agent_status_priority` sur (`agent_id`, `status`, `priority` DESC, `created_at` ASC)
 
 ---
 
 ### `files`
 
-Fichiers uploadés par les utilisateurs ou générés par les Kins.
+Fichiers uploadés par les utilisateurs ou générés par les Agents.
 
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
 | `id` | text PK | UUID | |
-| `kin_id` | text | FK → kins.id, NOT NULL | |
+| `agent_id` | text | FK → agents.id, NOT NULL | |
 | `message_id` | text | FK → messages.id | Message auquel le fichier est attaché |
-| `uploaded_by` | text | FK → user.id | NULL si généré par un Kin |
+| `uploaded_by` | text | FK → user.id | NULL si généré par un Agent |
 | `original_name` | text | NOT NULL | Nom d'origine du fichier |
 | `stored_path` | text | NOT NULL | Chemin de stockage local |
 | `mime_type` | text | NOT NULL | Type MIME |
@@ -669,7 +735,7 @@ Suivi des consommations de tokens LLM pour toutes les invocations AI (chat, tâc
 | `provider_type` | text | | Type de provider : 'anthropic', 'openai', 'gemini', etc. |
 | `provider_id` | text | | UUID du provider (nullable — le provider peut être supprimé) |
 | `model_id` | text | | Ex: 'claude-sonnet-4-20250514' |
-| `kin_id` | text | | ID du Kin (nullable pour les appels hors Kin) |
+| `agent_id` | text | | ID du Agent (nullable pour les appels hors Agent) |
 | `task_id` | text | | ID de la tâche (nullable) |
 | `cron_id` | text | | ID du cron (nullable) |
 | `session_id` | text | | ID de quick session (nullable) |
@@ -684,7 +750,7 @@ Suivi des consommations de tokens LLM pour toutes les invocations AI (chat, tâc
 
 **Index** :
 - `idx_llm_usage_created` sur (`created_at`)
-- `idx_llm_usage_kin` sur (`kin_id`, `created_at`)
+- `idx_llm_usage_agent` sur (`agent_id`, `created_at`)
 - `idx_llm_usage_provider_type` sur (`provider_type`, `created_at`)
 - `idx_llm_usage_model` sur (`model_id`, `created_at`)
 - `idx_llm_usage_task` sur (`task_id`)
@@ -694,13 +760,13 @@ Suivi des consommations de tokens LLM pour toutes les invocations AI (chat, tâc
 
 ### `projects`
 
-Projets de la plateforme. Entités indépendantes des Kins (partagées entre tous les utilisateurs, n'importe quel Kin peut sélectionner n'importe quel projet). Voir `projects.md` pour la spec complète.
+Projets de la plateforme. Entités indépendantes des Agents (partagées entre tous les utilisateurs, n'importe quel Agent peut sélectionner n'importe quel projet). Voir `projects.md` pour la spec complète.
 
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
 | `id` | text PK | UUID | |
 | `title` | text | NOT NULL | Titre du projet |
-| `description` | text | NOT NULL, DEFAULT '' | Description complète injectée dans le bloc volatile du prompt système des Kins quand le projet est actif. Pas de cap dur en DB (cap pratique à l'injection : 8000 tokens, cf. `config.md`) |
+| `description` | text | NOT NULL, DEFAULT '' | Description complète injectée dans le bloc volatile du prompt système des Agents quand le projet est actif. Pas de cap dur en DB (cap pratique à l'injection : 8000 tokens, cf. `config.md`) |
 | `github_url` | text | | URL externe (metadata uniquement, pas d'intégration tool au MVP) |
 | `created_at` | integer | NOT NULL | |
 | `updated_at` | integer | NOT NULL | |
@@ -772,6 +838,62 @@ Table de liaison N-N tickets ↔ project_tags.
 
 ---
 
+### `mini_apps`
+
+Mini-applications web (UI iframe + backend `_server.js` optionnel) construites par les Agents. Les fichiers vivent sur disque dans `{MINI_APPS_DIR}/<agent_id>/<app_id>/` ; cette table porte les métadonnées. Le manifest `app.json` (sur disque, pas en DB) déclare les dépendances (import map), `background: true` (backend chargé au boot, redémarré à chaque édition) et `permissions` (capacités demandées).
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | text PK | UUID | |
+| `agent_id` | text | FK → agents.id, ON DELETE CASCADE, NOT NULL | Agent **mainteneur** (réassignable — n'importe quel Agent peut éditer n'importe quelle app) |
+| `name` | text | NOT NULL | Nom affiché |
+| `slug` | text | NOT NULL | Identifiant kebab-case, unique par Agent |
+| `description` | text | | |
+| `icon` | text | | Emoji ou nom d'icône Lucide |
+| `icon_url` | text | | Chemin du logo généré (image) |
+| `entry_file` | text | NOT NULL, DEFAULT 'index.html' | Fichier d'entrée servi dans l'iframe |
+| `has_backend` | integer (bool) | NOT NULL, DEFAULT 0 | Vrai si `_server.js`/`_server.ts` existe |
+| `is_active` | integer (bool) | NOT NULL, DEFAULT 1 | |
+| `version` | integer | NOT NULL, DEFAULT 1 | Incrémenté à chaque écriture de fichier (cache-busting + invalidation du backend) |
+| `granted_permissions` | text | | JSON `string[]` des permissions de capacités approuvées par l'utilisateur (sous-ensemble des `permissions` du manifest, ex. `"llm"`, `"secrets:<NAME>"`, `"agent:inform"`, `"agent:task"`). Additif uniquement. |
+| `created_at` | integer | NOT NULL | |
+| `updated_at` | integer | NOT NULL | |
+
+**Index** :
+- `idx_mini_apps_agent_slug` UNIQUE sur (`agent_id`, `slug`)
+- `idx_mini_apps_agent_id` sur (`agent_id`)
+
+---
+
+### `mini_app_storage`
+
+Stockage clé-valeur par app, partagé entre le frontend (SDK `Hivekeep.storage`) et le backend (`ctx.storage`). Limites : 500 clés/app, 64 KB/valeur, clés ≤ 256 caractères.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | integer PK | AUTOINCREMENT | |
+| `app_id` | text | FK → mini_apps.id, ON DELETE CASCADE, NOT NULL | |
+| `key` | text | NOT NULL | |
+| `value` | text | NOT NULL | JSON sérialisé |
+| `updated_at` | integer | NOT NULL | |
+
+---
+
+### `mini_app_snapshots`
+
+Snapshots de version des fichiers d'une app (max 20, auto-élagués). Les fichiers snapshotés vivent dans `.snapshots/<version>/` du répertoire de l'app ; le répertoire runtime `_data/` (ctx.files) est exclu des snapshots et des rollbacks.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | integer PK | AUTOINCREMENT | |
+| `app_id` | text | FK → mini_apps.id, ON DELETE CASCADE, NOT NULL | |
+| `version` | integer | NOT NULL | Version de l'app au moment du snapshot |
+| `label` | text | | Libellé optionnel (ex. auto-backup avant rollback) |
+| `file_manifest` | text | NOT NULL | JSON `[{path, size}]` |
+| `created_at` | integer | NOT NULL | |
+
+---
+
 ## Tables virtuelles (FTS5 + sqlite-vec)
 
 ### `memories_fts` (FTS5)
@@ -827,20 +949,20 @@ user (Better Auth)
 
 providers (standalone)
 
-kins
- ├── N:M  mcp_servers        (via kin_mcp_servers)
+agents
+ ├── N:M  mcp_servers        (via agent_mcp_servers)
  ├── 1:N  messages            (session principale: task_id = NULL)
  ├── 1:N  compacting_snapshots  (legacy)
  ├── 1:N  compacting_summaries  (multi-summary accumulation)
  ├── 1:N  memories
  ├── 1:N  custom_tools
- ├── 1:N  tasks               (en tant que parent_kin_id)
+ ├── 1:N  tasks               (en tant que parent_agent_id)
  ├── 1:N  crons
  │         └── 1:N  cron_learnings  (FIFO cap 20, ON DELETE CASCADE)
  ├── 1:N  webhooks
  ├── 1:N  queue_items
  ├── 1:N  files
- └── N:1  projects            (via kins.active_project_id, ON DELETE SET NULL)
+ └── N:1  projects            (via agents.active_project_id, ON DELETE SET NULL)
 
 projects (entités indépendantes, partagées)
  ├── 1:N  project_tags        (ON DELETE CASCADE)
@@ -851,7 +973,7 @@ projects (entités indépendantes, partagées)
 contacts (registre partagé)
  ├── 1:N  contact_identifiers
  ├── 1:N  contact_platform_ids
- └── 1:N  contact_notes        (par Kin, privées ou globales)
+ └── 1:N  contact_notes        (par Agent, privées ou globales)
 
 tasks
  ├── 1:N  messages            (session de tâche: task_id = tasks.id)
@@ -868,5 +990,5 @@ vault_secrets
  ├── N:1  vault_types
  └── 1:N  vault_attachments
 
-llm_usage (standalone, indexes sur kin_id, provider_type, model_id, task_id, cron_id)
+llm_usage (standalone, indexes sur agent_id, provider_type, model_id, task_id, cron_id)
 ```

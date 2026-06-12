@@ -16,7 +16,6 @@ import { Button } from '@/client/components/ui/button'
 import { Input } from '@/client/components/ui/input'
 import { MarkdownEditor } from '@/client/components/ui/markdown-editor'
 import { Label } from '@/client/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/client/components/ui/select'
 import { TagManager } from '@/client/components/project/TagManager'
 import { ModelPicker, modelPickerValue } from '@/client/components/common/ModelPicker'
 import { ToolboxMultiSelect } from '@/client/components/toolbox/ToolboxMultiSelect'
@@ -27,9 +26,11 @@ import { useModels } from '@/client/hooks/useModels'
 import { useToolboxes } from '@/client/hooks/useToolboxes'
 import { getErrorMessage } from '@/client/lib/api'
 import { configToChoice, choiceToConfig, type ThinkingChoice } from '@/client/lib/thinking-choice'
+import { ThinkingEffortSelect } from '@/client/components/common/ThinkingEffortSelect'
+import { modelReasoningInfo } from '@/client/lib/model-efforts'
 import { toast } from 'sonner'
 import { Trash2 } from 'lucide-react'
-import type { Project, KinThinkingConfig } from '@/shared/types'
+import type { Project, AgentThinkingConfig } from '@/shared/types'
 
 interface EditProjectModalProps {
   open: boolean
@@ -45,7 +46,8 @@ interface EditProjectModalProps {
     providerId?: string | null
     scoutModel?: string | null
     scoutProviderId?: string | null
-    thinkingConfig?: KinThinkingConfig | null
+    scoutThinkingConfig?: AgentThinkingConfig | null
+    thinkingConfig?: AgentThinkingConfig | null
     defaultToolboxIds?: string[] | null
   }) => Promise<unknown>
   onDelete: () => Promise<void>
@@ -73,6 +75,7 @@ export function EditProjectModal({ open, onOpenChange, project, onSave, onDelete
   const [scoutModel, setScoutModel] = useState(project.scoutModel ?? '')
   const [scoutProviderId, setScoutProviderId] = useState(project.scoutProviderId ?? '')
   const [thinkingChoice, setThinkingChoice] = useState<ThinkingChoice>(configToChoice(project.thinkingConfig))
+  const [scoutThinkingChoice, setScoutThinkingChoice] = useState<ThinkingChoice>(configToChoice(project.scoutThinkingConfig))
   const [defaultToolboxIds, setDefaultToolboxIds] = useState<string[]>(project.defaultToolboxIds ?? [])
   const [submitting, setSubmitting] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -91,11 +94,13 @@ export function EditProjectModal({ open, onOpenChange, project, onSave, onDelete
       setScoutModel(project.scoutModel ?? '')
       setScoutProviderId(project.scoutProviderId ?? '')
       setThinkingChoice(configToChoice(project.thinkingConfig))
+      setScoutThinkingChoice(configToChoice(project.scoutThinkingConfig))
       setDefaultToolboxIds(project.defaultToolboxIds ?? [])
     }
   }, [open, project])
 
   const initialThinkingChoice = configToChoice(project.thinkingConfig)
+  const initialScoutThinkingChoice = configToChoice(project.scoutThinkingConfig)
   const initialToolboxIds = project.defaultToolboxIds ?? []
   const toolboxesChanged = !sameToolboxIds(defaultToolboxIds, initialToolboxIds)
   const hasChanges =
@@ -109,6 +114,7 @@ export function EditProjectModal({ open, onOpenChange, project, onSave, onDelete
     (scoutModel || null) !== (project.scoutModel ?? null) ||
     (scoutProviderId || null) !== (project.scoutProviderId ?? null) ||
     thinkingChoice !== initialThinkingChoice ||
+    scoutThinkingChoice !== initialScoutThinkingChoice ||
     toolboxesChanged
 
   async function handleSave() {
@@ -127,6 +133,7 @@ export function EditProjectModal({ open, onOpenChange, project, onSave, onDelete
         effectiveScoutModel !== (project.scoutModel ?? null) ||
         effectiveScoutProviderId !== (project.scoutProviderId ?? null)
       const thinkingChanged = thinkingChoice !== initialThinkingChoice
+      const scoutThinkingChanged = scoutThinkingChoice !== initialScoutThinkingChoice
       await onSave({
         title: trimmedTitle !== project.title ? trimmedTitle : undefined,
         description: description !== project.description ? description : undefined,
@@ -141,6 +148,7 @@ export function EditProjectModal({ open, onOpenChange, project, onSave, onDelete
         scoutModel: scoutChanged ? effectiveScoutModel : undefined,
         scoutProviderId: scoutChanged ? effectiveScoutProviderId : undefined,
         thinkingConfig: thinkingChanged ? choiceToConfig(thinkingChoice) : undefined,
+        scoutThinkingConfig: scoutThinkingChanged ? choiceToConfig(scoutThinkingChoice) : undefined,
         // Empty selection clears to null (inherit built-in default).
         defaultToolboxIds: toolboxesChanged
           ? (defaultToolboxIds.length > 0 ? defaultToolboxIds : null)
@@ -280,7 +288,7 @@ export function EditProjectModal({ open, onOpenChange, project, onSave, onDelete
         </FormField>
 
         {/* Default scout model for tasks on this project's tickets.
-            Empty = inherit the global scout default, then the Kin's model. */}
+            Empty = inherit the global scout default, then the Agent's model. */}
         <FormField label={t('projects.edit.scoutModelField')} hint={t('projects.edit.scoutModelHint')}>
           <ModelPicker
             models={llmModels}
@@ -295,27 +303,23 @@ export function EditProjectModal({ open, onOpenChange, project, onSave, onDelete
           />
         </FormField>
 
+        <FormField label={t('projects.edit.scoutThinkingField')} hint={t('projects.edit.scoutThinkingHint')}>
+          <ThinkingEffortSelect
+            value={scoutThinkingChoice}
+            onChange={setScoutThinkingChoice}
+            inheritLabel={t('projects.edit.scoutThinkingInherit')}
+            reasoning={scoutModel
+              ? modelReasoningInfo(llmModels.find((m) => m.id === scoutModel && (!scoutProviderId || m.providerId === scoutProviderId)))
+              : undefined}
+          />
+        </FormField>
+
         <FormField label={t('projects.edit.thinkingField')} hint={t('projects.edit.thinkingHint')}>
-          <Select
+          <ThinkingEffortSelect
             value={thinkingChoice}
-            onValueChange={(v) => setThinkingChoice(v as ThinkingChoice)}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="inherit">
-                <span className="italic text-muted-foreground">
-                  {t('projects.edit.thinkingInherit')}
-                </span>
-              </SelectItem>
-              <SelectItem value="off">{t('chat.thinkingPicker.effort.off')}</SelectItem>
-              <SelectItem value="low">{t('chat.thinkingPicker.effort.low')}</SelectItem>
-              <SelectItem value="medium">{t('chat.thinkingPicker.effort.medium')}</SelectItem>
-              <SelectItem value="high">{t('chat.thinkingPicker.effort.high')}</SelectItem>
-              <SelectItem value="max">{t('chat.thinkingPicker.effort.max')}</SelectItem>
-            </SelectContent>
-          </Select>
+            onChange={setThinkingChoice}
+            inheritLabel={t('projects.edit.thinkingInherit')}
+          />
         </FormField>
 
         {/* Default toolboxes for tasks started on this project's tickets.

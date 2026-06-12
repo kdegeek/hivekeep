@@ -35,17 +35,17 @@ import {
   deleteTicketComment,
 } from '@/server/services/ticket-comments'
 import { db } from '@/server/db/index'
-import { kins } from '@/server/db/schema'
+import { agents } from '@/server/db/schema'
 import { eq } from 'drizzle-orm'
 import { TICKET_STATUSES } from '@/shared/constants'
 
-/** Look up the active project for the calling Kin — used to resolve bare
+/** Look up the active project for the calling Agent — used to resolve bare
  *  ticket references like `#42`. Returns null when no active project is set. */
-function getActiveProjectIdFor(kinId: string): string | null {
+function getActiveProjectIdFor(agentId: string): string | null {
   const row = db
-    .select({ activeProjectId: kins.activeProjectId })
-    .from(kins)
-    .where(eq(kins.id, kinId))
+    .select({ activeProjectId: agents.activeProjectId })
+    .from(agents)
+    .where(eq(agents.id, agentId))
     .get()
   return row?.activeProjectId ?? null
 }
@@ -55,15 +55,15 @@ const log = createLogger('tools:project')
 // ─── Availability gates ───────────────────────────────────────────────────────
 
 /** Main-agent-only tools (CRUD-on-projects / context-management).
- *  Sub-Kins linked to a ticket do NOT get these (they could destabilize their own run). */
+ *  Sub-Agents linked to a ticket do NOT get these (they could destabilize their own run). */
 const mainOnlyCondition = (ctx: ToolExecutionContext): boolean => !ctx.taskId
 
-/** Available to main agents AND to sub-Kins when task.ticket_id is set.
- *  This covers the read/update set the sub-Kin needs to interact with its assigned ticket. */
+/** Available to main agents AND to sub-Agents when task.ticket_id is set.
+ *  This covers the read/update set the sub-Agent needs to interact with its assigned ticket. */
 const mainOrTicketBoundCondition = (ctx: ToolExecutionContext): boolean =>
   !ctx.taskId || !!ctx.ticketId
 
-// ─── Read tools (main + ticket-bound sub-Kin) ─────────────────────────────────
+// ─── Read tools (main + ticket-bound sub-Agent) ─────────────────────────────────
 
 export const listProjectsTool: ToolRegistration = {
   availability: ['main'],
@@ -136,13 +136,13 @@ export const getTicketTool: ToolRegistration = {
     tool({
       description:
         'Retrieve a ticket with full description, tags, and linked tasks history. ' +
-        'Accepts a UUID, a qualified id like "kinbot#42", or a bare "#42" (resolved against the active project).',
+        'Accepts a UUID, a qualified id like "hivekeep#42", or a bare "#42" (resolved against the active project).',
       inputSchema: z.object({
         ticket_id: z.string(),
       }),
       execute: async ({ ticket_id }) => {
         const resolved = await resolveTicketRef(ticket_id, {
-          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+          activeProjectId: getActiveProjectIdFor(ctx.agentId),
         })
         if (!resolved.ok) return { error: resolved.code, message: resolved.message }
         const ticket = await getTicket(resolved.ticketId)
@@ -214,7 +214,7 @@ export const deleteProjectTool: ToolRegistration = {
     }),
 }
 
-// ─── Project description editing (main + ticket-bound sub-Kin) ────────────────
+// ─── Project description editing (main + ticket-bound sub-Agent) ────────────────
 
 export const updateProjectDescriptionTool: ToolRegistration = {
   availability: ['main'],
@@ -283,13 +283,13 @@ export const setActiveProjectTool: ToolRegistration = {
   condition: mainOnlyCondition,
   create: (ctx) =>
     tool({
-      description: 'Set or clear the active project for the calling Kin. The project context will be injected in the system prompt on the next turn. Pass null to deactivate.',
+      description: 'Set or clear the active project for the calling Agent. The project context will be injected in the system prompt on the next turn. Pass null to deactivate.',
       inputSchema: z.object({
         project_id: z.string().nullable(),
       }),
       execute: async ({ project_id }) => {
         try {
-          const result = await setActiveProject(ctx.kinId, project_id)
+          const result = await setActiveProject(ctx.agentId, project_id)
           return { activeProjectId: result.activeProjectId }
         } catch (err) {
           return { error: err instanceof Error ? err.message : 'Unknown error' }
@@ -298,7 +298,7 @@ export const setActiveProjectTool: ToolRegistration = {
     }),
 }
 
-// ─── Tags (main only — sub-Kins don't manage the palette) ─────────────────────
+// ─── Tags (main only — sub-Agents don't manage the palette) ─────────────────────
 
 export const createTagTool: ToolRegistration = {
   availability: ['main'],
@@ -363,7 +363,7 @@ export const deleteTagTool: ToolRegistration = {
     }),
 }
 
-// ─── Tickets (CRUD: main only ; update + tag mgmt: main + ticket-bound sub-Kin) ─
+// ─── Tickets (CRUD: main only ; update + tag mgmt: main + ticket-bound sub-Agent) ─
 
 export const createTicketTool: ToolRegistration = {
   availability: ['main'],
@@ -386,7 +386,7 @@ export const createTicketTool: ToolRegistration = {
             description,
             status,
             tagIds: tag_ids,
-            reporter: { type: 'kin', id: ctx.kinId },
+            reporter: { type: 'agent', id: ctx.agentId },
           })
           return { ticket }
         } catch (err) {
@@ -404,7 +404,7 @@ export const updateTicketTool: ToolRegistration = {
       description:
         'Modify a ticket — title, description, status, position, or tags (PUT-like for tag_ids: pass the full set). ' +
         'Status change without explicit position moves the card to the top of the target column. ' +
-        'Accepts a UUID, a qualified id like "kinbot#42", or a bare "#42" (resolved against the active project).',
+        'Accepts a UUID, a qualified id like "hivekeep#42", or a bare "#42" (resolved against the active project).',
       inputSchema: z.object({
         ticket_id: z.string(),
         title: z.string().optional(),
@@ -415,7 +415,7 @@ export const updateTicketTool: ToolRegistration = {
       }),
       execute: async ({ ticket_id, title, description, status, position, tag_ids }) => {
         const resolved = await resolveTicketRef(ticket_id, {
-          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+          activeProjectId: getActiveProjectIdFor(ctx.agentId),
         })
         if (!resolved.ok) return { error: resolved.code, message: resolved.message }
         try {
@@ -442,14 +442,14 @@ export const addTicketTagTool: ToolRegistration = {
     tool({
       description:
         'Attach a tag to a ticket. Idempotent. The tag must belong to the ticket\'s project. ' +
-        'Accepts a UUID, a qualified id like "kinbot#42", or a bare "#42".',
+        'Accepts a UUID, a qualified id like "hivekeep#42", or a bare "#42".',
       inputSchema: z.object({
         ticket_id: z.string(),
         tag_id: z.string(),
       }),
       execute: async ({ ticket_id, tag_id }) => {
         const resolved = await resolveTicketRef(ticket_id, {
-          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+          activeProjectId: getActiveProjectIdFor(ctx.agentId),
         })
         if (!resolved.ok) return { error: resolved.code, message: resolved.message }
         const ok = await addTicketTag(resolved.ticketId, tag_id)
@@ -465,14 +465,14 @@ export const removeTicketTagTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Detach a tag from a ticket. Accepts a UUID, a qualified id like "kinbot#42", or a bare "#42".',
+        'Detach a tag from a ticket. Accepts a UUID, a qualified id like "hivekeep#42", or a bare "#42".',
       inputSchema: z.object({
         ticket_id: z.string(),
         tag_id: z.string(),
       }),
       execute: async ({ ticket_id, tag_id }) => {
         const resolved = await resolveTicketRef(ticket_id, {
-          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+          activeProjectId: getActiveProjectIdFor(ctx.agentId),
         })
         if (!resolved.ok) return { error: resolved.code, message: resolved.message }
         const ok = await removeTicketTag(resolved.ticketId, tag_id)
@@ -490,13 +490,13 @@ export const deleteTicketTool: ToolRegistration = {
     tool({
       description:
         'Permanently delete a ticket. Linked tasks history is preserved (ticket_id set to NULL). ' +
-        'Accepts a UUID, a qualified id like "kinbot#42", or a bare "#42".',
+        'Accepts a UUID, a qualified id like "hivekeep#42", or a bare "#42".',
       inputSchema: z.object({
         ticket_id: z.string(),
       }),
       execute: async ({ ticket_id }) => {
         const resolved = await resolveTicketRef(ticket_id, {
-          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+          activeProjectId: getActiveProjectIdFor(ctx.agentId),
         })
         if (!resolved.ok) return { error: resolved.code, message: resolved.message }
         const deleted = await deleteTicket(resolved.ticketId)
@@ -514,13 +514,13 @@ export const startTicketTaskTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Spawn a sub-Kin to work on a ticket. Always runs in await mode — you will get a turn when it finishes. ' +
+        'Spawn a sub-Agent to work on a ticket. Always runs in await mode — you will get a turn when it finishes. ' +
         'NO side-effect on the ticket status: update it manually via update_ticket() before/after. ' +
-        'Accepts a UUID, a qualified id like "kinbot#42", or a bare "#42". ' +
+        'Accepts a UUID, a qualified id like "hivekeep#42", or a bare "#42". ' +
         'Optional `run_prompt` lets you scope this specific run (e.g. "only the backend", ' +
         '"stop after the DB migration phase", "ignore the UI part for this pass"). Useful when ' +
         'fanning out several agents on the same ticket with different scopes, or resuming after a ' +
-        'partial run. It is injected into the sub-Kin brief in a dedicated block, after the ticket ' +
+        'partial run. It is injected into the sub-Agent brief in a dedicated block, after the ticket ' +
         'description and existing comments. It does NOT replace the ticket itself — keep it short.',
       inputSchema: z.object({
         ticket_id: z.string(),
@@ -534,11 +534,11 @@ export const startTicketTaskTool: ToolRegistration = {
       }),
       execute: async ({ ticket_id, run_prompt }) => {
         const resolved = await resolveTicketRef(ticket_id, {
-          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+          activeProjectId: getActiveProjectIdFor(ctx.agentId),
         })
         if (!resolved.ok) return { error: resolved.code, message: resolved.message }
         try {
-          const result = await startTicketTask(resolved.ticketId, ctx.kinId, {
+          const result = await startTicketTask(resolved.ticketId, ctx.agentId, {
             runPrompt: run_prompt ?? null,
           })
           return result
@@ -565,10 +565,10 @@ export const enrichTicketTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Spawn a dedicated enrichment sub-Kin on a ticket. The agent gathers context (repo, related tickets, history) ' +
+        'Spawn a dedicated enrichment sub-Agent on a ticket. The agent gathers context (repo, related tickets, history) ' +
         'and rewrites the ticket title, description, and tags to make it actionable. Runs in await mode — you get a turn back when it finishes. ' +
         'Refuses if another enrichment is already in flight on the same ticket. ' +
-        'Accepts a UUID, a qualified id like "kinbot#42", or a bare "#42".',
+        'Accepts a UUID, a qualified id like "hivekeep#42", or a bare "#42".',
       inputSchema: z.object({
         ticket_id: z.string(),
         focus: z
@@ -580,11 +580,11 @@ export const enrichTicketTool: ToolRegistration = {
       }),
       execute: async ({ ticket_id, focus }) => {
         const resolved = await resolveTicketRef(ticket_id, {
-          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+          activeProjectId: getActiveProjectIdFor(ctx.agentId),
         })
         if (!resolved.ok) return { error: resolved.code, message: resolved.message }
         try {
-          const result = await startTicketEnrichment(resolved.ticketId, ctx.kinId, { focus })
+          const result = await startTicketEnrichment(resolved.ticketId, ctx.agentId, { focus })
           return result
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'Unknown error'
@@ -600,7 +600,7 @@ export const enrichTicketTool: ToolRegistration = {
     }),
 }
 
-// ─── Ticket comments (main + ticket-bound sub-Kin) ────────────────────────────
+// ─── Ticket comments (main + ticket-bound sub-Agent) ────────────────────────────
 
 export const addTicketCommentTool: ToolRegistration = {
   availability: ['main'],
@@ -608,22 +608,22 @@ export const addTicketCommentTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Post a comment on a ticket signed as the calling Kin. Use mid-task to flag something separate ' +
+        'Post a comment on a ticket signed as the calling Agent. Use mid-task to flag something separate ' +
         'from the final report (the final report is already posted automatically as a comment when the ' +
-        'sub-Kin finishes). Accepts a UUID, a qualified id like "kinbot#42", or a bare "#42".',
+        'sub-Agent finishes). Accepts a UUID, a qualified id like "hivekeep#42", or a bare "#42".',
       inputSchema: z.object({
         ticket_id: z.string(),
         content: z.string().describe('Markdown supported. Avoid em-dashes per repo conventions; use commas or parentheses instead.'),
       }),
       execute: async ({ ticket_id, content }) => {
         const resolved = await resolveTicketRef(ticket_id, {
-          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+          activeProjectId: getActiveProjectIdFor(ctx.agentId),
         })
         if (!resolved.ok) return { error: resolved.code, message: resolved.message }
         try {
           const comment = await createTicketComment({
             ticketId: resolved.ticketId,
-            author: { type: 'kin', id: ctx.kinId },
+            author: { type: 'agent', id: ctx.agentId },
             content,
             metadata: ctx.taskId ? { fromTaskId: ctx.taskId } : null,
           })
@@ -645,7 +645,7 @@ export const listTicketCommentsTool: ToolRegistration = {
     tool({
       description:
         'List comments posted on a ticket in chronological order. ' +
-        'Accepts a UUID, a qualified id like "kinbot#42", or a bare "#42".',
+        'Accepts a UUID, a qualified id like "hivekeep#42", or a bare "#42".',
       inputSchema: z.object({
         ticket_id: z.string(),
         limit: z.number().int().min(1).max(200).optional().describe('Default: 100'),
@@ -653,7 +653,7 @@ export const listTicketCommentsTool: ToolRegistration = {
       }),
       execute: async ({ ticket_id, limit, offset }) => {
         const resolved = await resolveTicketRef(ticket_id, {
-          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+          activeProjectId: getActiveProjectIdFor(ctx.agentId),
         })
         if (!resolved.ok) return { error: resolved.code, message: resolved.message }
         const result = await listTicketComments(resolved.ticketId, {
@@ -672,13 +672,13 @@ export const deleteTicketCommentTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Delete a comment by its UUID. A Kin can only delete its own comments. Hard delete, no recovery.',
+        'Delete a comment by its UUID. An Agent can only delete its own comments. Hard delete, no recovery.',
       inputSchema: z.object({
         comment_id: z.string(),
       }),
       execute: async ({ comment_id }) => {
         try {
-          const ok = await deleteTicketComment(comment_id, { type: 'kin', id: ctx.kinId })
+          const ok = await deleteTicketComment(comment_id, { type: 'agent', id: ctx.agentId })
           if (!ok) return { error: 'COMMENT_NOT_FOUND' }
           return { success: true, commentId: comment_id }
         } catch (err) {

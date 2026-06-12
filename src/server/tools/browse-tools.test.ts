@@ -38,6 +38,7 @@ const mockCreateFileFromContent = mock(() =>
 )
 
 mock.module('@/server/services/file-storage', () => ({
+  readStoredFile: mock(() => Promise.resolve(null)),
   createFileFromContent: mockCreateFileFromContent,
   createFileFromWorkspace: mock(() => Promise.resolve(null)),
   createFileFromUrl: mock(() => Promise.resolve(null)),
@@ -82,7 +83,7 @@ const { browseUrlTool, extractLinksTool, screenshotUrlTool } =
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const ctx = { kinId: 'kin-test-123' } as any
+const ctx = { agentId: 'agent-test-123' } as any
 const opts = { toolCallId: 'x', messages: [] as any[], abortSignal: undefined as any }
 
 function createTool(reg: ToolRegistration) {
@@ -99,7 +100,7 @@ describe('browseUrlTool', () => {
   })
 
   it('has correct availability', () => {
-    expect(browseUrlTool.availability).toEqual(['main', 'sub-kin'])
+    expect(browseUrlTool.availability).toEqual(['main', 'sub-agent'])
   })
 
   it('uses headless browser when wait_for_js is true', async () => {
@@ -176,7 +177,7 @@ describe('browseUrlTool', () => {
 
 describe('extractLinksTool', () => {
   it('has correct availability', () => {
-    expect(extractLinksTool.availability).toEqual(['main', 'sub-kin'])
+    expect(extractLinksTool.availability).toEqual(['main', 'sub-agent'])
   })
 
   it('calls extractLinks with url and defaults', async () => {
@@ -267,7 +268,7 @@ describe('screenshotUrlTool', () => {
     const t = createTool(screenshotUrlTool)
     await t.execute({ url: 'https://my-site.example.com/path' }, opts)
     const call = mockCreateFileFromContent.mock.calls[0] as unknown as any[]
-    // createFileFromContent(kinId, name, content, mimeType, options)
+    // createFileFromContent(agentId, name, content, mimeType, options)
     expect(call[1]).toContain('my-site.example.com')
   })
 
@@ -275,7 +276,7 @@ describe('screenshotUrlTool', () => {
     const t = createTool(screenshotUrlTool)
     await t.execute({ url: 'https://example.com' }, opts)
     const call = mockCreateFileFromContent.mock.calls[0] as unknown as any[]
-    // createFileFromContent(kinId, name, content, mimeType, options)
+    // createFileFromContent(agentId, name, content, mimeType, options)
     expect(call[3]).toBe('image/png')
     expect(call[4]).toHaveProperty('isPublic', true)
   })

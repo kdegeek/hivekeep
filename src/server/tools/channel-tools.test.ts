@@ -50,7 +50,7 @@ mock.module('@/server/services/channels', () => ({
   removeContactPlatformId: mock(() => true),
   setChannelOriginMeta: () => {},
   getChannelOriginMeta: () => undefined,
-  getActiveChannelsForKin: () => [],
+  getActiveChannelsForAgent: () => [],
   restoreActiveChannels: async () => {},
   transferChannel: mock(() => Promise.resolve({ ok: true, transferred: true })),
 }))
@@ -109,9 +109,9 @@ const { listChannelsTool, listChannelConversationsTool, sendChannelMessageTool }
 
 function createTool(registration: ToolRegistration) {
   return registration.create({
-    kinId: 'kin-1',
+    agentId: 'agent-1',
     userId: 'user-1',
-    isSubKin: false,
+    isSubAgent: false,
   })
 }
 
@@ -144,7 +144,7 @@ describe('listChannelsTool', () => {
     mockListChannels.mockResolvedValue([])
     const result = await executeTool(listChannelsTool)
     expect(result.channels).toEqual([])
-    expect(mockListChannels).toHaveBeenCalledWith('kin-1')
+    expect(mockListChannels).toHaveBeenCalledWith('agent-1')
   })
 
   it('returns formatted channel list', async () => {
@@ -186,24 +186,24 @@ describe('listChannelsTool', () => {
     mockListChannelsWithOwners.mockResolvedValue([
       {
         id: 'ch-1',
-        kinId: 'kin-1',
+        agentId: 'agent-1',
         name: 'Mine',
         platform: 'telegram',
         status: 'active',
-        ownerKinSlug: 'me',
-        ownerKinName: 'Me',
+        ownerAgentSlug: 'me',
+        ownerAgentName: 'Me',
         messagesReceived: 1,
         messagesSent: 2,
         lastActivityAt: null,
       },
       {
         id: 'ch-2',
-        kinId: 'other-kin',
+        agentId: 'other-agent',
         name: 'Dispatcher Discord',
         platform: 'discord',
         status: 'active',
-        ownerKinSlug: 'dispatcher-central',
-        ownerKinName: 'Dispatcher Central',
+        ownerAgentSlug: 'dispatcher-central',
+        ownerAgentName: 'Dispatcher Central',
         messagesReceived: 0,
         messagesSent: 0,
         lastActivityAt: null,
@@ -215,9 +215,9 @@ describe('listChannelsTool', () => {
     expect(mockListChannels).not.toHaveBeenCalled()
     expect(result.channels).toHaveLength(2)
     expect(result.channels[0].owned).toBe(true)
-    expect(result.channels[0].ownerKinSlug).toBe('me')
+    expect(result.channels[0].ownerAgentSlug).toBe('me')
     expect(result.channels[1].owned).toBe(false)
-    expect(result.channels[1].ownerKinName).toBe('Dispatcher Central')
+    expect(result.channels[1].ownerAgentName).toBe('Dispatcher Central')
   })
 })
 
@@ -234,8 +234,8 @@ describe('listChannelConversationsTool', () => {
     expect(result.error).toBe('Channel not found')
   })
 
-  it('returns conversations cross-Kin when channel belongs to another kin', async () => {
-    mockGetChannel.mockResolvedValue({ id: 'ch-1', kinId: 'other-kin' })
+  it('returns conversations cross-Agent when channel belongs to another agent', async () => {
+    mockGetChannel.mockResolvedValue({ id: 'ch-1', agentId: 'other-agent' })
     mockListChannelConversations.mockResolvedValue({
       users: [{ id: 'u1', name: 'Alice' }],
       chatIds: ['chat-1'],
@@ -245,8 +245,8 @@ describe('listChannelConversationsTool', () => {
     expect(mockListChannelConversations).toHaveBeenCalledWith('ch-1')
   })
 
-  it('returns conversations when channel exists and belongs to kin', async () => {
-    mockGetChannel.mockResolvedValue({ id: 'ch-1', kinId: 'kin-1' })
+  it('returns conversations when channel exists and belongs to agent', async () => {
+    mockGetChannel.mockResolvedValue({ id: 'ch-1', agentId: 'agent-1' })
     mockListChannelConversations.mockResolvedValue({
       users: [{ id: 'u1', name: 'Alice' }],
       chatIds: ['chat-1', 'chat-2'],
@@ -276,7 +276,7 @@ describe('sendChannelMessageTool', () => {
     expect(result.error).toBe('Channel not found')
   })
 
-  it('sends cross-Kin: delegates to sendToChannelAs with the calling kin as sender', async () => {
+  it('sends cross-Agent: delegates to sendToChannelAs with the calling agent as sender', async () => {
     mockSendToChannelAs.mockResolvedValue({ ok: true, result: { platformMessageId: 'msg-x', prefixed: true } } as any)
     const result = await executeTool(sendChannelMessageTool, {
       channel_id: 'ch-other',
@@ -287,7 +287,7 @@ describe('sendChannelMessageTool', () => {
     expect(result.prefixed).toBe(true)
     expect(mockSendToChannelAs).toHaveBeenCalledWith({
       channelId: 'ch-other',
-      senderKinId: 'kin-1',
+      senderAgentId: 'agent-1',
       chatId: 'chat-1',
       content: 'Daily AI brief',
       attachments: undefined,
@@ -325,7 +325,7 @@ describe('sendChannelMessageTool', () => {
     expect(result.platformMessageId).toBe('msg-123')
     expect(mockSendToChannelAs).toHaveBeenCalledWith({
       channelId: 'ch-1',
-      senderKinId: 'kin-1',
+      senderAgentId: 'agent-1',
       chatId: 'chat-42',
       content: 'Hello world',
       attachments: undefined,

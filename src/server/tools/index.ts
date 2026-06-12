@@ -15,7 +15,7 @@ class ToolRegistry {
   private tools = new Map<string, RegistryEntry>()
 
   /** Register a tool. The `domain` argument is the single source of truth
-   *  for which UI category the tool belongs to — used by the Kin tools
+   *  for which UI category the tool belongs to — used by the Agent tools
    *  settings tab and the live tool-call renderer. TypeScript enforces it
    *  here so no tool can be registered without a category. */
   register(name: string, registration: ToolRegistration, domain: ToolDomain): void {
@@ -41,7 +41,7 @@ class ToolRegistry {
    * Wraps each tool's execute function with beforeToolCall/afterToolCall hooks.
    */
   resolve(ctx: ToolExecutionContext): Record<string, Tool<any, any>> {
-    const target: ToolAvailability = ctx.isSubKin ? 'sub-kin' : 'main'
+    const target: ToolAvailability = ctx.isSubAgent ? 'sub-agent' : 'main'
     const resolved: Record<string, Tool<any, any>> = {}
 
     for (const [name, entry] of this.tools) {
@@ -52,7 +52,7 @@ class ToolRegistry {
       resolved[name] = this.wrapWithHooks(name, baseTool, ctx)
     }
 
-    log.debug({ kinId: ctx.kinId, resolvedCount: Object.keys(resolved).length }, 'Tools resolved for Kin')
+    log.debug({ agentId: ctx.agentId, resolvedCount: Object.keys(resolved).length }, 'Tools resolved for Agent')
 
     return resolved
   }
@@ -126,7 +126,7 @@ class ToolRegistry {
     const entry = this.tools.get(name)
     if (!entry) return undefined
     try {
-      const stub: ToolExecutionContext = { kinId: '', isSubKin: false }
+      const stub: ToolExecutionContext = { agentId: '', isSubAgent: false }
       const built = entry.registration.create(stub) as { description?: string }
       return typeof built.description === 'string' ? built.description : undefined
     } catch {

@@ -7,7 +7,7 @@ import type { ChatMessage } from '@/client/hooks/useChat'
 
 const PAGE_SIZE = 20
 
-export function useQuickSessionHistory(kinId: string | null) {
+export function useQuickSessionHistory(agentId: string | null) {
   const { t } = useTranslation()
   const [sessions, setSessions] = useState<QuickSessionSummary[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -19,12 +19,12 @@ export function useQuickSessionHistory(kinId: string | null) {
   const offsetRef = useRef(0)
 
   const fetchHistory = useCallback(async () => {
-    if (!kinId) return
+    if (!agentId) return
     setIsLoading(true)
     offsetRef.current = 0
     try {
       const data = await api.get<{ sessions: QuickSessionSummary[]; hasMore: boolean }>(
-        `/kins/${kinId}/quick-sessions?status=closed&limit=${PAGE_SIZE}&offset=0`,
+        `/agents/${agentId}/quick-sessions?status=closed&limit=${PAGE_SIZE}&offset=0`,
       )
       setSessions(data.sessions)
       setHasMore(data.hasMore)
@@ -34,14 +34,14 @@ export function useQuickSessionHistory(kinId: string | null) {
     } finally {
       setIsLoading(false)
     }
-  }, [kinId])
+  }, [agentId])
 
   const loadMore = useCallback(async () => {
-    if (!kinId || isLoadingMore || !hasMore) return
+    if (!agentId || isLoadingMore || !hasMore) return
     setIsLoadingMore(true)
     try {
       const data = await api.get<{ sessions: QuickSessionSummary[]; hasMore: boolean }>(
-        `/kins/${kinId}/quick-sessions?status=closed&limit=${PAGE_SIZE}&offset=${offsetRef.current}`,
+        `/agents/${agentId}/quick-sessions?status=closed&limit=${PAGE_SIZE}&offset=${offsetRef.current}`,
       )
       setSessions((prev) => [...prev, ...data.sessions])
       setHasMore(data.hasMore)
@@ -51,7 +51,7 @@ export function useQuickSessionHistory(kinId: string | null) {
     } finally {
       setIsLoadingMore(false)
     }
-  }, [kinId, isLoadingMore, hasMore])
+  }, [agentId, isLoadingMore, hasMore])
 
   const viewSession = useCallback(async (session: QuickSessionSummary) => {
     setSelectedSession(session)

@@ -36,18 +36,10 @@ export function useVersionCheck() {
   }, [fetchVersionInfo])
 
   useSSE({
-    'version:update-available': (data) => {
-      setVersionInfo((prev) => {
-        // Don't mark as update available if current version is unknown (fallback 0.0.0)
-        if (!prev || !prev.currentVersion || prev.currentVersion === '0.0.0') return prev
-        return {
-          ...prev,
-          latestVersion: data.latestVersion as string,
-          releaseUrl: (data.releaseUrl as string) ?? null,
-          publishedAt: (data.publishedAt as number) ?? null,
-          isUpdateAvailable: true,
-        }
-      })
+    // Refetch the full info instead of patching state: the SSE payload is a
+    // summary and lacks the cumulative changelog the dialog renders.
+    'version:update-available': () => {
+      fetchVersionInfo()
     },
   })
 

@@ -2,7 +2,7 @@ import { eq, and, desc, count } from 'drizzle-orm'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/server/db/index'
 import { createLogger } from '@/server/logger'
-import { messages, channels, channelUserMappings, channelMessageLinks, contactPlatformIds, contactNicknames, kins, contacts, userProfiles } from '@/server/db/schema'
+import { messages, channels, channelUserMappings, channelMessageLinks, contactPlatformIds, contactNicknames, agents, contacts, userProfiles } from '@/server/db/schema'
 import { enqueueMessage } from '@/server/services/queue'
 import { downloadChannelAttachments } from '@/server/services/files'
 import { createSecret, deleteSecret, getSecretValue, getSecretByKey } from '@/server/services/vault'
@@ -10,9 +10,9 @@ import { createContact } from '@/server/services/contacts'
 import { channelAdapters } from '@/server/channels/index'
 import { sseManager } from '@/server/sse/index'
 import { config } from '@/server/config'
-import { kinAvatarUrl } from '@/server/services/field-validator'
+import { agentAvatarUrl } from '@/server/services/field-validator'
 import { getContactDisplayName } from '@/shared/contact-display'
-import { applyKinNamePrefix } from '@/server/services/channel-prefix'
+import { applyAgentNamePrefix } from '@/server/services/channel-prefix'
 import type { IncomingMessage, OutboundAttachment, DeliveryStatusUpdate } from '@/server/channels/adapter'
 import type { ChannelPlatform, ChannelStatus } from '@/shared/types'
 
@@ -45,23 +45,23 @@ export function popChannelQueueMeta(queueItemId: string): ChannelQueueMeta | und
 
 // ─── Channel transfer hints (one-shot, consumed by the next inbound) ────────
 //
-// When a Kin calls transfer_channel(channelId, targetKinSlug, reason?), the
-// channel binding mutates (channels.kinId is updated). The next inbound on
-// the channel should carry transfer context so the new Kin understands it
+// When an Agent calls transfer_channel(channelId, targetAgentSlug, reason?), the
+// channel binding mutates (channels.agentId is updated). The next inbound on
+// the channel should carry transfer context so the new Agent understands it
 // just inherited the conversation. We stash the hint here keyed by channelId.
 // The hint is popped (consumed) by handleIncomingChannelMessage when the
 // next inbound arrives, and merged into the user message metadata under
-// `channelTransfer`. The kin-engine then surfaces it in <channel-context>.
+// `channelTransfer`. The agent-engine then surfaces it in <channel-context>.
 //
 // In-memory only, lost on restart. Acceptable trade-off: a stale hint after
-// a restart is harmless (the Kin will simply miss the one-shot transfer
+// a restart is harmless (the Agent will simply miss the one-shot transfer
 // note; the conversation history and the audit-trail system messages
 // remain).
 
 export interface ChannelTransferHint {
-  fromKinId: string
-  fromKinSlug: string
-  fromKinName: string
+  fromAgentId: string
+  fromAgentSlug: string
+  fromAgentName: string
   reason?: string
   at: number
 }
@@ -105,13 +105,13 @@ export function getChannelOriginMeta(originId: string): ChannelOriginMeta | unde
   return meta
 }
 
-// ─── Locale resolution (channel → kin → owner → user_profiles.language) ─────
+// ─── Locale resolution (channel → agent → owner → user_profiles.language) ─────
 
 const DEFAULT_LOCALE = 'en'
 
 /**
  * Resolve the locale to use when an adapter localizes a `contextLine` for a
- * channel. The owner of the Kin attached to the channel sees the chat UI, so
+ * channel. The owner of the Agent attached to the channel sees the chat UI, so
  * we pick that user's `user_profiles.language`. Falls back to 'en'.
  */
 export function resolveChannelLocale(channelId: string): string {
@@ -119,8 +119,8 @@ export function resolveChannelLocale(channelId: string): string {
     const row = db
       .select({ language: userProfiles.language })
       .from(channels)
-      .innerJoin(kins, eq(channels.kinId, kins.id))
-      .innerJoin(userProfiles, eq(kins.createdBy, userProfiles.userId))
+      .innerJoin(agents, eq(channels.agentId, agents.id))
+      .innerJoin(userProfiles, eq(agents.createdBy, userProfiles.userId))
       .where(eq(channels.id, channelId))
       .get()
     return row?.language ?? DEFAULT_LOCALE
@@ -132,7 +132,7 @@ export function resolveChannelLocale(channelId: string): string {
 // ─── CRUD ───────────────────────────────────────────────────────────────────
 
 interface CreateChannelParams {
-  kinId: string
+  agentId: string
   name: string
   platform: ChannelPlatform
   /**
@@ -144,19 +144,19 @@ interface CreateChannelParams {
   platformConfig?: Record<string, unknown>
   allowedChatIds?: string[]
   autoCreateContacts?: boolean
-  createdBy?: 'user' | 'kin'
+  createdBy?: 'user' | 'agent'
 }
 
 export async function createChannel(params: CreateChannelParams) {
-  // Check max per Kin limit
+  // Check max per Agent limit
   const existing = await db
     .select()
     .from(channels)
-    .where(eq(channels.kinId, params.kinId))
+    .where(eq(channels.agentId, params.agentId))
     .all()
 
-  if (existing.length >= config.channels.maxPerKin) {
-    throw new Error(`Max channels per Kin (${config.channels.maxPerKin}) reached`)
+  if (existing.length >= config.channels.maxPerAgent) {
+    throw new Error(`Max channels per Agent (${config.channels.maxPerAgent}) reached`)
   }
 
   const adapter = channelAdapters.get(params.platform)
@@ -198,7 +198,7 @@ export async function createChannel(params: CreateChannelParams) {
 
   await db.insert(channels).values({
     id,
-    kinId: params.kinId,
+    agentId: params.agentId,
     name: params.name,
     platform: params.platform,
     platformConfig: JSON.stringify(stored),
@@ -216,12 +216,12 @@ export async function createChannel(params: CreateChannelParams) {
   if (created) {
     sseManager.broadcast({
       type: 'channel:created',
-      kinId: created.kinId,
-      data: { channelId: created.id, kinId: created.kinId, platform: created.platform },
+      agentId: created.agentId,
+      data: { channelId: created.id, agentId: created.agentId, platform: created.platform },
     })
   }
 
-  log.info({ channelId: id, kinId: params.kinId, platform: params.platform, name: params.name }, 'Channel created')
+  log.info({ channelId: id, agentId: params.agentId, platform: params.platform, name: params.name }, 'Channel created')
   return created!
 }
 
@@ -229,35 +229,35 @@ export async function getChannel(channelId: string) {
   return db.select().from(channels).where(eq(channels.id, channelId)).get()
 }
 
-export async function listChannels(kinId?: string) {
-  if (kinId) {
-    return db.select().from(channels).where(eq(channels.kinId, kinId)).all()
+export async function listChannels(agentId?: string) {
+  if (agentId) {
+    return db.select().from(channels).where(eq(channels.agentId, agentId)).all()
   }
   return db.select().from(channels).all()
 }
 
 /**
- * List every channel on the platform, joined with its owner Kin's slug/name.
- * Powers `list_channels({ scope: 'all' })` so a Kin can discover channels it can
- * borrow for a cross-Kin send. Left-join on kins keeps a row even if the owner
- * Kin was deleted (slug/name then null).
+ * List every channel on the platform, joined with its owner Agent's slug/name.
+ * Powers `list_channels({ scope: 'all' })` so an Agent can discover channels it can
+ * borrow for a cross-Agent send. Left-join on agents keeps a row even if the owner
+ * Agent was deleted (slug/name then null).
  */
 export async function listChannelsWithOwners() {
   return db
     .select({
       id: channels.id,
-      kinId: channels.kinId,
+      agentId: channels.agentId,
       name: channels.name,
       platform: channels.platform,
       status: channels.status,
       messagesReceived: channels.messagesReceived,
       messagesSent: channels.messagesSent,
       lastActivityAt: channels.lastActivityAt,
-      ownerKinSlug: kins.slug,
-      ownerKinName: kins.name,
+      ownerAgentSlug: agents.slug,
+      ownerAgentName: agents.name,
     })
     .from(channels)
-    .leftJoin(kins, eq(channels.kinId, kins.id))
+    .leftJoin(agents, eq(channels.agentId, agents.id))
     .all()
 }
 
@@ -265,7 +265,7 @@ export async function updateChannel(
   channelId: string,
   updates: Partial<{
     name: string
-    kinId: string
+    agentId: string
     allowedChatIds: string[] | null
     autoCreateContacts: boolean
   }>,
@@ -275,7 +275,7 @@ export async function updateChannel(
 
   const setValues: Record<string, unknown> = { updatedAt: new Date() }
   if (updates.name !== undefined) setValues.name = updates.name
-  if (updates.kinId !== undefined) setValues.kinId = updates.kinId
+  if (updates.agentId !== undefined) setValues.agentId = updates.agentId
   if (updates.autoCreateContacts !== undefined) setValues.autoCreateContacts = updates.autoCreateContacts
 
   // Update allowedChatIds in platform config
@@ -295,8 +295,8 @@ export async function updateChannel(
   if (updated) {
     sseManager.broadcast({
       type: 'channel:updated',
-      kinId: updated.kinId,
-      data: { channelId: updated.id, kinId: updated.kinId },
+      agentId: updated.agentId,
+      data: { channelId: updated.id, agentId: updated.agentId },
     })
   }
 
@@ -340,11 +340,11 @@ export async function deleteChannel(channelId: string) {
 
   sseManager.broadcast({
     type: 'channel:deleted',
-    kinId: existing.kinId,
-    data: { channelId, kinId: existing.kinId },
+    agentId: existing.agentId,
+    data: { channelId, agentId: existing.agentId },
   })
 
-  log.info({ channelId, kinId: existing.kinId }, 'Channel deleted')
+  log.info({ channelId, agentId: existing.agentId }, 'Channel deleted')
   return true
 }
 
@@ -404,8 +404,8 @@ async function setChannelStatus(channelId: string, status: ChannelStatus, status
   if (updated) {
     sseManager.broadcast({
       type: 'channel:updated',
-      kinId: updated.kinId,
-      data: { channelId, kinId: updated.kinId, status },
+      agentId: updated.agentId,
+      data: { channelId, agentId: updated.agentId, status },
     })
   }
 }
@@ -500,7 +500,7 @@ export async function handleIncomingChannelMessage(channelId: string, incoming: 
   }
 
   // Format content with sender context
-  // When the contact is not resolved, include platform metadata so the Kin can identify/create the contact
+  // When the contact is not resolved, include platform metadata so the Agent can identify/create the contact
   let content: string
   if (contact) {
     content = `[${channel.platform}:${senderName}] ${incoming.content}`
@@ -513,10 +513,10 @@ export async function handleIncomingChannelMessage(channelId: string, incoming: 
   // Download and store any file attachments
   let fileIds: string[] | undefined
   if (incoming.attachments && incoming.attachments.length > 0) {
-    const result = await downloadChannelAttachments(channel.kinId, incoming.attachments)
+    const result = await downloadChannelAttachments(channel.agentId, incoming.attachments)
     fileIds = result.fileIds.length > 0 ? result.fileIds : undefined
 
-    // Inform the Kin about files that couldn't be processed
+    // Inform the Agent about files that couldn't be processed
     if (result.failedAttachments.length > 0) {
       const failedLines = result.failedAttachments
         .map((f) => `- ${f.fileName ?? f.mimeType ?? 'unknown file'}: ${f.reason}`)
@@ -545,15 +545,15 @@ export async function handleIncomingChannelMessage(channelId: string, incoming: 
   }
 
   // One-shot transfer hint: when a transfer_channel call was made before
-  // this inbound, surface the handoff context to the new Kin via the same
+  // this inbound, surface the handoff context to the new Agent via the same
   // <channel-context> block. Consumed (popped) on first inbound after the
   // transfer; subsequent inbounds carry no hint.
   const transferHint = popChannelTransferHint(channelId)
 
-  // Enqueue message to Kin's queue.
+  // Enqueue message to Agent's queue.
   // Channel adapters can attach free-form structured context via incoming.metadata
   // (modality, presence, channel info, etc.). It is stored under the `channel`
-  // key of the user message metadata so the kin-engine can inject it as a
+  // key of the user message metadata so the agent-engine can inject it as a
   // <channel-context> block in the prompt.
   const messageMetadata: Record<string, unknown> | undefined = (() => {
     const hasChannelMeta = incoming.metadata && Object.keys(incoming.metadata).length > 0
@@ -567,7 +567,7 @@ export async function handleIncomingChannelMessage(channelId: string, incoming: 
 
   const { id: queueItemId } = await enqueueMessage({
     id: originId,
-    kinId: channel.kinId,
+    agentId: channel.agentId,
     messageType: 'channel',
     content,
     sourceType: 'channel',
@@ -614,13 +614,13 @@ export async function handleIncomingChannelMessage(channelId: string, incoming: 
     .where(eq(channels.id, channelId))
 
   // Emit SSE event for web UI
-  sseManager.sendToKin(channel.kinId, {
+  sseManager.sendToAgent(channel.agentId, {
     type: 'channel:message-received',
-    kinId: channel.kinId,
+    agentId: channel.agentId,
     data: { channelId, platform: channel.platform, sender: senderName },
   })
 
-  log.info({ channelId, kinId: channel.kinId, sender: senderName, platform: channel.platform }, 'Channel message received')
+  log.info({ channelId, agentId: channel.agentId, sender: senderName, platform: channel.platform }, 'Channel message received')
 }
 
 // ─── Bot /start command ──────────────────────────────────────────────────────
@@ -630,16 +630,16 @@ async function handleBotStart(
   incoming: IncomingMessage,
   senderName: string,
 ) {
-  // Fetch Kin info for the welcome message
-  const kin = await db
-    .select({ name: kins.name, role: kins.role })
-    .from(kins)
-    .where(eq(kins.id, channel.kinId))
+  // Fetch Agent info for the welcome message
+  const agent = await db
+    .select({ name: agents.name, role: agents.role })
+    .from(agents)
+    .where(eq(agents.id, channel.agentId))
     .get()
 
-  const kinName = kin?.name ?? 'Kin'
-  const kinRole = kin?.role ? ` — ${kin.role}` : ''
-  const welcomeText = `Hi! I'm ${kinName}${kinRole}.\nSend me a message and I'll respond.`
+  const agentName = agent?.name ?? 'Agent'
+  const agentRole = agent?.role ? ` — ${agent.role}` : ''
+  const welcomeText = `Hi! I'm ${agentName}${agentRole}.\nSend me a message and I'll respond.`
 
   // Send welcome message via adapter
   const adapter = channelAdapters.get(channel.platform)
@@ -656,7 +656,7 @@ async function handleBotStart(
     }
   }
 
-  // Update stats (count as received but not sent to Kin)
+  // Update stats (count as received but not sent to Agent)
   await db
     .update(channels)
     .set({
@@ -669,12 +669,12 @@ async function handleBotStart(
   log.info({ channelId: channel.id, sender: senderName, platform: channel.platform }, 'Handled /start command')
 }
 
-// ─── Cross-Kin proactive send ───────────────────────────────────────────────
+// ─── Cross-Agent proactive send ───────────────────────────────────────────────
 
 export interface SendToChannelAsParams {
   channelId: string
-  /** The Kin actually sending. Drives the cross-Kin prefix + audit trail. */
-  senderKinId: string
+  /** The Agent actually sending. Drives the cross-Agent prefix + audit trail. */
+  senderAgentId: string
   chatId: string
   content: string
   attachments?: OutboundAttachment[]
@@ -682,31 +682,31 @@ export interface SendToChannelAsParams {
 
 export interface SendToChannelAsResult {
   platformMessageId: string
-  /** True when a `[KinName]` prefix was prepended (sender ≠ channel owner). */
+  /** True when a `[AgentName]` prefix was prepended (sender ≠ channel owner). */
   prefixed: boolean
 }
 
 /**
- * Send a message proactively through a channel, on behalf of `senderKinId`.
+ * Send a message proactively through a channel, on behalf of `senderAgentId`.
  *
  * Shared by send_channel_message and send_to_contact. Unlike
- * `deliverChannelResponse` (auto-delivery of a Kin reply tied to an assistant
+ * `deliverChannelResponse` (auto-delivery of an Agent reply tied to an assistant
  * `messages` row), this path has no originating message — it persists an audit
- * `channel_message_links` row with `messageId = null` and `sentByKinId` set.
+ * `channel_message_links` row with `messageId = null` and `sentByAgentId` set.
  *
- * Cross-Kin handling: when the sending Kin is NOT the channel owner
- * (channels.kinId), the message is prefixed with `[SenderKinName] ` so the human
+ * Cross-Agent handling: when the sending Agent is NOT the channel owner
+ * (channels.agentId), the message is prefixed with `[SenderAgentName] ` so the human
  * understands who is speaking through the borrowed bot, regardless of the
  * adapter's identitySwitchMode. When the sender IS the owner, no prefix is added
- * (preserves the historical single-Kin behaviour).
+ * (preserves the historical single-Agent behaviour).
  *
  * Channel existence (not ownership) is the only gate — on a self-hosted
- * single-user instance every Kin is under the same control.
+ * single-user instance every Agent is under the same control.
  */
 export async function sendToChannelAs(
   params: SendToChannelAsParams,
 ): Promise<{ ok: true; result: SendToChannelAsResult } | { ok: false; error: string }> {
-  const { channelId, senderKinId, chatId, content, attachments } = params
+  const { channelId, senderAgentId, chatId, content, attachments } = params
 
   const channel = await getChannel(channelId)
   if (!channel) return { ok: false, error: 'Channel not found' }
@@ -715,18 +715,18 @@ export async function sendToChannelAs(
   const adapter = channelAdapters.get(channel.platform)
   if (!adapter) return { ok: false, error: `No adapter for platform ${channel.platform}` }
 
-  // Cross-Kin prefix: only when the sender is not the channel owner.
-  const isCrossKin = senderKinId !== channel.kinId
+  // Cross-Agent prefix: only when the sender is not the channel owner.
+  const isCrossAgent = senderAgentId !== channel.agentId
   let outboundContent = content
   let prefixed = false
-  if (isCrossKin) {
+  if (isCrossAgent) {
     const senderRow = db
-      .select({ name: kins.name })
-      .from(kins)
-      .where(eq(kins.id, senderKinId))
+      .select({ name: agents.name })
+      .from(agents)
+      .where(eq(agents.id, senderAgentId))
       .get()
     if (senderRow?.name) {
-      const next = applyKinNamePrefix(content, senderRow.name)
+      const next = applyAgentNamePrefix(content, senderRow.name)
       prefixed = next !== content
       outboundContent = next
     }
@@ -750,7 +750,7 @@ export async function sendToChannelAs(
       platformMessageId: result.platformMessageId,
       platformChatId: chatId,
       direction: 'outbound',
-      sentByKinId: senderKinId,
+      sentByAgentId: senderAgentId,
       createdAt: new Date(),
     })
 
@@ -765,9 +765,9 @@ export async function sendToChannelAs(
       .where(eq(channels.id, channelId))
 
     // SSE — broadcast to the channel owner so any open UI tab refreshes.
-    sseManager.sendToKin(channel.kinId, {
+    sseManager.sendToAgent(channel.agentId, {
       type: 'channel:message-sent',
-      kinId: channel.kinId,
+      agentId: channel.agentId,
       data: {
         channelId,
         platform: channel.platform,
@@ -779,9 +779,9 @@ export async function sendToChannelAs(
     log.info(
       {
         channelId,
-        ownerKinId: channel.kinId,
-        senderKinId,
-        crossKin: isCrossKin,
+        ownerAgentId: channel.agentId,
+        senderAgentId,
+        crossAgent: isCrossAgent,
         prefix: prefixed,
         platform: channel.platform,
       },
@@ -814,8 +814,8 @@ export async function deliverChannelResponse(
   const cfg = JSON.parse(channel.platformConfig) as Record<string, unknown>
 
   // Identity prefix fallback. When the adapter does NOT switch identity
-  // natively on the external platform, we prepend "[Kin Name] " to the
-  // text content so the user knows which Kin is speaking after a
+  // natively on the external platform, we prepend "[Agent Name] " to the
+  // text content so the user knows which Agent is speaking after a
   // transfer_channel handoff. Precedence:
   //   - 'native': adapter pushed name/avatar to the platform itself,
   //               no prefix needed.
@@ -830,13 +830,13 @@ export async function deliverChannelResponse(
     typeof content === 'string' &&
     content.trim().length > 0
   ) {
-    const kinRow = db
-      .select({ name: kins.name })
-      .from(kins)
-      .where(eq(kins.id, channel.kinId))
+    const agentRow = db
+      .select({ name: agents.name })
+      .from(agents)
+      .where(eq(agents.id, channel.agentId))
       .get()
-    if (kinRow?.name) {
-      outboundContent = applyKinNamePrefix(content, kinRow.name)
+    if (agentRow?.name) {
+      outboundContent = applyAgentNamePrefix(content, agentRow.name)
     }
   }
 
@@ -851,7 +851,7 @@ export async function deliverChannelResponse(
     })
 
     // Record the outbound link. Auto-delivered replies are authored by the
-    // channel's current owner Kin, so sentByKinId mirrors channel.kinId.
+    // channel's current owner Agent, so sentByAgentId mirrors channel.agentId.
     await db.insert(channelMessageLinks).values({
       id: uuid(),
       channelId: meta.channelId,
@@ -859,11 +859,11 @@ export async function deliverChannelResponse(
       platformMessageId: result.platformMessageId,
       platformChatId: meta.platformChatId,
       direction: 'outbound',
-      sentByKinId: channel.kinId,
+      sentByAgentId: channel.agentId,
       createdAt: new Date(),
     })
 
-    // Persist delivery context on the Kin's message so the UI can render a
+    // Persist delivery context on the Agent's message so the UI can render a
     // "Sent on X via Y" hint under the bubble. Merge with whatever metadata
     // the engine already wrote.
     if (result.contextLine || result.deliveryMeta) {
@@ -902,9 +902,9 @@ export async function deliverChannelResponse(
       .where(eq(channels.id, meta.channelId))
 
     // Emit SSE — include contextLine so the UI can refresh the message hint
-    sseManager.sendToKin(channel.kinId, {
+    sseManager.sendToAgent(channel.agentId, {
       type: 'channel:message-sent',
-      kinId: channel.kinId,
+      agentId: channel.agentId,
       data: {
         channelId: meta.channelId,
         platform: channel.platform,
@@ -913,7 +913,7 @@ export async function deliverChannelResponse(
       },
     })
 
-    log.info({ channelId: meta.channelId, kinId: channel.kinId, platform: channel.platform }, 'Channel response delivered')
+    log.info({ channelId: meta.channelId, agentId: channel.agentId, platform: channel.platform }, 'Channel response delivered')
   } catch (err) {
     log.error({ channelId: meta.channelId, err }, 'Failed to deliver channel response')
   }
@@ -946,7 +946,7 @@ function buildDeliveryContextLine(update: DeliveryStatusUpdate, platformName: st
 /**
  * Apply an asynchronous delivery-status update produced by a webhook-driven
  * channel (e.g. a Twilio MessageStatus callback). Correlates the provider's
- * message id back to the originating Kin message via `channelMessageLinks`,
+ * message id back to the originating Agent message via `channelMessageLinks`,
  * refreshes the delivery hint stored on that message, and emits SSE so the
  * bubble updates live. No-op when the message id can't be correlated (e.g.
  * proactive sends with no originating message, or a callback that races the
@@ -1017,9 +1017,9 @@ export async function applyChannelDeliveryStatusUpdate(
 
   // Reuse channel:message-sent — the client already updates the message's
   // channelContextLine from this event, so the hint refreshes without a fetch.
-  sseManager.sendToKin(channel.kinId, {
+  sseManager.sendToAgent(channel.agentId, {
     type: 'channel:message-sent',
-    kinId: channel.kinId,
+    agentId: channel.agentId,
     data: {
       channelId,
       platform: channel.platform,
@@ -1029,7 +1029,7 @@ export async function applyChannelDeliveryStatusUpdate(
   })
 
   log.info(
-    { channelId, kinId: channel.kinId, messageId: link.messageId, status: update.status, errorCode: update.errorCode },
+    { channelId, agentId: channel.agentId, messageId: link.messageId, status: update.status, errorCode: update.errorCode },
     'Applied channel delivery status update',
   )
 }
@@ -1038,12 +1038,12 @@ export async function applyChannelDeliveryStatusUpdate(
 
 export interface TransferChannelParams {
   channelId: string
-  targetKinId: string
+  targetAgentId: string
   reason?: string
   /** Surfaced in the log line only; useful for ops traceability. */
   initiatedBy: 'tool' | 'ui'
-  /** Calling Kin ID (tool flow). Logged for audit, not persisted. */
-  calledByKinId?: string
+  /** Calling Agent ID (tool flow). Logged for audit, not persisted. */
+  calledByAgentId?: string
 }
 
 export type TransferChannelResult =
@@ -1052,23 +1052,23 @@ export type TransferChannelResult =
       ok: true
       noop?: false
       transferredAt: number
-      previousKinSlug: string
-      newKinSlug: string
-      fromKinId: string
-      fromKinName: string
-      toKinId: string
-      toKinName: string
+      previousAgentSlug: string
+      newAgentSlug: string
+      fromAgentId: string
+      fromAgentName: string
+      toAgentId: string
+      toAgentName: string
     }
   | { ok: false; error: string }
 
 /**
- * Re-bind a channel to a different Kin at runtime. Single source of truth for
+ * Re-bind a channel to a different Agent at runtime. Single source of truth for
  * both the transfer_channel tool and the REST endpoint
  * POST /api/channels/:id/transfer. Wraps:
  *
- *   1. Validation: channel exists, target Kin exists, no-op detection.
- *   2. channels.kinId mutation.
- *   3. Two role='system' audit-trail messages (one per Kin, with
+ *   1. Validation: channel exists, target Agent exists, no-op detection.
+ *   2. channels.agentId mutation.
+ *   3. Two role='system' audit-trail messages (one per Agent, with
  *      metadata.systemEvent set so buildMessageHistory can filter them out
  *      of the LLM prompt and the UI can render them as handoff banners).
  *   4. Sideband channelTransferHint for the next inbound's <channel-context>.
@@ -1076,7 +1076,7 @@ export type TransferChannelResult =
  *   6. Best-effort adapter.onIdentityChange (warn on failure).
  *
  * Callers should never re-implement any of these steps directly; the only
- * place channels.kinId is mutated should be here.
+ * place channels.agentId is mutated should be here.
  */
 export async function transferChannel(params: TransferChannelParams): Promise<TransferChannelResult> {
   const channel = await getChannel(params.channelId)
@@ -1084,33 +1084,33 @@ export async function transferChannel(params: TransferChannelParams): Promise<Tr
     return { ok: false, error: `Channel "${params.channelId}" not found.` }
   }
 
-  if (channel.kinId === params.targetKinId) {
-    return { ok: true, noop: true, message: 'Channel is already bound to this Kin.' }
+  if (channel.agentId === params.targetAgentId) {
+    return { ok: true, noop: true, message: 'Channel is already bound to this Agent.' }
   }
 
-  const fromKinRow = db
-    .select({ id: kins.id, slug: kins.slug, name: kins.name })
-    .from(kins)
-    .where(eq(kins.id, channel.kinId))
+  const fromAgentRow = db
+    .select({ id: agents.id, slug: agents.slug, name: agents.name })
+    .from(agents)
+    .where(eq(agents.id, channel.agentId))
     .get()
-  if (!fromKinRow) {
-    return { ok: false, error: `Source Kin "${channel.kinId}" not found; refusing to transfer from a dangling binding.` }
+  if (!fromAgentRow) {
+    return { ok: false, error: `Source Agent "${channel.agentId}" not found; refusing to transfer from a dangling binding.` }
   }
-  const toKinRow = db
-    .select({ id: kins.id, slug: kins.slug, name: kins.name, avatarPath: kins.avatarPath, updatedAt: kins.updatedAt })
-    .from(kins)
-    .where(eq(kins.id, params.targetKinId))
+  const toAgentRow = db
+    .select({ id: agents.id, slug: agents.slug, name: agents.name, avatarPath: agents.avatarPath, updatedAt: agents.updatedAt })
+    .from(agents)
+    .where(eq(agents.id, params.targetAgentId))
     .get()
-  if (!toKinRow) {
-    return { ok: false, error: `Target Kin "${params.targetKinId}" not found; refusing to transfer to a dangling binding.` }
+  if (!toAgentRow) {
+    return { ok: false, error: `Target Agent "${params.targetAgentId}" not found; refusing to transfer to a dangling binding.` }
   }
 
-  const fromKinId = fromKinRow.id
-  const fromKinSlug = fromKinRow.slug ?? fromKinRow.id
-  const fromKinName = fromKinRow.name
-  const toKinId = toKinRow.id
-  const toKinSlug = toKinRow.slug ?? toKinRow.id
-  const toKinName = toKinRow.name
+  const fromAgentId = fromAgentRow.id
+  const fromAgentSlug = fromAgentRow.slug ?? fromAgentRow.id
+  const fromAgentName = fromAgentRow.name
+  const toAgentId = toAgentRow.id
+  const toAgentSlug = toAgentRow.slug ?? toAgentRow.id
+  const toAgentName = toAgentRow.name
 
   const at = Date.now()
   const now = new Date(at)
@@ -1118,7 +1118,7 @@ export async function transferChannel(params: TransferChannelParams): Promise<Tr
   // (2) Mutate the binding.
   await db
     .update(channels)
-    .set({ kinId: toKinId, updatedAt: now })
+    .set({ agentId: toAgentId, updatedAt: now })
     .where(eq(channels.id, channel.id))
 
   // (3) Audit-trail rows. Same content/shape as before the extraction so the
@@ -1128,9 +1128,9 @@ export async function transferChannel(params: TransferChannelParams): Promise<Tr
     systemEvent: 'channel_transferred_out',
     channelId: channel.id,
     channelName: channel.name,
-    targetKinId: toKinId,
-    targetKinSlug: toKinSlug,
-    targetKinName: toKinName,
+    targetAgentId: toAgentId,
+    targetAgentSlug: toAgentSlug,
+    targetAgentName: toAgentName,
     reason: reasonOrNull,
     at,
   })
@@ -1138,15 +1138,15 @@ export async function transferChannel(params: TransferChannelParams): Promise<Tr
     systemEvent: 'channel_transferred_in',
     channelId: channel.id,
     channelName: channel.name,
-    fromKinId,
-    fromKinSlug,
-    fromKinName,
+    fromAgentId,
+    fromAgentSlug,
+    fromAgentName,
     reason: reasonOrNull,
     at,
   })
   await db.insert(messages).values({
     id: uuid(),
-    kinId: fromKinId,
+    agentId: fromAgentId,
     role: 'system',
     content: null,
     sourceType: 'system',
@@ -1156,7 +1156,7 @@ export async function transferChannel(params: TransferChannelParams): Promise<Tr
   })
   await db.insert(messages).values({
     id: uuid(),
-    kinId: toKinId,
+    agentId: toAgentId,
     role: 'system',
     content: null,
     sourceType: 'system',
@@ -1167,9 +1167,9 @@ export async function transferChannel(params: TransferChannelParams): Promise<Tr
 
   // (4) One-shot sideband hint for the next inbound.
   setChannelTransferHint(channel.id, {
-    fromKinId,
-    fromKinSlug,
-    fromKinName,
+    fromAgentId,
+    fromAgentSlug,
+    fromAgentName,
     reason: params.reason,
     at,
   })
@@ -1181,12 +1181,12 @@ export async function transferChannel(params: TransferChannelParams): Promise<Tr
       channelId: channel.id,
       channelName: channel.name,
       platform: channel.platform,
-      fromKinId,
-      fromKinSlug,
-      fromKinName,
-      toKinId,
-      toKinSlug,
-      toKinName,
+      fromAgentId,
+      fromAgentSlug,
+      fromAgentName,
+      toAgentId,
+      toAgentSlug,
+      toAgentName,
       reason: reasonOrNull,
       at,
     },
@@ -1197,16 +1197,16 @@ export async function transferChannel(params: TransferChannelParams): Promise<Tr
   if (adapter && typeof adapter.onIdentityChange === 'function') {
     try {
       const cfg = JSON.parse(channel.platformConfig) as Record<string, unknown>
-      const relAvatar = kinAvatarUrl(toKinId, toKinRow.avatarPath, toKinRow.updatedAt)
+      const relAvatar = agentAvatarUrl(toAgentId, toAgentRow.avatarPath, toAgentRow.updatedAt)
       const avatarUrl = relAvatar ? `${config.publicUrl}${relAvatar}` : undefined
       await adapter.onIdentityChange(channel.id, cfg, {
-        kinSlug: toKinSlug,
-        kinName: toKinName,
+        agentSlug: toAgentSlug,
+        agentName: toAgentName,
         avatarUrl,
       })
     } catch (err) {
       log.warn(
-        { err: err instanceof Error ? err.message : String(err), channelId: channel.id, newKinSlug: toKinSlug },
+        { err: err instanceof Error ? err.message : String(err), channelId: channel.id, newAgentSlug: toAgentSlug },
         'onIdentityChange failed (non-fatal); the prefix fallback (if any) still applies',
       )
     }
@@ -1215,10 +1215,10 @@ export async function transferChannel(params: TransferChannelParams): Promise<Tr
   log.info(
     {
       initiatedBy: params.initiatedBy,
-      calledByKinId: params.calledByKinId ?? null,
+      calledByAgentId: params.calledByAgentId ?? null,
       channelId: channel.id,
-      fromKinId,
-      toKinId,
+      fromAgentId,
+      toAgentId,
       reason: reasonOrNull,
     },
     'Channel transferred',
@@ -1227,12 +1227,12 @@ export async function transferChannel(params: TransferChannelParams): Promise<Tr
   return {
     ok: true,
     transferredAt: at,
-    previousKinSlug: fromKinSlug,
-    newKinSlug: toKinSlug,
-    fromKinId,
-    fromKinName,
-    toKinId,
-    toKinName,
+    previousAgentSlug: fromAgentSlug,
+    newAgentSlug: toAgentSlug,
+    fromAgentId,
+    fromAgentName,
+    toAgentId,
+    toAgentName,
   }
 }
 
@@ -1308,7 +1308,7 @@ async function resolveChannelContact(
 
   sseManager.broadcast({
     type: 'channel:user-pending',
-    kinId: channel.kinId,
+    agentId: channel.agentId,
     data: {
       channelId: channel.id,
       mappingId,
@@ -1324,7 +1324,7 @@ async function resolveChannelContact(
     type: 'channel:user-pending',
     title: 'New user awaiting approval',
     body: `${incoming.platformDisplayName ?? incoming.platformUsername ?? incoming.platformUserId} on ${channel.name}`,
-    kinId: channel.kinId,
+    agentId: channel.agentId,
     relatedId: channel.id,
     relatedType: 'channel',
   }).catch(() => {})
@@ -1425,7 +1425,7 @@ export async function approveChannelUser(mappingId: string, params: ApproveParam
       // Broadcast approval on those channels too
       sseManager.broadcast({
         type: 'channel:user-approved',
-        kinId: otherChannel.kinId,
+        agentId: otherChannel.agentId,
         data: { channelId: other.channelId, mappingId: other.id },
       })
     }
@@ -1434,7 +1434,7 @@ export async function approveChannelUser(mappingId: string, params: ApproveParam
   // Broadcast SSE for the primary channel
   sseManager.broadcast({
     type: 'channel:user-approved',
-    kinId: channel.kinId,
+    agentId: channel.agentId,
     data: { channelId: mapping.channelId, mappingId },
   })
 
@@ -1581,13 +1581,13 @@ export async function listChannelConversations(channelId: string) {
   return { users, knownChatIds: distinctChatIds }
 }
 
-// ─── Active channels for a Kin (for prompt builder) ─────────────────────────
+// ─── Active channels for an Agent (for prompt builder) ─────────────────────────
 
-export async function getActiveChannelsForKin(kinId: string) {
+export async function getActiveChannelsForAgent(agentId: string) {
   return db
     .select()
     .from(channels)
-    .where(and(eq(channels.kinId, kinId), eq(channels.status, 'active')))
+    .where(and(eq(channels.agentId, agentId), eq(channels.status, 'active')))
     .all()
 }
 

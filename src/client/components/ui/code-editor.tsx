@@ -1,10 +1,13 @@
-import { useCallback, useMemo } from 'react'
-import CodeMirror from '@uiw/react-codemirror'
-import { EditorView } from '@codemirror/view'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+// Prec/Extension come via the react-codemirror re-export: @codemirror/state is
+// only an override (isolated install), not directly importable from app code.
+import CodeMirror, { Prec, type Extension } from '@uiw/react-codemirror'
+import { EditorView, keymap } from '@codemirror/view'
 import { json } from '@codemirror/lang-json'
 import { javascript } from '@codemirror/lang-javascript'
 import { python } from '@codemirror/lang-python'
-import { StreamLanguage } from '@codemirror/language'
+import { StreamLanguage, LanguageDescription } from '@codemirror/language'
+import { languages as languageData } from '@codemirror/language-data'
 import { shell } from '@codemirror/legacy-modes/mode/shell'
 import { useTheme } from 'next-themes'
 import { cn } from '@/client/lib/utils'
@@ -30,10 +33,20 @@ interface CodeEditorProps {
    * with line numbers — still far better than a bare <textarea>.
    */
   language?: CodeEditorLanguage | string
+  /**
+   * Alternative to `language`: resolve the language from a filename via
+   * @codemirror/language-data (lazy-loaded, ~150 languages — same registry
+   * MarkdownEditor uses for code blocks). Takes precedence over `language`.
+   */
+  filename?: string
   height?: string
   readOnly?: boolean
   /** Soft-wrap long lines. Default ON for readability in a narrow modal. */
   lineWrapping?: boolean
+  /** Extra CodeMirror extensions appended after the built-in ones. */
+  extensions?: Extension[]
+  /** Bound to Mod-S inside the editor (browser save dialog suppressed). */
+  onSave?: () => void
   className?: string
 }
 
@@ -67,21 +80,71 @@ export function CodeEditor({
   value,
   onChange,
   language,
+  filename,
   height = '220px',
   readOnly = false,
   lineWrapping = true,
+  extensions: extraExtensions,
+  onSave,
   className,
 }: CodeEditorProps) {
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === 'dark'
 
+  // Filename-based language: matched against the lazy language-data registry.
+  const [fileLanguage, setFileLanguage] = useState<Extension | null>(null)
+  useEffect(() => {
+    if (!filename) {
+      setFileLanguage(null)
+      return
+    }
+    let cancelled = false
+    const description = LanguageDescription.matchFilename(languageData, filename)
+    if (!description) {
+      setFileLanguage(null)
+      return
+    }
+    description.load().then(
+      (ext) => {
+        if (!cancelled) setFileLanguage(ext)
+      },
+      () => {
+        if (!cancelled) setFileLanguage(null)
+      },
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [filename])
+
+  // Keep the latest onSave without rebuilding the keymap extension each render.
+  const onSaveRef = useRef(onSave)
+  onSaveRef.current = onSave
+
   const extensions = useMemo(() => {
-    const exts = []
-    const lang = languageExtension(language)
+    const exts: Extension[] = []
+    const lang = filename ? fileLanguage : languageExtension(language)
     if (lang) exts.push(lang)
     if (lineWrapping) exts.push(EditorView.lineWrapping)
+    if (onSaveRef.current !== undefined || onSave !== undefined) {
+      exts.push(
+        Prec.high(
+          keymap.of([
+            {
+              key: 'Mod-s',
+              run: () => {
+                onSaveRef.current?.()
+                return true
+              },
+            },
+          ]),
+        ),
+      )
+    }
+    if (extraExtensions) exts.push(...extraExtensions)
     return exts
-  }, [language, lineWrapping])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language, filename, fileLanguage, lineWrapping, extraExtensions, onSave !== undefined])
 
   const theme = useMemo(() => buildThemeExtension(isDark), [isDark])
 

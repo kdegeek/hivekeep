@@ -2,7 +2,7 @@ import { describe, it, expect, mock } from 'bun:test'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 
-import helloKin from '../examples/hello-kin/index'
+import helloAgent from '../examples/hello-agent/index'
 import type {
   PluginContext,
   PluginExports,
@@ -33,7 +33,7 @@ function makeCtx(): PluginContext<{ greeting?: string; apiKey?: string }> {
       deleteSecret: async () => {},
       listKeys: async () => [],
     },
-    manifest: { name: 'hello-kin', version: '0.1.0' },
+    manifest: { name: 'hello-agent', version: '0.1.0' },
     cards: {
       emit: mock(async () => ({ messageId: 'msg-1', cardInstanceId: 'card-1' })),
       update: mock(async () => {}),
@@ -43,10 +43,10 @@ function makeCtx(): PluginContext<{ greeting?: string; apiKey?: string }> {
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
-describe('hello-kin reference example', () => {
+describe('hello-agent reference example', () => {
   it('exports a PluginExports object covering every extension point', () => {
     const ctx = makeCtx()
-    const exports: PluginExports = helloKin(ctx)
+    const exports: PluginExports = helloAgent(ctx)
 
     expect(exports.tools?.greet).toBeDefined()
     expect(exports.channels?.['echo-channel']).toBeDefined()
@@ -60,11 +60,11 @@ describe('hello-kin reference example', () => {
 
   it('greet tool returns a typed reply and emits a card', async () => {
     const ctx = makeCtx()
-    const exports = helloKin(ctx)
+    const exports = helloAgent(ctx)
     const t = exports.tools!.greet.create({
-      kinId: 'k-1',
+      agentId: 'k-1',
       userId: 'u-1',
-      isSubKin: false,
+      isSubAgent: false,
     })
 
     const result = (await t.execute!({ name: 'Marl' }, {})) as {
@@ -80,8 +80,8 @@ describe('hello-kin reference example', () => {
   it('uses the configured greeting word', async () => {
     const ctx = makeCtx()
     ctx.config.greeting = 'Hola'
-    const exports = helloKin(ctx)
-    const t = exports.tools!.greet.create({ kinId: 'k-1', isSubKin: false })
+    const exports = helloAgent(ctx)
+    const t = exports.tools!.greet.create({ agentId: 'k-1', isSubAgent: false })
 
     const result = (await t.execute!({ name: 'Nik' }, {})) as { reply: string }
     expect(result.reply).toBe('Hola, Nik!')
@@ -89,7 +89,7 @@ describe('hello-kin reference example', () => {
 
   it('EchoLLMProvider streams a single text-delta followed by a finish', async () => {
     const ctx = makeCtx()
-    const exports = helloKin(ctx)
+    const exports = helloAgent(ctx)
     const provider = exports.providers![0]!
 
     // Family detection: this is an LLMProvider (has `chat`).
@@ -117,7 +117,7 @@ describe('hello-kin reference example', () => {
 
   it('echo channel adapter exposes the expected surface', () => {
     const ctx = makeCtx()
-    const exports = helloKin(ctx)
+    const exports = helloAgent(ctx)
     const channel = exports.channels!['echo-channel']!
     expect(channel.platform).toBe('echo-channel')
     expect(channel.meta?.displayName).toBe('Echo Channel (example)')
@@ -128,13 +128,13 @@ describe('hello-kin reference example', () => {
 
   it('hooks have access to their typed payload fields', () => {
     const ctx = makeCtx()
-    const exports = helloKin(ctx)
+    const exports = helloAgent(ctx)
 
     // Just calling the handlers — payload shapes are checked at compile time.
-    exports.hooks!.beforeChat?.({ kinId: 'k', userId: 'u', message: 'hi' })
+    exports.hooks!.beforeChat?.({ agentId: 'k', userId: 'u', message: 'hi' })
     exports.hooks!.afterToolCall?.({
-      kinId: 'k',
-      isSubKin: false,
+      agentId: 'k',
+      isSubAgent: false,
       toolName: 'greet',
       toolArgs: { name: 'M' },
       toolResult: { reply: 'Hi, M!' },
@@ -143,11 +143,11 @@ describe('hello-kin reference example', () => {
 
   it('the plugin manifest validates against the published JSON schema', () => {
     const manifest = JSON.parse(
-      readFileSync(join(import.meta.dir, '../examples/hello-kin/plugin.json'), 'utf8'),
+      readFileSync(join(import.meta.dir, '../examples/hello-agent/plugin.json'), 'utf8'),
     )
     // Smoke-check the bits we care most about; full JSON Schema validation is
     // covered by tooling (editors, CI) once the package is published.
-    expect(manifest.name).toBe('hello-kin')
+    expect(manifest.name).toBe('hello-agent')
     expect(manifest.main).toBe('index.ts')
     expect(manifest.$schema).toContain('plugin-manifest.schema.json')
   })

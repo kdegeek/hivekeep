@@ -66,20 +66,20 @@ export const redactMessageTool: ToolRegistration = {
 
         // If no message_id provided (or it fails), try content-based lookup
         if (!targetId && content_match) {
-          targetId = await findMessageByContent(ctx.kinId, content_match) ?? undefined
+          targetId = await findMessageByContent(ctx.agentId, content_match) ?? undefined
         }
 
         if (!targetId) {
           return { error: 'Message not found. Provide a valid message_id or a content_match snippet that exists in a recent message.' }
         }
 
-        const success = await redactMessage(targetId, ctx.kinId, redacted_text)
+        const success = await redactMessage(targetId, ctx.agentId, redacted_text)
         if (!success) {
           // If message_id was provided directly but failed, try content fallback
           if (message_id && content_match) {
-            const fallbackId = await findMessageByContent(ctx.kinId, content_match)
+            const fallbackId = await findMessageByContent(ctx.agentId, content_match)
             if (fallbackId) {
-              const fallbackSuccess = await redactMessage(fallbackId, ctx.kinId, redacted_text)
+              const fallbackSuccess = await redactMessage(fallbackId, ctx.agentId, redacted_text)
               if (fallbackSuccess) return { success: true, matched_by: 'content_match' }
             }
           }
@@ -105,12 +105,12 @@ export const createSecretTool: ToolRegistration = {
         description: z.string().optional(),
       }),
       execute: async ({ key, value, description }) => {
-        log.debug({ key, kinId: ctx.kinId }, 'create_secret invoked')
+        log.debug({ key, agentId: ctx.agentId }, 'create_secret invoked')
         const existing = await getSecretByKey(key)
         if (existing) {
           return { error: `Secret with key "${key}" already exists. Use update_secret to change its value.` }
         }
-        const secret = await createSecret(key, value, ctx.kinId, description)
+        const secret = await createSecret(key, value, ctx.agentId, description)
         return { id: secret.id, key: secret.key }
       },
     }),
@@ -130,7 +130,7 @@ export const updateSecretTool: ToolRegistration = {
         value: z.string(),
       }),
       execute: async ({ key, value }) => {
-        log.debug({ key, kinId: ctx.kinId }, 'update_secret invoked')
+        log.debug({ key, agentId: ctx.agentId }, 'update_secret invoked')
         const updated = await updateSecretValueByKey(key, value)
         if (!updated) {
           return { error: `Secret with key "${key}" not found` }
@@ -142,7 +142,7 @@ export const updateSecretTool: ToolRegistration = {
 
 /**
  * delete_secret — delete a secret from the Vault.
- * A Kin can only delete secrets it created itself.
+ * An Agent can only delete secrets it created itself.
  * Available to main agents only.
  */
 export const deleteSecretTool: ToolRegistration = {
@@ -155,13 +155,13 @@ export const deleteSecretTool: ToolRegistration = {
         key: z.string(),
       }),
       execute: async ({ key }) => {
-        log.debug({ key, kinId: ctx.kinId }, 'delete_secret invoked')
+        log.debug({ key, agentId: ctx.agentId }, 'delete_secret invoked')
         const existing = await getSecretByKey(key)
         if (!existing) {
           return { error: `Secret with key "${key}" not found` }
         }
-        if (existing.createdByKinId !== ctx.kinId) {
-          return { error: 'Cannot delete this secret — it was not created by this Kin' }
+        if (existing.createdByAgentId !== ctx.agentId) {
+          return { error: 'Cannot delete this secret — it was not created by this Agent' }
         }
         const deleted = await deleteSecret(existing.id)
         if (!deleted) {
@@ -188,7 +188,7 @@ export const searchSecretsTool: ToolRegistration = {
         query: z.string(),
       }),
       execute: async ({ query }) => {
-        log.debug({ query, kinId: ctx.kinId }, 'search_secrets invoked')
+        log.debug({ query, agentId: ctx.agentId }, 'search_secrets invoked')
         const results = await searchSecrets(query)
         return { secrets: results }
       },
@@ -212,7 +212,7 @@ export const getVaultEntryTool: ToolRegistration = {
         key: z.string(),
       }),
       execute: async ({ key }) => {
-        log.debug({ key, kinId: ctx.kinId }, 'get_vault_entry invoked')
+        log.debug({ key, agentId: ctx.agentId }, 'get_vault_entry invoked')
         const secret = await getSecretByKey(key)
         if (!secret) {
           return { error: 'Entry not found' }
@@ -243,7 +243,7 @@ export const createVaultEntryTool: ToolRegistration = {
         description: z.string().optional(),
       }),
       execute: async ({ key, entry_type, value, description }) => {
-        log.debug({ key, entry_type, kinId: ctx.kinId }, 'create_vault_entry invoked')
+        log.debug({ key, entry_type, agentId: ctx.agentId }, 'create_vault_entry invoked')
         const existing = await getSecretByKey(key)
         if (existing) {
           return { error: `Entry with key "${key}" already exists` }
@@ -253,7 +253,7 @@ export const createVaultEntryTool: ToolRegistration = {
           entryType: entry_type,
           value,
           description,
-          createdByKinId: ctx.kinId,
+          createdByAgentId: ctx.agentId,
         })
         return { id: entry.id, key: entry.key, entryType: entry.entryType }
       },
@@ -280,14 +280,14 @@ export const createVaultTypeTool: ToolRegistration = {
         })),
       }),
       execute: async ({ name, slug, icon, fields }) => {
-        log.debug({ slug, kinId: ctx.kinId }, 'create_vault_type invoked')
+        log.debug({ slug, agentId: ctx.agentId }, 'create_vault_type invoked')
         try {
           const type = await createType({
             name,
             slug,
             icon,
             fields,
-            createdByKinId: ctx.kinId,
+            createdByAgentId: ctx.agentId,
           })
           return { id: type.id, slug: type.slug, name: type.name }
         } catch (err) {
@@ -311,7 +311,7 @@ export const getVaultAttachmentTool: ToolRegistration = {
         attachment_id: z.string(),
       }),
       execute: async ({ attachment_id }) => {
-        log.debug({ attachment_id, kinId: ctx.kinId }, 'get_vault_attachment invoked')
+        log.debug({ attachment_id, agentId: ctx.agentId }, 'get_vault_attachment invoked')
         const result = await getAttachment(attachment_id)
         if (!result) {
           return { error: 'Attachment not found' }

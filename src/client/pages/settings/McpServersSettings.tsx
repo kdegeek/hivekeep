@@ -9,7 +9,7 @@ import { SettingsListSkeleton } from '@/client/components/common/SettingsListSke
 import { api, getErrorMessage, toastError } from '@/client/lib/api'
 import { FormErrorAlert } from '@/client/components/common/FormErrorAlert'
 import { useSSE } from '@/client/hooks/useSSE'
-import { useKinList } from '@/client/hooks/useKinList'
+import { useAgentList } from '@/client/hooks/useAgentList'
 import { McpServerCard, type McpServerData } from '@/client/components/mcp/McpServerCard'
 import { McpServerFormDialog } from '@/client/components/mcp/McpServerFormDialog'
 
@@ -18,7 +18,7 @@ export function McpServersSettings() {
   const [servers, setServers] = useState<McpServerData[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
-  const { kinNames, kinAvatars } = useKinList()
+  const { agentNames, agentAvatars } = useAgentList()
   const [modalOpen, setModalOpen] = useState(false)
   const [editingServer, setEditingServer] = useState<McpServerData | null>(null)
 
@@ -130,8 +130,8 @@ export function McpServersSettings() {
         <McpServerCard
           key={server.id}
           server={server}
-          kinName={server.createdByKinId ? kinNames.get(server.createdByKinId) : undefined}
-          kinAvatarUrl={server.createdByKinId ? kinAvatars.get(server.createdByKinId) : undefined}
+          agentName={server.createdByAgentId ? agentNames.get(server.createdByAgentId) : undefined}
+          agentAvatarUrl={server.createdByAgentId ? agentAvatars.get(server.createdByAgentId) : undefined}
           onApprove={() => handleApprove(server.id)}
           onEdit={() => openEdit(server)}
           onDelete={() => handleDeleteServer(server.id)}

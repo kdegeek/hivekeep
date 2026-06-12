@@ -29,13 +29,20 @@ export function cronToHuman(expression: string, locale: string = 'en'): string |
     })
   }
 
-  try {
-    return cronstrue.toString(expression, {
-      locale,
-      use24HourTimeFormat: true,
-      throwExceptionOnParseError: true,
-    })
-  } catch {
-    return null
+  // cronstrue locale ids use underscores (pt_BR, zh_CN) where i18next uses
+  // dashes (pt-BR, zh-CN). Unknown locales throw, so fall back to English
+  // rather than dropping the description entirely.
+  for (const cronLocale of [locale.replace('-', '_'), 'en']) {
+    try {
+      return cronstrue.toString(expression, {
+        locale: cronLocale,
+        use24HourTimeFormat: true,
+        throwExceptionOnParseError: true,
+      })
+    } catch {
+      // invalid expression OR unsupported locale — only the locale case should
+      // retry; an invalid expression will fail for 'en' too and return null.
+    }
   }
+  return null
 }

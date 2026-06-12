@@ -1,10 +1,10 @@
 /**
  * Global custom tools.
  *
- * A custom tool is a platform-wide, user/Kin-authored script (any language,
- * with its own dependencies) exposed to Kins as a first-class tool named
+ * A custom tool is a platform-wide, user/Agent-authored script (any language,
+ * with its own dependencies) exposed to Agents as a first-class tool named
  * `custom_<slug>`. Access is scoped by TOOLBOXES (a toolbox lists the tool by
- * name) exactly like MCP tools — there is no per-Kin ownership.
+ * name) exactly like MCP tools — there is no per-Agent ownership.
  *
  * Storage model
  * -------------
@@ -85,7 +85,7 @@ interface CreateCustomToolParams {
   language?: string | null
   domainSlug?: string | null
   timeoutMs?: number | null
-  createdBy?: 'user' | 'kin'
+  createdBy?: 'user' | 'agent'
   /** UI-only localized overrides (object or JSON string). Stored as JSON text. */
   translations?: CustomToolTranslations | string | null
 }
@@ -227,7 +227,7 @@ export function getCustomTool(slug: string): CustomToolRow | undefined {
   return db.select().from(customTools).where(eq(customTools.slug, slug)).get()
 }
 
-/** All custom tools (global — no kinId). */
+/** All custom tools (global — no agentId). */
 export function listCustomTools(): CustomToolRow[] {
   return db.select().from(customTools).all()
 }
@@ -552,8 +552,8 @@ export async function executeCustomTool(
         ...process.env,
         PATH: augmentedPath,
         CUSTOM_TOOL_ARGS: JSON.stringify(args),
-        KINBOT_CUSTOM_TOOL_DIR: dir,
-        KINBOT_CUSTOM_TOOL_SLUG: slug,
+        HIVEKEEP_CUSTOM_TOOL_DIR: dir,
+        HIVEKEEP_CUSTOM_TOOL_SLUG: slug,
       },
     })
 

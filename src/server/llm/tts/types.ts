@@ -8,4 +8,4 @@ export type {
   SpeakResult,
   TTSCapabilities,
   TTSProvider,
-} from '@kinbot-developer/sdk'
+} from '@hivekeep/sdk'

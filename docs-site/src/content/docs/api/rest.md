@@ -1,9 +1,9 @@
 ---
 title: REST API
-description: KinBot REST API endpoint reference.
+description: Hivekeep REST API endpoint reference.
 ---
 
-KinBot exposes a REST API used by the web UI and available for external integrations. All endpoints are under `/api/` and require authentication unless noted otherwise.
+Hivekeep exposes a REST API used by the web UI and available for external integrations. All endpoints are under `/api/` and require authentication unless noted otherwise.
 
 ## Authentication
 
@@ -12,90 +12,105 @@ Authenticate using either:
 - **API key header:** `X-API-Key: <your-api-key>`
 - **Session cookie** set during login
 
-Auth routes (`/api/auth/*`) are handled by [Better Auth](https://www.better-auth.com/) and don't require pre-authentication.
+Auth routes (`/api/auth/*`) are handled by [Better Auth](https://www.better-auth.com/) and don't require pre-authentication. Onboarding routes (`/api/onboarding/*`) are also unauthenticated (first-run setup).
 
-## Kins
+## Error Format
+
+All API routes return JSON. Errors use a consistent envelope with a machine-readable `code` and a human-readable `message`:
+
+```json
+{
+  "error": {
+    "code": "PROVIDER_NOT_FOUND",
+    "message": "Provider not found"
+  }
+}
+```
+
+The HTTP status reflects the error class (`400` validation, `401` unauthenticated, `403` forbidden, `404` not found, `409` conflict, `429` rate-limited, `500` server error). Common codes include `VALIDATION_ERROR`, `NOT_FOUND`, `UNAUTHORIZED`, `FORBIDDEN`, and resource-specific codes such as `PROVIDER_NOT_FOUND` or `SESSION_EXPIRED`.
+
+## Agents
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/kins` | List all Kins |
-| `POST` | `/api/kins` | Create a new Kin |
-| `GET` | `/api/kins/:id` | Get Kin details |
-| `PATCH` | `/api/kins/:id` | Update a Kin |
-| `DELETE` | `/api/kins/:id` | Delete a Kin |
-| `GET` | `/api/kins/:id/tools` | List available tools (grouped by domain) |
-| `GET` | `/api/kins/:id/context-usage` | Get context window usage |
-| `GET` | `/api/kins/:id/context-preview` | Get full LLM context preview (system prompt, messages, tools, token estimates). Accepts `?taskId` or `?sessionId` query params |
-| `POST` | `/api/kins/:id/avatar` | Upload avatar (multipart) |
-| `POST` | `/api/kins/:id/avatar/generate` | Generate avatar with AI |
-| `POST` | `/api/kins/avatar/preview` | Preview generated avatar |
-| `POST` | `/api/kins/generate-config` | AI-generate Kin config from description |
-| `GET` | `/api/kins/:id/export` | Export Kin as archive |
-| `POST` | `/api/kins/import` | Import Kin from archive |
+| `GET` | `/api/agents` | List all Agents |
+| `POST` | `/api/agents` | Create a new Agent |
+| `GET` | `/api/agents/:id` | Get Agent details |
+| `PATCH` | `/api/agents/:id` | Update an Agent |
+| `DELETE` | `/api/agents/:id` | Delete an Agent |
+| `GET` | `/api/agents/:id/tools` | List available tools (grouped by domain) |
+| `GET` | `/api/agents/:id/context-usage` | Get context window usage |
+| `GET` | `/api/agents/:id/context-preview` | Get full LLM context preview (system prompt, messages, tools, token estimates). Accepts `?taskId` or `?sessionId` query params |
+| `POST` | `/api/agents/:id/avatar` | Upload avatar (multipart) |
+| `POST` | `/api/agents/:id/avatar/generate` | Generate avatar with AI |
+| `POST` | `/api/agents/avatar/preview` | Preview generated avatar |
+| `POST` | `/api/agents/generate-config` | AI-generate Agent config from description |
+| `GET` | `/api/agents/:id/export` | Export Agent as archive |
+| `POST` | `/api/agents/import` | Import Agent from archive |
 
 ## Messages
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/kins/:kinId/messages` | Get conversation history |
-| `POST` | `/api/kins/:kinId/messages` | Send a message to a Kin |
-| `POST` | `/api/kins/:kinId/messages/inject` | Inject a message with high priority (aborts current stream if active, used by `/btw` command) |
+| `GET` | `/api/agents/:agentId/messages` | Get conversation history |
+| `POST` | `/api/agents/:agentId/messages` | Send a message to an Agent |
+| `POST` | `/api/agents/:agentId/messages/inject` | Inject a message with high priority (aborts current stream if active, used by `/btw` command) |
 
 ## Reactions
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/kins/:kinId/messages/:messageId/reactions` | List reactions on a message |
-| `POST` | `/api/kins/:kinId/messages/:messageId/reactions` | Add or toggle a reaction |
+| `GET` | `/api/agents/:agentId/messages/:messageId/reactions` | List reactions on a message |
+| `POST` | `/api/agents/:agentId/messages/:messageId/reactions` | Add or toggle a reaction |
 
 ## Compacting
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/kins/:id/compacting/summaries` | List compacting summaries (with date ranges, token estimates, depth) |
-| `GET` | `/api/kins/:id/compacting/snapshots` | List compacting summaries (backwards-compatible alias, returns legacy format) |
-| `POST` | `/api/kins/:id/compacting/run` | Trigger manual compacting |
-| `POST` | `/api/kins/:id/compacting/purge` | Purge compacting data (deactivate all active summaries) |
-| `POST` | `/api/kins/:id/compacting/rollback` | Rollback to a summary (archives newer summaries) |
+| `GET` | `/api/agents/:id/compacting/summaries` | List compacting summaries (with date ranges, token estimates, depth) |
+| `GET` | `/api/agents/:id/compacting/snapshots` | List compacting summaries (backwards-compatible alias, returns legacy format) |
+| `POST` | `/api/agents/:id/compacting/run` | Trigger manual compacting |
+| `POST` | `/api/agents/:id/compacting/purge` | Purge compacting data (deactivate all active summaries) |
+| `POST` | `/api/agents/:id/compacting/rollback` | Rollback to a summary (archives newer summaries) |
 
 ## Memories
 
-Memories can be accessed via Kin-scoped routes or global maintenance routes.
+Memories can be accessed via Agent-scoped routes or global maintenance routes.
 
-### Kin-scoped
+### Agent-scoped
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/kins/:id/memories` | List memories for a Kin |
-| `POST` | `/api/kins/:id/memories` | Create a memory |
-| `PATCH` | `/api/kins/:id/memories/:memoryId` | Update a memory |
-| `DELETE` | `/api/kins/:id/memories/:memoryId` | Delete a memory |
+| `GET` | `/api/agents/:id/memories` | List memories for an Agent |
+| `POST` | `/api/agents/:id/memories` | Create a memory |
+| `PATCH` | `/api/agents/:id/memories/:memoryId` | Update a memory |
+| `DELETE` | `/api/agents/:id/memories/:memoryId` | Delete a memory |
 
 ### Global maintenance
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/memories` | List all memories (cross-Kin) |
+| `GET` | `/api/memories` | List all memories (cross-Agent) |
 | `POST` | `/api/memories/backfill-importance` | Backfill importance scores |
 | `POST` | `/api/memories/consolidate` | Run memory consolidation |
 | `POST` | `/api/memories/reembed` | Re-embed all memories |
 
 ## Knowledge
 
-Kin-scoped knowledge base (RAG document sources).
+Agent-scoped knowledge base (RAG document sources).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/kins/:kinId/knowledge` | List knowledge sources |
-| `POST` | `/api/kins/:kinId/knowledge` | Add a knowledge source |
-| `GET` | `/api/kins/:kinId/knowledge/search` | Search knowledge |
-| `GET` | `/api/kins/:kinId/knowledge/:sourceId` | Get source details |
-| `DELETE` | `/api/kins/:kinId/knowledge/:sourceId` | Delete a source |
-| `POST` | `/api/kins/:kinId/knowledge/:sourceId/reprocess` | Reprocess a source |
+| `GET` | `/api/agents/:agentId/knowledge` | List knowledge sources |
+| `POST` | `/api/agents/:agentId/knowledge` | Add a knowledge source |
+| `GET` | `/api/agents/:agentId/knowledge/search` | Search knowledge |
+| `GET` | `/api/agents/:agentId/knowledge/:sourceId` | Get source details |
+| `DELETE` | `/api/agents/:agentId/knowledge/:sourceId` | Delete a source |
+| `POST` | `/api/agents/:agentId/knowledge/:sourceId/reprocess` | Reprocess a source |
 
 ## Channels
 
-Channels are managed globally (not scoped to a Kin).
+Channels are managed globally (not scoped to an Agent).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -131,7 +146,7 @@ Platform-specific webhook endpoints (no auth required, verified by platform sign
 | `GET` | `/api/mini-apps/:id` | Get mini-app details |
 | `PATCH` | `/api/mini-apps/:id` | Update a mini-app |
 | `DELETE` | `/api/mini-apps/:id` | Delete a mini-app |
-| `GET` | `/api/mini-apps/by-slug/:kinId/:slug` | Get mini-app by Kin + slug |
+| `GET` | `/api/mini-apps/by-slug/:agentId/:slug` | Get mini-app by Agent + slug |
 | `GET` | `/api/mini-apps/gallery/browse` | Browse mini-app gallery |
 | `POST` | `/api/mini-apps/:id/generate-icon` | Generate an icon with AI |
 
@@ -182,10 +197,10 @@ Platform-specific webhook endpoints (no auth required, verified by platform sign
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/mini-apps/sdk/kinbot-sdk.js` | SDK JavaScript |
-| `GET` | `/api/mini-apps/sdk/kinbot-react.js` | React bindings |
-| `GET` | `/api/mini-apps/sdk/kinbot-components.js` | Component library |
-| `GET` | `/api/mini-apps/sdk/kinbot-sdk.css` | SDK stylesheet |
+| `GET` | `/api/mini-apps/sdk/hivekeep-sdk.js` | SDK JavaScript |
+| `GET` | `/api/mini-apps/sdk/hivekeep-react.js` | React bindings |
+| `GET` | `/api/mini-apps/sdk/hivekeep-components.js` | Component library |
+| `GET` | `/api/mini-apps/sdk/hivekeep-sdk.css` | SDK stylesheet |
 | `GET` | `/api/mini-apps/sdk/*.d.ts` | TypeScript declarations |
 
 ## Quick Sessions
@@ -194,12 +209,12 @@ Ephemeral conversation sessions for quick interactions.
 
 All session responses include an `expiresAt` field (Unix timestamp in ms, or `null`). Sending a message to an expired session returns `409 SESSION_EXPIRED`.
 
-### Kin-scoped
+### Agent-scoped
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/kins/:kinId/quick-sessions` | List sessions for a Kin |
-| `POST` | `/api/kins/:kinId/quick-sessions` | Create a session |
+| `GET` | `/api/agents/:agentId/quick-sessions` | List sessions for an Agent |
+| `POST` | `/api/agents/:agentId/quick-sessions` | Create a session |
 
 ### Session detail
 
@@ -212,7 +227,7 @@ All session responses include an `expiresAt` field (Unix timestamp in ms, or `nu
 
 ## Tasks
 
-Sub-tasks spawned by Kins (inter-Kin delegation, subtasks). Tasks support **concurrency groups** — tasks in the same group are limited to a max number of parallel executions, with excess tasks queued and auto-promoted.
+Sub-tasks spawned by Agents (inter-Agent delegation, subtasks). Tasks support **concurrency groups**: tasks in the same group are limited to a max number of parallel executions, with excess tasks queued and auto-promoted.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -221,7 +236,7 @@ Sub-tasks spawned by Kins (inter-Kin delegation, subtasks). Tasks support **conc
 | `POST` | `/api/tasks/:id/cancel` | Cancel a running task |
 | `POST` | `/api/tasks/:id/pause` | Pause a running task (preserves state) |
 | `POST` | `/api/tasks/:id/resume` | Resume a paused task, optionally with a message (`{ message?: string }`) |
-| `POST` | `/api/tasks/:id/inject` | Inject a message into a running task (`{ content: string }`) — aborts current stream and re-triggers with addendum |
+| `POST` | `/api/tasks/:id/inject` | Inject a message into a running task (`{ content: string }`), aborts current stream and re-triggers with addendum |
 | `POST` | `/api/tasks/:id/force-promote` | Force-start a queued task (ignoring concurrency limit) |
 
 ## Plugins
@@ -233,7 +248,7 @@ Sub-tasks spawned by Kins (inter-Kin delegation, subtasks). Tasks support **conc
 | `PATCH` | `/api/plugins/:id` | Update plugin config |
 | `DELETE` | `/api/plugins/:id` | Uninstall a plugin |
 
-See [Plugin API](/kinbot/docs/plugins/api/) for the full plugin store and registry routes.
+See [Plugin API](/docs/plugins/api/) for the full plugin store and registry routes.
 
 ## Providers
 
@@ -245,7 +260,7 @@ See [Plugin API](/kinbot/docs/plugins/api/) for the full plugin store and regist
 | `DELETE` | `/api/providers/:id` | Remove provider config |
 | `POST` | `/api/providers/:id/test` | Test provider connection |
 
-See [Providers](/kinbot/docs/providers/supported/) for the full provider reference.
+See [Providers](/docs/providers/supported/) for the full provider reference.
 
 ## Contacts
 
@@ -279,7 +294,7 @@ See [Providers](/kinbot/docs/providers/supported/) for the full provider referen
 
 ## Cron Jobs
 
-Cron jobs are managed globally (not scoped to a Kin).
+Cron jobs are managed globally (not scoped to an Agent).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -360,6 +375,7 @@ Shared file hosting with optional expiration and passwords.
 |--------|----------|-------------|
 | `GET` | `/api/file-storage` | List stored files |
 | `POST` | `/api/file-storage` | Upload a file (multipart) |
+| `POST` | `/api/file-storage/from-workspace` | Snapshot a workspace file into the storage (share) |
 | `GET` | `/api/file-storage/:id` | Download a file |
 | `PATCH` | `/api/file-storage/:id` | Update file metadata |
 | `DELETE` | `/api/file-storage/:id` | Delete a file |
@@ -371,6 +387,24 @@ Internal file uploads (used by messages).
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/files/upload` | Upload a file (multipart) |
+
+## Workspace Files
+
+Direct access to an Agent's workspace from the [Files section](/docs/features/files/). All paths are relative to the workspace root and strictly contained (no traversal, no symlink escape).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/agents/:agentId/workspace/ls` | List a directory |
+| `GET` | `/api/agents/:agentId/workspace/file` | Read a file (metadata + text content) |
+| `PUT` | `/api/agents/:agentId/workspace/file` | Write a text file (optimistic concurrency via `baseModifiedAt`) |
+| `GET` | `/api/agents/:agentId/workspace/raw` | Stream raw bytes (download / inline view) |
+| `POST` | `/api/agents/:agentId/workspace/mkdir` | Create a folder |
+| `POST` | `/api/agents/:agentId/workspace/move` | Move / rename (cross-workspace via `fromAgentId`) |
+| `POST` | `/api/agents/:agentId/workspace/copy` | Copy (auto " (copy N)" suffix on collision) |
+| `DELETE` | `/api/agents/:agentId/workspace/file` | Delete a file or folder (recursive) |
+| `POST` | `/api/agents/:agentId/workspace/upload` | Upload files into a folder (multipart) |
+| `GET` | `/api/agents/:agentId/workspace/search` | Search files by name/path |
+| `POST` | `/api/agents/:agentId/workspace/resolve-paths` | Batched existence check (chat path chips) |
 
 ## Notifications
 
@@ -415,16 +449,24 @@ Pending approval prompts (e.g. tool use confirmations).
 | `GET` | `/api/settings/global-prompt` | Get global system prompt |
 | `PUT` | `/api/settings/global-prompt` | Update global prompt |
 | `GET` | `/api/settings/models` | Get extraction + embedding model config (legacy) |
-| `GET` | `/api/settings/default-models` | Get all model/service defaults (LLM, image, compacting, extraction, embedding, search) |
+| `GET` | `/api/settings/default-models` | Get all model/service defaults (LLM, image, compacting, scout, extraction, embedding, search, TTS, STT) |
 | `PUT` | `/api/settings/default-llm` | Set default LLM model + provider |
 | `PUT` | `/api/settings/default-image` | Set default image generation model + provider |
 | `PUT` | `/api/settings/default-compacting` | Set default compacting model + provider |
+| `PUT` | `/api/settings/default-scout` | Set default scout model + provider |
+| `PUT` | `/api/settings/default-scout-thinking` | Set the global scout reasoning default (`{ thinking: AgentThinkingConfig \| null }`) |
+| `PUT` | `/api/settings/default-search` | Set default search provider |
+| `PUT` | `/api/settings/default-tts` | Set default text-to-speech provider/model |
+| `PUT` | `/api/settings/default-stt` | Set default speech-to-text provider/model |
 | `PUT` | `/api/settings/extraction-model` | Set memory extraction model |
 | `PUT` | `/api/settings/embedding-model` | Set embedding model |
-| `GET` | `/api/settings/search-provider` | Get search provider config |
-| `PUT` | `/api/settings/search-provider` | Update search provider |
-| `GET` | `/api/settings/hub` | Get Hub settings |
-| `PUT` | `/api/settings/hub` | Update Hub settings |
+| `GET` | `/api/settings/task-limits` | Get task concurrency/depth limits |
+| `PUT` | `/api/settings/task-limits` | Update task limits |
+| `GET` | `/api/settings/avatar-style` | Get the global avatar art style |
+| `PUT` | `/api/settings/avatar-style` | Update the avatar art style |
+| `GET` | `/api/settings/dismissed-setup-items` | List dismissed setup-checklist items |
+| `POST` | `/api/settings/dismissed-setup-items/:itemId` | Dismiss a setup-checklist item |
+| `DELETE` | `/api/settings/dismissed-setup-items/:itemId` | Restore a dismissed setup item |
 
 ## Current User
 
@@ -443,13 +485,15 @@ Public access to shared files (no auth required, token-based).
 | `GET` | `/s/:token` | View shared content |
 | `POST` | `/s/:token` | Access password-protected share |
 
-## Version Check
+## Platform Updates
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/version-check` | Get cached version info (current version, latest, update available, release notes). Returns `isUpdateAvailable: false` if disabled |
-| `POST` | `/api/version-check/check` | Force a fresh version check (admin only). Returns 400 if version check is disabled |
-| `POST` | `/api/version-check/update` | Self-update: runs `git pull` + `bun install` and restarts (admin only, non-Docker). Returns 400 in Docker mode |
+| `GET` | `/api/version-check` | Cached version info: current version/sha, channel (`stable`/`edge`), installation type, latest version, cumulative changelog, `canSelfUpdate` |
+| `POST` | `/api/version-check/check` | Force a fresh version check against GitHub (admin only). Returns 400 if version check is disabled |
+| `PUT` | `/api/version-check/channel` | Switch the update channel: `{ "channel": "stable" \| "edge" }` (admin only) |
+| `POST` | `/api/version-check/update` | Start the safe self-update (admin only, git installs). Returns `{ runId }`; progress over SSE `update:progress`, outcome in `/last-update`. 400 for Docker/dev installs, 409 if already running |
+| `GET` | `/api/version-check/last-update` | Latest update attempt (`running`/`restarting`/`success`/`failed`/`rolled-back`) — persisted, survives the restart |
 
 ## Usage (admin only)
 
@@ -457,11 +501,11 @@ Token usage tracking for all LLM calls. All routes require admin role.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/usage` | Paginated list of LLM usage records with filters (kinId, providerId, providerType, modelId, taskId, cronId, callSite, from/to timestamps) |
-| `GET` | `/api/usage/summary` | Aggregated usage grouped by dimension (groupBy: `provider_type`, `model_id`, `kin_id`, `call_site`, `day`) |
+| `GET` | `/api/usage` | Paginated list of LLM usage records with filters (agentId, providerId, providerType, modelId, taskId, cronId, callSite, from/to timestamps) |
+| `GET` | `/api/usage/summary` | Aggregated usage grouped by dimension (groupBy: `provider_type`, `model_id`, `agent_id`, `call_site`, `day`) |
 
 ## SSE
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/sse` | SSE event stream (see [SSE Events](/kinbot/docs/api/sse/)) |
+| `GET` | `/api/sse` | SSE event stream (see [SSE Events](/docs/api/sse/)) |

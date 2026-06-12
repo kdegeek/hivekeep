@@ -13,7 +13,7 @@ fileRoutes.post('/upload', async (c) => {
 
   const formData = await c.req.formData()
   const file = formData.get('file') as File | null
-  const kinId = formData.get('kinId') as string | null
+  const agentId = formData.get('agentId') as string | null
 
   if (!file || !(file instanceof File)) {
     return c.json(
@@ -22,21 +22,21 @@ fileRoutes.post('/upload', async (c) => {
     )
   }
 
-  if (!kinId) {
+  if (!agentId) {
     return c.json(
-      { error: { code: 'VALIDATION_ERROR', message: 'kinId is required' } },
+      { error: { code: 'VALIDATION_ERROR', message: 'agentId is required' } },
       400,
     )
   }
 
   try {
     const result = await uploadFile({
-      kinId,
+      agentId,
       uploadedBy: user.id,
       file,
     })
 
-    log.info({ fileId: result.id, kinId, fileName: file.name, size: file.size }, 'File uploaded')
+    log.info({ fileId: result.id, agentId, fileName: file.name, size: file.size }, 'File uploaded')
     return c.json({ file: result }, 201)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Upload failed'

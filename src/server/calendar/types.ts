@@ -12,4 +12,4 @@ export type {
   CreateEventParams,
   UpdateEventParams,
   CalendarProvider,
-} from '@kinbot-developer/sdk'
+} from '@hivekeep/sdk'

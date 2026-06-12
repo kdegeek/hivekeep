@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { db } from '@/server/db/index'
-import { userProfiles, user, kins } from '@/server/db/schema'
+import { userProfiles, user, agents } from '@/server/db/schema'
 import { createNotificationForUser } from '@/server/services/notifications'
 import { MENTION_REGEX } from '@/shared/constants'
 import { createLogger } from '@/server/logger'
@@ -10,14 +10,14 @@ const log = createLogger('mentions')
 export interface ParsedMention {
   raw: string       // "@alice"
   handle: string    // "alice"
-  type: 'user' | 'kin'
+  type: 'user' | 'agent'
   id: string        // resolved UUID
   name: string      // display name
 }
 
 /**
- * Parse @mentions from message content and resolve them to users or kins.
- * Matches against user_profiles.pseudonym (case-insensitive) then kins.slug.
+ * Parse @mentions from message content and resolve them to users or agents.
+ * Matches against user_profiles.pseudonym (case-insensitive) then agents.slug.
  */
 export async function parseMentions(content: string): Promise<ParsedMention[]> {
   const regex = new RegExp(MENTION_REGEX.source, MENTION_REGEX.flags)
@@ -30,8 +30,8 @@ export async function parseMentions(content: string): Promise<ParsedMention[]> {
 
   if (handles.size === 0) return []
 
-  // Fetch all users and kins once (small dataset — self-hosted for individuals/small groups)
-  const [allProfiles, allKins] = await Promise.all([
+  // Fetch all users and agents once (small dataset — self-hosted for individuals/small groups)
+  const [allProfiles, allAgents] = await Promise.all([
     db.select({
       userId: userProfiles.userId,
       pseudonym: userProfiles.pseudonym,
@@ -39,10 +39,10 @@ export async function parseMentions(content: string): Promise<ParsedMention[]> {
       lastName: userProfiles.lastName,
     }).from(userProfiles).all(),
     db.select({
-      id: kins.id,
-      slug: kins.slug,
-      name: kins.name,
-    }).from(kins).all(),
+      id: agents.id,
+      slug: agents.slug,
+      name: agents.name,
+    }).from(agents).all(),
   ])
 
   const mentions: ParsedMention[] = []
@@ -65,17 +65,17 @@ export async function parseMentions(content: string): Promise<ParsedMention[]> {
       continue
     }
 
-    // Try kin (slug, case-insensitive)
-    const kinMatch = allKins.find(
+    // Try agent (slug, case-insensitive)
+    const agentMatch = allAgents.find(
       (k) => k.slug?.toLowerCase() === handle || k.name.toLowerCase() === handle,
     )
-    if (kinMatch) {
+    if (agentMatch) {
       mentions.push({
         raw: `@${handle}`,
         handle,
-        type: 'kin',
-        id: kinMatch.id,
-        name: kinMatch.name,
+        type: 'agent',
+        id: agentMatch.id,
+        name: agentMatch.name,
       })
       resolved.add(handle)
     }
@@ -86,11 +86,11 @@ export async function parseMentions(content: string): Promise<ParsedMention[]> {
 
 /**
  * Send a notification to each mentioned user.
- * Kin mentions are ignored (visual only).
+ * Agent mentions are ignored (visual only).
  */
 export async function notifyMentionedUsers(
   mentions: ParsedMention[],
-  kinId: string,
+  agentId: string,
   messageId: string,
   senderName: string,
 ): Promise<void> {
@@ -103,7 +103,7 @@ export async function notifyMentionedUsers(
         type: 'mention',
         title: senderName,
         body: undefined,
-        kinId,
+        agentId,
         relatedId: messageId,
         relatedType: 'message',
       })

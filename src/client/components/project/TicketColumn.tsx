@@ -83,9 +83,9 @@ export function TicketColumn({ status, label, tickets, onTicketClick, highlightQ
   // Activity at-a-glance: how many tickets in this column have a task in flight.
   // Surfaced in the header so users can spot busy columns without scanning cards.
   // Defensive `?? []` — some SSE/optimistic-update code paths can yield tickets
-  // without `runningKins` populated; we don't want to crash the whole kanban.
+  // without `runningAgents` populated; we don't want to crash the whole kanban.
   const runningCount = tickets.reduce(
-    (acc, ticket) => acc + ((ticket.runningKins?.length ?? 0) > 0 ? 1 : 0),
+    (acc, ticket) => acc + ((ticket.runningAgents?.length ?? 0) > 0 ? 1 : 0),
     0,
   )
 

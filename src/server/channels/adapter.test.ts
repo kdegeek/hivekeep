@@ -127,7 +127,7 @@ describe('isImageAttachment', () => {
 describe('readAttachmentBlob', () => {
   it('throws for non-existent local file', async () => {
     const att: OutboundAttachment = {
-      source: '/tmp/definitely-does-not-exist-kinbot-test-file.png',
+      source: '/tmp/definitely-does-not-exist-hivekeep-test-file.png',
       mimeType: 'image/png',
     }
     expect(readAttachmentBlob(att)).rejects.toThrow('Attachment file not found')
@@ -167,7 +167,7 @@ describe('readAttachmentBlob', () => {
 
   it('reads existing local file as blob', async () => {
     // Write a temp file to test local reading (unique name to avoid parallel conflicts)
-    const tmpPath = `/tmp/kinbot-test-adapter-blob-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`
+    const tmpPath = `/tmp/hivekeep-test-adapter-blob-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`
     const { writeFileSync } = await import('fs')
     writeFileSync(tmpPath, 'hello-blob')
     try {

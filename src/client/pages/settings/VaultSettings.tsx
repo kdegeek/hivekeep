@@ -7,7 +7,7 @@ import { EmptyState } from '@/client/components/common/EmptyState'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
 import { SettingsListSkeleton } from '@/client/components/common/SettingsListSkeleton'
 import { api, getErrorMessage, toastError } from '@/client/lib/api'
-import { useKinList } from '@/client/hooks/useKinList'
+import { useAgentList } from '@/client/hooks/useAgentList'
 import { VaultSecretCard, type VaultSecretData } from '@/client/components/vault/VaultSecretCard'
 import { VaultEntryFormDialog } from '@/client/components/vault/VaultEntryFormDialog'
 import { VaultTypeManagerDialog } from '@/client/components/vault/VaultTypeManagerDialog'
@@ -23,7 +23,7 @@ export function VaultSettings() {
   const [customTypes, setCustomTypes] = useState<VaultTypeSummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
-  const { kinNames, kinAvatars } = useKinList()
+  const { agentNames, agentAvatars } = useAgentList()
   const [modalOpen, setModalOpen] = useState(false)
   const [editingEntry, setEditingEntry] = useState<VaultSecretData | null>(null)
   const [activeTab, setActiveTab] = useState(ALL_TAB)
@@ -188,8 +188,8 @@ export function VaultSettings() {
         <VaultSecretCard
           key={entry.id}
           secret={entry}
-          kinName={entry.createdByKinId ? kinNames.get(entry.createdByKinId) : undefined}
-          kinAvatarUrl={entry.createdByKinId ? kinAvatars.get(entry.createdByKinId) : undefined}
+          agentName={entry.createdByAgentId ? agentNames.get(entry.createdByAgentId) : undefined}
+          agentAvatarUrl={entry.createdByAgentId ? agentAvatars.get(entry.createdByAgentId) : undefined}
           onEdit={() => openEdit(entry)}
           onDelete={() => handleDeleteEntry(entry.id)}
           onToggleFavorite={() => handleToggleFavorite(entry)}

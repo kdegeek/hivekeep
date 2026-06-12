@@ -8,16 +8,21 @@ import { cn } from '@/client/lib/utils'
 import { HighlightText } from '@/client/components/chat/HighlightText'
 import { ImageLightbox } from '@/client/components/chat/ImageLightbox'
 import { TicketMention } from '@/client/components/chat/TicketMention'
+import { WorkspacePathMention } from '@/client/components/chat/WorkspacePathMention'
 import { remarkTicketMentions } from '@/client/lib/remark-ticket-mentions'
+import { remarkWorkspacePaths, WORKSPACE_PATH_TEXT_REGEX } from '@/client/lib/remark-workspace-paths'
 
 interface MarkdownContentProps {
   content: string
   /** Whether the content lives inside a user bubble (primary bg) */
   isUser?: boolean
+  /** Drop the chat-scoped remark plugins (ticket mentions, …) — used when
+   *  MarkdownContent renders outside a conversation (e.g. Files md preview). */
+  disableChatPlugins?: boolean
   className?: string
 }
 
-const defaultRemarkPlugins = [remarkGfm, remarkTicketMentions]
+const defaultRemarkPlugins = [remarkGfm, remarkTicketMentions, remarkWorkspacePaths]
 
 // ─── Lazy-loaded plugins ──────────────────────────────────────────────────────
 // rehype-highlight (~170 KB), remark-math + rehype-katex (~260 KB) are loaded
@@ -71,12 +76,13 @@ function hasMathExpressions(content: string): boolean {
 }
 
 /** Hook to get remark+rehype plugins, loading heavy ones on demand */
-function useLazyPlugins(content: string): LazyPlugins {
+function useLazyPlugins(content: string, disableChatPlugins = false): LazyPlugins {
   const needsHighlight = useMemo(() => hasCodeBlocks(content), [content])
   const needsMath = useMemo(() => hasMathExpressions(content), [content])
+  const basePlugins = disableChatPlugins ? [remarkGfm] : defaultRemarkPlugins
 
   const [plugins, setPlugins] = useState<LazyPlugins>(() => {
-    const remark: UnifiedPlugin[] = [...defaultRemarkPlugins]
+    const remark: UnifiedPlugin[] = [...basePlugins]
     const rehype: UnifiedPlugin[] = []
     if (needsMath && cachedRemarkMath) remark.push(cachedRemarkMath)
     if (needsHighlight && cachedRehypeHighlight) rehype.push(cachedRehypeHighlight)
@@ -101,7 +107,7 @@ function useLazyPlugins(content: string): LazyPlugins {
     if (promises.length > 0) {
       Promise.all(promises).then(() => {
         if (cancelled) return
-        const remark: UnifiedPlugin[] = [...defaultRemarkPlugins]
+        const remark: UnifiedPlugin[] = [...basePlugins]
         const rehype: UnifiedPlugin[] = []
         if (needsMath && cachedRemarkMath) remark.push(cachedRemarkMath)
         if (needsHighlight && cachedRehypeHighlight) rehype.push(cachedRehypeHighlight)
@@ -109,7 +115,7 @@ function useLazyPlugins(content: string): LazyPlugins {
         setPlugins({ remarkPlugins: remark, rehypePlugins: rehype })
       })
     } else {
-      const remark: UnifiedPlugin[] = [...defaultRemarkPlugins]
+      const remark: UnifiedPlugin[] = [...basePlugins]
       const rehype: UnifiedPlugin[] = []
       if (needsMath && cachedRemarkMath) remark.push(cachedRemarkMath)
       if (needsHighlight && cachedRehypeHighlight) rehype.push(cachedRehypeHighlight)
@@ -118,7 +124,8 @@ function useLazyPlugins(content: string): LazyPlugins {
     }
 
     return () => { cancelled = true }
-  }, [needsHighlight, needsMath])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsHighlight, needsMath, disableChatPlugins])
 
   return plugins
 }
@@ -468,6 +475,12 @@ function MarkdownTable({ children, ...props }: HTMLAttributes<HTMLTableElement> 
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: registering a custom tag name in the components map
+function WorkspacePathElement(props: HTMLAttributes<HTMLElement> & { 'data-path'?: string; 'data-was-code'?: string }) {
+  const path = props['data-path']
+  if (!path) return <>{props.children}</>
+  return <WorkspacePathMention path={path} wasCode={props['data-was-code'] !== undefined} />
+}
+
 const markdownComponents: any = {
   pre: PreBlock,
   table: MarkdownTable,
@@ -488,6 +501,7 @@ const markdownComponents: any = {
   h6: withHighlight('h6'),
   blockquote: withHighlight('blockquote'),
   'ticket-mention': MentionElement,
+  'workspace-path': WorkspacePathElement,
 }
 
 // ─── Inner markdown renderer (uses hooks for lazy rehype plugins) ─────────────
@@ -495,9 +509,10 @@ const markdownComponents: any = {
 function MarkdownRenderer({
   content,
   isUser,
+  disableChatPlugins,
   className,
 }: MarkdownContentProps) {
-  const { remarkPlugins, rehypePlugins } = useLazyPlugins(content)
+  const { remarkPlugins, rehypePlugins } = useLazyPlugins(content, disableChatPlugins)
 
   return (
     <div
@@ -523,6 +538,7 @@ function MarkdownRenderer({
 export const MarkdownContent = memo(function MarkdownContent({
   content,
   isUser = false,
+  disableChatPlugins = false,
   className,
 }: MarkdownContentProps) {
   // Strip leading whitespace — LLMs sometimes start with \n
@@ -534,7 +550,11 @@ export const MarkdownContent = memo(function MarkdownContent({
   // potential ticket mention (`#42` or `slug#42`) already takes the markdown
   // path and runs through remarkTicketMentions — no extra branch needed here.
   const isPlainText = useMemo(() => {
-    return !/[*_`#\[!\-|>~$\\]/.test(trimmed) && !/^\d+\.\s/m.test(trimmed)
+    if (/[*_`#\[!\-|>~$\\]/.test(trimmed) || /^\d+\.\s/m.test(trimmed)) return false
+    // Workspace path candidates (e.g. "voilà rapports/analyse.md") need the
+    // remark pipeline even when no markdown marker is present (files.md § 5.2).
+    const pathProbe = new RegExp(WORKSPACE_PATH_TEXT_REGEX.source)
+    return !pathProbe.test(trimmed)
   }, [trimmed])
 
   if (isPlainText) {
@@ -545,5 +565,5 @@ export const MarkdownContent = memo(function MarkdownContent({
     )
   }
 
-  return <MarkdownRenderer content={trimmed} isUser={isUser} className={className} />
+  return <MarkdownRenderer content={trimmed} isUser={isUser} disableChatPlugins={disableChatPlugins} className={className} />
 })

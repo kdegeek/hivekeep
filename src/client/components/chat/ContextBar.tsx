@@ -16,7 +16,7 @@ function formatTokenCount(n: number): string {
 }
 
 interface ContextBarProps {
-  kinId: string
+  agentId: string
   /** Local BPE estimate of the context size — drives the breakdown bar. */
   estimatedTokens: number
   maxTokens: number
@@ -98,7 +98,7 @@ function RealBar({
 }
 
 export function ContextBar({
-  kinId,
+  agentId,
   estimatedTokens,
   maxTokens,
   apiContextTokens,
@@ -439,7 +439,7 @@ export function ContextBar({
           <ContextViewerDialog
             open={contextViewerOpen}
             onOpenChange={setContextViewerOpen}
-            kinId={kinId}
+            agentId={agentId}
             taskId={taskId}
             sessionId={sessionId}
           />

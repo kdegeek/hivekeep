@@ -46,7 +46,7 @@ const {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const ctx: ToolExecutionContext = { kinId: 'kin-abc', isSubKin: false }
+const ctx: ToolExecutionContext = { agentId: 'agent-abc', isSubAgent: false }
 
 function execute(registration: any, args: any) {
   const t = registration.create(ctx)
@@ -102,7 +102,7 @@ describe('vault-tools', () => {
       mockVault.redactMessage.mockResolvedValueOnce(true)
       const result = await execute(redactMessageTool, { message_id: 'msg-1', redacted_text: '[REDACTED]' })
       expect(result).toEqual({ success: true })
-      expect(mockVault.redactMessage).toHaveBeenCalledWith('msg-1', 'kin-abc', '[REDACTED]')
+      expect(mockVault.redactMessage).toHaveBeenCalledWith('msg-1', 'agent-abc', '[REDACTED]')
     })
 
     it('returns error when message not found', async () => {
@@ -120,7 +120,7 @@ describe('vault-tools', () => {
       mockVault.createSecret.mockResolvedValueOnce({ id: 'sec-new', key: 'NEW_KEY' })
       const result = await execute(createSecretTool, { key: 'NEW_KEY', value: 'val', description: 'desc' })
       expect(result).toEqual({ id: 'sec-new', key: 'NEW_KEY' })
-      expect(mockVault.createSecret).toHaveBeenCalledWith('NEW_KEY', 'val', 'kin-abc', 'desc')
+      expect(mockVault.createSecret).toHaveBeenCalledWith('NEW_KEY', 'val', 'agent-abc', 'desc')
     })
 
     it('returns error when key already exists', async () => {
@@ -150,8 +150,8 @@ describe('vault-tools', () => {
   // ── delete_secret ─────────────────────────────────────────────────────────
 
   describe('delete_secret', () => {
-    it('deletes secret owned by this kin', async () => {
-      mockVault.getSecretByKey.mockResolvedValueOnce({ id: 'sec-1', createdByKinId: 'kin-abc' })
+    it('deletes secret owned by this agent', async () => {
+      mockVault.getSecretByKey.mockResolvedValueOnce({ id: 'sec-1', createdByAgentId: 'agent-abc' })
       mockVault.deleteSecret.mockResolvedValueOnce(true)
       const result = await execute(deleteSecretTool, { key: 'MY_SECRET' })
       expect(result).toEqual({ success: true, key: 'MY_SECRET' })
@@ -164,15 +164,15 @@ describe('vault-tools', () => {
       expect(result).toEqual({ error: 'Secret with key "NOPE" not found' })
     })
 
-    it('refuses to delete secret owned by another kin', async () => {
-      mockVault.getSecretByKey.mockResolvedValueOnce({ id: 'sec-2', createdByKinId: 'kin-other' })
+    it('refuses to delete secret owned by another agent', async () => {
+      mockVault.getSecretByKey.mockResolvedValueOnce({ id: 'sec-2', createdByAgentId: 'agent-other' })
       const result = await execute(deleteSecretTool, { key: 'THEIR_SECRET' })
-      expect(result).toEqual({ error: 'Cannot delete this secret — it was not created by this Kin' })
+      expect(result).toEqual({ error: 'Cannot delete this secret — it was not created by this Agent' })
       expect(mockVault.deleteSecret).not.toHaveBeenCalled()
     })
 
     it('returns error when deleteSecret fails', async () => {
-      mockVault.getSecretByKey.mockResolvedValueOnce({ id: 'sec-1', createdByKinId: 'kin-abc' })
+      mockVault.getSecretByKey.mockResolvedValueOnce({ id: 'sec-1', createdByAgentId: 'agent-abc' })
       mockVault.deleteSecret.mockResolvedValueOnce(false)
       const result = await execute(deleteSecretTool, { key: 'FAIL' })
       expect(result).toEqual({ error: 'Failed to delete secret' })

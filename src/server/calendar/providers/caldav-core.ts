@@ -20,7 +20,7 @@ import type {
   UpdateEventParams,
   EventAttendee,
   AuthResult,
-} from '@kinbot-developer/sdk'
+} from '@hivekeep/sdk'
 
 export interface CalDavCreds {
   serverUrl: string
@@ -92,7 +92,7 @@ export function buildVEvent(
   } else {
     vcalendar = new ICAL.Component('vcalendar')
     vcalendar.updatePropertyWithValue('version', '2.0')
-    vcalendar.updatePropertyWithValue('prodid', '-//KinBot//Calendar//EN')
+    vcalendar.updatePropertyWithValue('prodid', '-//Hivekeep//Calendar//EN')
     vevent = new ICAL.Component('vevent')
     vcalendar.addSubcomponent(vevent)
   }

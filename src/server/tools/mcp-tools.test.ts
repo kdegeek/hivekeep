@@ -64,7 +64,7 @@ mock.module('@/server/db/index', () => ({
 mock.module('@/server/db/schema', () => ({
   ...fullMockSchema,
   mcpServers: { _name: 'mcp_servers', id: 'id' },
-  kinMcpServers: { _name: 'kin_mcp_servers' },
+  agentMcpServers: { _name: 'agent_mcp_servers' },
 }))
 
 mock.module('drizzle-orm', () => ({
@@ -139,7 +139,7 @@ const {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const CTX = { kinId: 'test-kin-1', isSubKin: false } as any
+const CTX = { agentId: 'test-agent-1', isSubAgent: false } as any
 
 function createTool(reg: ToolRegistration) {
   return reg.create(CTX)
@@ -197,12 +197,12 @@ describe('addMcpServerTool', () => {
     expect(dbStore['mcp_servers']![0]!.args).toBe(JSON.stringify(['-y', 'some-pkg']))
     expect(dbStore['mcp_servers']![0]!.env).toBe(JSON.stringify({ API_KEY: 'secret' }))
     expect(dbStore['mcp_servers']![0]!.status).toBe('active')
-    expect(dbStore['mcp_servers']![0]!.createdByKinId).toBe('test-kin-1')
+    expect(dbStore['mcp_servers']![0]!.createdByAgentId).toBe('test-agent-1')
 
     // Check auto-assignment
-    expect(dbStore['kin_mcp_servers']).toHaveLength(1)
-    expect(dbStore['kin_mcp_servers']![0]!.kinId).toBe('test-kin-1')
-    expect(dbStore['kin_mcp_servers']![0]!.mcpServerId).toBe('test-uuid-1234')
+    expect(dbStore['agent_mcp_servers']).toHaveLength(1)
+    expect(dbStore['agent_mcp_servers']![0]!.agentId).toBe('test-agent-1')
+    expect(dbStore['agent_mcp_servers']![0]!.mcpServerId).toBe('test-uuid-1234')
 
     // Check SSE broadcast
     expect(broadcastedEvents).toHaveLength(1)
@@ -462,7 +462,7 @@ describe('listMcpServersTool', () => {
         command: 'npx',
         args: JSON.stringify(['-y', 'pkg']),
         status: 'active',
-        createdByKinId: 'kin-1',
+        createdByAgentId: 'agent-1',
       },
       {
         id: 'srv-2',
@@ -470,7 +470,7 @@ describe('listMcpServersTool', () => {
         command: 'node',
         args: null,
         status: 'pending_approval',
-        createdByKinId: 'kin-2',
+        createdByAgentId: 'agent-2',
       },
     ]
 

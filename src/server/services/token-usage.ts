@@ -1,16 +1,32 @@
 import { v4 as uuid } from 'uuid'
 import { db } from '@/server/db/index'
 import { llmUsage } from '@/server/db/schema'
-import { and, eq, gte, lte, sql, desc } from 'drizzle-orm'
+import { and, eq, gte, lte, sql, desc, isNull, isNotNull } from 'drizzle-orm'
 import { createLogger } from '@/server/logger'
+import { computeUsageCostUsd, type UsagePricing } from '@/server/services/usage-cost'
 import type { LlmUsageCallSite, LlmUsageCallType, MessageTokenUsage, TaskTokenUsage } from '@/shared/types'
 
 const log = createLogger('token-usage')
 
+// Pricing is injected (DI) at startup rather than imported statically, so this
+// hot module — pulled in everywhere `recordUsage` is called — never drags the
+// model-registry import graph (and its `schema.modelRegistry` link) into test
+// files that mock `@/server/db/schema`. Wired in `index.ts`.
+let getPricingHook: ((providerId: string | null | undefined, modelId: string) => UsagePricing | null) | null = null
+let listPricedModelsHook: (() => Array<{ modelId: string; pricing: UsagePricing }>) | null = null
+
+export function setUsageCostHooks(hooks: {
+  getPricing: (providerId: string | null | undefined, modelId: string) => UsagePricing | null
+  listPricedModels: () => Array<{ modelId: string; pricing: UsagePricing }>
+}): void {
+  getPricingHook = hooks.getPricing
+  listPricedModelsHook = hooks.listPricedModels
+}
+
 // ─── Step Usage Aggregation ────────────────────────────────────────────────
 
 /**
- * Aggregate already-resolved per-step `Usage` objects (kinbot LLMProvider
+ * Aggregate already-resolved per-step `Usage` objects (hivekeep LLMProvider
  * shape) into a single `MessageTokenUsage` with a `peakStepInputTokens`
  * extra. Sync version of `aggregateStepUsage` for the new abstraction.
  */
@@ -60,7 +76,7 @@ export interface RecordUsageParams {
   providerType?: string | null
   providerId?: string | null
   modelId?: string | null
-  kinId?: string | null
+  agentId?: string | null
   taskId?: string | null
   cronId?: string | null
   sessionId?: string | null
@@ -89,6 +105,17 @@ export function recordUsage(params: RecordUsageParams): void {
       ? (inputTokens ?? 0) + (outputTokens ?? 0)
       : null)
 
+    const cacheReadTokens = u?.inputTokenDetails?.cacheReadTokens ?? null
+    const cacheWriteTokens = u?.inputTokenDetails?.cacheWriteTokens ?? null
+
+    // Freeze the cost at the current registry price, so a later price change
+    // never rewrites this row's history. Null when the model has no pricing.
+    let costUsd: number | null = null
+    if (params.modelId && getPricingHook && (inputTokens != null || outputTokens != null)) {
+      const pricing = getPricingHook(params.providerId, params.modelId)
+      if (pricing) costUsd = computeUsageCostUsd(pricing, { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens })
+    }
+
     db.insert(llmUsage).values({
       id: uuid(),
       createdAt: new Date(Date.now()),
@@ -97,28 +124,66 @@ export function recordUsage(params: RecordUsageParams): void {
       providerType: params.providerType ?? null,
       providerId: params.providerId ?? null,
       modelId: params.modelId ?? null,
-      kinId: params.kinId ?? null,
+      agentId: params.agentId ?? null,
       taskId: params.taskId ?? null,
       cronId: params.cronId ?? null,
       sessionId: params.sessionId ?? null,
       inputTokens,
       outputTokens,
       totalTokens,
-      cacheReadTokens: u?.inputTokenDetails?.cacheReadTokens ?? null,
-      cacheWriteTokens: u?.inputTokenDetails?.cacheWriteTokens ?? null,
+      cacheReadTokens,
+      cacheWriteTokens,
       reasoningTokens: u?.outputTokenDetails?.reasoningTokens ?? null,
       embeddingTokens: embTokens,
       stepCount: params.stepCount ?? 1,
+      costUsd,
     }).run()
   } catch (err) {
     log.warn({ err }, 'Failed to record LLM usage')
   }
 }
 
+/**
+ * One-time backfill: estimate `cost_usd` for historical rows recorded before the
+ * cost feature, using the CURRENT registry price (a best-effort estimate for the
+ * past — future rows freeze their price at record time). Idempotent: only fills
+ * `cost_usd IS NULL` rows, so it no-ops once the history is priced. Cheap-guarded
+ * so it doesn't scan every startup.
+ */
+export function backfillUsageCosts(): void {
+  try {
+    if (!listPricedModelsHook) return
+    const pending = db.select({ id: llmUsage.id }).from(llmUsage).where(isNull(llmUsage.costUsd)).limit(1).get()
+    if (!pending) return // nothing to backfill
+
+    // One bulk UPDATE per distinct priced model, at its current price.
+    let models = 0
+    for (const { modelId, pricing: p } of listPricedModelsHook()) {
+      const cr = p.cacheRead ?? p.input
+      const cw = p.cacheWrite ?? p.input
+      db.update(llmUsage)
+        .set({
+          costUsd: sql`(
+            COALESCE(${llmUsage.inputTokens}, 0) * ${p.input}
+            + COALESCE(${llmUsage.outputTokens}, 0) * ${p.output}
+            + COALESCE(${llmUsage.cacheReadTokens}, 0) * ${cr}
+            + COALESCE(${llmUsage.cacheWriteTokens}, 0) * ${cw}
+          ) / 1000000.0`,
+        })
+        .where(and(isNull(llmUsage.costUsd), eq(llmUsage.modelId, modelId), isNotNull(llmUsage.totalTokens)))
+        .run()
+      models++
+    }
+    log.info({ models }, 'Backfilled historical LLM usage costs (current-price estimate)')
+  } catch (err) {
+    log.warn({ err }, 'Usage cost backfill failed')
+  }
+}
+
 // ─── Query ──────────────────────────────────────────────────────────────────
 
 export interface UsageQueryFilters {
-  kinId?: string
+  agentId?: string
   providerId?: string
   providerType?: string
   modelId?: string
@@ -150,6 +215,7 @@ export function queryUsage(filters: UsageQueryFilters) {
       totalTokens: sql<number>`COALESCE(SUM(${llmUsage.totalTokens}), 0)`,
       cacheReadTokens: sql<number>`COALESCE(SUM(${llmUsage.cacheReadTokens}), 0)`,
       cacheWriteTokens: sql<number>`COALESCE(SUM(${llmUsage.cacheWriteTokens}), 0)`,
+      costUsd: sql<number>`COALESCE(SUM(${llmUsage.costUsd}), 0)`,
       count: sql<number>`COUNT(*)`,
     })
     .from(llmUsage)
@@ -159,7 +225,7 @@ export function queryUsage(filters: UsageQueryFilters) {
   return { rows, totals: totals!, count: totals!.count }
 }
 
-export type UsageGroupBy = 'provider_type' | 'model_id' | 'kin_id' | 'call_site' | 'day'
+export type UsageGroupBy = 'provider_type' | 'model_id' | 'agent_id' | 'call_site' | 'day'
 
 export function getUsageSummary(filters: UsageQueryFilters & { groupBy: UsageGroupBy }) {
   const conditions = buildConditions(filters)
@@ -169,7 +235,7 @@ export function getUsageSummary(filters: UsageQueryFilters & { groupBy: UsageGro
     switch (filters.groupBy) {
       case 'provider_type': return llmUsage.providerType
       case 'model_id': return llmUsage.modelId
-      case 'kin_id': return llmUsage.kinId
+      case 'agent_id': return llmUsage.agentId
       case 'call_site': return llmUsage.callSite
       case 'day': return sql`date(${llmUsage.createdAt} / 1000, 'unixepoch')`
     }
@@ -183,6 +249,7 @@ export function getUsageSummary(filters: UsageQueryFilters & { groupBy: UsageGro
       totalTokens: sql<number>`COALESCE(SUM(${llmUsage.totalTokens}), 0)`,
       cacheReadTokens: sql<number>`COALESCE(SUM(${llmUsage.cacheReadTokens}), 0)`,
       cacheWriteTokens: sql<number>`COALESCE(SUM(${llmUsage.cacheWriteTokens}), 0)`,
+      costUsd: sql<number>`COALESCE(SUM(${llmUsage.costUsd}), 0)`,
       count: sql<number>`COUNT(*)`,
     })
     .from(llmUsage)
@@ -285,7 +352,7 @@ export function getTaskTotalsBatch(taskIds: string[]): Map<string, TaskTokenUsag
 
 function buildConditions(filters: UsageQueryFilters) {
   const conditions = []
-  if (filters.kinId) conditions.push(eq(llmUsage.kinId, filters.kinId))
+  if (filters.agentId) conditions.push(eq(llmUsage.agentId, filters.agentId))
   if (filters.providerId) conditions.push(eq(llmUsage.providerId, filters.providerId))
   if (filters.providerType) conditions.push(eq(llmUsage.providerType, filters.providerType))
   if (filters.modelId) conditions.push(eq(llmUsage.modelId, filters.modelId))

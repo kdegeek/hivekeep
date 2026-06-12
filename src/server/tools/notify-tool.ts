@@ -4,7 +4,7 @@ import { createNotification } from '@/server/services/notifications'
 import type { ToolRegistration } from './types'
 
 export const notifyTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: (ctx) =>
     tool({
       description:
@@ -18,11 +18,11 @@ export const notifyTool: ToolRegistration = {
       }),
       execute: async ({ title, body }) => {
         await createNotification({
-          type: 'kin:alert',
+          type: 'agent:alert',
           title,
           body,
-          kinId: ctx.kinId,
-          relatedType: 'kin',
+          agentId: ctx.agentId,
+          relatedType: 'agent',
         })
         return { success: true, message: 'Notification sent to user.' }
       },

@@ -18,13 +18,13 @@ mock.module('drizzle-orm', () => ({
   eq: (col: unknown, val: unknown) => ({ col, val }),
 }))
 
-const { validateKinFields, kinAvatarUrl } = await import(
+const { validateAgentFields, agentAvatarUrl } = await import(
   '@/server/services/field-validator'
 )
 
-// ─── validateKinFields ──────────────────────────────────────────────────────
+// ─── validateAgentFields ──────────────────────────────────────────────────────
 
-describe('validateKinFields', () => {
+describe('validateAgentFields', () => {
   beforeEach(() => {
     mockGet.mockReset()
     mockGet.mockReturnValue(undefined)
@@ -34,44 +34,44 @@ describe('validateKinFields', () => {
 
   describe('create mode — required fields', () => {
     it('returns error when name is missing', () => {
-      const err = validateKinFields({ role: 'helper', model: 'gpt-4' }, 'create')
+      const err = validateAgentFields({ role: 'helper', model: 'gpt-4' }, 'create')
       expect(err).not.toBeNull()
       expect(err!.field).toBe('name')
       expect(err!.code).toBe('INVALID_NAME')
     })
 
     it('returns error when name is empty string', () => {
-      const err = validateKinFields({ name: '  ', role: 'helper', model: 'gpt-4' }, 'create')
+      const err = validateAgentFields({ name: '  ', role: 'helper', model: 'gpt-4' }, 'create')
       expect(err).not.toBeNull()
       expect(err!.field).toBe('name')
     })
 
     it('returns error when role is missing', () => {
-      const err = validateKinFields({ name: 'Bot', model: 'gpt-4' }, 'create')
+      const err = validateAgentFields({ name: 'Bot', model: 'gpt-4' }, 'create')
       expect(err).not.toBeNull()
       expect(err!.field).toBe('role')
     })
 
     it('returns error when role is empty', () => {
-      const err = validateKinFields({ name: 'Bot', role: '', model: 'gpt-4' }, 'create')
+      const err = validateAgentFields({ name: 'Bot', role: '', model: 'gpt-4' }, 'create')
       expect(err).not.toBeNull()
       expect(err!.field).toBe('role')
     })
 
     it('returns error when model is missing', () => {
-      const err = validateKinFields({ name: 'Bot', role: 'helper' }, 'create')
+      const err = validateAgentFields({ name: 'Bot', role: 'helper' }, 'create')
       expect(err).not.toBeNull()
       expect(err!.field).toBe('model')
     })
 
     it('returns error when model is empty', () => {
-      const err = validateKinFields({ name: 'Bot', role: 'helper', model: '  ' }, 'create')
+      const err = validateAgentFields({ name: 'Bot', role: 'helper', model: '  ' }, 'create')
       expect(err).not.toBeNull()
       expect(err!.field).toBe('model')
     })
 
     it('returns null when all required fields are valid', () => {
-      const err = validateKinFields({ name: 'Bot', role: 'helper', model: 'gpt-4' }, 'create')
+      const err = validateAgentFields({ name: 'Bot', role: 'helper', model: 'gpt-4' }, 'create')
       expect(err).toBeNull()
     })
   })
@@ -80,17 +80,17 @@ describe('validateKinFields', () => {
 
   describe('update mode — partial fields allowed', () => {
     it('returns null when no fields provided', () => {
-      const err = validateKinFields({}, 'update')
+      const err = validateAgentFields({}, 'update')
       expect(err).toBeNull()
     })
 
     it('returns null with only name', () => {
-      const err = validateKinFields({ name: 'NewName' }, 'update')
+      const err = validateAgentFields({ name: 'NewName' }, 'update')
       expect(err).toBeNull()
     })
 
     it('returns null with only role', () => {
-      const err = validateKinFields({ role: 'new role' }, 'update')
+      const err = validateAgentFields({ role: 'new role' }, 'update')
       expect(err).toBeNull()
     })
   })
@@ -99,7 +99,7 @@ describe('validateKinFields', () => {
 
   describe('length limits', () => {
     it('rejects name over 100 characters', () => {
-      const err = validateKinFields(
+      const err = validateAgentFields(
         { name: 'a'.repeat(101), role: 'r', model: 'm' },
         'create',
       )
@@ -109,7 +109,7 @@ describe('validateKinFields', () => {
     })
 
     it('accepts name at exactly 100 characters', () => {
-      const err = validateKinFields(
+      const err = validateAgentFields(
         { name: 'a'.repeat(100), role: 'r', model: 'm' },
         'create',
       )
@@ -117,7 +117,7 @@ describe('validateKinFields', () => {
     })
 
     it('rejects role over 200 characters', () => {
-      const err = validateKinFields(
+      const err = validateAgentFields(
         { name: 'Bot', role: 'r'.repeat(201), model: 'm' },
         'create',
       )
@@ -127,7 +127,7 @@ describe('validateKinFields', () => {
     })
 
     it('accepts role at exactly 200 characters', () => {
-      const err = validateKinFields(
+      const err = validateAgentFields(
         { name: 'Bot', role: 'r'.repeat(200), model: 'm' },
         'create',
       )
@@ -135,7 +135,7 @@ describe('validateKinFields', () => {
     })
 
     it('rejects character over 50000 characters', () => {
-      const err = validateKinFields(
+      const err = validateAgentFields(
         { name: 'Bot', role: 'r', model: 'm', character: 'c'.repeat(50_001) },
         'create',
       )
@@ -144,7 +144,7 @@ describe('validateKinFields', () => {
     })
 
     it('accepts character at exactly 50000 characters', () => {
-      const err = validateKinFields(
+      const err = validateAgentFields(
         { name: 'Bot', role: 'r', model: 'm', character: 'c'.repeat(50_000) },
         'create',
       )
@@ -152,7 +152,7 @@ describe('validateKinFields', () => {
     })
 
     it('rejects expertise over 50000 characters', () => {
-      const err = validateKinFields(
+      const err = validateAgentFields(
         { name: 'Bot', role: 'r', model: 'm', expertise: 'e'.repeat(50_001) },
         'create',
       )
@@ -165,19 +165,19 @@ describe('validateKinFields', () => {
 
   describe('type validation', () => {
     it('rejects non-string name in update mode', () => {
-      const err = validateKinFields({ name: 123 as any }, 'update')
+      const err = validateAgentFields({ name: 123 as any }, 'update')
       expect(err).not.toBeNull()
       expect(err!.field).toBe('name')
     })
 
     it('rejects non-string role in update mode', () => {
-      const err = validateKinFields({ role: null as any }, 'update')
+      const err = validateAgentFields({ role: null as any }, 'update')
       expect(err).not.toBeNull()
       expect(err!.field).toBe('role')
     })
 
     it('rejects non-string model in update mode', () => {
-      const err = validateKinFields({ model: '' }, 'update')
+      const err = validateAgentFields({ model: '' }, 'update')
       expect(err).not.toBeNull()
       expect(err!.field).toBe('model')
     })
@@ -187,7 +187,7 @@ describe('validateKinFields', () => {
 
   describe('providerId', () => {
     it('returns null when providerId is null (clearing provider)', () => {
-      const err = validateKinFields(
+      const err = validateAgentFields(
         { name: 'Bot', role: 'r', model: 'm', providerId: null },
         'create',
       )
@@ -195,7 +195,7 @@ describe('validateKinFields', () => {
     })
 
     it('returns null when providerId is undefined', () => {
-      const err = validateKinFields(
+      const err = validateAgentFields(
         { name: 'Bot', role: 'r', model: 'm' },
         'create',
       )
@@ -204,7 +204,7 @@ describe('validateKinFields', () => {
 
     it('returns error when providerId does not exist in DB', () => {
       mockGet.mockReturnValue(undefined)
-      const err = validateKinFields(
+      const err = validateAgentFields(
         { name: 'Bot', role: 'r', model: 'm', providerId: 'nonexistent-id' },
         'create',
       )
@@ -215,7 +215,7 @@ describe('validateKinFields', () => {
 
     it('returns null when providerId exists in DB', () => {
       mockGet.mockReturnValue({ id: 'valid-id' })
-      const err = validateKinFields(
+      const err = validateAgentFields(
         { name: 'Bot', role: 'r', model: 'm', providerId: 'valid-id' },
         'create',
       )
@@ -228,7 +228,7 @@ describe('validateKinFields', () => {
   describe('edge cases', () => {
     it('validates fields in order: name → role → character → expertise → model', () => {
       // All invalid: should return name error first
-      const err = validateKinFields(
+      const err = validateAgentFields(
         { name: '', role: '', model: '' },
         'create',
       )
@@ -236,7 +236,7 @@ describe('validateKinFields', () => {
     })
 
     it('allows character and expertise as undefined without error', () => {
-      const err = validateKinFields(
+      const err = validateAgentFields(
         { name: 'Bot', role: 'r', model: 'm', character: undefined, expertise: undefined },
         'create',
       )
@@ -245,42 +245,42 @@ describe('validateKinFields', () => {
   })
 })
 
-// ─── kinAvatarUrl ───────────────────────────────────────────────────────────
+// ─── agentAvatarUrl ───────────────────────────────────────────────────────────
 
-describe('kinAvatarUrl', () => {
+describe('agentAvatarUrl', () => {
   it('returns null when avatarPath is null', () => {
-    expect(kinAvatarUrl('kin-1', null)).toBeNull()
+    expect(agentAvatarUrl('agent-1', null)).toBeNull()
   })
 
   it('returns null when avatarPath is empty string', () => {
     // empty string is falsy
-    expect(kinAvatarUrl('kin-1', '')).toBeNull()
+    expect(agentAvatarUrl('agent-1', '')).toBeNull()
   })
 
   it('builds correct URL with png extension', () => {
-    const url = kinAvatarUrl('kin-123', 'avatar.png', new Date(1000))
-    expect(url).toBe('/api/uploads/kins/kin-123/avatar.png?v=1000')
+    const url = agentAvatarUrl('agent-123', 'avatar.png', new Date(1000))
+    expect(url).toBe('/api/uploads/agents/agent-123/avatar.png?v=1000')
   })
 
   it('builds correct URL with jpg extension', () => {
-    const url = kinAvatarUrl('kin-456', 'photo.jpg', new Date(2000))
-    expect(url).toBe('/api/uploads/kins/kin-456/avatar.jpg?v=2000')
+    const url = agentAvatarUrl('agent-456', 'photo.jpg', new Date(2000))
+    expect(url).toBe('/api/uploads/agents/agent-456/avatar.jpg?v=2000')
   })
 
   it('builds correct URL with webp extension', () => {
-    const url = kinAvatarUrl('abc', 'img.webp', new Date(5000))
-    expect(url).toBe('/api/uploads/kins/abc/avatar.webp?v=5000')
+    const url = agentAvatarUrl('abc', 'img.webp', new Date(5000))
+    expect(url).toBe('/api/uploads/agents/abc/avatar.webp?v=5000')
   })
 
   it('defaults extension to png when path has no dot', () => {
-    const url = kinAvatarUrl('kin-1', 'noext', new Date(100))
+    const url = agentAvatarUrl('agent-1', 'noext', new Date(100))
     // 'noext'.split('.').pop() === 'noext', not 'png' — tests actual behavior
-    expect(url).toBe('/api/uploads/kins/kin-1/avatar.noext?v=100')
+    expect(url).toBe('/api/uploads/agents/agent-1/avatar.noext?v=100')
   })
 
   it('uses Date.now() when updatedAt is null', () => {
     const before = Date.now()
-    const url = kinAvatarUrl('kin-1', 'a.png', null)
+    const url = agentAvatarUrl('agent-1', 'a.png', null)
     const after = Date.now()
     // Extract v param
     const v = Number(url!.split('?v=')[1])
@@ -290,7 +290,7 @@ describe('kinAvatarUrl', () => {
 
   it('uses Date.now() when updatedAt is undefined', () => {
     const before = Date.now()
-    const url = kinAvatarUrl('kin-1', 'a.png')
+    const url = agentAvatarUrl('agent-1', 'a.png')
     const after = Date.now()
     const v = Number(url!.split('?v=')[1])
     expect(v).toBeGreaterThanOrEqual(before)

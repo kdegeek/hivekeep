@@ -6,7 +6,7 @@ import { Button } from '@/client/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/client/components/ui/dialog'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/client/components/ui/select'
 import { useMiniApps } from '@/client/hooks/useMiniApps'
-import { useKins } from '@/client/hooks/useKins'
+import { useAgents } from '@/client/hooks/useAgents'
 import { useSidePanel } from '@/client/contexts/SidePanelContext'
 import { api, getErrorMessage } from '@/client/lib/api'
 import { toast } from 'sonner'
@@ -21,16 +21,16 @@ import type { MiniAppSummary } from '@/shared/types'
 // SidePanelProvider at the App root, surviving navigation).
 const MiniAppViewer = lazy(() => import('@/client/components/mini-app/MiniAppViewer').then(m => ({ default: m.MiniAppViewer })))
 
-const VIEW_MODE_KEY = 'kinbot:miniapps-page-view-mode'
+const VIEW_MODE_KEY = 'hivekeep:miniapps-page-view-mode'
 
 export function MiniAppsPage() {
   const { t } = useTranslation()
   const { apps, isLoading, deleteApp } = useMiniApps(null, 'all')
-  const { kins } = useKins()
+  const { agents } = useAgents()
   const { activeAppId, badges, openApp, closePanel } = useSidePanel()
   const [searchQuery, setSearchQuery] = useState('')
   const [reassignApp, setReassignApp] = useState<MiniAppSummary | null>(null)
-  const [reassignKinId, setReassignKinId] = useState('')
+  const [reassignAgentId, setReassignAgentId] = useState('')
   const [reassigning, setReassigning] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() =>
     (localStorage.getItem(VIEW_MODE_KEY) as 'grid' | 'list') || 'grid',
@@ -47,7 +47,7 @@ export function MiniAppsPage() {
     return apps.filter(
       (a) =>
         a.name.toLowerCase().includes(q) ||
-        (a.maintainerKinName ?? '').toLowerCase().includes(q) ||
+        (a.maintainerAgentName ?? '').toLowerCase().includes(q) ||
         (a.description?.toLowerCase().includes(q)),
     )
   }, [apps, searchQuery])
@@ -59,26 +59,26 @@ export function MiniAppsPage() {
 
   const openReassign = useCallback((app: MiniAppSummary) => {
     setReassignApp(app)
-    setReassignKinId(app.maintainerKinId)
+    setReassignAgentId(app.maintainerAgentId)
   }, [])
 
   const submitReassign = useCallback(async () => {
-    if (!reassignApp || !reassignKinId || reassignKinId === reassignApp.maintainerKinId) {
+    if (!reassignApp || !reassignAgentId || reassignAgentId === reassignApp.maintainerAgentId) {
       setReassignApp(null)
       return
     }
     setReassigning(true)
     try {
-      await api.patch(`/mini-apps/${reassignApp.id}`, { maintainerKinId: reassignKinId })
-      const kin = kins.find((k) => k.id === reassignKinId)
-      toast.success(t('miniApps.maintainer.reassigned', { kin: kin?.name ?? '' }))
+      await api.patch(`/mini-apps/${reassignApp.id}`, { maintainerAgentId: reassignAgentId })
+      const agent = agents.find((k) => k.id === reassignAgentId)
+      toast.success(t('miniApps.maintainer.reassigned', { agent: agent?.name ?? '' }))
       setReassignApp(null)
     } catch (err) {
       toast.error(getErrorMessage(err))
     } finally {
       setReassigning(false)
     }
-  }, [reassignApp, reassignKinId, kins, t])
+  }, [reassignApp, reassignAgentId, agents, t])
 
   const isEmpty = filteredApps.length === 0 && !isLoading
 
@@ -198,12 +198,12 @@ export function MiniAppsPage() {
             <DialogTitle>{t('miniApps.maintainer.dialogTitle', { name: reassignApp?.name ?? '' })}</DialogTitle>
             <DialogDescription>{t('miniApps.maintainer.dialogDescription')}</DialogDescription>
           </DialogHeader>
-          <Select value={reassignKinId} onValueChange={setReassignKinId} disabled={reassigning}>
+          <Select value={reassignAgentId} onValueChange={setReassignAgentId} disabled={reassigning}>
             <SelectTrigger>
               <SelectValue placeholder={t('miniApps.maintainer.selectPlaceholder')} />
             </SelectTrigger>
             <SelectContent>
-              {kins.map((k) => (
+              {agents.map((k) => (
                 <SelectItem key={k.id} value={k.id}>{k.name}</SelectItem>
               ))}
             </SelectContent>
@@ -212,7 +212,7 @@ export function MiniAppsPage() {
             <Button variant="ghost" onClick={() => setReassignApp(null)} disabled={reassigning}>
               {t('common.cancel')}
             </Button>
-            <Button onClick={submitReassign} disabled={reassigning || !reassignKinId || reassignKinId === reassignApp?.maintainerKinId}>
+            <Button onClick={submitReassign} disabled={reassigning || !reassignAgentId || reassignAgentId === reassignApp?.maintainerAgentId}>
               {reassigning ? <Loader2 className="size-4 animate-spin" /> : null}
               {t('miniApps.maintainer.reassign')}
             </Button>

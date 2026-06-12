@@ -17,13 +17,13 @@ import {
   InvalidRequestError,
   ProviderServerError,
 } from '@/server/llm/core/types'
-import type { KinbotMessage, LLMModel, KinbotTool, SystemPrompt } from '@/server/llm/llm/types'
+import type { HivekeepMessage, LLMModel, HivekeepTool, SystemPrompt } from '@/server/llm/llm/types'
 
 // ─── messagesToAnthropic ─────────────────────────────────────────────────────
 
 describe('messagesToAnthropic', () => {
   it('converts a simple text user message', () => {
-    const msgs: KinbotMessage[] = [
+    const msgs: HivekeepMessage[] = [
       { role: 'user', content: [{ type: 'text', text: 'hello' }] },
     ]
     const out = messagesToAnthropic(msgs)
@@ -33,7 +33,7 @@ describe('messagesToAnthropic', () => {
   })
 
   it('preserves cacheControl on a text block', () => {
-    const msgs: KinbotMessage[] = [
+    const msgs: HivekeepMessage[] = [
       { role: 'user', content: [{ type: 'text', text: 'cached', cacheControl: { type: 'ephemeral' } }] },
     ]
     const out = messagesToAnthropic(msgs)
@@ -42,7 +42,7 @@ describe('messagesToAnthropic', () => {
   })
 
   it('converts a tool-use assistant block', () => {
-    const msgs: KinbotMessage[] = [
+    const msgs: HivekeepMessage[] = [
       {
         role: 'assistant',
         content: [
@@ -59,7 +59,7 @@ describe('messagesToAnthropic', () => {
   })
 
   it('converts a tool-result user block', () => {
-    const msgs: KinbotMessage[] = [
+    const msgs: HivekeepMessage[] = [
       {
         role: 'user',
         content: [
@@ -75,7 +75,7 @@ describe('messagesToAnthropic', () => {
   })
 
   it('drops thinking blocks without a signature (Anthropic rejects them)', () => {
-    const msgs: KinbotMessage[] = [
+    const msgs: HivekeepMessage[] = [
       {
         role: 'assistant',
         content: [
@@ -94,7 +94,7 @@ describe('messagesToAnthropic', () => {
   })
 
   it('keeps thinking blocks that carry a signature', () => {
-    const msgs: KinbotMessage[] = [
+    const msgs: HivekeepMessage[] = [
       {
         role: 'assistant',
         content: [
@@ -139,8 +139,8 @@ describe('toolsToAnthropic', () => {
     expect(toolsToAnthropic([])).toBeUndefined()
   })
 
-  it('maps kinbot fields to anthropic ones', () => {
-    const tools: KinbotTool[] = [
+  it('maps hivekeep fields to anthropic ones', () => {
+    const tools: HivekeepTool[] = [
       { name: 'foo', description: 'do foo', inputSchema: { type: 'object', properties: {} } },
     ]
     const out = toolsToAnthropic(tools)!
@@ -150,7 +150,7 @@ describe('toolsToAnthropic', () => {
   })
 
   it('propagates cacheControl as cache_control', () => {
-    const tools: KinbotTool[] = [
+    const tools: HivekeepTool[] = [
       {
         name: 'bar',
         description: 'last tool',

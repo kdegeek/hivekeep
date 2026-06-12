@@ -9,7 +9,7 @@ import { Hono } from 'hono'
 // is unloaded, 400 when the plugin does not implement onCardAction, and
 // the happy path that returns whatever the handler returns.
 
-const mockGetPluginCardWithOwner = mock<(id: string) => Promise<{ card: any; kinId: string; messageId: string } | null>>(
+const mockGetPluginCardWithOwner = mock<(id: string) => Promise<{ card: any; agentId: string; messageId: string } | null>>(
   () => Promise.resolve(null),
 )
 const mockGetPlugin = mock<(name: string) => any>(() => undefined)
@@ -85,7 +85,7 @@ describe('POST /api/plugin-cards/:cardInstanceId/action', () => {
   test('returns 503 when the owning plugin is not loaded', async () => {
     mockGetPluginCardWithOwner.mockImplementationOnce(() => Promise.resolve({
       card: { pluginId: 'claude-code', cardType: 'task-run', cardInstanceId: 'c', layout: [], state: {} } as any,
-      kinId: 'kin-1',
+      agentId: 'agent-1',
       messageId: 'msg-1',
     }))
     mockGetPlugin.mockImplementationOnce(() => undefined)
@@ -97,7 +97,7 @@ describe('POST /api/plugin-cards/:cardInstanceId/action', () => {
   test('returns 400 when the plugin has no onCardAction handler', async () => {
     mockGetPluginCardWithOwner.mockImplementationOnce(() => Promise.resolve({
       card: { pluginId: 'demo', cardType: 't', cardInstanceId: 'c', layout: [], state: {} } as any,
-      kinId: 'kin-1',
+      agentId: 'agent-1',
       messageId: 'msg-1',
     }))
     mockGetPlugin.mockImplementationOnce(() => ({
@@ -115,7 +115,7 @@ describe('POST /api/plugin-cards/:cardInstanceId/action', () => {
     const handler = mock<(...args: any[]) => Promise<any>>(() => Promise.resolve({ ok: true }))
     mockGetPluginCardWithOwner.mockImplementationOnce(() => Promise.resolve({
       card: { pluginId: 'demo', cardType: 't', cardInstanceId: 'c', layout: [], state: {} } as any,
-      kinId: 'kin-42',
+      agentId: 'agent-42',
       messageId: 'msg-1',
     }))
     mockGetPlugin.mockImplementationOnce(() => ({
@@ -132,14 +132,14 @@ describe('POST /api/plugin-cards/:cardInstanceId/action', () => {
       cardInstanceId: 'c',
       actionId: 'send-message',
       input: 'hello',
-      kinId: 'kin-42',
+      agentId: 'agent-42',
     })
   })
 
   test('forwards a plugin-reported failure as 400 with the plugin error', async () => {
     mockGetPluginCardWithOwner.mockImplementationOnce(() => Promise.resolve({
       card: { pluginId: 'demo', cardType: 't', cardInstanceId: 'c', layout: [], state: {} } as any,
-      kinId: 'kin-1',
+      agentId: 'agent-1',
       messageId: 'msg-1',
     }))
     mockGetPlugin.mockImplementationOnce(() => ({
@@ -157,7 +157,7 @@ describe('POST /api/plugin-cards/:cardInstanceId/action', () => {
   test('returns 500 with a useful message when the plugin handler throws', async () => {
     mockGetPluginCardWithOwner.mockImplementationOnce(() => Promise.resolve({
       card: { pluginId: 'demo', cardType: 't', cardInstanceId: 'c', layout: [], state: {} } as any,
-      kinId: 'kin-1',
+      agentId: 'agent-1',
       messageId: 'msg-1',
     }))
     mockGetPlugin.mockImplementationOnce(() => ({

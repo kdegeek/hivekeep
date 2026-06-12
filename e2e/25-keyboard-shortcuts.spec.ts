@@ -22,12 +22,12 @@ test.describe('Keyboard shortcuts dialog', () => {
     await mockProviderModels(page)
     await page.goto('/')
     const signIn = page.getByRole('button', { name: 'Sign in' })
-    const kins = page.getByText('Kins', { exact: true })
-    await expect(signIn.or(kins)).toBeVisible({ timeout: 10_000 })
+    const agents = page.getByText('Agents', { exact: true })
+    await expect(signIn.or(agents)).toBeVisible({ timeout: 10_000 })
     if (await signIn.isVisible().catch(() => false)) {
       await loginAs(page)
     }
-    await expect(kins).toBeVisible({ timeout: 10_000 })
+    await expect(agents).toBeVisible({ timeout: 10_000 })
   })
 
   test('open shortcuts dialog with ? key', async ({ page }) => {
@@ -44,11 +44,11 @@ test.describe('Keyboard shortcuts dialog', () => {
     await expect(dialog.getByText('Show keyboard shortcuts')).toBeVisible()
   })
 
-  test('shows kins shortcuts group', async ({ page }) => {
+  test('shows agents shortcuts group', async ({ page }) => {
     const dialog = await openShortcutsDialog(page)
-    await expect(dialog.getByText('Kins')).toBeVisible()
-    await expect(dialog.getByText('Switch to Kin by position')).toBeVisible()
-    await expect(dialog.getByText('Create new Kin')).toBeVisible()
+    await expect(dialog.getByText('Agents')).toBeVisible()
+    await expect(dialog.getByText('Switch to Agent by position')).toBeVisible()
+    await expect(dialog.getByText('Create new Agent')).toBeVisible()
   })
 
   test('shows chat shortcuts group', async ({ page }) => {
@@ -96,14 +96,14 @@ test.describe('Keyboard shortcuts dialog', () => {
   })
 
   test('does not open when typing in an input', async ({ page }) => {
-    // Click on a kin first to get the chat input visible
-    const kinLink = page.locator('[data-testid="kin-link"]').first()
-    const hasKin = await kinLink.isVisible({ timeout: 3_000 }).catch(() => false)
-    if (!hasKin) {
+    // Click on an agent first to get the chat input visible
+    const agentLink = page.locator('[data-testid="agent-link"]').first()
+    const hasAgent = await agentLink.isVisible({ timeout: 3_000 }).catch(() => false)
+    if (!hasAgent) {
       test.skip()
       return
     }
-    await kinLink.click()
+    await agentLink.click()
     const textarea = page.locator('textarea').first()
     await expect(textarea).toBeVisible({ timeout: 5_000 })
     await textarea.click()

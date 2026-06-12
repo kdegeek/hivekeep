@@ -3,6 +3,7 @@ import { db } from '@/server/db/index'
 import { appSettings } from '@/server/db/schema'
 import { createLogger } from '@/server/logger'
 import { config } from '@/server/config'
+import type { AgentThinkingConfig } from '@/shared/types'
 
 const log = createLogger('app-settings')
 
@@ -106,10 +107,10 @@ export async function setGlobalPrompt(value: string): Promise<void> {
   return setSetting('global_prompt', value)
 }
 
-/** Optional global art-style directive applied to every generated Kin avatar
+/** Optional global art-style directive applied to every generated Agent avatar
  *  (e.g. "heroic fantasy", "cyberpunk cyborg"). Empty/null → the built-in
  *  Pixar-robot baseline. Editable by the user (Settings) and the configurator
- *  Kin (set_avatar_style). See sherpa.md §9. */
+ *  Agent (set_avatar_style). See queenie.md §9. */
 export async function getAvatarStylePrompt(): Promise<string | null> {
   return getSetting('avatar_style_prompt')
 }
@@ -119,11 +120,11 @@ export async function setAvatarStylePrompt(value: string): Promise<void> {
   return setSetting('avatar_style_prompt', value)
 }
 
-/** Optional global avatar SUBJECT/type applied to every generated Kin avatar
+/** Optional global avatar SUBJECT/type applied to every generated Agent avatar
  *  (e.g. "a human character", "a dragon", "a cyborg"). Empty/null → the default
  *  friendly robot. Independent of the art STYLE (see avatar_style_prompt).
  *  A custom subject forces text-to-image generation (the img2img base is a
- *  robot, so it can't be transformed into another subject). See sherpa.md §9. */
+ *  robot, so it can't be transformed into another subject). See queenie.md §9. */
 export async function getAvatarSubject(): Promise<string | null> {
   return getSetting('avatar_subject')
 }
@@ -134,7 +135,7 @@ export async function setAvatarSubject(value: string): Promise<void> {
 }
 
 /** Whether avatars use the img2img base reference (default true). When false,
- *  avatars are always generated text-to-image. See sherpa.md §9. */
+ *  avatars are always generated text-to-image. See queenie.md §9. */
 export async function isAvatarBaseEnabled(): Promise<boolean> {
   const v = await getSetting('avatar_base_enabled')
   return v !== 'false'
@@ -142,6 +143,18 @@ export async function isAvatarBaseEnabled(): Promise<boolean> {
 
 export async function setAvatarBaseEnabled(enabled: boolean): Promise<void> {
   return setSetting('avatar_base_enabled', enabled ? 'true' : 'false')
+}
+
+/** Whether triggers created by an Agent (via tools) require the user's approval
+ *  before they go active. Default false — Agent-created triggers are active
+ *  immediately. When true, they land inactive/pending until approved in the UI. */
+export async function getAgentTriggersRequireApproval(): Promise<boolean> {
+  const v = await getSetting('agent_triggers_require_approval')
+  return v === 'true'
+}
+
+export async function setAgentTriggersRequireApproval(enabled: boolean): Promise<void> {
+  return setSetting('agent_triggers_require_approval', enabled ? 'true' : 'false')
 }
 
 export async function getExtractionModel(): Promise<string | null> {
@@ -178,7 +191,7 @@ export async function setEmbeddingProviderId(providerId: string | null): Promise
   return setSetting('embedding_provider_id', providerId)
 }
 
-// ─── Default LLM (for new kins) ──────────────────────────────────────────────
+// ─── Default LLM (for new agents) ──────────────────────────────────────────────
 
 export async function getDefaultLlmModel(): Promise<string | null> {
   return getSetting('default_llm_model')
@@ -201,8 +214,8 @@ export async function setDefaultLlmProviderId(providerId: string | null): Promis
 // ─── Default Scout Model (cheap delegation for the `scout` tool) ─────────────
 //
 // Global fallback for the scout model resolved by resolveScoutModel(). Sits
-// near the end of the chain: per-spawn override → Kin scout → project scout →
-// THIS global default → Kin's own main model. Mirrors getDefaultLlmModel /
+// near the end of the chain: per-spawn override → project scout → Agent scout →
+// THIS global default → Agent's own main model. Mirrors getDefaultLlmModel /
 // setDefaultLlmModel exactly (k/v, no dedicated column). A scout-less install
 // leaves both null and every scout falls back to the main model.
 
@@ -222,6 +235,26 @@ export async function getDefaultScoutProviderId(): Promise<string | null> {
 export async function setDefaultScoutProviderId(providerId: string | null): Promise<void> {
   if (providerId === null) return deleteSetting('default_scout_provider_id')
   return setSetting('default_scout_provider_id', providerId)
+}
+
+/** Global default reasoning config for scouts (JSON: AgentThinkingConfig).
+ *  One tier of resolveScoutThinking()'s chain: per-call override → project
+ *  scout thinking → Agent scout thinking → THIS → the calling Agent's own
+ *  general thinking config. Null = unset. */
+export async function getDefaultScoutThinking(): Promise<AgentThinkingConfig | null> {
+  const raw = await getSetting('default_scout_thinking')
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as AgentThinkingConfig
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export async function setDefaultScoutThinking(cfg: AgentThinkingConfig | null): Promise<void> {
+  if (cfg === null) return deleteSetting('default_scout_thinking')
+  return setSetting('default_scout_thinking', JSON.stringify(cfg))
 }
 
 // ─── Default Image Model ─────────────────────────────────────────────────────
@@ -252,7 +285,7 @@ export async function setDefaultImageProviderId(providerId: string | null): Prom
  * array under a single app_settings row so we don't need a schema
  * migration for the feature.
  *
- * Multi-user note: KinBot is "individual or small group" with shared
+ * Multi-user note: Hivekeep is "individual or small group" with shared
  * configuration — this list is NOT per-user. A dismissed item stays
  * dismissed for every admin viewing the dashboard. Reactivation
  * happens from Settings → General → 'Show setup checklist'.

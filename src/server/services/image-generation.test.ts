@@ -59,7 +59,7 @@ mock.module('@/server/services/encryption', () => ({
 mock.module('@/server/sse/index', () => ({
   sseManager: {
     broadcast: mock(),
-    sendToKin: mock(),
+    sendToAgent: mock(),
   },
 }))
 

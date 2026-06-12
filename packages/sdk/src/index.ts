@@ -1,16 +1,16 @@
 /**
- * @kinbot-developer/sdk — public plugin surface for KinBot.
+ * @hivekeep/sdk — public plugin surface for Hivekeep.
  *
  * A plugin's `index.ts` should import everything it needs from this module:
  *
- *   import { tool, z } from '@kinbot-developer/sdk'
- *   import type { PluginContext, PluginExports, ChannelAdapter } from '@kinbot-developer/sdk'
+ *   import { tool, z } from '@hivekeep/sdk'
+ *   import type { PluginContext, PluginExports, ChannelAdapter } from '@hivekeep/sdk'
  *
  *   export default function (ctx: PluginContext): PluginExports {
  *     return {
  *       tools: {
  *         my_tool: {
- *           availability: ['main', 'sub-kin'],
+ *           availability: ['main', 'sub-agent'],
  *           create: () => tool({
  *             description: '...',
  *             inputSchema: z.object({ name: z.string() }),
@@ -26,9 +26,9 @@
  *   - `z`                      : re-export of zod (so plugins don't ship their own copy)
  *   - Types for everything a plugin can declare: tools, channels, providers, hooks
  *
- * KinBot's plugin loader resolves this package against the host's installation,
- * so a plugin declaring `@kinbot-developer/sdk` as a peer dep gets the host's
- * version automatically. No KinBot internal imports needed.
+ * Hivekeep's plugin loader resolves this package against the host's installation,
+ * so a plugin declaring `@hivekeep/sdk` as a peer dep gets the host's
+ * version automatically. No Hivekeep internal imports needed.
  */
 
 import { z } from 'zod'
@@ -48,9 +48,9 @@ export type JSONValue =
   | JSONValue[]
 
 /**
- * A tool definition as seen by KinBot. `inputSchema` is typed as `unknown`
+ * A tool definition as seen by Hivekeep. `inputSchema` is typed as `unknown`
  * because it can be a zod schema, a JSON Schema object, or a wrapper exposing
- * `.jsonSchema`. KinBot normalizes via {@link asSchema} before any provider
+ * `.jsonSchema`. Hivekeep normalizes via {@link asSchema} before any provider
  * sees it.
  *
  * The `INPUT` / `OUTPUT` generics exist for inference at the `tool({...})`
@@ -72,7 +72,7 @@ export interface Tool<INPUT = any, OUTPUT = any> {
  * - Otherwise → `unknown` (the tool's `execute` callback then has to
  *   narrow the input itself).
  *
- * The KinBot core only ships zod-schema tools, but the type sits at
+ * The Hivekeep core only ships zod-schema tools, but the type sits at
  * `unknown` for the fallback so plugin authors who roll their own
  * schema validators still get a workable signature.
  */
@@ -146,17 +146,17 @@ export function asSchema(input: unknown): NormalizedSchema {
 
 // ─── Tool registration (what plugins put under `exports.tools`) ─────────────
 
-/** Where a tool is available: a Kin's main conversation, a sub-Kin task, or both. */
-export type ToolAvailability = 'main' | 'sub-kin'
+/** Where a tool is available: an Agent's main conversation, a sub-Agent task, or both. */
+export type ToolAvailability = 'main' | 'sub-agent'
 
-/** Runtime context passed to a tool factory by KinBot when the tool is resolved. */
+/** Runtime context passed to a tool factory by Hivekeep when the tool is resolved. */
 export interface ToolExecutionContext {
-  kinId: string
+  agentId: string
   userId?: string
   taskId?: string
   /** Current task depth (1-based). Present only when executing inside a task. */
   taskDepth?: number
-  isSubKin: boolean
+  isSubAgent: boolean
   /** ID of the originating channel queue item (causal chain tracking). */
   channelOriginId?: string
   /** Cron ID when executing a cron-triggered task. */
@@ -169,17 +169,17 @@ export type ToolFactory = (ctx: ToolExecutionContext) => Tool<any, any>
 
 /**
  * What a plugin returns for each entry of `exports.tools`. The `create`
- * factory is bound to a fresh `ToolExecutionContext` per Kin turn so the
- * tool can capture the right kinId / userId / taskId in its closure.
+ * factory is bound to a fresh `ToolExecutionContext` per Agent turn so the
+ * tool can capture the right agentId / userId / taskId in its closure.
  */
 export interface ToolRegistration {
   create: ToolFactory
   availability: ToolAvailability[]
-  /** Disabled by default unless the Kin's toolConfig opts in. */
+  /** Disabled by default unless the Agent's toolConfig opts in. */
   defaultDisabled?: boolean
   /**
    * True iff this tool **never** modifies external state — pure reads
-   * only. Used by KinBot's tool-executor to bundle consecutive
+   * only. Used by Hivekeep's tool-executor to bundle consecutive
    * read-only calls into a single parallel batch (with `concurrencySafe`
    * also true). Conservative default `false` — set this only when
    * you're certain the tool has no side effects. A `get_*` / `list_*`
@@ -191,7 +191,7 @@ export interface ToolRegistration {
    * True iff calling this tool concurrently with itself (or other
    * concurrency-safe tools) within the same LLM step is correct.
    * Triggers parallel execution alongside other `concurrencySafe`
-   * tools, bounded by `KINBOT_MAX_TOOL_USE_CONCURRENCY` (default 10).
+   * tools, bounded by `HIVEKEEP_MAX_TOOL_USE_CONCURRENCY` (default 10).
    * Default `false` — non-safe tools each run alone in their own
    * serial batch. Stateful or order-dependent tools must stay at
    * `false`.
@@ -199,7 +199,7 @@ export interface ToolRegistration {
   concurrencySafe?: boolean
   /**
    * True iff this tool may delete, overwrite, or otherwise destroy
-   * data the user cares about (rm, drop_table, delete_kin, etc.).
+   * data the user cares about (rm, drop_table, delete_agent, etc.).
    * Surfaced in UI as a confirmation prompt and to gating logic.
    * Doesn't affect execution scheduling — purely a user-facing signal.
    */
@@ -208,7 +208,7 @@ export interface ToolRegistration {
    *  the tool from the resolved toolset for a particular context. */
   condition?: (ctx: ToolExecutionContext) => boolean
   /**
-   * Human-readable label rendered in the Kin's Tools settings list.
+   * Human-readable label rendered in the Agent's Tools settings list.
    * Plugin tools without a label fall back to the bare tool name with
    * the `plugin_<plugin-name>_` prefix stripped — readable but not as
    * polished as a curated label.
@@ -217,7 +217,7 @@ export interface ToolRegistration {
    *   - A single string (`"Move to channel"`) — same label in every
    *     locale, fine for English-only plugins
    *   - A locale map (`{ en: "Move to channel", fr: "Changer de salon" }`)
-   *     — KinBot picks the user's UI locale, falls back to `en`, then
+   *     — Hivekeep picks the user's UI locale, falls back to `en`, then
    *     to any first entry
    *
    * Description (LLM-facing) stays on the tool factory itself; this
@@ -231,9 +231,9 @@ export interface ToolRegistration {
 // ════════════════════════════════════════════════════════════════════════════
 
 /**
- * UI metadata KinBot displays for a channel adapter (chip color,
+ * UI metadata Hivekeep displays for a channel adapter (chip color,
  * provider-style icon, friendly name). All fields are optional;
- * KinBot falls back to the channel's machine name and a generic icon
+ * Hivekeep falls back to the channel's machine name and a generic icon
  * when omitted. Returned by `ChannelAdapter.meta`.
  */
 export interface ChannelAdapterMeta {
@@ -310,7 +310,7 @@ export interface OutboundMessageParams {
   content: string
   replyToMessageId?: string
   attachments?: OutboundAttachment[]
-  /** Locale of the Kin owner (`en`, `fr`, …). Adapters may use it to localize
+  /** Locale of the Agent owner (`en`, `fr`, …). Adapters may use it to localize
    *  the `contextLine` they return. */
   locale?: string
 }
@@ -361,36 +361,36 @@ export interface DeliveryStatusUpdate {
 }
 
 /**
- * The contract every channel adapter implements to connect KinBot to
+ * The contract every channel adapter implements to connect Hivekeep to
  * an external messaging platform (Telegram, Discord, Slack, custom
  * webhook bridge, …). One adapter per platform handles many channels
- * (one channel = one chat / room / DM). The Kin's queue and KinBot
+ * (one channel = one chat / room / DM). The Agent's queue and Hivekeep
  * core stay platform-agnostic; the adapter owns every protocol detail.
  *
- * Lifecycle KinBot drives:
+ * Lifecycle Hivekeep drives:
  *   1. `validateConfig` — called by the UI before saving channel config.
  *   2. `getBotInfo`     — read the platform-side identity (used for
  *                          display + outbound author).
  *   3. `start`          — open the inbound stream (polling, WebSocket,
- *                          webhook subscription) and hand KinBot the
+ *                          webhook subscription) and hand Hivekeep the
  *                          `onMessage` callback. Must remain idempotent.
- *   4. `sendMessage`    — outbound from a Kin's response.
+ *   4. `sendMessage`    — outbound from an Agent's response.
  *   5. `stop`           — clean teardown when the channel is disabled
- *                          or KinBot shuts down.
+ *                          or Hivekeep shuts down.
  *
  * Optional surface area (implement only what your platform supports):
  *   - `sendTypingIndicator`, `webhook`, `formatInboundContext`,
  *     `onIdentityChange` — see each method's doc.
  *
- * Adapters from plugins must consume *only* `@kinbot-developer/sdk`.
+ * Adapters from plugins must consume *only* `@hivekeep/sdk`.
  */
 /**
  * A discoverable destination within a channel connection — a Discord
  * guild channel, a TeamSpeak room, a Telegram group, a Matrix room, a
- * DM thread, etc. Returned by `ChannelAdapter.listEndpoints` so a Kin
+ * DM thread, etc. Returned by `ChannelAdapter.listEndpoints` so an Agent
  * can post somewhere it hasn't received a message from first.
  *
- * The `id` is the opaque value the Kin later passes back as `chat_id`
+ * The `id` is the opaque value the Agent later passes back as `chat_id`
  * to `sendMessage` — same format the platform's inbound events use.
  */
 export interface ChannelEndpoint {
@@ -400,7 +400,7 @@ export interface ChannelEndpoint {
   /** Display name (e.g. `"#general"`, `"Alice"`, `"Lobby"`). Short. */
   displayName: string
   /**
-   * Type hint for the UI and the Kin's reasoning:
+   * Type hint for the UI and the Agent's reasoning:
    *   - `channel`  : multi-user space the bot is a member of (Discord
    *                  guild channel, Slack public/private channel)
    *   - `group`    : multi-user space typically smaller (Telegram
@@ -412,7 +412,7 @@ export interface ChannelEndpoint {
    */
   type: 'channel' | 'group' | 'room' | 'dm' | 'user'
   /** Adapter-specific extras (member count, topic, last activity, …).
-   *  KinBot won't interpret these but may surface them in the UI. */
+   *  Hivekeep won't interpret these but may surface them in the UI. */
   metadata?: Record<string, unknown>
 }
 
@@ -427,11 +427,11 @@ export interface ChannelAdapter {
   readonly configSchema?: ChannelConfigSchema
 
   /**
-   * Open the inbound stream for this channel. KinBot calls this once
+   * Open the inbound stream for this channel. Hivekeep calls this once
    * per channel at startup, and again each time the channel is
    * re-enabled. Must be idempotent — calling twice with the same
    * channelId is a no-op for the second call (or a clean restart).
-   * `onMessage` is the only path inbound messages reach the Kin queue.
+   * `onMessage` is the only path inbound messages reach the Agent queue.
    */
   start(
     channelId: string,
@@ -440,11 +440,11 @@ export interface ChannelAdapter {
   ): Promise<void>
 
   /** Tear down the inbound stream + any platform-side webhook
-   *  subscription. Called on disable/delete or KinBot shutdown. */
+   *  subscription. Called on disable/delete or Hivekeep shutdown. */
   stop(channelId: string): Promise<void>
 
-  /** Send an outbound message authored by the Kin. Throw on failure;
-   *  KinBot records the error and surfaces it in the UI. */
+  /** Send an outbound message authored by the Agent. Throw on failure;
+   *  Hivekeep records the error and surfaces it in the UI. */
   sendMessage(
     channelId: string,
     config: Record<string, unknown>,
@@ -452,17 +452,17 @@ export interface ChannelAdapter {
   ): Promise<OutboundMessageResult>
 
   /**
-   * Discover the destinations a Kin can post to within this channel
+   * Discover the destinations an Agent can post to within this channel
    * connection — Discord guild channels + DM threads, TeamSpeak rooms,
    * Matrix rooms, Telegram groups/DMs known to the bot, Slack channels,
    * etc. Optional: adapters where the destination is always a single
    * contact (Twilio SMS, Signal) don't implement this — the host tool
-   * falls back to telling the Kin to use `send_to_contact` instead.
+   * falls back to telling the Agent to use `send_to_contact` instead.
    *
-   * The `id` is the same opaque string the Kin passes back as
+   * The `id` is the same opaque string the Agent passes back as
    * `chat_id` to `send_channel_message` / `sendMessage`. Adapters
    * should NOT include endpoints the bot has no permission to write
-   * to (e.g. read-only Slack channels) — KinBot trusts the list.
+   * to (e.g. read-only Slack channels) — Hivekeep trusts the list.
    */
   listEndpoints?(
     channelId: string,
@@ -479,12 +479,12 @@ export interface ChannelAdapter {
 
   /**
    * How the adapter handles identity switching when a channel is transferred
-   * from one Kin to another (transfer_channel tool):
+   * from one Agent to another (transfer_channel tool):
    *   - 'native': the adapter implements `onIdentityChange` and pushes the
-   *     new Kin's display name (and avatar when supported) to the external
+   *     new Agent's display name (and avatar when supported) to the external
    *     platform. The core does NOT prefix outbound messages.
    *   - 'prefix': the adapter cannot switch identity natively. The core
-   *     prepends "[Kin Name] " to every outbound text message.
+   *     prepends "[Agent Name] " to every outbound text message.
    *   - 'none': neither identity change nor prefix. Use only when neither
    *     makes sense.
    *
@@ -496,8 +496,8 @@ export interface ChannelAdapter {
     channelId: string,
     config: Record<string, unknown>,
     newIdentity: {
-      kinSlug: string
-      kinName: string
+      agentSlug: string
+      agentName: string
       avatarUrl?: string
     },
   ): Promise<void>
@@ -517,7 +517,7 @@ export interface ChannelAdapter {
    * Handle an inbound HTTP webhook from the external platform. Called by
    * `POST /api/channels/plugin/:platform/webhook/:channelId`. The adapter
    * parses the request, validates the signature, and returns either an
-   * IncomingMessage to inject into the Kin queue (or null to ignore the
+   * IncomingMessage to inject into the Agent queue (or null to ignore the
    * event) along with the HTTP Response to send back to the platform.
    *
    * Adapters using long-lived connections (polling, WebSocket) don't need
@@ -545,9 +545,9 @@ export interface ChannelAdapter {
 //  Providers (native LLM / embedding / image / search / TTS / STT)
 // ════════════════════════════════════════════════════════════════════════════
 //
-// Plugins extend KinBot with new providers by implementing one of the six
+// Plugins extend Hivekeep with new providers by implementing one of the six
 // native interfaces (`LLMProvider`, `EmbeddingProvider`, `ImageProvider`,
-// `SearchProvider`, `TTSProvider`, `STTProvider`). KinBot's built-in
+// `SearchProvider`, `TTSProvider`, `STTProvider`). Hivekeep's built-in
 // providers (Anthropic, OpenAI, Brave, …) use the same interfaces —
 // there is no separate "plugin shape" anymore.
 
@@ -559,7 +559,7 @@ export type ProviderCapability = 'llm' | 'embedding' | 'image' | 'search' | 'tts
 
 /**
  * A single field a provider needs to accept from the user (API key, base URL,
- * auth file path, free-form text). The KinBot UI renders the form
+ * auth file path, free-form text). The Hivekeep UI renders the form
  * dynamically from this list; the server validates the payload against it.
  *
  * Used both for plugin providers and built-in providers — same shape.
@@ -614,7 +614,7 @@ export type ProviderConfig = Record<string, string | undefined>
 // ─── Authentication ─────────────────────────────────────────────────────────
 
 /**
- * What `authenticate()` returns. The KinBot UI calls this after the
+ * What `authenticate()` returns. The Hivekeep UI calls this after the
  * user enters credentials but before saving — so a `valid: false`
  * response is surfaced inline next to the form rather than during the
  * first real call. Implementations should be cheap (a lightweight
@@ -664,7 +664,7 @@ export type FinishReason =
 /** Base class for every error raised by a provider implementation. Always
  *  carries a stable `code` so callers can branch on the kind without
  *  sniffing error messages. */
-export abstract class KinbotProviderError extends Error {
+export abstract class HivekeepProviderError extends Error {
   abstract readonly code: string
 
   constructor(message: string, public override readonly cause?: unknown) {
@@ -674,12 +674,12 @@ export abstract class KinbotProviderError extends Error {
 }
 
 /** Authentication failed: missing/invalid key, expired OAuth token, etc. */
-export class AuthError extends KinbotProviderError {
+export class AuthError extends HivekeepProviderError {
   readonly code = 'AUTH_ERROR'
 }
 
 /** Provider rate limit hit. `retryAfterMs` is set when the provider returned one. */
-export class RateLimitError extends KinbotProviderError {
+export class RateLimitError extends HivekeepProviderError {
   readonly code = 'RATE_LIMIT'
   constructor(
     message: string,
@@ -691,7 +691,7 @@ export class RateLimitError extends KinbotProviderError {
 }
 
 /** Request exceeds the model's context window. */
-export class ContextOverflowError extends KinbotProviderError {
+export class ContextOverflowError extends HivekeepProviderError {
   readonly code = 'CONTEXT_OVERFLOW'
   constructor(
     message: string,
@@ -704,17 +704,17 @@ export class ContextOverflowError extends KinbotProviderError {
 }
 
 /** Request rejected by the provider (bad payload, unsupported feature, etc.). */
-export class InvalidRequestError extends KinbotProviderError {
+export class InvalidRequestError extends HivekeepProviderError {
   readonly code = 'INVALID_REQUEST'
 }
 
 /** Network/transport error (timeout, DNS, TLS, connection reset). */
-export class NetworkError extends KinbotProviderError {
+export class NetworkError extends HivekeepProviderError {
   readonly code = 'NETWORK_ERROR'
 }
 
 /** Provider returned a server-side error (5xx, malformed response, etc.). */
-export class ProviderServerError extends KinbotProviderError {
+export class ProviderServerError extends HivekeepProviderError {
   readonly code = 'PROVIDER_SERVER_ERROR'
   constructor(
     message: string,
@@ -727,7 +727,7 @@ export class ProviderServerError extends KinbotProviderError {
 
 /** The provider implementation does not support the requested capability
  *  (e.g. embeddings on a chat-only provider). */
-export class UnsupportedCapabilityError extends KinbotProviderError {
+export class UnsupportedCapabilityError extends HivekeepProviderError {
   readonly code = 'UNSUPPORTED_CAPABILITY'
 }
 
@@ -745,7 +745,7 @@ export interface ProviderUIHints {
   readonly apiKeyUrl?: string
   /**
    * Name of the icon to use from `@lobehub/icons` (e.g. `"Mistral"`,
-   * `"DeepSeek"`, `"Cohere"`). KinBot's frontend ships a whitelist of
+   * `"DeepSeek"`, `"Cohere"`). Hivekeep's frontend ships a whitelist of
    * supported names — anything outside the whitelist falls back to a
    * generic chip icon. See the developer guide for the full list, or
    * pick from https://icons.lobehub.com/.
@@ -782,9 +782,40 @@ export interface ProviderUIHints {
 
 // ─── LLM ────────────────────────────────────────────────────────────────────
 
-export type ThinkingEffort = 'low' | 'medium' | 'high' | 'max'
+export type ThinkingEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
-/** Everything KinBot needs to know about an LLM model. Populated by the
+/** Canonical effort ladder, lowest → highest. Used for clamping/downgrading a
+ *  requested effort to what a model actually supports. */
+export const THINKING_EFFORT_ORDER: readonly ThinkingEffort[] = [
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+]
+
+/**
+ * Clamp a requested effort to the closest level the model supports, scanning
+ * downward from the request (a request above the model's ceiling lands on its
+ * highest supported level; below its floor lands on its lowest). Returns
+ * undefined when the model supports no effort levels — providers should then
+ * omit the effort/reasoning parameter entirely.
+ */
+export function downgradeEffort(
+  requested: ThinkingEffort,
+  supported: readonly ThinkingEffort[],
+): ThinkingEffort | undefined {
+  if (supported.length === 0) return undefined
+  const idx = THINKING_EFFORT_ORDER.indexOf(requested)
+  for (let i = idx; i >= 0; i--) {
+    const level = THINKING_EFFORT_ORDER[i]!
+    if (supported.includes(level)) return level
+  }
+  return supported[0]
+}
+
+/** Everything Hivekeep needs to know about an LLM model. Populated by the
  *  provider's `listModels()` — never hardcoded in consumer code. */
 export interface LLMModel {
   id: string
@@ -796,7 +827,7 @@ export interface LLMModel {
   contextWindow?: number
   maxOutput?: number
   /**
-   * Per-model cap on the number of tools KinBot sends in a single chat
+   * Per-model cap on the number of tools Hivekeep sends in a single chat
    * request. Used as a per-model OVERRIDE of `LLMProvider.defaultMaxTools`
    * — the engine resolves the effective cap as
    * `model.maxTools ?? provider.defaultMaxTools ?? DEFAULT (128)`.
@@ -819,6 +850,9 @@ export interface LLMModel {
   maxTools?: number
   /** True when the model can accept image blocks in user messages. */
   supportsImageInput?: boolean
+  /** True when the model can accept PDF / document blocks in user messages.
+   *  (models.dev exposes a `pdf` input modality alongside `image`.) */
+  supportsPdfInput?: boolean
   /** True when the model supports provider-side prompt caching
    *  (Anthropic explicit cache_control, OpenAI auto-cache). */
   supportsPromptCaching?: boolean
@@ -841,9 +875,9 @@ export interface LLMModel {
   }
 }
 
-/** Tool definition as seen by the provider. Internal kinbot code translates
+/** Tool definition as seen by the provider. Internal hivekeep code translates
  *  the plugin's `Tool` shape into this for each chat request. */
-export interface KinbotTool {
+export interface HivekeepTool {
   name: string
   description: string
   /** JSON Schema for the tool's input arguments. */
@@ -853,7 +887,7 @@ export interface KinbotTool {
   cacheControl?: { type: 'ephemeral' }
 }
 
-export type KinbotRole = 'user' | 'assistant'
+export type HivekeepRole = 'user' | 'assistant'
 
 export interface TextBlock {
   type: 'text'
@@ -896,16 +930,16 @@ export interface ThinkingBlock {
   signature?: string
 }
 
-export type KinbotMessageBlock =
+export type HivekeepMessageBlock =
   | TextBlock
   | ImageBlock
   | ToolUseBlock
   | ToolResultBlock
   | ThinkingBlock
 
-export interface KinbotMessage {
-  role: KinbotRole
-  content: KinbotMessageBlock[]
+export interface HivekeepMessage {
+  role: HivekeepRole
+  content: HivekeepMessageBlock[]
 }
 
 /** System prompt as a list of text blocks. Multiple blocks let the caller
@@ -914,9 +948,9 @@ export interface KinbotMessage {
 export type SystemPrompt = TextBlock[]
 
 export interface ChatRequest {
-  messages: KinbotMessage[]
+  messages: HivekeepMessage[]
   system?: SystemPrompt
-  tools?: KinbotTool[]
+  tools?: HivekeepTool[]
   thinkingEffort?: ThinkingEffort
   maxOutputTokens?: number
   temperature?: number
@@ -947,7 +981,7 @@ export interface LLMProvider extends ProviderUIHints {
   /** Declarative schema for the configuration form. */
   readonly configSchema: ProviderConfigSchema
   /**
-   * Hard cap on the number of tools KinBot may send in a single chat
+   * Hard cap on the number of tools Hivekeep may send in a single chat
    * request to this provider. The engine's tool-truncation pass reads
    * this value before each call — exceeding it gets rejected upstream.
    *
@@ -963,7 +997,7 @@ export interface LLMProvider extends ProviderUIHints {
   readonly defaultMaxTools?: number
 
   /**
-   * Billing model of the upstream API. Used by KinBot's auto-resolution
+   * Billing model of the upstream API. Used by Hivekeep's auto-resolution
    * to break ties when the same model id is served by several configured
    * providers — fixed-cost (subscription) wins over pay-per-token so the
    * user's flat-rate plan is used before their metered key.
@@ -982,7 +1016,7 @@ export interface LLMProvider extends ProviderUIHints {
 
   /** Fetch the current list of models with full metadata. Called on demand
    *  and by the refresh cron. Implementations must not cache across calls
-   *  — KinBot's `model-info-cache` is the cache. */
+   *  — Hivekeep's `model-info-cache` is the cache. */
   listModels(config: ProviderConfig): Promise<LLMModel[]>
 
   /** Stream a chat completion. Implementations own the conversion between
@@ -1000,16 +1034,16 @@ export interface LLMProvider extends ProviderUIHints {
 
 /**
  * Metadata for one embedding model the provider's `listModels()`
- * returns. KinBot uses the model's `dimensions` to size the sqlite-vec
+ * returns. Hivekeep uses the model's `dimensions` to size the sqlite-vec
  * column and `maxInputTokens` to chunk long texts before calling
  * `embed()`. Both fields are optional — provider catalogues vary in
- * what they expose, and KinBot infers from the first call when needed.
+ * what they expose, and Hivekeep infers from the first call when needed.
  */
 export interface EmbeddingModel {
   id: string
   name: string
   /** Output vector dimension. Optional — some catalogues (Replicate's
-   *  community models, etc.) don't expose this; KinBot infers it from
+   *  community models, etc.) don't expose this; Hivekeep infers it from
    *  the first embed call when needed. */
   dimensions?: number
   /** Maximum input tokens per single embed call. Optional for the
@@ -1022,7 +1056,7 @@ export interface EmbeddingModel {
 }
 
 /** Payload passed to `EmbeddingProvider.embed`. Single text per call —
- *  KinBot batches at a higher level for now (one embed per chunk),
+ *  Hivekeep batches at a higher level for now (one embed per chunk),
  *  so providers don't need to implement batching themselves. */
 export interface EmbedRequest {
   /** Text to encode. Already truncated to the model's
@@ -1133,8 +1167,8 @@ export interface ImageRequest {
 }
 
 /**
- * What `ImageProvider.generate()` returns. KinBot writes the bytes
- * to the kin's upload directory, registers an entry in `files`, and
+ * What `ImageProvider.generate()` returns. Hivekeep writes the bytes
+ * to the agent's upload directory, registers an entry in `files`, and
  * surfaces a URL back to the tool caller.
  */
 export interface ImageResult {
@@ -1221,7 +1255,7 @@ export interface ImageProvider extends ProviderUIHints {
 
 /**
  * Static capability declaration a search provider exposes so the host
- * (and the Kin, via `list_search_providers`) knows what it can ask for.
+ * (and the Agent, via `list_search_providers`) knows what it can ask for.
  *
  * All flags are optional and default to `false` — a provider that
  * declares no capabilities only supports the bare minimum: a plain
@@ -1721,6 +1755,14 @@ export interface EmailListResult {
   nextPageToken?: string
 }
 
+/** A mailbox folder (IMAP/Graph) or label (Gmail). `id` is what `listMessages`
+ *  expects as `folder`; `name` is the display label. */
+export interface EmailFolder {
+  id: string
+  name: string
+  type?: 'folder' | 'label'
+}
+
 /** A file to attach to an outgoing message. `contentBase64` is the raw bytes
  *  in standard base64 — the provider wraps it in a MIME part. */
 export interface OutgoingAttachment {
@@ -1758,7 +1800,7 @@ export interface SendEmailResult {
  * Descriptor for an OAuth2 authorization-code flow. The host owns a single
  * generic OAuth2 implementation (authorize redirect, code exchange, refresh);
  * each provider declares only its endpoints + scopes here. The client id /
- * secret are supplied by the KinBot operator (app settings), not the provider.
+ * secret are supplied by the Hivekeep operator (app settings), not the provider.
  * Leave `oauth` undefined for password / token providers (generic IMAP).
  */
 export interface OAuthProfile {
@@ -1801,6 +1843,9 @@ export interface EmailProvider extends ProviderUIHints {
 
   listMessages(options: EmailListOptions, config: ProviderConfig): Promise<EmailListResult>
   getMessage(id: string, config: ProviderConfig): Promise<EmailFull>
+  /** List mailbox folders / labels for the folder picker. Optional — providers
+   *  that can't enumerate folders omit it (the host falls back to INBOX). */
+  listFolders?(config: ProviderConfig): Promise<EmailFolder[]>
   searchMessages?(query: EmailSearchQuery, config: ProviderConfig): Promise<EmailSummary[]>
   sendMessage(params: SendEmailParams, config: ProviderConfig): Promise<SendEmailResult>
   /** Fetch an attachment's raw bytes (standard base64). Optional — providers
@@ -1837,7 +1882,7 @@ export interface ContactEmailAddress {
 
 /**
  * A person from an external address book. Strictly read-only — the host never
- * writes back, and these never enter KinBot's own contacts store. Surfaced
+ * writes back, and these never enter Hivekeep's own contacts store. Surfaced
  * on demand by the contacts tools (e.g. to look up a phone number).
  */
 export interface Contact {
@@ -2046,7 +2091,7 @@ export type PluginProvider =
 // ════════════════════════════════════════════════════════════════════════════
 
 /**
- * Mapping from each hook name to the exact payload shape KinBot delivers
+ * Mapping from each hook name to the exact payload shape Hivekeep delivers
  * to handlers. Plugin authors get autocomplete on `ctx.<field>` inside their
  * handler — no more loose `[key: string]: unknown` access.
  *
@@ -2054,16 +2099,16 @@ export type PluginProvider =
  * registry signature picks it up automatically.
  */
 export interface HookPayloadMap {
-  /** Fired once per Kin turn, just before the system prompt is assembled. */
+  /** Fired once per Agent turn, just before the system prompt is assembled. */
   beforeChat: {
-    kinId: string
+    agentId: string
     userId?: string
     /** The raw incoming user message content for this turn. */
     message: string
   }
-  /** Fired once per Kin turn, after the assistant's response is finalized. */
+  /** Fired once per Agent turn, after the assistant's response is finalized. */
   afterChat: {
-    kinId: string
+    agentId: string
     userId?: string
     /** The raw incoming user message content for this turn. */
     message: string
@@ -2073,10 +2118,10 @@ export interface HookPayloadMap {
   /** Fired before each tool call inside a turn. Mutations to `toolArgs` are
    *  observed by the executor when the handler returns the modified ctx. */
   beforeToolCall: {
-    kinId: string
+    agentId: string
     userId?: string
     taskId?: string
-    isSubKin: boolean
+    isSubAgent: boolean
     /** Tool name as seen by the LLM (already plugin-prefixed when applicable). */
     toolName: string
     /** The arguments passed to the tool by the LLM. */
@@ -2088,10 +2133,10 @@ export interface HookPayloadMap {
   }
   /** Fired after each tool call. `toolResult` is whatever the tool returned. */
   afterToolCall: {
-    kinId: string
+    agentId: string
     userId?: string
     taskId?: string
-    isSubKin: boolean
+    isSubAgent: boolean
     toolName: string
     toolArgs: unknown
     toolResult: unknown
@@ -2147,12 +2192,12 @@ export interface PluginHTTPClient {
  *
  * Read access is permissive: `getSecret(key)` reads any vault entry by key.
  * Plugins are expected to only read keys they were handed via their config
- * (e.g. a channel password field stored by KinBot under a deterministic key).
+ * (e.g. a channel password field stored by Hivekeep under a deterministic key).
  * There is no API to enumerate the full vault.
  *
  * Write access is strictly scoped: `setSecret` / `deleteSecret` / `listKeys`
  * operate inside a `plugin:<plugin-name>:` namespace so plugins cannot
- * overwrite each other's secrets or those managed by KinBot core.
+ * overwrite each other's secrets or those managed by Hivekeep core.
  */
 export interface PluginVaultAPI {
   /** Read any vault entry by its key (returns the decrypted value or null).
@@ -2274,10 +2319,10 @@ export type PluginCardPrimitive =
  * discriminated union literals or use these helpers for slightly more
  * ergonomic call sites with default-friendly argument shapes.
  *
- *   import { card, z } from '@kinbot-developer/sdk'
+ *   import { card, z } from '@hivekeep/sdk'
  *
  *   ctx.cards.emit({
- *     kinId,
+ *     agentId,
  *     cardType: 'task-run',
  *     layout: [
  *       card.header({ title: 'Task running…', icon: 'Sparkles' }),
@@ -2372,7 +2417,7 @@ export const card = {
  *  in a `type` field fails at compile time. */
 export interface PluginCardsAPI {
   emit(params: {
-    kinId: string
+    agentId: string
     cardType: string
     layout: PluginCardPrimitive[]
     initialState: Record<string, unknown>
@@ -2388,18 +2433,18 @@ export interface PluginCardActionContext {
   cardInstanceId: string
   actionId: string
   input?: string
-  kinId: string
+  agentId: string
 }
 
 export type PluginCardActionResult = { ok: true } | { ok: false; error: string }
 
 /**
- * The runtime context KinBot passes to every plugin's default export.
+ * The runtime context Hivekeep passes to every plugin's default export.
  *
  * The `Config` generic lets a plugin author declare the exact shape of
  * their config so `ctx.config.<field>` is strongly typed:
  *
- *   import type { PluginContext } from '@kinbot-developer/sdk'
+ *   import type { PluginContext } from '@hivekeep/sdk'
  *
  *   interface MyConfig { apiKey: string; region?: 'eu' | 'us' }
  *
@@ -2411,7 +2456,7 @@ export type PluginCardActionResult = { ok: true } | { ok: false; error: string }
  * Plugins that don't care fall back to the default
  * `Record<string, unknown>` and read fields with their own narrowing.
  *
- * The runtime never validates the config against the generic — KinBot
+ * The runtime never validates the config against the generic — Hivekeep
  * already validated it against the manifest's declared config schema
  * before instantiating the context. The generic is purely a type-side
  * convenience for the plugin's call sites.
@@ -2433,7 +2478,7 @@ export interface PluginContext<Config = Record<string, unknown>> {
 export interface PluginExports {
   tools?: Record<string, ToolRegistration>
   /**
-   * Native AI providers contributed by the plugin. KinBot's plugin loader
+   * Native AI providers contributed by the plugin. Hivekeep's plugin loader
    * inspects each provider's shape (the `chat` / `embed` / `generate` /
    * `search` / `speak` / `transcribe` method) and registers it into the
    * matching native registry. The same `LLMProvider` / `EmbeddingProvider`

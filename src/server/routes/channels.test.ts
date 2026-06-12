@@ -3,14 +3,14 @@ import { fullMockSchema, fullMockDrizzleOrm } from '../../test-helpers'
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 //
-// channels.ts route depends on the service layer (channels.ts) and the kin
+// channels.ts route depends on the service layer (channels.ts) and the agent
 // resolver. We stub them and exercise the route handlers via the Hono test
 // fetch interface.
 
 const mockGetChannel = mock(() => Promise.resolve(null as any))
 const mockUpdateChannel = mock(() => Promise.resolve(null as any))
 type TransferResult =
-  | { ok: true; noop?: false; transferredAt: number; previousKinSlug: string; newKinSlug: string; fromKinId: string; fromKinName: string; toKinId: string; toKinName: string }
+  | { ok: true; noop?: false; transferredAt: number; previousAgentSlug: string; newAgentSlug: string; fromAgentId: string; fromAgentName: string; toAgentId: string; toAgentName: string }
   | { ok: true; noop: true; message: string }
   | { ok: false; error: string }
 
@@ -18,15 +18,15 @@ const mockTransferChannel = mock<(...args: any[]) => Promise<TransferResult>>(()
   Promise.resolve({
     ok: true,
     transferredAt: 1700000000000,
-    previousKinSlug: 'kinbot-master',
-    newKinSlug: 'kube-master',
-    fromKinId: 'kin-source',
-    fromKinName: 'KinBot Master',
-    toKinId: 'kin-target',
-    toKinName: 'Kube Master',
+    previousAgentSlug: 'hivekeep-master',
+    newAgentSlug: 'kube-master',
+    fromAgentId: 'agent-source',
+    fromAgentName: 'Hivekeep Master',
+    toAgentId: 'agent-target',
+    toAgentName: 'Kube Master',
   } as TransferResult),
 )
-const mockResolveKinId = mock(() => null as string | null)
+const mockResolveAgentId = mock(() => null as string | null)
 
 mock.module('@/server/services/channels', () => ({
   createChannel: mock(() => Promise.resolve({})),
@@ -56,17 +56,17 @@ mock.module('@/server/services/channels', () => ({
   listContactPlatformIds: () => [],
   addContactPlatformId: () => ({}),
   removeContactPlatformId: () => true,
-  getActiveChannelsForKin: () => [],
+  getActiveChannelsForAgent: () => [],
   restoreActiveChannels: async () => {},
   resolveChannelLocale: () => 'en',
 }))
 
-mock.module('@/server/services/kin-resolver', () => ({
-  resolveKinId: mockResolveKinId,
-  resolveKinByIdOrSlug: mock(() => null),
+mock.module('@/server/services/agent-resolver', () => ({
+  resolveAgentId: mockResolveAgentId,
+  resolveAgentByIdOrSlug: mock(() => null),
 }))
 
-// Minimal DB chain. Kin lookup after a successful transfer reads (name, avatarPath).
+// Minimal DB chain. Agent lookup after a successful transfer reads (name, avatarPath).
 const dbChain: any = {
   select: mock(() => dbChain),
   from: mock(() => dbChain),
@@ -78,7 +78,7 @@ mock.module('@/server/db/index', () => ({ db: dbChain }))
 
 mock.module('@/server/db/schema', () => ({
   ...fullMockSchema,
-  kins: { id: 'id', name: 'name', avatarPath: 'avatarPath' },
+  agents: { id: 'id', name: 'name', avatarPath: 'avatarPath' },
 }))
 
 // Full ChannelAdapterRegistry surface so other test files importing the
@@ -131,20 +131,20 @@ beforeEach(() => {
   mockGetChannel.mockReset()
   mockUpdateChannel.mockReset()
   mockTransferChannel.mockReset()
-  mockResolveKinId.mockReset()
+  mockResolveAgentId.mockReset()
   // Default service return is a successful, non-noop transfer. Specific
   // tests override with mockResolvedValueOnce as needed.
   mockTransferChannel.mockResolvedValue({
     ok: true,
     transferredAt: 1700000000000,
-    previousKinSlug: 'kinbot-master',
-    newKinSlug: 'kube-master',
-    fromKinId: 'kin-source',
-    fromKinName: 'KinBot Master',
-    toKinId: 'kin-target',
-    toKinName: 'Kube Master',
+    previousAgentSlug: 'hivekeep-master',
+    newAgentSlug: 'kube-master',
+    fromAgentId: 'agent-source',
+    fromAgentName: 'Hivekeep Master',
+    toAgentId: 'agent-target',
+    toAgentName: 'Kube Master',
   })
-  // Reset DB chain default to the successful-Kin-lookup return.
+  // Reset DB chain default to the successful-Agent-lookup return.
   dbChain.get.mockReset()
   dbChain.get.mockImplementation(() => ({ name: 'Kube Master', avatarPath: null }))
 })
@@ -153,14 +153,14 @@ beforeEach(() => {
 
 describe('channelRoutes', () => {
   describe('PATCH /:id', () => {
-    itMocked('rejects a kinId mutation with 400 KINID_NOT_PATCHABLE', async () => {
-      mockGetChannel.mockResolvedValue({ id: 'ch-1', name: 'Test', kinId: 'kin-source' })
+    itMocked('rejects a agentId mutation with 400 KINID_NOT_PATCHABLE', async () => {
+      mockGetChannel.mockResolvedValue({ id: 'ch-1', name: 'Test', agentId: 'agent-source' })
 
       const resp = await channelRoutes.fetch(
         new Request('http://localhost/ch-1', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ kinId: 'kin-other' }),
+          body: JSON.stringify({ agentId: 'agent-other' }),
         }),
       )
 
@@ -172,13 +172,13 @@ describe('channelRoutes', () => {
       expect(mockTransferChannel).not.toHaveBeenCalled()
     })
 
-    itMocked('allows a name-only patch (no kinId) and forwards it to updateChannel', async () => {
+    itMocked('allows a name-only patch (no agentId) and forwards it to updateChannel', async () => {
       mockGetChannel
-        .mockResolvedValueOnce({ id: 'ch-1', name: 'Old', kinId: 'kin-source' })
+        .mockResolvedValueOnce({ id: 'ch-1', name: 'Old', agentId: 'agent-source' })
       mockUpdateChannel.mockResolvedValueOnce({
         id: 'ch-1',
         name: 'New name',
-        kinId: 'kin-source',
+        agentId: 'agent-source',
         platform: 'telegram',
         platformConfig: '{}',
         status: 'active',
@@ -201,19 +201,19 @@ describe('channelRoutes', () => {
 
       expect(resp.status).toBe(200)
       expect(mockUpdateChannel).toHaveBeenCalledTimes(1)
-      // The kinId key MUST NOT be in the patch forwarded to updateChannel.
+      // The agentId key MUST NOT be in the patch forwarded to updateChannel.
       const patchArg = (mockUpdateChannel.mock.calls as any[])[0][1]
-      expect('kinId' in patchArg).toBe(false)
+      expect('agentId' in patchArg).toBe(false)
       expect(patchArg.name).toBe('New name')
     })
 
-    itMocked('strips a kinId that matches the current binding before calling updateChannel', async () => {
+    itMocked('strips a agentId that matches the current binding before calling updateChannel', async () => {
       mockGetChannel
-        .mockResolvedValueOnce({ id: 'ch-1', name: 'Old', kinId: 'kin-source' })
+        .mockResolvedValueOnce({ id: 'ch-1', name: 'Old', agentId: 'agent-source' })
       mockUpdateChannel.mockResolvedValueOnce({
         id: 'ch-1',
         name: 'Old',
-        kinId: 'kin-source',
+        agentId: 'agent-source',
         platform: 'telegram',
         platformConfig: '{}',
         status: 'active',
@@ -230,24 +230,24 @@ describe('channelRoutes', () => {
         new Request('http://localhost/ch-1', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ kinId: 'kin-source', name: 'Old' }),
+          body: JSON.stringify({ agentId: 'agent-source', name: 'Old' }),
         }),
       )
 
       expect(resp.status).toBe(200)
       const patchArg = (mockUpdateChannel.mock.calls as any[])[0][1]
-      expect('kinId' in patchArg).toBe(false)
+      expect('agentId' in patchArg).toBe(false)
     })
   })
 
   describe('POST /:id/transfer', () => {
-    itMocked('happy path: resolves targetKinSlug, calls transferChannel(initiatedBy=ui), returns 200', async () => {
+    itMocked('happy path: resolves targetAgentSlug, calls transferChannel(initiatedBy=ui), returns 200', async () => {
       mockGetChannel
-        .mockResolvedValueOnce({ id: 'ch-1', name: 'Telegram', kinId: 'kin-source' })
+        .mockResolvedValueOnce({ id: 'ch-1', name: 'Telegram', agentId: 'agent-source' })
         .mockResolvedValueOnce({
           id: 'ch-1',
           name: 'Telegram',
-          kinId: 'kin-target',
+          agentId: 'agent-target',
           platform: 'telegram',
           platformConfig: '{}',
           status: 'active',
@@ -259,33 +259,33 @@ describe('channelRoutes', () => {
           createdBy: 'user',
           createdAt: new Date(0),
         })
-      mockResolveKinId.mockReturnValue('kin-target')
+      mockResolveAgentId.mockReturnValue('agent-target')
 
       const resp = await channelRoutes.fetch(
         new Request('http://localhost/ch-1/transfer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ targetKinSlug: 'kube-master', reason: 'handoff' }),
+          body: JSON.stringify({ targetAgentSlug: 'kube-master', reason: 'handoff' }),
         }),
       )
 
       expect(resp.status).toBe(200)
       const body = await resp.json()
       expect(body.ok).toBe(true)
-      expect(body.newKinSlug).toBe('kube-master')
-      expect(body.previousKinSlug).toBe('kinbot-master')
-      expect(body.channel?.kinId).toBe('kin-target')
+      expect(body.newAgentSlug).toBe('kube-master')
+      expect(body.previousAgentSlug).toBe('hivekeep-master')
+      expect(body.channel?.agentId).toBe('agent-target')
 
       expect(mockTransferChannel).toHaveBeenCalledTimes(1)
       const args = (mockTransferChannel.mock.calls as any[])[0][0]
       expect(args.channelId).toBe('ch-1')
-      expect(args.targetKinId).toBe('kin-target')
+      expect(args.targetAgentId).toBe('agent-target')
       expect(args.reason).toBe('handoff')
       expect(args.initiatedBy).toBe('ui')
     })
 
-    itMocked('returns 400 when neither targetKinId nor targetKinSlug is provided', async () => {
-      mockGetChannel.mockResolvedValueOnce({ id: 'ch-1', name: 'Test', kinId: 'kin-source' })
+    itMocked('returns 400 when neither targetAgentId nor targetAgentSlug is provided', async () => {
+      mockGetChannel.mockResolvedValueOnce({ id: 'ch-1', name: 'Test', agentId: 'agent-source' })
 
       const resp = await channelRoutes.fetch(
         new Request('http://localhost/ch-1/transfer', {
@@ -301,15 +301,15 @@ describe('channelRoutes', () => {
       expect(mockTransferChannel).not.toHaveBeenCalled()
     })
 
-    itMocked('returns 404 when targetKinSlug cannot be resolved', async () => {
-      mockGetChannel.mockResolvedValueOnce({ id: 'ch-1', name: 'Test', kinId: 'kin-source' })
-      mockResolveKinId.mockReturnValue(null)
+    itMocked('returns 404 when targetAgentSlug cannot be resolved', async () => {
+      mockGetChannel.mockResolvedValueOnce({ id: 'ch-1', name: 'Test', agentId: 'agent-source' })
+      mockResolveAgentId.mockReturnValue(null)
 
       const resp = await channelRoutes.fetch(
         new Request('http://localhost/ch-1/transfer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ targetKinSlug: 'nope' }),
+          body: JSON.stringify({ targetAgentSlug: 'nope' }),
         }),
       )
 
@@ -320,19 +320,19 @@ describe('channelRoutes', () => {
     })
 
     itMocked('returns the service no-op envelope as 200 with noop:true', async () => {
-      mockGetChannel.mockResolvedValueOnce({ id: 'ch-1', name: 'Test', kinId: 'kin-target' })
-      mockResolveKinId.mockReturnValue('kin-target')
+      mockGetChannel.mockResolvedValueOnce({ id: 'ch-1', name: 'Test', agentId: 'agent-target' })
+      mockResolveAgentId.mockReturnValue('agent-target')
       mockTransferChannel.mockResolvedValueOnce({
         ok: true,
         noop: true,
-        message: 'Channel is already bound to this Kin.',
+        message: 'Channel is already bound to this Agent.',
       })
 
       const resp = await channelRoutes.fetch(
         new Request('http://localhost/ch-1/transfer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ targetKinSlug: 'kube-master' }),
+          body: JSON.stringify({ targetAgentSlug: 'kube-master' }),
         }),
       )
 

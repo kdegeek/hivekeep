@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/server/db/index'
-import { mcpServers, kinMcpServers } from '@/server/db/schema'
+import { mcpServers, agentMcpServers } from '@/server/db/schema'
 import { disconnectServer } from '@/server/services/mcp'
 import { sseManager } from '@/server/sse/index'
 import { config } from '@/server/config'
@@ -14,7 +14,7 @@ const log = createLogger('tools:mcp')
 
 /**
  * add_mcp_server — create a new MCP server on the platform.
- * The server is auto-assigned to the calling Kin.
+ * The server is auto-assigned to the calling Agent.
  * If MCP_REQUIRE_APPROVAL is true, the server stays pending until approved by the user.
  * Available to main agents only.
  */
@@ -47,18 +47,18 @@ export const addMcpServerTool: ToolRegistration = {
             args: args ? JSON.stringify(args) : null,
             env: env ? JSON.stringify(env) : null,
             status,
-            createdByKinId: ctx.kinId,
+            createdByAgentId: ctx.agentId,
             createdAt: now,
             updatedAt: now,
           })
 
-          // Auto-assign to the calling Kin
-          await db.insert(kinMcpServers).values({
-            kinId: ctx.kinId,
+          // Auto-assign to the calling Agent
+          await db.insert(agentMcpServers).values({
+            agentId: ctx.agentId,
             mcpServerId: id,
           })
 
-          log.info({ serverId: id, name, kinId: ctx.kinId, status }, 'MCP server created by Kin')
+          log.info({ serverId: id, name, agentId: ctx.agentId, status }, 'MCP server created by Agent')
 
           sseManager.broadcast({
             type: 'mcp-server:created',
@@ -72,7 +72,7 @@ export const addMcpServerTool: ToolRegistration = {
               type: 'mcp:pending-approval',
               title: 'MCP server needs approval',
               body: name,
-              kinId: ctx.kinId,
+              agentId: ctx.agentId,
               relatedId: id,
               relatedType: 'mcp',
             }).catch(() => {})
@@ -137,7 +137,7 @@ export const updateMcpServerTool: ToolRegistration = {
             await disconnectServer(server_id)
           }
 
-          log.info({ serverId: server_id, kinId: ctx.kinId, configChanged }, 'MCP server updated by Kin')
+          log.info({ serverId: server_id, agentId: ctx.agentId, configChanged }, 'MCP server updated by Agent')
 
           sseManager.broadcast({
             type: 'mcp-server:updated',
@@ -160,7 +160,7 @@ export const removeMcpServerTool: ToolRegistration = {
   availability: ['main'],
   create: (ctx) =>
     tool({
-      description: 'Remove an MCP server permanently. Disconnects and removes from all Kins.',
+      description: 'Remove an MCP server permanently. Disconnects and removes from all Agents.',
       inputSchema: z.object({
         server_id: z.string(),
       }),
@@ -172,7 +172,7 @@ export const removeMcpServerTool: ToolRegistration = {
           await disconnectServer(server_id)
           await db.delete(mcpServers).where(eq(mcpServers.id, server_id))
 
-          log.info({ serverId: server_id, name: existing.name, kinId: ctx.kinId }, 'MCP server removed by Kin')
+          log.info({ serverId: server_id, name: existing.name, agentId: ctx.agentId }, 'MCP server removed by Agent')
 
           sseManager.broadcast({
             type: 'mcp-server:deleted',
@@ -208,7 +208,7 @@ export const listMcpServersTool: ToolRegistration = {
             command: s.command,
             args: s.args ? JSON.parse(s.args) : [],
             status: s.status,
-            createdByKinId: s.createdByKinId,
+            createdByAgentId: s.createdByAgentId,
           })),
         }
       },

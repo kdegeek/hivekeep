@@ -82,12 +82,12 @@ contactsAccountRoutes.post('/connect-config/:type', async (c) => {
 // PATCH /api/contacts-accounts/:id — update the allow-list.
 contactsAccountRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id')
-  const body = await c.req.json<{ allowedKinIds?: string[] | null }>()
+  const body = await c.req.json<{ allowedAgentIds?: string[] | null }>()
   try {
-    if (body.allowedKinIds === undefined) {
+    if (body.allowedAgentIds === undefined) {
       return c.json({ error: { code: 'INVALID_INPUT', message: 'Nothing to update' } }, 400)
     }
-    const account = await setAllowList(id, body.allowedKinIds)
+    const account = await setAllowList(id, body.allowedAgentIds)
     return c.json({ account })
   } catch (err) {
     return c.json({ error: { code: 'NOT_FOUND', message: err instanceof Error ? err.message : 'Not found' } }, 404)

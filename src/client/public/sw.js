@@ -1,12 +1,12 @@
-const CACHE_NAME = 'kinbot-v2';
+const CACHE_NAME = 'hivekeep-v2';
 
 // App shell files to cache
 const APP_SHELL = [
   '/',
   '/manifest.json',
-  '/kinbot.svg',
-  '/kinbot-192.png',
-  '/kinbot-512.png',
+  '/hivekeep.svg',
+  '/hivekeep-192.png',
+  '/hivekeep-512.png',
 ];
 
 self.addEventListener('install', (event) => {

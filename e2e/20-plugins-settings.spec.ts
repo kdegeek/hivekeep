@@ -23,7 +23,7 @@ test.describe.serial('Settings — Plugins', () => {
     await navigateToSection(page, 'Plugins')
 
     await expect(
-      page.getByText('Manage plugins that extend KinBot with new tools, hooks, and integrations.')
+      page.getByText('Manage plugins that extend Hivekeep with new tools, hooks, and integrations.')
     ).toBeVisible({ timeout: 5_000 })
   })
 
@@ -112,7 +112,7 @@ test.describe.serial('Settings — Plugins', () => {
     await expect(page.getByText('Git Repository URL')).toBeVisible({ timeout: 3_000 })
 
     // Fill the git URL field
-    await page.fill('#git-url', 'https://github.com/user/kinbot-plugin-test.git')
+    await page.fill('#git-url', 'https://github.com/user/hivekeep-plugin-test.git')
 
     // The install button should now be enabled
     const installBtn = page.getByRole('dialog').getByRole('button', { name: /install plugin/i })
@@ -136,7 +136,7 @@ test.describe.serial('Settings — Plugins', () => {
     await expect(installBtn).toBeDisabled()
 
     // Fill the npm field
-    await page.fill('#npm-package', 'kinbot-plugin-test')
+    await page.fill('#npm-package', 'hivekeep-plugin-test')
 
     // Should now be enabled
     await expect(installBtn).toBeEnabled()

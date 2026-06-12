@@ -139,14 +139,14 @@ describe('config constraints', () => {
 // ─── CreateCron params validation ───────────────────────────────────────────
 
 describe('CreateCronParams interface contracts', () => {
-  it('createdBy distinguishes user vs kin crons', () => {
+  it('createdBy distinguishes user vs agent crons', () => {
     const userCron = { createdBy: 'user' as const }
-    const kinCron = { createdBy: 'kin' as const }
+    const agentCron = { createdBy: 'agent' as const }
 
-    // Kin-created crons should require approval (isActive=false by default)
-    const isKinCreated = kinCron.createdBy === 'kin'
-    expect(isKinCreated).toBe(true)
-    expect(userCron.createdBy).not.toBe('kin')
+    // Agent-created crons should require approval (isActive=false by default)
+    const isAgentCreated = agentCron.createdBy === 'agent'
+    expect(isAgentCreated).toBe(true)
+    expect(userCron.createdBy).not.toBe('agent')
   })
 
   it('runOnce defaults to false when not specified', () => {
@@ -159,16 +159,16 @@ describe('CreateCronParams interface contracts', () => {
     expect(params.runOnce ?? false).toBe(true)
   })
 
-  it('targetKinId is optional — defaults to kinId', () => {
-    const params = { kinId: 'kin-1', targetKinId: undefined }
-    const effectiveTarget = params.targetKinId ?? params.kinId
-    expect(effectiveTarget).toBe('kin-1')
+  it('targetAgentId is optional — defaults to agentId', () => {
+    const params = { agentId: 'agent-1', targetAgentId: undefined }
+    const effectiveTarget = params.targetAgentId ?? params.agentId
+    expect(effectiveTarget).toBe('agent-1')
   })
 
-  it('targetKinId overrides kinId when set', () => {
-    const params = { kinId: 'kin-1', targetKinId: 'kin-2' }
-    const effectiveTarget = params.targetKinId ?? params.kinId
-    expect(effectiveTarget).toBe('kin-2')
+  it('targetAgentId overrides agentId when set', () => {
+    const params = { agentId: 'agent-1', targetAgentId: 'agent-2' }
+    const effectiveTarget = params.targetAgentId ?? params.agentId
+    expect(effectiveTarget).toBe('agent-2')
   })
 
   it('model is optional — null when not provided', () => {
@@ -182,7 +182,7 @@ describe('CreateCronParams interface contracts', () => {
 /**
  * Replicated from crons.ts triggerCron / triggerCronManually mode selection.
  * When triggerParentTurn is set, the spawned task runs in 'await' mode so its
- * final report wakes the parent Kin for an LLM turn; otherwise 'async' (silent).
+ * final report wakes the parent Agent for an LLM turn; otherwise 'async' (silent).
  */
 function spawnModeFor(cron: { triggerParentTurn?: boolean }): 'await' | 'async' {
   return cron.triggerParentTurn ? 'await' : 'async'
@@ -213,9 +213,9 @@ describe('SSE event types for crons', () => {
     }
   })
 
-  it('event data always includes cronId and kinId', () => {
-    const eventData = { cronId: 'c-1', kinId: 'k-1' }
+  it('event data always includes cronId and agentId', () => {
+    const eventData = { cronId: 'c-1', agentId: 'k-1' }
     expect(eventData).toHaveProperty('cronId')
-    expect(eventData).toHaveProperty('kinId')
+    expect(eventData).toHaveProperty('agentId')
   })
 })

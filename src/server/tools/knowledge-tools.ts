@@ -7,7 +7,7 @@ import type { ToolRegistration } from '@/server/tools/types'
 const log = createLogger('tools:knowledge')
 
 /**
- * search_knowledge - search the Kin's knowledge base using hybrid search.
+ * search_knowledge - search the Agent's knowledge base using hybrid search.
  * Available to main agents only.
  */
 export const searchKnowledgeTool: ToolRegistration = {
@@ -29,8 +29,8 @@ export const searchKnowledgeTool: ToolRegistration = {
           .describe('Default: 5'),
       }),
       execute: async ({ query, limit }) => {
-        log.debug({ kinId: ctx.kinId, query }, 'search_knowledge invoked')
-        const results = await searchKnowledge(ctx.kinId, query, limit)
+        log.debug({ agentId: ctx.agentId, query }, 'search_knowledge invoked')
+        const results = await searchKnowledge(ctx.agentId, query, limit)
         return {
           chunks: results.map((r) => ({
             content: r.content,
@@ -44,7 +44,7 @@ export const searchKnowledgeTool: ToolRegistration = {
 }
 
 /**
- * list_knowledge_sources - list available knowledge sources for the Kin.
+ * list_knowledge_sources - list available knowledge sources for the Agent.
  * Available to main agents only.
  */
 export const listKnowledgeSourcesTool: ToolRegistration = {
@@ -57,8 +57,8 @@ export const listKnowledgeSourcesTool: ToolRegistration = {
         'List all knowledge sources (documents, texts) in your knowledge base.',
       inputSchema: z.object({}),
       execute: async () => {
-        log.debug({ kinId: ctx.kinId }, 'list_knowledge_sources invoked')
-        const sources = await listSources(ctx.kinId)
+        log.debug({ agentId: ctx.agentId }, 'list_knowledge_sources invoked')
+        const sources = await listSources(ctx.agentId)
         return {
           sources: sources.map((s) => ({
             id: s.id,

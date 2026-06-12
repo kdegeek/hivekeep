@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Switch } from '@/client/components/ui/switch'
 import { Badge } from '@/client/components/ui/badge'
+import { Button } from '@/client/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/client/components/ui/collapsible'
 import { ToolDomainIcon } from '@/client/components/common/ToolDomainIcon'
 import { getToolDomainMeta } from '@/client/lib/tool-domain-lookup'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, ChevronsUpDown, ChevronsDownUp } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 import type { ToolCatalogEntry, ToolDomain, ToolLabel, ToolSource } from '@/shared/types'
 
@@ -47,6 +48,11 @@ interface ToolSelectorProps {
   onChange: (next: Set<string>) => void
   /** When true, every switch is rendered disabled (read-only built-in view). */
   readOnly?: boolean
+  /** Pure-listing mode: no switches at all and plain counts instead of
+   *  "x/y enabled" — for surfaces that only DISPLAY a toolset (e.g. the
+   *  composer's tools modal), where a wall of disabled switches reads as
+   *  broken interactivity rather than information. Implies readOnly. */
+  hideSwitches?: boolean
   /** Optional soft note shown under a tool row (warnings etc.). */
   toolNote?: ToolNoteResolver
   /** Show the friendly i18n name (tools.names.*) instead of the raw key as the
@@ -71,7 +77,7 @@ interface SourceBucket {
  * a per-tool toggle, a per-domain "toggle the whole category" switch, and a
  * per-source "toggle the whole source" switch. Fully controlled: the parent
  * owns the selected `Set<string>` of tool names and is notified through
- * `onChange`. Used by the toolbox editor (and adapted by the Kin tools tab).
+ * `onChange`. Used by the toolbox editor (and adapted by the Agent tools tab).
  *
  * A catalog that contains only native tools (no plugin/MCP/custom entries)
  * renders exactly one source group, so existing single-source callers keep
@@ -82,6 +88,7 @@ export function ToolSelector({
   selected,
   onChange,
   readOnly = false,
+  hideSwitches = false,
   toolNote,
   useFriendlyNames = true,
 }: ToolSelectorProps) {
@@ -121,6 +128,22 @@ export function ToolSelector({
     })
   }, [tools])
 
+  // Group open-state, lifted here (instead of per-group local state) so the
+  // expand/collapse-all toolbar can drive every source + domain group at once.
+  // Keys: `src:<source>` and `dom:<source>:<domain>` (a domain can repeat
+  // across sources). Default: collapsed.
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>({})
+  const setGroupOpen = (key: string, value: boolean) =>
+    setOpenMap((prev) => ({ ...prev, [key]: value }))
+  const setAllOpen = (value: boolean) => {
+    const next: Record<string, boolean> = {}
+    for (const srcBucket of sourceBuckets) {
+      next[`src:${srcBucket.source}`] = value
+      for (const bucket of srcBucket.domains) next[`dom:${srcBucket.source}:${bucket.domain}`] = value
+    }
+    setOpenMap(next)
+  }
+
   const toggleTool = (name: string) => {
     if (readOnly) return
     const next = new Set(selected)
@@ -146,6 +169,18 @@ export function ToolSelector({
 
   return (
     <div className="space-y-3">
+      {tools.length > 0 && (
+        <div className="flex justify-end gap-1">
+          <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={() => setAllOpen(true)}>
+            <ChevronsUpDown className="size-3.5" />
+            {t('common.expandAll', 'Expand all')}
+          </Button>
+          <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={() => setAllOpen(false)}>
+            <ChevronsDownUp className="size-3.5" />
+            {t('common.collapseAll', 'Collapse all')}
+          </Button>
+        </div>
+      )}
       {sourceBuckets.map((srcBucket) => {
         const domainGroups = (
           <div className="space-y-3">
@@ -160,6 +195,9 @@ export function ToolSelector({
                   totalCount={bucket.tools.length}
                   allEnabled={allEnabled}
                   readOnly={readOnly}
+                  hideSwitches={hideSwitches}
+                  open={openMap[`dom:${srcBucket.source}:${bucket.domain}`] ?? false}
+                  onOpenChange={(v) => setGroupOpen(`dom:${srcBucket.source}:${bucket.domain}`, v)}
                   onToggleAll={() => toggleMany(bucket.tools)}
                 >
                   {bucket.tools.map((tool) => {
@@ -171,7 +209,7 @@ export function ToolSelector({
                       tool.source === 'mcp'
                         ? tool.mcpServerName ?? undefined
                         : tool.source === 'custom'
-                          ? tool.customKinName ?? undefined
+                          ? tool.customAgentName ?? undefined
                           : undefined
                     return (
                       <ToolRow
@@ -181,6 +219,7 @@ export function ToolSelector({
                         subLabel={subLabel}
                         enabled={selected.has(tool.name)}
                         readOnly={readOnly}
+                        hideSwitch={hideSwitches}
                         note={toolNote?.(tool)}
                         onToggle={() => toggleTool(tool.name)}
                       />
@@ -203,6 +242,9 @@ export function ToolSelector({
             totalCount={srcBucket.tools.length}
             allEnabled={srcEnabled === srcBucket.tools.length}
             readOnly={readOnly}
+            hideSwitches={hideSwitches}
+            open={openMap[`src:${srcBucket.source}`] ?? false}
+            onOpenChange={(v) => setGroupOpen(`src:${srcBucket.source}`, v)}
             onToggleAll={() => toggleMany(srcBucket.tools)}
           >
             {domainGroups}
@@ -219,6 +261,9 @@ function SourceGroup({
   totalCount,
   allEnabled,
   readOnly,
+  hideSwitches,
+  open,
+  onOpenChange,
   onToggleAll,
   children,
 }: {
@@ -227,14 +272,16 @@ function SourceGroup({
   totalCount: number
   allEnabled: boolean
   readOnly?: boolean
+  hideSwitches?: boolean
+  open: boolean
+  onOpenChange: (open: boolean) => void
   onToggleAll: () => void
   children: React.ReactNode
 }) {
   const { t } = useTranslation()
-  const [open, setOpen] = useState(false)
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
+    <Collapsible open={open} onOpenChange={onOpenChange}>
       <div className="rounded-lg border bg-card">
         <div className="flex items-center justify-between px-3 py-2">
           <CollapsibleTrigger asChild>
@@ -252,16 +299,18 @@ function SourceGroup({
                 {t(`toolboxes.sources.${source}`)}
               </Badge>
               <span className="text-xs text-muted-foreground">
-                {t('kin.tools.countEnabled', { count: enabledCount, total: totalCount })}
+                {hideSwitches ? totalCount : t('agent.tools.countEnabled', { count: enabledCount, total: totalCount })}
               </span>
             </button>
           </CollapsibleTrigger>
-          <Switch
-            size="sm"
-            checked={allEnabled}
-            disabled={readOnly}
-            onCheckedChange={onToggleAll}
-          />
+          {!hideSwitches && (
+            <Switch
+              size="sm"
+              checked={allEnabled}
+              disabled={readOnly}
+              onCheckedChange={onToggleAll}
+            />
+          )}
         </div>
         <CollapsibleContent>
           <div className="border-t p-3">{children}</div>
@@ -277,6 +326,9 @@ function DomainGroup({
   totalCount,
   allEnabled,
   readOnly,
+  hideSwitches,
+  open,
+  onOpenChange,
   onToggleAll,
   children,
 }: {
@@ -285,15 +337,17 @@ function DomainGroup({
   totalCount: number
   allEnabled: boolean
   readOnly?: boolean
+  hideSwitches?: boolean
+  open: boolean
+  onOpenChange: (open: boolean) => void
   onToggleAll: () => void
   children: React.ReactNode
 }) {
   const { t } = useTranslation()
   const meta = getToolDomainMeta(domain)
-  const [open, setOpen] = useState(false)
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
+    <Collapsible open={open} onOpenChange={onOpenChange}>
       <div className="rounded-lg border bg-card/50">
         <div className="flex items-center justify-between px-3 py-2">
           <CollapsibleTrigger asChild>
@@ -309,16 +363,18 @@ function DomainGroup({
               </span>
               <span className="text-sm font-medium">{meta.labelKey ? t(meta.labelKey) : (meta.label ?? domain)}</span>
               <span className="text-xs text-muted-foreground">
-                {t('kin.tools.countEnabled', { count: enabledCount, total: totalCount })}
+                {hideSwitches ? totalCount : t('agent.tools.countEnabled', { count: enabledCount, total: totalCount })}
               </span>
             </button>
           </CollapsibleTrigger>
-          <Switch
-            size="sm"
-            checked={allEnabled}
-            disabled={readOnly}
-            onCheckedChange={onToggleAll}
-          />
+          {!hideSwitches && (
+            <Switch
+              size="sm"
+              checked={allEnabled}
+              disabled={readOnly}
+              onCheckedChange={onToggleAll}
+            />
+          )}
         </div>
         <CollapsibleContent>
           <div className="border-t">{children}</div>
@@ -334,15 +390,17 @@ function ToolRow({
   subLabel,
   enabled,
   readOnly,
+  hideSwitch,
   note,
   onToggle,
 }: {
   label: string
   toolKey?: string
-  /** Secondary provenance line, e.g. the MCP server or owning Kin. */
+  /** Secondary provenance line, e.g. the MCP server or owning Agent. */
   subLabel?: string
   enabled: boolean
   readOnly?: boolean
+  hideSwitch?: boolean
   note?: string
   onToggle: () => void
 }) {
@@ -362,7 +420,7 @@ function ToolRow({
           <p className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400">{note}</p>
         )}
       </div>
-      <Switch size="sm" checked={enabled} disabled={readOnly} onCheckedChange={onToggle} />
+      {!hideSwitch && <Switch size="sm" checked={enabled} disabled={readOnly} onCheckedChange={onToggle} />}
     </div>
   )
 }

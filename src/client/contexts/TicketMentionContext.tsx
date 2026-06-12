@@ -2,7 +2,7 @@
  * Ticket mention resolution cache.
  *
  * Markdown renderers can call `useTicketMention(raw)` to get the live state of
- * a `#42` or `kinbot#42` reference. The provider:
+ * a `#42` or `hivekeep#42` reference. The provider:
  *
  *   1. Coalesces every requested ref into a single in-memory cache, so a given
  *      ref is fetched at most once per session.
@@ -14,7 +14,7 @@
  *
  * Bare `#N` refs are resolved against the *current* active project provided
  * by the consumer. The cache is keyed by `(activeProjectId, raw)` for bare
- * refs so switching Kins/projects doesn't mix resolutions.
+ * refs so switching Agents/projects doesn't mix resolutions.
  */
 import {
   createContext,
@@ -62,7 +62,7 @@ interface BatchPayload {
 type CacheKey = string
 
 /** Build the cache key. Bare refs (no slug, leading `#`) are namespaced by the
- *  active project so the same `#42` resolves correctly when switching Kins. */
+ *  active project so the same `#42` resolves correctly when switching Agents. */
 function cacheKey(raw: string, activeProjectId: string | null): CacheKey {
   // A "bare" ref does not contain a `slug#`. We detect that cheaply.
   const hasSlugPrefix = /^[a-z][a-z0-9-]*#/.test(raw)

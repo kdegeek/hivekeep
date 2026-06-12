@@ -11,23 +11,23 @@ import type { ToolRegistration } from '@/server/tools/types'
 const log = createLogger('tools:subtask')
 
 /**
- * report_to_parent — send a message or intermediate result to the parent Kin.
- * Available to sub-Kins only.
+ * report_to_parent — send a message or intermediate result to the parent Agent.
+ * Available to sub-Agents only.
  */
 export const reportToParentTool: ToolRegistration = {
-  availability: ['sub-kin'],
+  availability: ['sub-agent'],
   create: (ctx) =>
     tool({
       description:
-        'Send a message or intermediate result to the parent Kin.',
+        'Send a message or intermediate result to the parent Agent.',
       inputSchema: z.object({
         message: z
           .string(),
       }),
       execute: async ({ message }) => {
-        log.debug({ kinId: ctx.kinId, taskId: ctx.taskId }, 'report_to_parent invoked')
+        log.debug({ agentId: ctx.agentId, taskId: ctx.taskId }, 'report_to_parent invoked')
         if (!ctx.taskId) {
-          return { error: 'No task context — this tool is only available to sub-Kins' }
+          return { error: 'No task context — this tool is only available to sub-Agents' }
         }
         const success = await reportToParent(ctx.taskId, message)
         if (!success) {
@@ -40,10 +40,10 @@ export const reportToParentTool: ToolRegistration = {
 
 /**
  * update_task_status — update the status of the current task.
- * Available to sub-Kins only.
+ * Available to sub-Agents only.
  */
 export const updateTaskStatusTool: ToolRegistration = {
-  availability: ['sub-kin'],
+  availability: ['sub-agent'],
   create: (ctx) =>
     tool({
       description:
@@ -61,9 +61,9 @@ export const updateTaskStatusTool: ToolRegistration = {
           .describe('For status="failed"'),
       }),
       execute: async ({ status, result, error }) => {
-        log.debug({ kinId: ctx.kinId, taskId: ctx.taskId, status }, 'update_task_status invoked')
+        log.debug({ agentId: ctx.agentId, taskId: ctx.taskId, status }, 'update_task_status invoked')
         if (!ctx.taskId) {
-          return { error: 'No task context — this tool is only available to sub-Kins' }
+          return { error: 'No task context — this tool is only available to sub-Agents' }
         }
         const success = await updateTaskStatus(ctx.taskId, status, result, error)
         if (!success) {
@@ -75,29 +75,29 @@ export const updateTaskStatusTool: ToolRegistration = {
 }
 
 /**
- * request_input — ask the parent Kin (non-ticket task) or the human user
- * (ticket task) for clarification or a decision. Available to sub-Kins only,
+ * request_input — ask the parent Agent (non-ticket task) or the human user
+ * (ticket task) for clarification or a decision. Available to sub-Agents only,
  * capped at `config.tasks.maxRequestInput` invocations per task.
  *
  * The tool **pauses the task**: the runner stops the multi-step loop and
- * resumes the sub-Kin only once the response arrives. The `note` in the
+ * resumes the sub-Agent only once the response arrives. The `note` in the
  * returned payload tells the model to emit nothing further on this turn —
  * any tool call you'd make next would race the suspension and likely be
  * the wrong move with the question still unanswered.
  */
 export const requestInputTool: ToolRegistration = {
-  availability: ['sub-kin'],
+  availability: ['sub-agent'],
   create: (ctx) =>
     tool({
       description:
-        'Ask the parent Kin or the human user (when the task is linked to a ticket) for clarification or a decision. The task is suspended until the response arrives — DO NOT emit any further tool calls in this turn. Limited calls per task.',
+        'Ask the parent Agent or the human user (when the task is linked to a ticket) for clarification or a decision. The task is suspended until the response arrives — DO NOT emit any further tool calls in this turn. Limited calls per task.',
       inputSchema: z.object({
         question: z.string(),
       }),
       execute: async ({ question }) => {
-        log.debug({ kinId: ctx.kinId, taskId: ctx.taskId }, 'request_input invoked')
+        log.debug({ agentId: ctx.agentId, taskId: ctx.taskId }, 'request_input invoked')
         if (!ctx.taskId) {
-          return { error: 'No task context — this tool is only available to sub-Kins' }
+          return { error: 'No task context — this tool is only available to sub-Agents' }
         }
         const result = await requestInput(ctx.taskId, question)
         if (!result.success) {
@@ -107,7 +107,7 @@ export const requestInputTool: ToolRegistration = {
           success: true,
           paused: true as const,
           note:
-            'Your task is now PAUSED waiting for the answer. Do NOT emit any further tool calls on this turn — the runner will stop the loop after this step and resume your sub-Kin once the response arrives in your message history. Acting on a guess before the human answers usually picks the wrong path; wait for the actual response.',
+            'Your task is now PAUSED waiting for the answer. Do NOT emit any further tool calls on this turn — the runner will stop the loop after this step and resume your sub-Agent once the response arrives in your message history. Acting on a guess before the human answers usually picks the wrong path; wait for the actual response.',
         }
       },
     }),

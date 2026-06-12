@@ -1,31 +1,31 @@
-# KinBot — Structure du projet
+# Hivekeep — Structure du projet
 
 Monorepo avec frontend, backend, SDK plugin et plugins de référence dans le même dépôt, servi par un seul process Bun (pour le runtime) et un seul workspace `bun` (pour le tooling). Le résultat se déploie en un container Docker unique.
 
-> **À jour pour KinBot 2.0** (post-refactor providers/SDK/plugins). Si une partie de l'arborescence diffère de la réalité, c'est ce fichier qui est obsolète — la réalité fait foi.
+> **À jour pour Hivekeep 2.0** (post-refactor providers/SDK/plugins). Si une partie de l'arborescence diffère de la réalité, c'est ce fichier qui est obsolète — la réalité fait foi.
 
 ---
 
 ## Arborescence
 
 ```
-kinbot/
+hivekeep/
 ├── package.json                       # Workspaces Bun (packages/*, plugins/*)
 ├── tsconfig.json
 ├── drizzle.config.ts
 ├── CLAUDE.md                          # Instructions agent + conventions
-├── idea.md / api.md / schema.md / …   # Specs (voir CLAUDE.md > Documentation map)
+├── api.md / schema.md / sse.md / …    # Specs (voir CLAUDE.md > Documentation map)
 ├── docker/
 │   ├── Dockerfile
 │   └── docker-compose.yml
 │
 ├── packages/                          # Packages npm publiés
-│   ├── sdk/                           # @kinbot-developer/sdk
+│   ├── sdk/                           # @hivekeep/sdk
 │   │   ├── src/index.ts               # Surface publique (tools, channels, providers,
 │   │   │                              #  hooks, cards, plugin context)
 │   │   ├── README.md
-│   │   └── examples/hello-kin/        # Plugin minimal de référence
-│   └── create-kinbot-plugin/          # Scaffolder `bunx create-kinbot-plugin`
+│   │   └── examples/hello-agent/        # Plugin minimal de référence
+│   └── create-hivekeep-plugin/          # Scaffolder `bunx create-hivekeep-plugin`
 │
 ├── plugins/                           # Plugins maintenus dans le repo
 │   ├── replicate/                     # Pilot — provider LLM/Image/Embedding via SDK
@@ -35,22 +35,28 @@ kinbot/
 │
 ├── src/
 │   ├── server/                        # Backend (Bun + Hono)
-│   │   ├── index.ts                   # Point d'entrée : Hono app + serve static
+│   │   ├── index.ts                   # Point d'entrée : boot-guard self-update (rollback auto) → import main.ts
+│   │   ├── main.ts                    # Boot réel : migrations, registres, crons, Bun.serve
 │   │   ├── app.ts                     # Configuration Hono (middleware, routes)
 │   │   ├── config.ts                  # Configuration centralisée (env vars)
 │   │   ├── logger.ts                  # Logger (pino)
 │   │   │
+│   │   ├── update/                    # Self-update, zone SANS dépendances app (importable par le boot-guard)
+│   │   │   ├── journal.ts             # Journal persistant data/update/journal.json + update.log
+│   │   │   ├── rollback.ts            # Restauration version précédente (repo, dist, deps, snapshot DB)
+│   │   │   └── semver.ts              # compareSemver
+│   │   │
 │   │   ├── routes/                    # Routes API REST
-│   │   │   ├── auth.ts, me.ts, kins.ts, messages.ts, …
+│   │   │   ├── auth.ts, me.ts, agents.ts, messages.ts, …
 │   │   │   ├── providers.ts           # CRUD providers + /:id/test + /:id/models
 │   │   │   ├── plugins.ts             # CRUD plugins, manifest, permissions
 │   │   │   ├── channel-*.ts           # Webhooks built-in (telegram, slack, signal, …)
 │   │   │   └── sse.ts                 # GET /api/sse (connexion SSE globale)
 │   │   │
 │   │   ├── services/                  # Logique métier
-│   │   │   ├── kin-engine.ts          # Orchestration LLM (contexte, appels, streaming)
+│   │   │   ├── agent-engine.ts          # Orchestration LLM (contexte, appels, streaming)
 │   │   │   ├── prompt-builder.ts      # Construction du prompt système
-│   │   │   ├── queue.ts               # Queue FIFO par Kin
+│   │   │   ├── queue.ts               # Queue FIFO par Agent
 │   │   │   ├── compacting.ts          # Compacting des sessions
 │   │   │   ├── memory.ts              # Mémoire long terme (extraction, recall, search)
 │   │   │   ├── consolidation.ts       # Fusion automatique des memories proches
@@ -61,7 +67,7 @@ kinbot/
 │   │   │   └── app-settings.ts        # Paramètres globaux persistants
 │   │   │
 │   │   ├── channels/                  # ChannelAdapters built-in
-│   │   │   ├── adapter.ts             # Interface (cf. @kinbot-developer/sdk)
+│   │   │   ├── adapter.ts             # Interface (cf. @hivekeep/sdk)
 │   │   │   ├── telegram.ts, discord.ts, slack.ts, whatsapp.ts, signal.ts, matrix.ts
 │   │   │
 │   │   ├── llm/                       # Providers IA natifs (post-Vercel SDK)
@@ -87,10 +93,10 @@ kinbot/
 │   │   │   │                          #  describeImageModel, testProviderConnection
 │   │   │   └── ADDING_PROVIDERS.md
 │   │   │
-│   │   ├── tools/                     # Outils natifs exposés aux Kins
+│   │   ├── tools/                     # Outils natifs exposés aux Agents
 │   │   │   ├── index.ts, register.ts, types.ts
 │   │   │   ├── memory-tools.ts, contact-tools.ts, history-tools.ts
-│   │   │   ├── inter-kin-tools.ts, task-tools.ts, subtask-tools.ts
+│   │   │   ├── inter-agent-tools.ts, task-tools.ts, subtask-tools.ts
 │   │   │   ├── cron-tools.ts, webhook-tools.ts, vault-tools.ts
 │   │   │   ├── filesystem-tools.ts, grep-tools.ts, multi-edit-tools.ts
 │   │   │   ├── shell-tools.ts, custom-tool-tools.ts
@@ -106,18 +112,18 @@ kinbot/
 │   │   ├── auth/                      # Better Auth
 │   │   ├── sse/                       # Server-Sent Events
 │   │   ├── hooks/                     # Event bus + hook system
-│   │   ├── mini-app-sdk/              # SDK consommé par les mini-apps des Kins
+│   │   ├── mini-app-sdk/              # SDK consommé par les mini-apps des Agents
 │   │   ├── utils/                     # Helpers transverses
 │   │   └── assets/                    # Assets statiques (base avatar, etc.)
 │   │
 │   ├── client/                        # Frontend (React + Vite)
 │   │   ├── main.tsx, App.tsx
 │   │   ├── pages/                     # Pages (dashboard, settings, design-system, …)
-│   │   ├── components/                # Composants (ui/, sidebar/, chat/, kin/, …)
+│   │   ├── components/                # Composants (ui/, sidebar/, chat/, agent/, …)
 │   │   ├── hooks/                     # Hooks React custom
 │   │   ├── contexts/                  # Contexts (theme, palette, …)
 │   │   ├── lib/                       # Utilitaires client (api, i18n, …)
-│   │   ├── locales/                   # Traductions i18n (en, fr)
+│   │   ├── locales/                   # Traductions i18n (en, fr, es, de, pt-BR, zh-CN, ja, ru, it, pl)
 │   │   └── styles/                    # CSS (Tailwind + design tokens)
 │   │
 │   └── shared/                        # Code partagé client/serveur
@@ -132,9 +138,9 @@ kinbot/
 ├── site/                              # Site marketing
 │
 └── data/                              # Données persistantes (gitignored)
-    ├── kinbot.db (+ -shm / -wal)
+    ├── hivekeep.db (+ -shm / -wal)
     ├── uploads/                       # Pièces jointes utilisateur
-    ├── workspaces/                    # Workspaces des Kins (filesystem isolé)
+    ├── workspaces/                    # Workspaces des Agents (filesystem isolé)
     ├── mini-apps/                     # Fichiers des mini-apps
     ├── storage/                       # File storage partagé
     ├── browser-states/                # Profils navigateur du tool browser
@@ -143,7 +149,7 @@ kinbot/
 
 ## Conventions
 
-- **Imports** : alias absolus `@/server/...`, `@/client/...`, `@/shared/...`. Plugins consomment uniquement `@kinbot-developer/sdk`.
+- **Imports** : alias absolus `@/server/...`, `@/client/...`, `@/shared/...`. Plugins consomment uniquement `@hivekeep/sdk`.
 - **Naming** : `kebab-case.ts` pour les modules, `PascalCase.tsx` pour les composants React, `snake_case` pour les tables SQL.
 - **Tests** : co-localisés (`foo.test.ts` à côté de `foo.ts`). Lancés via `bun run test`.
 - **Provider agnostic core** : le core (tout sauf `src/server/llm/{provider}/` et `plugins/`) ne doit jamais brancher sur un nom de provider. Les capacités spécifiques sont déclarées par le provider lui-même (cf. `LLMProvider.defaultMaxTools`, `LLMProvider.billing`, `ImageProvider.describeModel`).

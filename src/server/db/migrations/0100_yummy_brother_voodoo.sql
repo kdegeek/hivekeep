@@ -1,0 +1,1 @@
+ALTER TABLE `user_profiles` ADD `agent_language` text;

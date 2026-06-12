@@ -40,7 +40,7 @@ describe('buildTicketSearchUrl', () => {
 
   it('prefers projectSlug over projectId when both are provided', () => {
     // Rationale: when the user types `soup#login`, the popover passes the
-    // typed slug as projectSlug and the kin's active project as projectId.
+    // typed slug as projectSlug and the agent's active project as projectId.
     // The slug wins — that's the whole point of the cross-project shorthand.
     const url = buildTicketSearchUrl({
       query: 'login',

@@ -1,12 +1,14 @@
-import { memo, useState, useCallback } from 'react'
+import { memo, useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/client/components/ui/button'
 import { Textarea } from '@/client/components/ui/textarea'
-import { HelpCircle, Check, Loader2, Send } from 'lucide-react'
+import { HelpCircle, Check, Loader2, Send, Wrench, X } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 import { RelativeTimestamp } from '@/client/components/chat/RelativeTimestamp'
 import { MarkdownContent } from '@/client/components/chat/MarkdownContent'
 import type { HumanPromptSummary, HumanPromptOptionVariant } from '@/shared/types'
+import { ToolDomainIcon } from '@/client/components/common/ToolDomainIcon'
+import { useToolCatalog } from '@/client/hooks/useToolCatalog'
 
 interface HumanPromptCardProps {
   prompt: HumanPromptSummary
@@ -51,7 +53,18 @@ export const HumanPromptCard = memo(function HumanPromptCard({
   isResponding,
 }: HumanPromptCardProps) {
   const { t } = useTranslation()
-  const [selectedValues, setSelectedValues] = useState<Set<string>>(new Set())
+  // Canonical tool presentation (same as ToolSelector): domain icon + translated
+  // label, raw name as sublabel when it differs.
+  const { tools: toolCatalog } = useToolCatalog()
+  const catalogByName = useMemo(() => new Map(toolCatalog.map((t) => [t.name, t])), [toolCatalog])
+
+  // tool_access starts with everything pre-checked (grant-by-default, the user
+  // unchecks what they refuse); multi_select starts empty.
+  const [selectedValues, setSelectedValues] = useState<Set<string>>(() =>
+    prompt.promptType === 'tool_access'
+      ? new Set(prompt.options.map((option) => option.value))
+      : new Set(),
+  )
   const [textValue, setTextValue] = useState('')
   const [submitted, setSubmitted] = useState(false)
 
@@ -80,6 +93,12 @@ export const HumanPromptCard = memo(function HumanPromptCard({
     await onRespond(prompt.id, Array.from(selectedValues))
   }
 
+  /** tool_access submit — an EMPTY array is valid and means "deny all". */
+  const handleToolAccessSubmit = async (values: string[]) => {
+    setSubmitted(true)
+    await onRespond(prompt.id, values)
+  }
+
   const handleTextSubmit = useCallback(async () => {
     const trimmed = textValue.trim()
     if (!trimmed) return
@@ -94,7 +113,7 @@ export const HumanPromptCard = memo(function HumanPromptCard({
       {/* Header */}
       <div className="flex items-start gap-3 mb-3">
         <div className="flex-shrink-0 mt-0.5 flex items-center justify-center size-8 rounded-lg bg-primary/10 text-primary">
-          <HelpCircle className="size-4" />
+          {prompt.promptType === 'tool_access' ? <Wrench className="size-4" /> : <HelpCircle className="size-4" />}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
@@ -103,11 +122,21 @@ export const HumanPromptCard = memo(function HumanPromptCard({
             </p>
             <RelativeTimestamp timestamp={new Date(prompt.createdAt).toISOString()} className="shrink-0 text-[10px] text-muted-foreground/70" />
           </div>
-          {prompt.description && (
+          {prompt.description && prompt.promptType === 'tool_access' ? (
+            // The agent's verbatim reason — rendered as a quoted secondary block.
+            <div className="mt-1.5">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                {t('humanPrompt.toolAccess.reason')}
+              </p>
+              <div className="mt-0.5 border-l-2 border-border pl-2 text-xs text-muted-foreground leading-relaxed">
+                <MarkdownContent content={prompt.description} />
+              </div>
+            </div>
+          ) : prompt.description ? (
             <div className="text-xs text-muted-foreground mt-1 leading-relaxed">
               <MarkdownContent content={prompt.description} />
             </div>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -214,6 +243,81 @@ export const HumanPromptCard = memo(function HumanPromptCard({
             {disabled && <Loader2 className="size-3.5 animate-spin" />}
             {t('humanPrompt.submit')} ({selectedValues.size})
           </Button>
+        </div>
+      )}
+
+      {/* Tool access type — one checkbox per requested tool (pre-checked) +
+          grant/deny actions. Same checkbox-row pattern as multi_select, but an
+          empty selection is VALID: the primary button then reads "Deny all". */}
+      {!submitted && prompt.promptType === 'tool_access' && (
+        <div className="flex flex-col gap-1.5">
+          {prompt.options.map((option) => {
+            const checked = selectedValues.has(option.value)
+            const vc = variantClasses(option.variant)
+            return (
+              <button
+                key={option.value}
+                disabled={disabled}
+                className={cn(
+                  'flex items-center gap-3 rounded-lg border px-3 py-2 text-left text-sm transition-all',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  checked ? vc.selected : vc.button,
+                )}
+                onClick={() => toggleMultiSelect(option.value)}
+              >
+                <div
+                  className={cn(
+                    'size-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all',
+                    checked ? 'bg-primary border-primary text-primary-foreground' : 'border-current',
+                  )}
+                >
+                  {checked && <Check className="size-3" />}
+                </div>
+                {(() => {
+                  const entry = catalogByName.get(option.value)
+                  const fallback =
+                    typeof entry?.label === 'string'
+                      ? entry.label
+                      : entry?.label?.en ?? option.label
+                  const friendly = t(`tools.names.${option.value}`, fallback)
+                  return (
+                    <>
+                      {entry && <ToolDomainIcon domain={entry.domain} className="size-4 shrink-0 text-muted-foreground" />}
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium">{friendly}</span>
+                        {friendly !== option.value && (
+                          <p className="font-mono text-[11px] text-muted-foreground mt-0.5">{option.value}</p>
+                        )}
+                      </div>
+                    </>
+                  )
+                })()}
+              </button>
+            )
+          })}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              disabled={disabled}
+              className="flex-1 min-w-[8rem]"
+              onClick={() => handleToolAccessSubmit(Array.from(selectedValues))}
+            >
+              {disabled && <Loader2 className="size-3.5 animate-spin" />}
+              {selectedValues.size === 0
+                ? t('humanPrompt.toolAccess.denyAll')
+                : t('humanPrompt.toolAccess.grant', { count: selectedValues.size })}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={disabled}
+              className="border-destructive/40 text-destructive hover:bg-destructive/10"
+              onClick={() => handleToolAccessSubmit([])}
+            >
+              <X className="size-3.5" />
+              {t('humanPrompt.toolAccess.deny')}
+            </Button>
+          </div>
         </div>
       )}
 

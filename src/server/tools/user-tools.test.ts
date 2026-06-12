@@ -36,7 +36,7 @@ const mockCreateInvitation = mock(() =>
     id: 'inv-1',
     token: 'abc123',
     label: 'Test',
-    url: 'https://kinbot.local/invite/abc123',
+    url: 'https://hivekeep.local/invite/abc123',
     expiresAt: Date.now() + 7 * 86_400_000,
     createdAt: Date.now(),
   }),
@@ -44,7 +44,7 @@ const mockCreateInvitation = mock(() =>
 
 mock.module('@/server/services/invitations', () => ({
   createInvitation: mockCreateInvitation,
-  buildInvitationUrl: (token: string) => `https://kinbot.local/invite/${token}`,
+  buildInvitationUrl: (token: string) => `https://hivekeep.local/invite/${token}`,
   validateInvitation: () => ({ valid: true }),
   markInvitationUsed: () => true,
   listInvitations: () => [],
@@ -63,9 +63,9 @@ const { listUsersTool, getUserTool, createInvitationTool } = await import(
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const ctx: ToolExecutionContext = {
-  kinId: 'kin-1',
+  agentId: 'agent-1',
   userId: 'user-1',
-  isSubKin: false,
+  isSubAgent: false,
 }
 
 function getExecute(reg: any) {
@@ -195,7 +195,7 @@ describe('createInvitationTool', () => {
       expect.objectContaining({
         createdBy: 'user-1',
         label: 'For Mom',
-        kinId: 'kin-1',
+        agentId: 'agent-1',
       }),
     )
   })
@@ -239,7 +239,7 @@ describe('createInvitationTool', () => {
   })
 
   it('returns error when userId is not set', async () => {
-    const noUserCtx: ToolExecutionContext = { kinId: 'kin-1', isSubKin: false }
+    const noUserCtx: ToolExecutionContext = { agentId: 'agent-1', isSubAgent: false }
     const t = createInvitationTool.create(noUserCtx)
     const execute = t.execute as (...args: any[]) => Promise<any>
     const result = await execute({ label: 'System invite' })

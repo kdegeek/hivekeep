@@ -1,15 +1,15 @@
 /**
- * Configurator Kin (Sherpa) seeding — creates the user's first Kin, the
- * conversational onboarding guide. Idempotent: only one configurator Kin ever
- * exists. See sherpa.md.
+ * Configurator Agent (Queenie) seeding — creates the user's first Agent, the
+ * conversational onboarding guide. Idempotent: only one configurator Agent ever
+ * exists. See queenie.md.
  */
 
 import { existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { eq } from 'drizzle-orm'
 import { db } from '@/server/db/index'
-import { kins, providers } from '@/server/db/schema'
-import { createKin } from '@/server/services/kins'
+import { agents, providers } from '@/server/db/schema'
+import { createAgent } from '@/server/services/agents'
 import { getToolboxByName } from '@/server/services/toolboxes'
 import { loadProviderConfig } from '@/server/services/provider-config'
 import { listModelsForProvider } from '@/server/providers/index'
@@ -21,22 +21,22 @@ import { createLogger } from '@/server/logger'
 
 const log = createLogger('configurator')
 
-const SHERPA = {
-  name: 'Sherpa',
-  role: 'Your KinBot onboarding & configuration guide',
+const QUEENIE = {
+  name: 'Queenie',
+  role: 'Your Hivekeep onboarding & configuration guide',
   character:
-    'You are Sherpa: warm, patient, and genuinely helpful — a friendly guide, never condescending. You explain things simply, in plain language, one step at a time, and you celebrate small wins. You are honest and transparent: you tell people what you need and why, and you never pretend something works until you have actually tested it.',
+    'You are Queenie: warm, patient, and genuinely helpful — a friendly guide, never condescending. You explain things simply, in plain language, one step at a time, and you celebrate small wins. You are honest and transparent: you tell people what you need and why, and you never pretend something works until you have actually tested it.',
   expertise:
-    "You are the user's onboarding guide and permanent configuration assistant. You know KinBot inside out and you set the platform up through conversation — connecting AI providers, wiring up memory, avatars, channels, and helping the user create their first Kins — so they never have to dig through menus.",
+    "You are the user's onboarding guide and permanent configuration assistant. You know Hivekeep inside out and you set the platform up through conversation — connecting AI providers, wiring up memory, avatars, channels, and helping the user create their first Agents — so they never have to dig through menus.",
 }
 
-/** The single configurator Kin, or undefined if not seeded yet. */
-export function getConfiguratorKin() {
-  return db.select().from(kins).where(eq(kins.kind, 'configurator')).get()
+/** The single configurator Agent, or undefined if not seeded yet. */
+export function getConfiguratorAgent() {
+  return db.select().from(agents).where(eq(agents.kind, 'configurator')).get()
 }
 
 /**
- * Pick a balanced, tool-use-reliable model for Sherpa from the bootstrap
+ * Pick a balanced, tool-use-reliable model for Queenie from the bootstrap
  * provider's live catalogue (preference list → first available). Drift-proof.
  */
 async function resolveConfiguratorModel(providerId: string): Promise<string> {
@@ -48,38 +48,56 @@ async function resolveConfiguratorModel(providerId: string): Promise<string> {
   if (ids.length === 0) throw new Error(`Provider "${provider.type}" exposes no LLM models to seed the configurator with`)
   const prefs = CONFIGURATOR_MODEL_PREFERENCES[provider.type] ?? []
   for (const pref of prefs) {
-    const match = ids.find((id) => id.toLowerCase().includes(pref.toLowerCase()))
-    if (match) return match
+    const p = pref.toLowerCase()
+    const matches = ids.filter((id) => id.toLowerCase().includes(p))
+    if (matches.length === 0) continue
+    // Drop obvious cheap/small tiers when a full-size sibling exists, so a
+    // tool-heavy conversational agent never lands on a nano/mini/lite model.
+    const nonLite = matches.filter((id) => !/-(nano|mini|lite|tiny|small|8b)(\b|[-_]|$)/i.test(id))
+    return pickStrongestModel(nonLite.length > 0 ? nonLite : matches)
   }
   return ids[0]!
 }
 
 /**
- * Seed the configurator Kin bound to the just-added bootstrap LLM provider.
+ * Among models matching a preference substring, pick the strongest / most
+ * canonical: prefer stable ids over dated / preview / "latest" aliases, then the
+ * shortest (canonical) id. Keeps onboarding on a flagship without per-id
+ * hardcoding, regardless of the provider API's listing order.
+ */
+function pickStrongestModel(pool: string[]): string {
+  if (pool.length === 1) return pool[0]!
+  const stable = pool.filter((id) => !/(preview|-exp\b|exp-|-latest|beta|alpha|\d{4})/i.test(id))
+  const candidates = stable.length > 0 ? stable : pool
+  return candidates.slice().sort((a, b) => a.length - b.length)[0]!
+}
+
+/**
+ * Seed the configurator Agent bound to the just-added bootstrap LLM provider.
  * Idempotent — returns the existing one if already seeded (no duplicate, no
  * second kickoff).
  */
-export async function seedConfiguratorKin(adminUserId: string, providerId: string) {
-  const existing = getConfiguratorKin()
+export async function seedConfiguratorAgent(adminUserId: string, providerId: string) {
+  const existing = getConfiguratorAgent()
   if (existing) return existing
 
   const model = await resolveConfiguratorModel(providerId)
   const toolbox = getToolboxByName('configurator')
-  if (!toolbox) log.warn('configurator toolbox not found — Sherpa will fall back to the full toolset')
+  if (!toolbox) log.warn('configurator toolbox not found — Queenie will fall back to the full toolset')
 
   // Make the bootstrap provider the default LLM (model + provider) if the user
-  // hasn't set one yet — so the Kins they create next inherit a working default.
+  // hasn't set one yet — so the Agents they create next inherit a working default.
   const { getDefaultLlmProviderId, setDefaultLlmModel, setDefaultLlmProviderId } = await import('@/server/services/app-settings')
   if (!(await getDefaultLlmProviderId())) {
     await setDefaultLlmModel(model)
     await setDefaultLlmProviderId(providerId)
   }
 
-  const kin = await createKin({
-    name: SHERPA.name,
-    role: SHERPA.role,
-    character: SHERPA.character,
-    expertise: SHERPA.expertise,
+  const agent = await createAgent({
+    name: QUEENIE.name,
+    role: QUEENIE.role,
+    character: QUEENIE.character,
+    expertise: QUEENIE.expertise,
     model,
     providerId,
     kind: 'configurator',
@@ -95,38 +113,38 @@ export async function seedConfiguratorKin(adminUserId: string, providerId: strin
     let srcPath: string | null = null
     let ext = 'png'
     for (const e of ['png', 'jpg', 'jpeg', 'webp']) {
-      const p = join(assetsDir, `sherpa-avatar.${e}`)
+      const p = join(assetsDir, `queenie-avatar.${e}`)
       if (existsSync(p)) { srcPath = p; ext = e === 'jpeg' ? 'jpg' : e; break }
     }
     if (srcPath) {
-      const dir = `${config.upload.dir}/kins/${kin.id}`
+      const dir = `${config.upload.dir}/agents/${agent.id}`
       if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
       const dest = `${dir}/avatar.${ext}`
       await Bun.write(dest, Bun.file(srcPath))
-      await db.update(kins).set({ avatarPath: dest, updatedAt: new Date() }).where(eq(kins.id, kin.id))
+      await db.update(agents).set({ avatarPath: dest, updatedAt: new Date() }).where(eq(agents.id, agent.id))
       sseManager.broadcast({
-        type: 'kin:updated',
-        kinId: kin.id,
-        data: { kinId: kin.id, avatarUrl: `/api/uploads/kins/${kin.id}/avatar.${ext}?v=${Date.now()}` },
+        type: 'agent:updated',
+        agentId: agent.id,
+        data: { agentId: agent.id, avatarUrl: `/api/uploads/agents/${agent.id}/avatar.${ext}?v=${Date.now()}` },
       })
     }
   } catch (err) {
-    log.warn({ kinId: kin.id, err }, 'Failed to assign bundled Sherpa avatar')
+    log.warn({ agentId: agent.id, err }, 'Failed to assign bundled Queenie avatar')
   }
 
-  // Kickoff: a hidden system trigger so Sherpa greets the user first (no user
+  // Kickoff: a hidden system trigger so Queenie greets the user first (no user
   // message needed). sourceType 'system' keeps it out of the normal user bubbles.
   await enqueueMessage({
-    kinId: kin.id,
+    agentId: agent.id,
     messageType: 'user',
     content:
-      '[A new user just finished initial setup and opened the onboarding chat. Greet them warmly, introduce yourself as their KinBot guide, and start onboarding by getting to know them. Keep it short and friendly.]',
+      '[A new user just finished initial setup and opened the onboarding chat. FIRST call get_setup_health (read-only) so your guidance is grounded in the real current state, THEN greet them warmly, introduce yourself as their Hivekeep guide, and start onboarding by getting to know them. Keep it short and friendly.]',
     sourceType: 'system',
     priority: config.queue.userPriority,
-    // Hidden from the chat UI — it's just the trigger for Sherpa's first greeting.
+    // Hidden from the chat UI — it's just the trigger for Queenie's first greeting.
     messageMetadata: { hidden: true },
   })
 
-  log.info({ kinId: kin.id, model }, 'Configurator Kin (Sherpa) seeded')
-  return db.select().from(kins).where(eq(kins.id, kin.id)).get()
+  log.info({ agentId: agent.id, model }, 'Configurator Agent (Queenie) seeded')
+  return db.select().from(agents).where(eq(agents.id, agent.id)).get()
 }

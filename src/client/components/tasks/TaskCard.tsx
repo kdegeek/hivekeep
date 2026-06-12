@@ -5,7 +5,7 @@ import { ProviderIcon } from '@/client/components/common/ProviderIcon'
 import { cn } from '@/client/lib/utils'
 import { formatDurationMs, computeDurationMs, formatRelativeTime } from '@/client/lib/time'
 import { taskStatusMeta, isQueuedStatus, isTerminalStatus, isActiveStatus } from '@/client/lib/task-status'
-import type { TaskStatus, KinThinkingEffort, TaskTokenUsage } from '@/shared/types'
+import type { TaskStatus, AgentThinkingEffort, TaskTokenUsage } from '@/shared/types'
 
 /**
  * Normalized view-model for a task card. Both the Tasks page (`TaskSummary`)
@@ -18,8 +18,8 @@ export interface TaskCardModel {
   status: TaskStatus
   /** Primary line — task title/prompt, or a kind label for ticket tasks. */
   title: string
-  /** Secondary line — the acting Kin (matches the avatar). */
-  kinName: string
+  /** Secondary line — the acting Agent (matches the avatar). */
+  agentName: string
   avatarUrl: string | null
   startedMs: number | null
   endedMs: number | null
@@ -27,7 +27,7 @@ export interface TaskCardModel {
   model?: string | null
   providerType?: string | null
   thinkingEnabled?: boolean
-  thinkingEffort?: KinThinkingEffort | null
+  thinkingEffort?: AgentThinkingEffort | null
   cronId?: string | null
   depth?: number
   concurrencyGroup?: string | null
@@ -41,7 +41,7 @@ function formatTokenCount(n: number): string {
 }
 
 /**
- * Compact, info-rich task card. Surfaces the acting Kin's identity, a labelled
+ * Compact, info-rich task card. Surfaces the acting Agent's identity, a labelled
  * status badge, optional model/thinking/origin meta, and a footer with the run
  * duration (live off the shared `nowMs` clock while executing, frozen once
  * terminal) plus token consumption. Sections collapse when their data is
@@ -67,7 +67,7 @@ export function TaskCard({
   const isFinished = isTerminalStatus(task.status)
   const isActive = isActiveStatus(task.status)
 
-  const initials = task.kinName.slice(0, 2).toUpperCase()
+  const initials = task.agentName.slice(0, 2).toUpperCase()
 
   const runMs = computeDurationMs(task.startedMs, isFinished ? task.endedMs : null, nowMs)
   const runDuration = runMs != null ? formatDurationMs(runMs) : null
@@ -98,15 +98,15 @@ export function TaskCard({
         task.status === 'cancelled' && 'opacity-60',
       )}
     >
-      {/* Header — acting Kin identity + task title */}
+      {/* Header — acting Agent identity + task title */}
       <div className="flex min-w-0 items-start gap-2">
         <Avatar className="size-7 shrink-0">
-          {task.avatarUrl && <AvatarImage src={task.avatarUrl} alt={task.kinName} />}
+          {task.avatarUrl && <AvatarImage src={task.avatarUrl} alt={task.agentName} />}
           <AvatarFallback className="bg-secondary text-[9px]">{initials}</AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
           <p className="line-clamp-2 text-[13px] font-semibold leading-tight text-foreground">{task.title}</p>
-          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{task.kinName}</p>
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{task.agentName}</p>
         </div>
         {queuePosition != null && (
           <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">

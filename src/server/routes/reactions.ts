@@ -4,7 +4,7 @@ import { v4 as uuid } from 'uuid'
 import { db } from '@/server/db/index'
 import { messageReactions, messages } from '@/server/db/schema'
 import { sseManager } from '@/server/sse/index'
-import { resolveKinId } from '@/server/services/kin-resolver'
+import { resolveAgentId } from '@/server/services/agent-resolver'
 import type { AppVariables } from '@/server/app'
 import { createLogger } from '@/server/logger'
 
@@ -15,7 +15,7 @@ export const PRESET_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉']
 
 const reactionRoutes = new Hono<{ Variables: AppVariables }>()
 
-// GET /api/kins/:kinId/messages/:messageId/reactions
+// GET /api/agents/:agentId/messages/:messageId/reactions
 reactionRoutes.get('/', async (c) => {
   const messageId = c.req.param('messageId')!
 
@@ -28,12 +28,12 @@ reactionRoutes.get('/', async (c) => {
   return c.json({ reactions })
 })
 
-// POST /api/kins/:kinId/messages/:messageId/reactions — toggle a reaction
+// POST /api/agents/:agentId/messages/:messageId/reactions — toggle a reaction
 reactionRoutes.post('/', async (c) => {
-  const kinIdParam = c.req.param('kinId')
-  const kinId = kinIdParam ? resolveKinId(kinIdParam) : null
-  if (!kinId) {
-    return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Kin not found' } }, 404)
+  const agentIdParam = c.req.param('agentId')
+  const agentId = agentIdParam ? resolveAgentId(agentIdParam) : null
+  if (!agentId) {
+    return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Agent not found' } }, 404)
   }
 
   const messageId = c.req.param('messageId')!
@@ -68,9 +68,9 @@ reactionRoutes.post('/', async (c) => {
     // Remove the reaction
     await db.delete(messageReactions).where(eq(messageReactions.id, existing.id))
 
-    sseManager.sendToKin(kinId, {
+    sseManager.sendToAgent(agentId, {
       type: 'reaction:removed',
-      kinId,
+      agentId,
       data: {
         messageId,
         userId: user.id,
@@ -96,9 +96,9 @@ reactionRoutes.post('/', async (c) => {
     createdAt: now,
   })
 
-  sseManager.sendToKin(kinId, {
+  sseManager.sendToAgent(agentId, {
     type: 'reaction:added',
-    kinId,
+    agentId,
     data: {
       messageId,
       userId: user.id,

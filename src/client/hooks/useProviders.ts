@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { api } from '@/client/lib/api'
 import { useSSE, useSSEStatus } from '@/client/hooks/useSSE'
-import type { ProviderData } from '@/client/components/kin/ProviderCard'
+import type { ProviderData } from '@/client/components/agent/ProviderCard'
 
 interface UseProvidersOptions {
   /** Filter providers by type (e.g. AI_PROVIDER_TYPES). No filter if omitted. */

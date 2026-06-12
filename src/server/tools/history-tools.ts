@@ -10,7 +10,7 @@ import type { ToolRegistration } from '@/server/tools/types'
 const log = createLogger('tools:history')
 
 /**
- * search_history — keyword search across message history for a Kin.
+ * search_history — keyword search across message history for an Agent.
  * Uses FTS5 keyword search with optional date range filtering and pagination.
  */
 export const searchHistoryTool: ToolRegistration = {
@@ -29,7 +29,7 @@ export const searchHistoryTool: ToolRegistration = {
         offset: z.number().int().min(0).optional().describe('Skip this many results for pagination. Default: 0'),
       }),
       execute: async ({ query, startDate, endDate, limit, offset }) => {
-        log.debug({ kinId: ctx.kinId, query, startDate, endDate }, 'History search invoked')
+        log.debug({ agentId: ctx.agentId, query, startDate, endDate }, 'History search invoked')
         const maxResults = limit ?? 10
         const skip = offset ?? 0
 
@@ -46,7 +46,7 @@ export const searchHistoryTool: ToolRegistration = {
 
           // Build date filter clause
           let dateFilter = ''
-          const params: (string | number)[] = [ftsQuery, ctx.kinId]
+          const params: (string | number)[] = [ftsQuery, ctx.agentId]
 
           if (startDate) {
             dateFilter += ' AND m.created_at >= ?'
@@ -63,7 +63,7 @@ export const searchHistoryTool: ToolRegistration = {
               `SELECT COUNT(*) as cnt
                FROM messages_fts fts
                JOIN messages m ON m.rowid = fts.rowid
-               WHERE messages_fts MATCH ? AND m.kin_id = ? AND m.is_redacted = 0${dateFilter}`,
+               WHERE messages_fts MATCH ? AND m.agent_id = ? AND m.is_redacted = 0${dateFilter}`,
             )
             .get(...params)
 
@@ -78,7 +78,7 @@ export const searchHistoryTool: ToolRegistration = {
               `SELECT m.id, m.role, m.content, m.source_type, m.created_at
                FROM messages_fts fts
                JOIN messages m ON m.rowid = fts.rowid
-               WHERE messages_fts MATCH ? AND m.kin_id = ? AND m.is_redacted = 0${dateFilter}
+               WHERE messages_fts MATCH ? AND m.agent_id = ? AND m.is_redacted = 0${dateFilter}
                ORDER BY fts.rank
                LIMIT ? OFFSET ?`,
             )
@@ -119,7 +119,7 @@ export const browseHistoryTool: ToolRegistration = {
         offset: z.number().int().min(0).optional().describe('Skip this many messages for pagination. Default: 0'),
       }),
       execute: async ({ startDate, endDate, limit, offset }) => {
-        log.debug({ kinId: ctx.kinId, startDate, endDate }, 'History browse invoked')
+        log.debug({ agentId: ctx.agentId, startDate, endDate }, 'History browse invoked')
         const maxResults = limit ?? 20
         const skip = offset ?? 0
 
@@ -132,11 +132,11 @@ export const browseHistoryTool: ToolRegistration = {
             .query<{ cnt: number }, [string, number, number]>(
               `SELECT COUNT(*) as cnt
                FROM messages
-               WHERE kin_id = ? AND created_at >= ? AND created_at <= ?
+               WHERE agent_id = ? AND created_at >= ? AND created_at <= ?
                  AND is_redacted = 0 AND task_id IS NULL AND session_id IS NULL
                  AND source_type != 'compacting'`,
             )
-            .get(ctx.kinId, startMs, endMs)
+            .get(ctx.agentId, startMs, endMs)
 
           const totalCount = countResult?.cnt ?? 0
 
@@ -148,13 +148,13 @@ export const browseHistoryTool: ToolRegistration = {
             >(
               `SELECT id, role, content, source_type, source_id, created_at
                FROM messages
-               WHERE kin_id = ? AND created_at >= ? AND created_at <= ?
+               WHERE agent_id = ? AND created_at >= ? AND created_at <= ?
                  AND is_redacted = 0 AND task_id IS NULL AND session_id IS NULL
                  AND source_type != 'compacting'
                ORDER BY created_at ASC
                LIMIT ? OFFSET ?`,
             )
-            .all(ctx.kinId, startMs, endMs, maxResults, skip)
+            .all(ctx.agentId, startMs, endMs, maxResults, skip)
 
           return {
             totalCount,
@@ -195,20 +195,20 @@ export const readMessageTool: ToolRegistration = {
       execute: async ({ messageId, contextBefore, contextAfter }) => {
         const before = contextBefore ?? 0
         const after = contextAfter ?? 0
-        log.debug({ kinId: ctx.kinId, messageId, before, after }, 'Read message invoked')
+        log.debug({ agentId: ctx.agentId, messageId, before, after }, 'Read message invoked')
 
         try {
           const target = sqlite
             .query<
-              { rowid: number; id: string; role: string; content: string | null; source_type: string; task_id: string | null; session_id: string | null; created_at: number; is_redacted: number; kin_id: string },
+              { rowid: number; id: string; role: string; content: string | null; source_type: string; task_id: string | null; session_id: string | null; created_at: number; is_redacted: number; agent_id: string },
               [string]
             >(
-              `SELECT rowid, id, role, content, source_type, task_id, session_id, created_at, is_redacted, kin_id
+              `SELECT rowid, id, role, content, source_type, task_id, session_id, created_at, is_redacted, agent_id
                FROM messages WHERE id = ?`,
             )
             .get(messageId)
 
-          if (!target || target.kin_id !== ctx.kinId) return { error: 'Message not found' }
+          if (!target || target.agent_id !== ctx.agentId) return { error: 'Message not found' }
           if (target.is_redacted) return { error: 'Message is redacted and cannot be read' }
 
           const full = (r: { id: string; role: string; content: string | null; source_type: string; created_at: number }) => ({
@@ -232,7 +232,7 @@ export const readMessageTool: ToolRegistration = {
 
           if (before > 0 || after > 0) {
             // Anchor the window to the SAME conversation stream as the target
-            // (kin + matching task_id/session_id bucket), ordered by rowid
+            // (agent + matching task_id/session_id bucket), ordered by rowid
             // (monotonic = chronological). Redacted + compaction rows excluded.
             const taskClause = target.task_id === null ? 'task_id IS NULL' : 'task_id = ?'
             const sessionClause = target.session_id === null ? 'session_id IS NULL' : 'session_id = ?'
@@ -241,14 +241,14 @@ export const readMessageTool: ToolRegistration = {
             if (target.session_id !== null) bucket.push(target.session_id)
 
             const cols = 'rowid, id, role, content, source_type, created_at'
-            const where = `kin_id = ? AND is_redacted = 0 AND source_type != 'compacting' AND ${taskClause} AND ${sessionClause}`
+            const where = `agent_id = ? AND is_redacted = 0 AND source_type != 'compacting' AND ${taskClause} AND ${sessionClause}`
 
             const beforeRows = before > 0
               ? sqlite
                   .query<{ id: string; role: string; content: string | null; source_type: string; created_at: number }, (string | number)[]>(
                     `SELECT ${cols} FROM messages WHERE ${where} AND rowid < ? ORDER BY rowid DESC LIMIT ?`,
                   )
-                  .all(ctx.kinId, ...bucket, target.rowid, before)
+                  .all(ctx.agentId, ...bucket, target.rowid, before)
                   .reverse()
               : []
 
@@ -257,7 +257,7 @@ export const readMessageTool: ToolRegistration = {
                   .query<{ id: string; role: string; content: string | null; source_type: string; created_at: number }, (string | number)[]>(
                     `SELECT ${cols} FROM messages WHERE ${where} AND rowid > ? ORDER BY rowid ASC LIMIT ?`,
                   )
-                  .all(ctx.kinId, ...bucket, target.rowid, after)
+                  .all(ctx.agentId, ...bucket, target.rowid, after)
               : []
 
             result.context = { before: beforeRows.map(windowed), after: afterRows.map(windowed) }
@@ -286,7 +286,7 @@ export const listSummariesTool: ToolRegistration = {
         includeArchived: z.boolean().optional().describe('Include archived/merged summaries. Default: false'),
       }),
       execute: async ({ includeArchived }) => {
-        log.debug({ kinId: ctx.kinId, includeArchived }, 'List summaries invoked')
+        log.debug({ agentId: ctx.agentId, includeArchived }, 'List summaries invoked')
 
         try {
           let query = db
@@ -301,7 +301,7 @@ export const listSummariesTool: ToolRegistration = {
               createdAt: compactingSummaries.createdAt,
             })
             .from(compactingSummaries)
-            .where(eq(compactingSummaries.kinId, ctx.kinId))
+            .where(eq(compactingSummaries.agentId, ctx.agentId))
             .orderBy(asc(compactingSummaries.lastMessageAt))
 
           const allSummaries = await query.all()
@@ -346,7 +346,7 @@ export const readSummaryTool: ToolRegistration = {
         summaryId: z.string().describe('The ID of the summary to read'),
       }),
       execute: async ({ summaryId }) => {
-        log.debug({ kinId: ctx.kinId, summaryId }, 'Read summary invoked')
+        log.debug({ agentId: ctx.agentId, summaryId }, 'Read summary invoked')
 
         try {
           const summary = await db
@@ -359,8 +359,8 @@ export const readSummaryTool: ToolRegistration = {
             return { error: 'Summary not found' }
           }
 
-          if (summary.kinId !== ctx.kinId) {
-            return { error: 'Summary belongs to another Kin' }
+          if (summary.agentId !== ctx.agentId) {
+            return { error: 'Summary belongs to another Agent' }
           }
 
           return {

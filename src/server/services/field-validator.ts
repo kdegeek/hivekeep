@@ -16,7 +16,7 @@ export interface ValidationError {
   field: string
 }
 
-export interface KinFieldsInput {
+export interface AgentFieldsInput {
   name?: string
   role?: string
   character?: string
@@ -31,8 +31,8 @@ export interface KinFieldsInput {
 
 // ─── Validation ─────────────────────────────────────────────────────────────
 
-export function validateKinFields(
-  fields: KinFieldsInput,
+export function validateAgentFields(
+  fields: AgentFieldsInput,
   mode: 'create' | 'update',
 ): ValidationError | null {
   const { name, role, character, expertise, model, providerId, scoutModel, scoutProviderId } = fields
@@ -90,9 +90,9 @@ export function validateKinFields(
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-export function kinAvatarUrl(kinId: string, avatarPath: string | null, updatedAt?: Date | null): string | null {
+export function agentAvatarUrl(agentId: string, avatarPath: string | null, updatedAt?: Date | null): string | null {
   if (!avatarPath) return null
   const ext = avatarPath.split('.').pop() ?? 'png'
   const v = updatedAt ? updatedAt.getTime() : Date.now()
-  return `/api/uploads/kins/${kinId}/avatar.${ext}?v=${v}`
+  return `/api/uploads/agents/${agentId}/avatar.${ext}?v=${v}`
 }

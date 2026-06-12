@@ -33,7 +33,7 @@ interface EditTicketModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   ticket: Ticket
-  /** Project slug used to qualify the ticket ref (e.g. kinbot#42). Optional:
+  /** Project slug used to qualify the ticket ref (e.g. hivekeep#42). Optional:
    *  falls back to a bare #42 when absent or empty. */
   projectSlug?: string | null
   availableTags: ProjectTag[]

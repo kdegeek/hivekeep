@@ -41,7 +41,7 @@ contactRoutes.get('/', async (c) => {
 // GET /api/contacts/:id — full contact detail (identifiers + all notes for admin view)
 contactRoutes.get('/:id', async (c) => {
   const id = c.req.param('id')
-  const contact = await getContactWithDetails(id) // no kinId → admin view shows all notes
+  const contact = await getContactWithDetails(id) // no agentId → admin view shows all notes
   if (!contact) {
     return c.json({ error: { code: 'CONTACT_NOT_FOUND', message: 'Contact not found' } }, 404)
   }
@@ -470,18 +470,18 @@ contactRoutes.delete('/:id/platform-ids/:pidId', async (c) => {
 
 // ─── Notes ──────────────────────────────────────────────────────────────────
 
-// POST /api/contacts/:id/notes — create/upsert a note (admin creates on behalf of a kin)
+// POST /api/contacts/:id/notes — create/upsert a note (admin creates on behalf of an agent)
 contactRoutes.post('/:id/notes', async (c) => {
   const contactId = c.req.param('id')
-  const { kinId, scope, content } = (await c.req.json()) as {
-    kinId: string
+  const { agentId, scope, content } = (await c.req.json()) as {
+    agentId: string
     scope: 'private' | 'global'
     content: string
   }
 
-  if (!kinId || !scope || !content?.trim()) {
+  if (!agentId || !scope || !content?.trim()) {
     return c.json(
-      { error: { code: 'INVALID_INPUT', message: 'kinId, scope and content are required' } },
+      { error: { code: 'INVALID_INPUT', message: 'agentId, scope and content are required' } },
       400,
     )
   }
@@ -494,11 +494,11 @@ contactRoutes.post('/:id/notes', async (c) => {
     )
   }
 
-  const note = setContactNote(contactId, kinId, scope, trimmedContent)
+  const note = setContactNote(contactId, agentId, scope, trimmedContent)
   return c.json({ note }, 201)
 })
 
-// PATCH /api/contacts/:id/notes/:noteId — update a note's content (Kin notes only)
+// PATCH /api/contacts/:id/notes/:noteId — update a note's content (Agent notes only)
 contactRoutes.patch('/:id/notes/:noteId', async (c) => {
   const contactId = c.req.param('id')
   const noteId = c.req.param('noteId')
@@ -538,7 +538,7 @@ contactRoutes.patch('/:id/notes/:noteId', async (c) => {
   return c.json({ note: updated })
 })
 
-// DELETE /api/contacts/:id/notes/:noteId — delete a note (Kin notes only)
+// DELETE /api/contacts/:id/notes/:noteId — delete a note (Agent notes only)
 contactRoutes.delete('/:id/notes/:noteId', async (c) => {
   const contactId = c.req.param('id')
   const noteId = c.req.param('noteId')

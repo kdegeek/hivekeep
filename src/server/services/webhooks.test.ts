@@ -35,14 +35,14 @@ mock.module('@/server/db/schema', () => ({
   ...fullMockSchema,
   webhooks: {},
   webhookLogs: {},
-  kins: {},
+  agents: {},
 }))
 
 mock.module('@/server/services/queue', () => ({
   enqueueMessage: async () => ({ id: 'queue-1', queuePosition: 1 }),
   dequeueMessage: async () => null,
   markQueueItemDone: async () => {},
-  isKinProcessing: async () => false,
+  isAgentProcessing: async () => false,
   getQueueSize: async () => 0,
   getPendingQueueItems: async () => [],
   removeQueueItem: async () => false,
@@ -52,21 +52,21 @@ mock.module('@/server/services/queue', () => ({
 mock.module('@/server/sse/index', () => ({
   sseManager: {
     broadcast: () => {},
-    sendToKin: () => {},
+    sendToAgent: () => {},
   },
 }))
 
 mock.module('@/server/config', () => ({
   config: {
     ...fullMockConfig,
-    publicUrl: 'https://kinbot.example.com',
+    publicUrl: 'https://hivekeep.example.com',
     webhooks: {
       ...fullMockConfig.webhooks,
-      maxPerKin: 10,
+      maxPerAgent: 10,
     },
     queue: {
       ...fullMockConfig.queue,
-      kinPriority: 5,
+      agentPriority: 5,
     },
   },
 }))
@@ -248,20 +248,20 @@ describe('buildWebhookUrl', () => {
   it('constructs correct URL from webhook ID', () => {
     const id = 'abc-123-def'
     const url = buildWebhookUrl(id)
-    expect(url).toBe('https://kinbot.example.com/api/webhooks/incoming/abc-123-def')
+    expect(url).toBe('https://hivekeep.example.com/api/webhooks/incoming/abc-123-def')
   })
 
   it('handles UUID-style webhook IDs', () => {
     const id = '550e8400-e29b-41d4-a716-446655440000'
     const url = buildWebhookUrl(id)
     expect(url).toBe(
-      'https://kinbot.example.com/api/webhooks/incoming/550e8400-e29b-41d4-a716-446655440000',
+      'https://hivekeep.example.com/api/webhooks/incoming/550e8400-e29b-41d4-a716-446655440000',
     )
   })
 
   it('uses the configured publicUrl', () => {
     const url = buildWebhookUrl('test')
-    expect(url).toStartWith('https://kinbot.example.com/')
+    expect(url).toStartWith('https://hivekeep.example.com/')
   })
 
   it('includes the /api/webhooks/incoming/ path prefix', () => {

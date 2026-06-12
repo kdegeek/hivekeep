@@ -51,7 +51,7 @@ try {
   listMemoriesTool = mod.listMemoriesTool
   reviewMemoriesTool = mod.reviewMemoriesTool
   // Probe: verify mocks actually work
-  const t = recallTool.create({ kinId: 'probe', isSubKin: false })
+  const t = recallTool.create({ agentId: 'probe', isSubAgent: false })
   await t.execute({ query: 'probe' }, { toolCallId: 'p', messages: [], abortSignal: new AbortController().signal })
   _mocksWorking = true
   mockMemory.searchMemories.mockClear()
@@ -63,7 +63,7 @@ const itMocked = _mocksWorking ? it : it.skip
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const ctx: ToolExecutionContext = { kinId: 'kin-abc', isSubKin: false }
+const ctx: ToolExecutionContext = { agentId: 'agent-abc', isSubAgent: false }
 
 function execute(registration: any, args: any) {
   const t = registration.create(ctx)
@@ -101,7 +101,7 @@ describe('memory-tools', () => {
 
       const result = await execute(recallTool, { query: 'typescript' })
 
-      expect(mockMemory.searchMemories).toHaveBeenCalledWith('kin-abc', 'typescript', undefined)
+      expect(mockMemory.searchMemories).toHaveBeenCalledWith('agent-abc', 'typescript', undefined)
       expect(result.memories).toHaveLength(2)
       expect(result.memories[0]).toMatchObject({
         id: 'mem-1',
@@ -118,7 +118,7 @@ describe('memory-tools', () => {
 
       await execute(recallTool, { query: 'test', limit: 5 })
 
-      expect(mockMemory.searchMemories).toHaveBeenCalledWith('kin-abc', 'test', 5)
+      expect(mockMemory.searchMemories).toHaveBeenCalledWith('agent-abc', 'test', 5)
     })
 
     itMocked('returns empty array when no memories match', async () => {
@@ -148,7 +148,7 @@ describe('memory-tools', () => {
         importance: 7,
       })
 
-      expect(mockMemory.createMemory).toHaveBeenCalledWith('kin-abc', {
+      expect(mockMemory.createMemory).toHaveBeenCalledWith('agent-abc', {
         content: 'Nicolas prefers dark mode',
         category: 'preference',
         subject: 'nicolas',
@@ -174,7 +174,7 @@ describe('memory-tools', () => {
 
       await execute(memorizeTool, { content: 'A fact', category: 'fact' })
 
-      expect(mockMemory.createMemory).toHaveBeenCalledWith('kin-abc', {
+      expect(mockMemory.createMemory).toHaveBeenCalledWith('agent-abc', {
         content: 'A fact',
         category: 'fact',
         subject: undefined,
@@ -209,7 +209,7 @@ describe('memory-tools', () => {
         content: 'Updated content',
       })
 
-      expect(mockMemory.updateMemory).toHaveBeenCalledWith('mem-1', 'kin-abc', {
+      expect(mockMemory.updateMemory).toHaveBeenCalledWith('mem-1', 'agent-abc', {
         content: 'Updated content',
         category: undefined,
         subject: undefined,
@@ -242,7 +242,7 @@ describe('memory-tools', () => {
 
       const result = await execute(forgetTool, { memory_id: 'mem-1' })
 
-      expect(mockMemory.deleteMemory).toHaveBeenCalledWith('mem-1', 'kin-abc')
+      expect(mockMemory.deleteMemory).toHaveBeenCalledWith('mem-1', 'agent-abc')
       expect(result).toEqual({ success: true })
     })
 
@@ -266,7 +266,7 @@ describe('memory-tools', () => {
 
       const result = await execute(listMemoriesTool, {})
 
-      expect(mockMemory.listMemories).toHaveBeenCalledWith('kin-abc', {
+      expect(mockMemory.listMemories).toHaveBeenCalledWith('agent-abc', {
         subject: undefined,
         category: undefined,
       })
@@ -278,7 +278,7 @@ describe('memory-tools', () => {
 
       await execute(listMemoriesTool, { subject: 'nicolas', category: 'preference' })
 
-      expect(mockMemory.listMemories).toHaveBeenCalledWith('kin-abc', {
+      expect(mockMemory.listMemories).toHaveBeenCalledWith('agent-abc', {
         subject: 'nicolas',
         category: 'preference',
       })

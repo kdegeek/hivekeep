@@ -15,7 +15,7 @@ export const browseMiniAppsTool: ToolRegistration = {
   create: (_ctx) =>
     tool({
       description:
-        'Browse all active mini-apps across all Kins.',
+        'Browse all active mini-apps across all Agents.',
       inputSchema: z.object({}),
       execute: async () => {
         log.debug('browse_mini_apps invoked')
@@ -29,8 +29,8 @@ export const browseMiniAppsTool: ToolRegistration = {
               slug: a.slug,
               description: a.description,
               icon: a.icon,
-              maintainerKinId: a.maintainerKinId,
-              maintainerKinName: a.maintainerKinName,
+              maintainerAgentId: a.maintainerAgentId,
+              maintainerAgentName: a.maintainerAgentName,
               hasBackend: a.hasBackend,
               version: a.version,
             })),

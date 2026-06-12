@@ -11,10 +11,10 @@ const log = createLogger('tools:cron-learning')
 
 /**
  * save_run_learning — persist a lesson learned during this cron run.
- * Available to sub-Kins only, and only when executing a cron-triggered task.
+ * Available to sub-Agents only, and only when executing a cron-triggered task.
  */
 export const saveRunLearningTool: ToolRegistration = {
-  availability: ['sub-kin'],
+  availability: ['sub-agent'],
   create: (ctx) =>
     tool({
       description:
@@ -55,10 +55,10 @@ export const saveRunLearningTool: ToolRegistration = {
 
 /**
  * delete_run_learning — delete a stale or incorrect learning from this cron.
- * Available to sub-Kins only during cron task runs.
+ * Available to sub-Agents only during cron task runs.
  */
 export const deleteRunLearningTool: ToolRegistration = {
-  availability: ['sub-kin'],
+  availability: ['sub-agent'],
   create: (ctx) =>
     tool({
       description:

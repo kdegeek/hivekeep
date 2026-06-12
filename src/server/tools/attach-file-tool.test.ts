@@ -10,8 +10,8 @@ import {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const KIN_A = 'kin-aaa-111'
-const KIN_B = 'kin-bbb-222'
+const KIN_A = 'agent-aaa-111'
+const KIN_B = 'agent-bbb-222'
 
 function makeAttachment(name: string, mime = 'image/png') {
   return { source: `/tmp/${name}`, mimeType: mime, fileName: name }
@@ -29,7 +29,7 @@ describe('attach-file-tool staging', () => {
   // ─── stageAttachment ──────────────────────────────────────────────
 
   describe('stageAttachment', () => {
-    it('stages a single attachment for a kin', () => {
+    it('stages a single attachment for an agent', () => {
       const att = makeAttachment('photo.png')
       stageAttachment(KIN_A, att)
 
@@ -38,7 +38,7 @@ describe('attach-file-tool staging', () => {
       expect(result[0]).toEqual(att)
     })
 
-    it('stages multiple attachments for the same kin', () => {
+    it('stages multiple attachments for the same agent', () => {
       stageAttachment(KIN_A, makeAttachment('a.png'))
       stageAttachment(KIN_A, makeAttachment('b.pdf', 'application/pdf'))
       stageAttachment(KIN_A, makeAttachment('c.mp3', 'audio/mpeg'))
@@ -50,7 +50,7 @@ describe('attach-file-tool staging', () => {
       expect(result[2]!.fileName).toBe('c.mp3')
     })
 
-    it('keeps attachments isolated between kins', () => {
+    it('keeps attachments isolated between agents', () => {
       stageAttachment(KIN_A, makeAttachment('for-a.png'))
       stageAttachment(KIN_B, makeAttachment('for-b.jpg', 'image/jpeg'))
 
@@ -80,7 +80,7 @@ describe('attach-file-tool staging', () => {
 
   describe('popStagedAttachments', () => {
     it('returns empty array when no attachments staged', () => {
-      const result = popStagedAttachments('nonexistent-kin')
+      const result = popStagedAttachments('nonexistent-agent')
       expect(result).toEqual([])
     })
 
@@ -94,7 +94,7 @@ describe('attach-file-tool staging', () => {
       expect(second).toEqual([])
     })
 
-    it('does not affect other kins when popping', () => {
+    it('does not affect other agents when popping', () => {
       stageAttachment(KIN_A, makeAttachment('a.png'))
       stageAttachment(KIN_B, makeAttachment('b.png'))
 
@@ -137,11 +137,11 @@ describe('attach-file-tool staging', () => {
       expect(popStagedAttachments(KIN_A)).toEqual([])
     })
 
-    it('clearing nonexistent kin does not throw', () => {
-      expect(() => clearStagedAttachments('ghost-kin')).not.toThrow()
+    it('clearing nonexistent agent does not throw', () => {
+      expect(() => clearStagedAttachments('ghost-agent')).not.toThrow()
     })
 
-    it('does not affect other kins', () => {
+    it('does not affect other agents', () => {
       stageAttachment(KIN_A, makeAttachment('keep-a.png'))
       stageAttachment(KIN_B, makeAttachment('keep-b.png'))
 

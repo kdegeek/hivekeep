@@ -149,7 +149,7 @@ export async function getBaseAvatarBytes(): Promise<Uint8Array> {
 // ─── Custom img2img base image ───────────────────────────────────────────────
 // The img2img reference image (default = bundled robot). A custom one — uploaded
 // or auto-generated as a neutral avatar in the chosen (subject, style) — gives
-// the model a consistent reference so every Kin avatar shares the same look.
+// the model a consistent reference so every Agent avatar shares the same look.
 
 const CUSTOM_BASE_DIR = `${config.upload.dir}/avatar-base`
 const CUSTOM_BASE_EXTS = ['png', 'webp', 'jpg', 'jpeg'] as const
@@ -286,7 +286,7 @@ export const generateAvatarImage = generateImage
  */
 async function resolveImageInput(imageUrl: string): Promise<Uint8Array> {
   if (imageUrl.startsWith('/api/uploads/')) {
-    // Internal upload: /api/uploads/messages/{kinId}/{filename} → data/uploads/messages/{kinId}/{filename}
+    // Internal upload: /api/uploads/messages/{agentId}/{filename} → data/uploads/messages/{agentId}/{filename}
     const relativePath = imageUrl.replace('/api/uploads/', '')
     const filePath = join(config.upload.dir, relativePath)
     const file = Bun.file(filePath)
@@ -438,16 +438,16 @@ Rules:
 }
 
 /**
- * No-LLM fallback: produce a serviceable prompt straight from kin metadata.
+ * No-LLM fallback: produce a serviceable prompt straight from agent metadata.
  * Used when no LLM provider is configured or the configured one isn't supported here.
  */
 function fallbackAvatarPrompt(
-  kin: { role: string; expertise: string },
+  agent: { role: string; expertise: string },
   mode: 'edit' | 'generate',
   subject: string,
   style: string,
 ): string {
-  const domain = (kin.expertise || kin.role || 'a generalist assistant').slice(0, 120)
+  const domain = (agent.expertise || agent.role || 'a generalist assistant').slice(0, 120)
   if (mode === 'edit') {
     // Edit transforms the base robot — only used for the default robot subject.
     return `Reframe this base robot as an extreme close-up headshot avatar (head and top of shoulders only, head fills the frame), repaint it with a color palette that fits ${domain}, add small props or accessories that hint at this domain, and replace the plain background with a simple thematic scene. Render it in this overall art style: ${style}. Extreme close-up headshot, head and top of shoulders only, no legs, no full body, no wide shot — tight avatar crop. No text, no letters, no words, no UI elements.`
@@ -461,9 +461,9 @@ export interface BuildAvatarPromptOptions {
   /** Override the global art style (axis A) — used for one-shot manual gen. */
   style?: string | null
   /** Extra per-shot art direction (axis C) supplied by the user in the manual
-   *  avatar modal. Appended to the Kin identity given to the prompt-writer and
+   *  avatar modal. Appended to the Agent identity given to the prompt-writer and
    *  flagged as high-priority. Empty/undefined → the writer derives axis C from
-   *  the Kin's identity alone (the default behavior). */
+   *  the Agent's identity alone (the default behavior). */
   extraGuidance?: string | null
   /** The image model that will render the result — given to the prompt-writer
    *  so it can tailor the prompt to that model's strengths. */
@@ -474,15 +474,15 @@ export interface BuildAvatarPromptOptions {
 
 /**
  * Ephemeral prompt-writer: an LLM rewrites the FULL image-generation prompt from
- * the Kin's identity, GUIDED by the two global axes — SUBJECT (axis B, what it
- * depicts) and STYLE (axis A, how it's drawn) — producing the per-Kin character
+ * the Agent's identity, GUIDED by the two global axes — SUBJECT (axis B, what it
+ * depicts) and STYLE (axis A, how it's drawn) — producing the per-Agent character
  * (axis C). A full rewrite (not block concatenation) keeps the prompt coherent.
  * The writer is also told which image model will render it.
  * - 'edit'     → transformation instructions applied to the neutral base image
  * - 'generate' → full description from scratch (text-to-image)
  */
 export async function buildAvatarPrompt(
-  kin: {
+  agent: {
     name: string
     role: string
     character: string
@@ -501,13 +501,13 @@ export async function buildAvatarPrompt(
   const subject = subjectDirective?.trim() || DEFAULT_AVATAR_SUBJECT
   const style = styleDirective?.trim() || DEFAULT_AVATAR_STYLE
   const resolved = await pickAnyLLMModel()
-  if (!resolved) return fallbackAvatarPrompt(kin, mode, subject, style)
+  if (!resolved) return fallbackAvatarPrompt(agent, mode, subject, style)
 
-  const charSnippet = kin.character.slice(0, 300)
-  const expertSnippet = kin.expertise.slice(0, 300)
+  const charSnippet = agent.character.slice(0, 300)
+  const expertSnippet = agent.expertise.slice(0, 300)
 
   // SUBJECT (axis B) + STYLE (axis A) are baked into the system template; the
-  // writer fills axis C (the per-Kin character) coherently.
+  // writer fills axis C (the per-Agent character) coherently.
   const systemText = mode === 'edit'
     ? buildEditSystem(subject, style)
     : buildGenerateSystem(subject, style)
@@ -530,7 +530,7 @@ export async function buildAvatarPrompt(
       role: 'user',
       content: [{
         type: 'text',
-        text: `Name: ${kin.name}\nRole: ${kin.role}\nPersonality: ${charSnippet}\nExpertise: ${expertSnippet}${guidanceHint}${modelHint}`,
+        text: `Name: ${agent.name}\nRole: ${agent.role}\nPersonality: ${charSnippet}\nExpertise: ${expertSnippet}${guidanceHint}${modelHint}`,
       }],
     }],
     maxOutputTokens: 200,
@@ -560,7 +560,7 @@ function buildNeutralBasePrompt(subject: string, style: string): string {
 
 /**
  * Generate a NEUTRAL base avatar in the given (or current) subject + style and
- * store it as the img2img base reference, so every Kin avatar derives from it
+ * store it as the img2img base reference, so every Agent avatar derives from it
  * for visual consistency. Returns the generated image (base64 + mediaType).
  */
 export async function generateNeutralAvatarBase(opts?: {

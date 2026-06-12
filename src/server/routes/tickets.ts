@@ -30,10 +30,10 @@ import { projects } from '@/server/db/schema'
 import { eq } from 'drizzle-orm'
 import type { AppVariables } from '@/server/app'
 import { createLogger } from '@/server/logger'
-import { TICKET_STATUSES } from '@/shared/constants'
-import type { TicketStatus, KinThinkingConfig, KinThinkingEffort } from '@/shared/types'
+import { TICKET_STATUSES, THINKING_EFFORTS } from '@/shared/constants'
+import type { TicketStatus, AgentThinkingConfig, AgentThinkingEffort } from '@/shared/types'
 
-const TICKET_TASK_VALID_EFFORTS: readonly KinThinkingEffort[] = ['low', 'medium', 'high', 'max']
+const TICKET_TASK_VALID_EFFORTS: readonly AgentThinkingEffort[] = THINKING_EFFORTS
 
 const log = createLogger('routes:tickets')
 
@@ -41,13 +41,13 @@ export const ticketRoutes = new Hono<{ Variables: AppVariables }>()
 
 /**
  * Batch-resolve ticket mention refs from free text. Used by the chat client to
- * turn `#42` and `kinbot#42` patterns into clickable badges in a single round
+ * turn `#42` and `hivekeep#42` patterns into clickable badges in a single round
  * trip per rendered message. Accepts both query strings (`?refs=a,b,c`) and
  * POST bodies (`{ refs: [...] }`) — POST is preferred when N > 10 to avoid
  * URL length limits.
  *
  * Optional `activeProjectId` resolves bare `#N` refs against a specific
- * project. The client is expected to pass the current Kin's active project id.
+ * project. The client is expected to pass the current Agent's active project id.
  */
 ticketRoutes.get('/resolve-mentions', async (c) => {
   const refsParam = c.req.query('refs') ?? ''
@@ -199,9 +199,9 @@ ticketRoutes.delete('/:id', async (c) => {
 ticketRoutes.post('/:id/start-task', async (c) => {
   const ticketId = c.req.param('id')
   const body = await c.req.json().catch(() => ({}))
-  const kinId = typeof body.kinId === 'string' ? body.kinId.trim() : ''
-  if (!kinId) {
-    return c.json({ error: { code: 'INVALID_INPUT', message: 'kinId is required' } }, 400)
+  const agentId = typeof body.agentId === 'string' ? body.agentId.trim() : ''
+  if (!agentId) {
+    return c.json({ error: { code: 'INVALID_INPUT', message: 'agentId is required' } }, 400)
   }
   const rawRunPrompt = typeof body.runPrompt === 'string' ? body.runPrompt : null
   // Soft length cap mirrored from TICKET_TASK_RUN_PROMPT_MAX so over-long
@@ -230,7 +230,7 @@ ticketRoutes.post('/:id/start-task', async (c) => {
 
   // Optional per-run model override. model + providerId are coupled: both must
   // be present (and non-empty strings) to apply an override; anything else is
-  // treated as "inherit from project default → Kin".
+  // treated as "inherit from project default → Agent".
   let model: string | undefined
   let providerId: string | undefined
   if (typeof body.model === 'string' && body.model.trim() && typeof body.providerId === 'string' && body.providerId.trim()) {
@@ -239,19 +239,19 @@ ticketRoutes.post('/:id/start-task', async (c) => {
   }
 
   // Optional per-run thinking/effort override. Shape mirrors the project /
-  // Kin thinking config. Absent → inherit from project default → Kin.
-  let thinkingConfig: KinThinkingConfig | undefined
+  // Agent thinking config. Absent → inherit from project default → Agent.
+  let thinkingConfig: AgentThinkingConfig | undefined
   if (body.thinkingConfig && typeof body.thinkingConfig === 'object') {
     const cfg = body.thinkingConfig as Record<string, unknown>
     const enabled = cfg.enabled === true
     const effort = typeof cfg.effort === 'string' && (TICKET_TASK_VALID_EFFORTS as readonly string[]).includes(cfg.effort)
-      ? (cfg.effort as KinThinkingEffort)
+      ? (cfg.effort as AgentThinkingEffort)
       : null
     thinkingConfig = { enabled, ...(effort !== null ? { effort } : {}) }
   }
 
   try {
-    const task = await startTicketTask(ticketId, kinId, { runPrompt: rawRunPrompt, toolboxIds, model, providerId, thinkingConfig })
+    const task = await startTicketTask(ticketId, agentId, { runPrompt: rawRunPrompt, toolboxIds, model, providerId, thinkingConfig })
     return c.json({ task }, 201)
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error'
@@ -259,7 +259,7 @@ ticketRoutes.post('/:id/start-task', async (c) => {
       return c.json({ error: { code: 'TICKET_NOT_FOUND', message: 'Ticket not found' } }, 404)
     }
     if (msg === 'KIN_NOT_FOUND') {
-      return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Kin not found' } }, 404)
+      return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Agent not found' } }, 404)
     }
     log.warn({ err }, 'startTicketTask failed')
     return c.json({ error: { code: 'INTERNAL', message: msg } }, 500)
@@ -513,16 +513,16 @@ ticketRoutes.delete('/:id/attachments/:attachmentId', async (c) => {
 ticketRoutes.post('/:id/enrich', async (c) => {
   const ticketId = c.req.param('id')
   const body = await c.req.json().catch(() => ({}))
-  const kinId = typeof body.kinId === 'string' ? body.kinId.trim() : ''
+  const agentId = typeof body.agentId === 'string' ? body.agentId.trim() : ''
   const focus = typeof body.focus === 'string' && body.focus.trim().length > 0
     ? body.focus.trim()
     : undefined
-  if (!kinId) {
-    return c.json({ error: { code: 'INVALID_INPUT', message: 'kinId is required' } }, 400)
+  if (!agentId) {
+    return c.json({ error: { code: 'INVALID_INPUT', message: 'agentId is required' } }, 400)
   }
 
   try {
-    const task = await startTicketEnrichment(ticketId, kinId, { focus })
+    const task = await startTicketEnrichment(ticketId, agentId, { focus })
     return c.json({ task }, 201)
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error'
@@ -530,7 +530,7 @@ ticketRoutes.post('/:id/enrich', async (c) => {
       return c.json({ error: { code: 'TICKET_NOT_FOUND', message: 'Ticket not found' } }, 404)
     }
     if (msg === 'KIN_NOT_FOUND') {
-      return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Kin not found' } }, 404)
+      return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Agent not found' } }, 404)
     }
     if (msg === 'ENRICHMENT_ALREADY_RUNNING') {
       return c.json(

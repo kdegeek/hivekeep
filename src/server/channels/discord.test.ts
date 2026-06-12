@@ -643,8 +643,8 @@ describe('Discord IDENTIFY payload', () => {
         intents: INTENTS,
         properties: {
           os: 'linux',
-          browser: 'kinbot',
-          device: 'kinbot',
+          browser: 'hivekeep',
+          device: 'hivekeep',
         },
       },
     }
@@ -666,7 +666,7 @@ describe('Discord IDENTIFY payload', () => {
     expect(payload.op).toBe(2)
     expect(payload.d.token).toBe('test-token')
     expect(payload.d.intents).toBe(37377)
-    expect(payload.d.properties.browser).toBe('kinbot')
+    expect(payload.d.properties.browser).toBe('hivekeep')
   })
 
   it('constructs resume payload with session state', () => {

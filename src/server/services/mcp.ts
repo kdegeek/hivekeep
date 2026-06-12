@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm'
 import { db } from '@/server/db/index'
 import { createLogger } from '@/server/logger'
 import { augmentedPath, killProcessTree } from '@/server/lib/process'
-import { mcpServers, kinMcpServers } from '@/server/db/schema'
+import { mcpServers, agentMcpServers } from '@/server/db/schema'
 import type { Tool } from '@/server/tools/tool-helper'
 
 const log = createLogger('mcp')
@@ -57,7 +57,7 @@ async function connectToServer(serverId: string): Promise<MCPConnection | null> 
     })
 
     const client = new Client({
-      name: 'kinbot',
+      name: 'hivekeep',
       version: '1.0.0',
     })
 
@@ -177,15 +177,15 @@ export interface MCPToolSummary {
 }
 
 /**
- * Get a lightweight summary of MCP tools available to a Kin.
- * Used for injection into the system prompt so the Kin knows what MCP tools are available.
+ * Get a lightweight summary of MCP tools available to an Agent.
+ * Used for injection into the system prompt so the Agent knows what MCP tools are available.
  * This reuses existing connections (or creates them) but only extracts metadata.
  */
-export async function getMCPToolsSummary(kinId: string): Promise<MCPToolSummary[]> {
+export async function getMCPToolsSummary(agentId: string): Promise<MCPToolSummary[]> {
   const links = await db
-    .select({ mcpServerId: kinMcpServers.mcpServerId })
-    .from(kinMcpServers)
-    .where(eq(kinMcpServers.kinId, kinId))
+    .select({ mcpServerId: agentMcpServers.mcpServerId })
+    .from(agentMcpServers)
+    .where(eq(agentMcpServers.agentId, agentId))
     .all()
 
   if (links.length === 0) return []
@@ -208,7 +208,7 @@ export async function getMCPToolsSummary(kinId: string): Promise<MCPToolSummary[
   return summaries
 }
 
-// ─── MCP catalog (all global active servers, no per-Kin gate) ────────────────
+// ─── MCP catalog (all global active servers, no per-Agent gate) ────────────────
 
 /** A single MCP tool as it appears in the toolbox catalog. */
 export interface MCPCatalogEntry {
@@ -223,9 +223,9 @@ export interface MCPCatalogEntry {
 }
 
 /**
- * Enumerate every MCP tool from ALL global active servers, with no per-Kin
+ * Enumerate every MCP tool from ALL global active servers, with no per-Agent
  * gate. This powers the toolbox catalog: a toolbox can list any of these stable
- * `mcp_*` names and the unified resolver will grant it to any Kin/task that
+ * `mcp_*` names and the unified resolver will grant it to any Agent/task that
  * references that toolbox (the server's creds stay global).
  *
  * Servers that are not `active` are skipped. A server we cannot connect to (so
@@ -255,24 +255,24 @@ export async function listAllMCPCatalogTools(): Promise<MCPCatalogEntry[]> {
   return entries
 }
 
-// ─── Resolve MCP tools (global, no per-Kin gate) ─────────────────────────────
+// ─── Resolve MCP tools (global, no per-Agent gate) ─────────────────────────────
 
 /**
  * Resolve every MCP tool from ALL global ACTIVE servers, keyed by the canonical
  * `mcp_{sanitizeName(server)}_{sanitizeName(tool)}` name.
  *
  * The TOOLBOX is now the sole tool-grant primitive (see toolset-resolver.ts):
- * there is no per-Kin MCP access gate. MCP servers live globally in
+ * there is no per-Agent MCP access gate. MCP servers live globally in
  * `mcp_servers` with their own credentials; a toolbox references an MCP tool by
  * its stable name, and the unified resolver intersects that against this
  * universe. Server-level approval status (`status === 'active'`) still applies —
  * `pending_approval` servers contribute nothing.
  *
- * The `kinId` parameter is retained only for logging/diagnostic symmetry with
+ * The `agentId` parameter is retained only for logging/diagnostic symmetry with
  * the other source resolvers; it no longer filters the result.
  */
 export async function resolveMCPTools(
-  _kinId?: string,
+  _agentId?: string,
 ): Promise<Record<string, Tool<any, any>>> {
   const servers = await db.select().from(mcpServers).all()
 

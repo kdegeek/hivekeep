@@ -1,5 +1,5 @@
 /**
- * Native address-book tools exposed to Kins (read-only EXTERNAL contacts).
+ * Native address-book tools exposed to Agents (read-only EXTERNAL contacts).
  *
  *  - list_address_books         — discovery: connected address-book accounts.
  *  - list_address_book_contacts — page through an address book.
@@ -7,12 +7,12 @@
  *  - search_address_book        — find by name / org / email / phone.
  *
  * These read external address books (iCloud, …) on demand and are deliberately
- * SEPARATE from KinBot's own contacts CRM (create_contact/get_contact/…): these
- * never enter KinBot's store. Typical use is looking up a phone number to hand
+ * SEPARATE from Hivekeep's own contacts CRM (create_contact/get_contact/…): these
+ * never enter Hivekeep's store. Typical use is looking up a phone number to hand
  * to `send_channel_message` (e.g. an SMS via the Twilio channel).
  *
  * Every tool resolves an account via `resolveContactsProvider` (explicit slug →
- * first valid), which enforces the per-account allow-list against the Kin.
+ * first valid), which enforces the per-account allow-list against the Agent.
  */
 import { z } from 'zod'
 import { tool } from '@/server/tools/tool-helper'
@@ -32,17 +32,17 @@ function toErr(err: unknown): { error: string } {
 // ─── list_address_books ──────────────────────────────────────────────────────
 
 export const listAddressBooksTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (ctx) =>
     tool({
       description:
-        'List the external address-book accounts this Kin can use (slug, label, type). ' +
+        'List the external address-book accounts this Agent can use (slug, label, type). ' +
         'Call this when there is more than one account, or to pass the right `account` to the other address-book tools.',
       inputSchema: z.object({}),
       execute: async () => {
-        const accounts = await listContactsAccounts(ctx.kinId)
+        const accounts = await listContactsAccounts(ctx.agentId)
         return {
           accounts: accounts.map((a) => ({
             slug: a.slug,
@@ -58,7 +58,7 @@ export const listAddressBooksTool: ToolRegistration = {
 // ─── list_address_book_contacts ──────────────────────────────────────────────
 
 export const listAddressBookContactsTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (ctx) =>
@@ -73,7 +73,7 @@ export const listAddressBookContactsTool: ToolRegistration = {
       }),
       execute: async (args) => {
         try {
-          const { provider, config, account } = await resolveContactsProvider({ slug: args.account, kinId: ctx.kinId })
+          const { provider, config, account } = await resolveContactsProvider({ slug: args.account, agentId: ctx.agentId })
           const res = await provider.listContacts({ limit: args.limit, pageToken: args.page_token }, config)
           return { account: account.slug, contacts: res.contacts, nextPageToken: res.nextPageToken }
         } catch (err) {
@@ -86,7 +86,7 @@ export const listAddressBookContactsTool: ToolRegistration = {
 // ─── get_address_book_contact ────────────────────────────────────────────────
 
 export const getAddressBookContactTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (ctx) =>
@@ -98,7 +98,7 @@ export const getAddressBookContactTool: ToolRegistration = {
       }),
       execute: async (args) => {
         try {
-          const { provider, config, account } = await resolveContactsProvider({ slug: args.account, kinId: ctx.kinId })
+          const { provider, config, account } = await resolveContactsProvider({ slug: args.account, agentId: ctx.agentId })
           const contact = await provider.getContact(args.contact_id, config)
           return { account: account.slug, contact }
         } catch (err) {
@@ -111,7 +111,7 @@ export const getAddressBookContactTool: ToolRegistration = {
 // ─── search_address_book ─────────────────────────────────────────────────────
 
 export const searchAddressBookTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (ctx) =>
@@ -125,7 +125,7 @@ export const searchAddressBookTool: ToolRegistration = {
       }),
       execute: async (args) => {
         try {
-          const { provider, config, account } = await resolveContactsProvider({ slug: args.account, kinId: ctx.kinId })
+          const { provider, config, account } = await resolveContactsProvider({ slug: args.account, agentId: ctx.agentId })
           let contacts: Contact[]
           if (provider.searchContacts) {
             contacts = await provider.searchContacts({ text: args.query }, config)

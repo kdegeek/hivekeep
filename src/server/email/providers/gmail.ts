@@ -18,10 +18,11 @@ import type {
   EmailAddress,
   EmailAttachment,
   EmailSearchQuery,
+  EmailFolder,
   SendEmailParams,
   SendEmailResult,
 } from '@/server/email/types'
-import type { ProviderConfig, AuthResult } from '@kinbot-developer/sdk'
+import type { ProviderConfig, AuthResult } from '@hivekeep/sdk'
 
 const GMAIL_API = 'https://gmail.googleapis.com/gmail/v1/users/me'
 
@@ -334,6 +335,15 @@ export const gmailProvider: EmailProvider = {
   async searchMessages(query: EmailSearchQuery, config: ProviderConfig): Promise<EmailSummary[]> {
     const res = await this.listMessages({ query, limit: 25 }, config)
     return res.messages
+  },
+
+  async listFolders(config: ProviderConfig): Promise<EmailFolder[]> {
+    const res = (await gmailFetch(config, '/labels')) as {
+      labels?: Array<{ id: string; name: string; type?: string }>
+    }
+    return (res.labels ?? [])
+      .filter((l) => l.id && l.name)
+      .map((l) => ({ id: l.id, name: l.name, type: 'label' as const }))
   },
 
   async sendMessage(params: SendEmailParams, config: ProviderConfig): Promise<SendEmailResult> {

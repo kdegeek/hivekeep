@@ -2,7 +2,7 @@
  * Resolve a (modelId, providerId?) reference to a concrete provider + model +
  * decrypted config triple, ready to be passed to `provider.chat()`.
  *
- * This is the kinbot-side dispatcher: the rest of the codebase only knows
+ * This is the hivekeep-side dispatcher: the rest of the codebase only knows
  * about model IDs and provider rows in DB; this helper hides the lookup,
  * decryption, and model-info fetching from every caller.
  */
@@ -14,6 +14,7 @@ import { loadProviderConfig } from '@/server/services/provider-config'
 import { getLLMProvider } from '@/server/llm/llm/registry'
 import { listModelsForProvider } from '@/server/providers/index'
 import { providerPriority } from '@/server/llm/core/provider-priority'
+import { enrichModel } from '@/server/llm/metadata/enrich'
 import type { LLMProvider, LLMModel } from '@/server/llm/llm/types'
 import type { ProviderConfig } from '@/server/llm/core/types'
 import { AuthError, InvalidRequestError } from '@/server/llm/core/types'
@@ -61,7 +62,7 @@ async function findModelInProvider(
 export async function resolveLLM(opts: ResolveOptions): Promise<ResolvedLLM> {
   const { modelId, providerId } = opts
 
-  // Preferred provider path. Accept UUID or slug — Kins prefer the slug
+  // Preferred provider path. Accept UUID or slug — Agents prefer the slug
   // because it's stable across renames and far easier to express in a tool call.
   if (providerId) {
     const row = db
@@ -82,7 +83,7 @@ export async function resolveLLM(opts: ResolveOptions): Promise<ResolvedLLM> {
     const config = await readProviderConfig(row)
     const model = await findModelInProvider(llm, config, modelId)
     if (!model) throw new InvalidRequestError(`Model "${modelId}" not available on provider ${providerId} (${row.type})`)
-    return { provider: llm, model, config, providerRow: row }
+    return { provider: llm, model: enrichModel(row.id, row.type, model), config, providerRow: row }
   }
 
   // Auto-resolve: scan valid LLM providers. Order matters when the same
@@ -101,7 +102,7 @@ export async function resolveLLM(opts: ResolveOptions): Promise<ResolvedLLM> {
     try {
       const config = await readProviderConfig(row)
       const model = await findModelInProvider(llm, config, modelId)
-      if (model) return { provider: llm, model, config, providerRow: row }
+      if (model) return { provider: llm, model: enrichModel(row.id, row.type, model), config, providerRow: row }
     } catch {
       // This provider can't serve the model — keep scanning.
     }
@@ -128,7 +129,7 @@ export async function pickAnyLLMModel(): Promise<ResolvedLLM | null> {
       const config = await readProviderConfig(row)
       const list = await llm.listModels(config)
       const first = list[0]
-      if (first) return { provider: llm, model: first, config, providerRow: row }
+      if (first) return { provider: llm, model: enrichModel(row.id, row.type, first), config, providerRow: row }
     } catch {
       // Skip this provider
     }

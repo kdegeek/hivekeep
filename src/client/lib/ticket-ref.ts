@@ -10,7 +10,7 @@
  *                legacy rows awaiting backfill — returns `null` so callers can
  *                conditionally skip rendering.
  * @param slug    Optional project slug. When provided, the ref is qualified
- *                (`kinbot#42`); otherwise it stays bare (`#42`). An empty slug
+ *                (`hivekeep#42`); otherwise it stays bare (`#42`). An empty slug
  *                (legacy projects pre-backfill) is treated as absent.
  * @returns The formatted ref, or `null` when there is no number to show.
  */

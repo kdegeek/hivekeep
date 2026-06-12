@@ -76,15 +76,15 @@ interface LLMModel {
 
 interface TaskPanelContentProps {
   taskId: string
-  kinName?: string
-  kinAvatarUrl?: string | null
+  agentName?: string
+  agentAvatarUrl?: string | null
   llmModels?: LLMModel[]
 }
 
 export function TaskPanelContent({
   taskId,
-  kinName,
-  kinAvatarUrl,
+  agentName,
+  agentAvatarUrl,
   llmModels = [],
 }: TaskPanelContentProps) {
   const { t } = useTranslation()
@@ -107,7 +107,7 @@ export function TaskPanelContent({
     todos,
   } = useTaskDetail(taskId)
   const { prompts: pendingPrompts, respond: respondToPrompt, isResponding } = useHumanPrompts(
-    task ? task.parentKinId : null,
+    task ? task.parentAgentId : null,
     taskId,
   )
 
@@ -118,8 +118,8 @@ export function TaskPanelContent({
     apiContextTokens?: number
   } | null>(null)
   useEffect(() => {
-    if (!task?.parentKinId || !task?.id) { setContextData(null); return }
-    fetch(`/api/kins/${task.parentKinId}/context-preview?taskId=${task.id}`)
+    if (!task?.parentAgentId || !task?.id) { setContextData(null); return }
+    fetch(`/api/agents/${task.parentAgentId}/context-preview?taskId=${task.id}`)
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
         if (data?.tokenEstimate) {
@@ -131,7 +131,7 @@ export function TaskPanelContent({
         }
       })
       .catch(() => {})
-  }, [task?.parentKinId, task?.id])
+  }, [task?.parentAgentId, task?.id])
   const [isPromptOpen, setIsPromptOpen] = useState(false)
   const [isRunPromptOpen, setIsRunPromptOpen] = useState(false)
 
@@ -175,10 +175,10 @@ export function TaskPanelContent({
     if (run.id === taskId) return
     openTask({
       taskId: run.id,
-      kinName: run.sourceKinName ?? run.parentKinName ?? kinName,
-      kinAvatarUrl: run.sourceKinAvatarUrl ?? run.parentKinAvatarUrl ?? kinAvatarUrl,
+      agentName: run.sourceAgentName ?? run.parentAgentName ?? agentName,
+      agentAvatarUrl: run.sourceAgentAvatarUrl ?? run.parentAgentAvatarUrl ?? agentAvatarUrl,
     })
-  }, [openTask, taskId, kinName, kinAvatarUrl])
+  }, [openTask, taskId, agentName, agentAvatarUrl])
 
   // Filter out messages already represented elsewhere:
   const visibleMessages = useMemo(
@@ -205,9 +205,9 @@ export function TaskPanelContent({
   const isRunning = task?.status === 'in_progress'
   const isPaused = task?.status === 'paused'
   const isActive = task ? isActiveStatus(task.status) : false
-  const initials = kinName?.slice(0, 2).toUpperCase() ?? 'K'
+  const initials = agentName?.slice(0, 2).toUpperCase() ?? 'K'
   const resolvedModel = task?.model ? llmModels.find((m) => m.id === task.model) : null
-  // Qualified ticket ref (e.g. kinbot#42) for ticket-bound tasks. Null otherwise.
+  // Qualified ticket ref (e.g. hivekeep#42) for ticket-bound tasks. Null otherwise.
   const ticketRef = formatTicketRef(task?.ticket?.number, task?.ticket?.projectSlug)
 
   // Live + persisted run duration. Ticks every second while the task is active
@@ -239,14 +239,14 @@ export function TaskPanelContent({
     try {
       const result = await api.post<{ taskId: string }>(`/tasks/${task.id}/retry`, { preserveHistory })
       if (result?.taskId) {
-        openTask({ taskId: result.taskId, kinName, kinAvatarUrl })
+        openTask({ taskId: result.taskId, agentName, agentAvatarUrl })
       }
     } catch {
       // Error surfaced by the API layer's global toast
     } finally {
       setRetryMode(null)
     }
-  }, [task, openTask, kinName, kinAvatarUrl])
+  }, [task, openTask, agentName, agentAvatarUrl])
 
   // Inject / Resume message input
   const [injectMessage, setInjectMessage] = useState('')
@@ -285,14 +285,14 @@ export function TaskPanelContent({
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Header info — restructured into 3 calm rows:
           1) avatar + title + status badge
-          2) kin name · depth · mode · model · thinking effort · cron run selector
+          2) agent name · depth · mode · model · thinking effort · cron run selector
           3) action chips (tool calls, prompt, context) — only when relevant */}
       <div className="shrink-0 border-b border-border px-3 py-2.5 space-y-1.5">
         {/* Row 1: identity + status */}
         <div className="flex items-center gap-2">
           <Avatar className="size-7 shrink-0">
-            {kinAvatarUrl ? (
-              <AvatarImage src={kinAvatarUrl} alt={kinName ?? ''} />
+            {agentAvatarUrl ? (
+              <AvatarImage src={agentAvatarUrl} alt={agentName ?? ''} />
             ) : (
               <AvatarFallback className="text-[10px] bg-secondary">
                 {initials}
@@ -310,10 +310,10 @@ export function TaskPanelContent({
                   t('common.loading')}
               </span>
             </div>
-            {kinName && (
+            {agentName && (
               <div className="flex items-center gap-1 mt-0.5 text-[11px] text-muted-foreground">
                 <GitBranch className="size-2.5 shrink-0" />
-                <span className="truncate">{kinName}</span>
+                <span className="truncate">{agentName}</span>
               </div>
             )}
           </div>
@@ -326,7 +326,7 @@ export function TaskPanelContent({
         {/* Row 2: meta facts — depth, mode, model, thinking, cron runs */}
         {task && (
           <div className="flex items-center gap-1 flex-wrap pl-9">
-            {/* Parent ticket — clickable ref (e.g. kinbot#42) that opens the
+            {/* Parent ticket — clickable ref (e.g. hivekeep#42) that opens the
                 ticket panel. Only present for ticket-bound tasks. */}
             {ticketRef && task.ticket && (
               <Tooltip>
@@ -416,7 +416,7 @@ export function TaskPanelContent({
                   defaultValue: '{{count}} LLM call',
                   defaultValue_other: '{{count}} LLM calls',
                   // Use the sum of per-row stepCount, not COUNT(*) on
-                  // llm_usage: one row = one sub-Kin turn (the runner
+                  // llm_usage: one row = one sub-Agent turn (the runner
                   // collapses all tool-loop steps into a single roll-up),
                   // so COUNT(*) reads "1" on a turn that made 46 real
                   // HTTP calls to the provider. stepCount sums to the
@@ -557,7 +557,7 @@ export function TaskPanelContent({
             )}
             {contextData && (
               <ContextBar
-                kinId={task.parentKinId}
+                agentId={task.parentAgentId}
                 taskId={task.id}
                 estimatedTokens={contextData.tokenEstimate.total}
                 maxTokens={contextData.contextWindow}
@@ -608,8 +608,8 @@ export function TaskPanelContent({
             isActive ? (
               <div className="py-4">
                 <TypingIndicator
-                  kinName={kinName}
-                  kinAvatarUrl={kinAvatarUrl}
+                  agentName={agentName}
+                  agentAvatarUrl={agentAvatarUrl}
                   startedAt={streamingStartedAt ?? (startedMs ?? undefined)}
                   tokenCount={streamingOutputTokens}
                   toolCallCount={streamingToolCallCount}
@@ -628,8 +628,8 @@ export function TaskPanelContent({
                   role={msg.role}
                   content={msg.content}
                   sourceType={msg.sourceType}
-                  avatarUrl={msg.role === 'assistant' ? kinAvatarUrl : undefined}
-                  senderName={msg.role === 'assistant' ? kinName : undefined}
+                  avatarUrl={msg.role === 'assistant' ? agentAvatarUrl : undefined}
+                  senderName={msg.role === 'assistant' ? agentName : undefined}
                   timestamp={msg.createdAt ? new Date(msg.createdAt).toISOString() : undefined}
                   toolCalls={toolCallsByMessage.get(msg.id)}
                   tokenUsage={msg.tokenUsage}
@@ -642,8 +642,8 @@ export function TaskPanelContent({
                   role={streamingMessage.role}
                   content={streamingMessage.content}
                   sourceType={streamingMessage.sourceType}
-                  avatarUrl={kinAvatarUrl}
-                  senderName={kinName}
+                  avatarUrl={agentAvatarUrl}
+                  senderName={agentName}
                   timestamp={streamingMessage.createdAt ? new Date(streamingMessage.createdAt).toISOString() : undefined}
                   toolCalls={toolCallsByMessage.get(streamingMessage.id)}
                   reasoning={streamingReasoning || undefined}
@@ -660,8 +660,8 @@ export function TaskPanelContent({
               ))}
               {(isStreaming || (isActive && !streamingMessage && pendingPrompts.length === 0)) && (
                 <TypingIndicator
-                  kinName={kinName}
-                  kinAvatarUrl={kinAvatarUrl}
+                  agentName={agentName}
+                  agentAvatarUrl={agentAvatarUrl}
                   startedAt={streamingStartedAt ?? (startedMs ?? undefined)}
                   tokenCount={streamingOutputTokens}
                   toolCallCount={streamingToolCallCount}

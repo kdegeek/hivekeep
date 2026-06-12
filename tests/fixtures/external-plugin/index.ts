@@ -1,10 +1,10 @@
 /**
  * External plugin fixture — simulates a third-party plugin published on
- * npm. The whole module imports from `@kinbot-developer/sdk` only;
- * nothing from KinBot internals (no `@/server/...`, no `@/shared/...`).
+ * npm. The whole module imports from `@hivekeep/sdk` only;
+ * nothing from Hivekeep internals (no `@/server/...`, no `@/shared/...`).
  *
  * Loaded by `src/server/services/plugins-e2e.test.ts` to prove the SDK
- * contract works end-to-end for plugins that don't live in the kinbot
+ * contract works end-to-end for plugins that don't live in the hivekeep
  * tree.
  */
 
@@ -19,7 +19,7 @@ import {
   type PluginContext,
   type PluginExports,
   type ProviderConfig,
-} from '@kinbot-developer/sdk'
+} from '@hivekeep/sdk'
 
 interface ExternalConfig {
   greeting?: string
@@ -98,7 +98,7 @@ export default function externalPlugin(
   return {
     tools: {
       hello: {
-        availability: ['main', 'sub-kin'],
+        availability: ['main', 'sub-agent'],
         readOnly: true,
         concurrencySafe: true,
         create: (execCtx) =>
@@ -110,7 +110,7 @@ export default function externalPlugin(
             execute: async ({ name }) => {
               const word = ctx.config.greeting ?? 'Hello'
               await ctx.cards.emit({
-                kinId: execCtx.kinId,
+                agentId: execCtx.agentId,
                 cardType: 'hello-card',
                 layout: [
                   card.header({ title: `${word} card` }),
@@ -132,7 +132,7 @@ export default function externalPlugin(
 
     hooks: {
       beforeChat: (h) => {
-        ctx.log.debug({ kinId: h.kinId, len: h.message.length }, 'beforeChat')
+        ctx.log.debug({ agentId: h.agentId, len: h.message.length }, 'beforeChat')
       },
       afterToolCall: (h) => {
         ctx.log.debug({ tool: h.toolName }, 'afterToolCall')

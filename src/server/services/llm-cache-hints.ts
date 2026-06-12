@@ -2,13 +2,13 @@
  * Helpers for annotating LLM requests with Anthropic prompt-caching hints.
  *
  * Cache hints are encoded as `cacheControl: { type: 'ephemeral' }` on the
- * individual `KinbotMessageBlock` carrying the breakpoint. The Anthropic
+ * individual `HivekeepMessageBlock` carrying the breakpoint. The Anthropic
  * provider promotes those hints to `cache_control` on the matching API
  * block; other providers ignore them.
  *
- * The Anthropic API allows up to 4 cache breakpoints per request. KinBot uses:
+ * The Anthropic API allows up to 4 cache breakpoints per request. Hivekeep uses:
  *   - end of the stable system segment           (BP1)
- *   - end of the tools list (last tool)          (BP2 — markLastKinbotToolCacheable)
+ *   - end of the tools list (last tool)          (BP2 — markLastHivekeepToolCacheable)
  *   - last historical message before the new user msg  (BP3 — cross-turn cache)
  *   - very last message of the request           (BP4 — within-turn step cache)
  *
@@ -29,8 +29,8 @@
  * BP4 ensures successive requests can read each other's cache.
  */
 import type {
-  KinbotMessage,
-  KinbotMessageBlock,
+  HivekeepMessage,
+  HivekeepMessageBlock,
   SystemPrompt,
 } from '@/server/llm/llm/types'
 
@@ -41,7 +41,7 @@ import type {
  * "effectively empty" only when all of its blocks are empty text blocks
  * (or the block list is itself empty).
  */
-function isEffectivelyEmptyMessage(message: KinbotMessage): boolean {
+function isEffectivelyEmptyMessage(message: HivekeepMessage): boolean {
   if (message.content.length === 0) return true
   for (const block of message.content) {
     if (block.type === 'text') {
@@ -65,7 +65,7 @@ function isEffectivelyEmptyMessage(message: KinbotMessage): boolean {
  *
  * Returns -1 when no block in the message can carry the hint.
  */
-function findCacheAnchorBlockIdx(blocks: readonly KinbotMessageBlock[]): number {
+function findCacheAnchorBlockIdx(blocks: readonly HivekeepMessageBlock[]): number {
   for (let i = blocks.length - 1; i >= 0; i--) {
     const b = blocks[i]!
     if (b.type === 'text') {
@@ -83,10 +83,10 @@ function findCacheAnchorBlockIdx(blocks: readonly KinbotMessageBlock[]): number 
  * the block returned by {@link findCacheAnchorBlockIdx}. No-op when the
  * message has no carriable block.
  */
-function withCacheBreakpoint(message: KinbotMessage): KinbotMessage {
+function withCacheBreakpoint(message: HivekeepMessage): HivekeepMessage {
   const idx = findCacheAnchorBlockIdx(message.content)
   if (idx < 0) return message
-  const cloned: KinbotMessageBlock[] = message.content.slice()
+  const cloned: HivekeepMessageBlock[] = message.content.slice()
   const target = cloned[idx]!
   // findCacheAnchorBlockIdx never returns a thinking block, so the target
   // always has a `cacheControl` field in its type.
@@ -108,7 +108,7 @@ function withCacheBreakpoint(message: KinbotMessage): KinbotMessage {
  * around tool outputs in the Anthropic convention — they are NOT what
  * triggered the current turn.
  */
-function isToolResultOnlyMessage(msg: KinbotMessage): boolean {
+function isToolResultOnlyMessage(msg: HivekeepMessage): boolean {
   if (msg.role !== 'user') return false
   if (msg.content.length === 0) return false
   for (const block of msg.content) {
@@ -126,7 +126,7 @@ function isToolResultOnlyMessage(msg: KinbotMessage): boolean {
  * triggered the current turn, which is where the volatile system reminder
  * must be attached.
  */
-function findLastUserMessageIndex(history: readonly KinbotMessage[]): number {
+function findLastUserMessageIndex(history: readonly HivekeepMessage[]): number {
   for (let i = history.length - 1; i >= 0; i--) {
     const msg = history[i]!
     if (msg.role === 'user' && !isToolResultOnlyMessage(msg)) return i
@@ -144,9 +144,9 @@ function findLastUserMessageIndex(history: readonly KinbotMessage[]): number {
  * last user message.
  */
 function prependVolatileToUserMessage(
-  msg: KinbotMessage,
+  msg: HivekeepMessage,
   volatile: string,
-): KinbotMessage {
+): HivekeepMessage {
   if (msg.role !== 'user') return msg
   const reminder = `<system-reminder>\n${volatile}\n</system-reminder>`
   return {
@@ -173,13 +173,13 @@ function prependVolatileToUserMessage(
  *   - No user message in history (degenerate): treat the last entry as the
  *     "new" message and skip BP3.
  *   - The natural BP3 anchor is an empty-text-only message (e.g. a
- *     sub-Kin row created during `request_input` resume): walk back to a
+ *     sub-Agent row created during `request_input` resume): walk back to a
  *     prior message that has carriable content. Same safety for BP4.
  */
 export function buildSegmentedMessages(
   segments: { stable: string; volatile: string },
-  history: KinbotMessage[],
-): { system: SystemPrompt | undefined; messages: KinbotMessage[] } {
+  history: HivekeepMessage[],
+): { system: SystemPrompt | undefined; messages: HivekeepMessage[] } {
   const system: SystemPrompt | undefined = segments.stable
     ? [
         {
@@ -195,7 +195,7 @@ export function buildSegmentedMessages(
   }
 
   const lastUserIdx = findLastUserMessageIndex(history)
-  const out: KinbotMessage[] = []
+  const out: HivekeepMessage[] = []
   // Index in `out` of the message just BEFORE the new user message.
   // Used as the cross-turn cache breakpoint anchor (BP3).
   let crossTurnAnchorIdx = -1

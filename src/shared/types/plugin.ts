@@ -66,7 +66,7 @@ export interface PluginManifest {
   author?: string
   homepage?: string
   license?: string
-  kinbot?: string
+  hivekeep?: string
   main: string
   /** Emoji shown when the plugin has no real logo (back-compat). */
   icon?: string
@@ -122,10 +122,10 @@ export interface PluginInstallMeta {
 /**
  * Normalised npm search result. Built from registry.npmjs.org's
  * `/-/v1/search` API, which returns the `{ objects: [{ package, score }] }`
- * shape — KinBot's UI just needs the flat fields below.
+ * shape — Hivekeep's UI just needs the flat fields below.
  */
 export interface NpmPlugin {
-  /** Full npm package name (e.g. `@marlburrow/kinbot-plugin-x`). */
+  /** Full npm package name (e.g. `@marlburrow/hivekeep-plugin-x`). */
   name: string
   /** Human-readable name from manifest.displayName (fetched via unpkg).
    *  Missing for packages that don't ship a plugin.json or where the

@@ -23,7 +23,7 @@ export function buildInvitationUrl(token: string): string {
 interface CreateInvitationParams {
   createdBy: string // userId
   label?: string
-  kinId?: string // if created by a Kin tool
+  agentId?: string // if created by an Agent tool
   expiresInDays?: number
 }
 
@@ -50,7 +50,7 @@ export async function createInvitation(params: CreateInvitationParams) {
     token,
     label: params.label ?? null,
     createdBy: params.createdBy,
-    kinId: params.kinId ?? null,
+    agentId: params.agentId ?? null,
     expiresAt,
     createdAt: now,
   }).run()
@@ -75,7 +75,7 @@ export function listInvitations() {
       label: invitations.label,
       createdBy: invitations.createdBy,
       creatorName: user.name,
-      kinId: invitations.kinId,
+      agentId: invitations.agentId,
       expiresAt: invitations.expiresAt,
       usedAt: invitations.usedAt,
       usedBy: invitations.usedBy,

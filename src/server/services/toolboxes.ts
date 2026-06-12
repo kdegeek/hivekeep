@@ -143,7 +143,7 @@ export const BUILTIN_TOOLBOXES: readonly BuiltinToolboxDef[] = [
   },
   {
     name: 'email',
-    description: 'Email account access: list, read, search, and send mail through connected accounts.',
+    description: 'Email account access: list, read, search, and send mail through connected accounts. Set up triggers that react to incoming email.',
     toolNames: [
       'list_email_accounts',
       'list_emails',
@@ -151,12 +151,18 @@ export const BUILTIN_TOOLBOXES: readonly BuiltinToolboxDef[] = [
       'search_emails',
       'send_email',
       'download_email_attachment',
+      'describe_trigger_conditions',
+      'list_email_folders',
+      'create_account_trigger',
+      'list_account_triggers',
+      'update_account_trigger',
+      'delete_account_trigger',
     ],
   },
   {
     name: 'address-book',
     description:
-      "Read-only EXTERNAL address books (iCloud, …): list and search contacts (names, phones, emails). Separate from KinBot's own contacts.",
+      "Read-only EXTERNAL address books (iCloud, …): list and search contacts (names, phones, emails). Separate from Hivekeep's own contacts.",
     toolNames: [
       'list_address_books',
       'list_address_book_contacts',
@@ -180,7 +186,7 @@ export const BUILTIN_TOOLBOXES: readonly BuiltinToolboxDef[] = [
   {
     name: 'configurator',
     description:
-      "Platform configuration set for the onboarding guide (Sherpa): connect/test AI providers (secure popup), set defaults, configure channels, customize the avatar style, edit the global prompt, manage contacts/memory, and create the user's first Kins.",
+      "Platform configuration set for the onboarding guide (Queenie): connect/test AI providers (secure popup), set defaults, configure channels, customize the avatar style, edit the global prompt, manage contacts/memory, set up email triggers, and create the user's first Agents.",
     toolNames: [
       // Provider discovery + secure setup + defaults.
       'describe_provider_config',
@@ -203,13 +209,13 @@ export const BUILTIN_TOOLBOXES: readonly BuiltinToolboxDef[] = [
       'set_avatar_base_enabled',
       'generate_avatar_base',
       'reset_avatar_base',
-      // Kin creation + discovery.
-      'create_kin',
-      'update_kin',
-      'get_kin_details',
+      // Agent creation + discovery.
+      'create_agent',
+      'update_agent',
+      'get_agent_details',
       'list_kins',
       // Toolbox composition: discover tools, then build/edit minimal toolboxes
-      // so a new Kin gets exactly what it needs (not the broad "all").
+      // so a new Agent gets exactly what it needs (not the broad "all").
       'list_tools',
       'list_toolboxes',
       'create_toolbox',
@@ -236,11 +242,19 @@ export const BUILTIN_TOOLBOXES: readonly BuiltinToolboxDef[] = [
       'request_channel_setup',
       'test_channel',
       // Connected accounts (read-only discovery). Connecting is OAuth/UI-driven —
-      // Sherpa can SEE what's linked and guide the user to the Settings UI, but
+      // Queenie can SEE what's linked and guide the user to the Settings UI, but
       // there is no "connect account" tool.
       'list_email_accounts',
       'list_calendar_accounts',
       'list_address_books',
+      // Email triggers — connecting an account is UI-only, but automating
+      // reactions to incoming mail IS tool-driven, so Queenie can set these up.
+      'describe_trigger_conditions',
+      'list_email_folders',
+      'create_account_trigger',
+      'list_account_triggers',
+      'update_account_trigger',
+      'delete_account_trigger',
       // Search + web (to find provider key pages).
       'list_search_providers',
       'web_search',
@@ -248,6 +262,10 @@ export const BUILTIN_TOOLBOXES: readonly BuiltinToolboxDef[] = [
       'extract_links',
       // Platform / system administration.
       'get_system_info',
+      // Read-only "doctor 2.0" diagnostic — CALL FIRST on any rescue: capability
+      // coverage, invalid providers (with lastError), stale defaults, channel
+      // status, public-URL sanity + a prioritized fix list.
+      'get_setup_health',
       'get_platform_config',
       'list_platform_config_options',
       'update_platform_config',
@@ -389,7 +407,7 @@ export function deleteToolbox(id: string): void {
  * A toolbox may list any grantable tool name across all four sources: native,
  * plugin (`plugin_*`), MCP (`mcp_*`), and custom (`custom_*`). Those explicit
  * names are returned verbatim — the unified resolver intersects them with the
- * Kin/task universe, so a name absent from the universe is silently dropped
+ * Agent/task universe, so a name absent from the universe is silently dropped
  * there.
  *
  * The single special value "*" expands to every registered NATIVE tool name

@@ -2,20 +2,20 @@ import { eq, and, desc, lt, sql } from 'drizzle-orm'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/server/db/index'
 import { createLogger } from '@/server/logger'
-import { notifications, notificationPreferences, kins, user } from '@/server/db/schema'
+import { notifications, notificationPreferences, agents, user } from '@/server/db/schema'
 import { sseManager } from '@/server/sse/index'
 import { config } from '@/server/config'
 import type { NotificationType, NotificationRelatedType, NotificationSummary } from '@/shared/types'
 
 const log = createLogger('notifications')
 
-// ─── Kin avatar helper (same pattern as tasks.ts) ────────────────────────────
+// ─── Agent avatar helper (same pattern as tasks.ts) ────────────────────────────
 
-function kinAvatarUrl(kinId: string, avatarPath: string | null, updatedAt?: Date | null): string | null {
+function agentAvatarUrl(agentId: string, avatarPath: string | null, updatedAt?: Date | null): string | null {
   if (!avatarPath) return null
   const ext = avatarPath.split('.').pop() ?? 'png'
   const v = updatedAt ? updatedAt.getTime() : Date.now()
-  return `/api/uploads/kins/${kinId}/avatar.${ext}?v=${v}`
+  return `/api/uploads/agents/${agentId}/avatar.${ext}?v=${v}`
 }
 
 // ─── Create ──────────────────────────────────────────────────────────────────
@@ -24,7 +24,7 @@ interface CreateNotificationParams {
   type: NotificationType
   title: string
   body?: string
-  kinId?: string
+  agentId?: string
   relatedId?: string
   relatedType?: NotificationRelatedType
 }
@@ -54,16 +54,16 @@ export async function createNotification(params: CreateNotificationParams): Prom
 
     const disabledUserIds = new Set(disabledPrefs.map((p) => p.userId))
 
-    // Resolve Kin info for the SSE payload
-    let kinName: string | null = null
-    let kinSlug: string | null = null
-    let kinAvatar: string | null = null
-    if (params.kinId) {
-      const kin = await db.select().from(kins).where(eq(kins.id, params.kinId)).get()
-      if (kin) {
-        kinName = kin.name
-        kinSlug = kin.slug ?? null
-        kinAvatar = kinAvatarUrl(kin.id, kin.avatarPath, kin.updatedAt)
+    // Resolve Agent info for the SSE payload
+    let agentName: string | null = null
+    let agentSlug: string | null = null
+    let agentAvatar: string | null = null
+    if (params.agentId) {
+      const agent = await db.select().from(agents).where(eq(agents.id, params.agentId)).get()
+      if (agent) {
+        agentName = agent.name
+        agentSlug = agent.slug ?? null
+        agentAvatar = agentAvatarUrl(agent.id, agent.avatarPath, agent.updatedAt)
       }
     }
 
@@ -79,7 +79,7 @@ export async function createNotification(params: CreateNotificationParams): Prom
         type: params.type,
         title: params.title,
         body: params.body ?? null,
-        kinId: params.kinId ?? null,
+        agentId: params.agentId ?? null,
         relatedId: params.relatedId ?? null,
         relatedType: params.relatedType ?? null,
         isRead: false,
@@ -91,10 +91,10 @@ export async function createNotification(params: CreateNotificationParams): Prom
         type: params.type,
         title: params.title,
         body: params.body ?? null,
-        kinId: params.kinId ?? null,
-        kinName,
-        kinSlug,
-        kinAvatarUrl: kinAvatar,
+        agentId: params.agentId ?? null,
+        agentName,
+        agentSlug,
+        agentAvatarUrl: agentAvatar,
         relatedId: params.relatedId ?? null,
         relatedType: params.relatedType ?? null,
         isRead: false,
@@ -112,7 +112,7 @@ export async function createNotification(params: CreateNotificationParams): Prom
           type: params.type,
           title: params.title,
           body: params.body,
-          kinName,
+          agentName,
         }).catch(() => {}),
       )
     }
@@ -150,16 +150,16 @@ export async function createNotificationForUser(
 
     if (disabledPref) return
 
-    // Resolve Kin info for the SSE payload
-    let kinName: string | null = null
-    let kinSlug: string | null = null
-    let kinAvatar: string | null = null
-    if (params.kinId) {
-      const kin = await db.select().from(kins).where(eq(kins.id, params.kinId)).get()
-      if (kin) {
-        kinName = kin.name
-        kinSlug = kin.slug ?? null
-        kinAvatar = kinAvatarUrl(kin.id, kin.avatarPath, kin.updatedAt)
+    // Resolve Agent info for the SSE payload
+    let agentName: string | null = null
+    let agentSlug: string | null = null
+    let agentAvatar: string | null = null
+    if (params.agentId) {
+      const agent = await db.select().from(agents).where(eq(agents.id, params.agentId)).get()
+      if (agent) {
+        agentName = agent.name
+        agentSlug = agent.slug ?? null
+        agentAvatar = agentAvatarUrl(agent.id, agent.avatarPath, agent.updatedAt)
       }
     }
 
@@ -172,7 +172,7 @@ export async function createNotificationForUser(
       type: params.type,
       title: params.title,
       body: params.body ?? null,
-      kinId: params.kinId ?? null,
+      agentId: params.agentId ?? null,
       relatedId: params.relatedId ?? null,
       relatedType: params.relatedType ?? null,
       isRead: false,
@@ -184,10 +184,10 @@ export async function createNotificationForUser(
       type: params.type,
       title: params.title,
       body: params.body ?? null,
-      kinId: params.kinId ?? null,
-      kinName,
-      kinSlug,
-      kinAvatarUrl: kinAvatar,
+      agentId: params.agentId ?? null,
+      agentName,
+      agentSlug,
+      agentAvatarUrl: agentAvatar,
       relatedId: params.relatedId ?? null,
       relatedType: params.relatedType ?? null,
       isRead: false,
@@ -205,7 +205,7 @@ export async function createNotificationForUser(
         type: params.type,
         title: params.title,
         body: params.body,
-        kinName,
+        agentName,
       }).catch(() => {}),
     )
 
@@ -238,18 +238,18 @@ export async function listNotifications(
       type: notifications.type,
       title: notifications.title,
       body: notifications.body,
-      kinId: notifications.kinId,
+      agentId: notifications.agentId,
       relatedId: notifications.relatedId,
       relatedType: notifications.relatedType,
       isRead: notifications.isRead,
       createdAt: notifications.createdAt,
-      kinName: kins.name,
-      kinSlug: kins.slug,
-      kinAvatarPath: kins.avatarPath,
-      kinUpdatedAt: kins.updatedAt,
+      agentName: agents.name,
+      agentSlug: agents.slug,
+      agentAvatarPath: agents.avatarPath,
+      agentUpdatedAt: agents.updatedAt,
     })
     .from(notifications)
-    .leftJoin(kins, eq(notifications.kinId, kins.id))
+    .leftJoin(agents, eq(notifications.agentId, agents.id))
     .where(and(...conditions))
     .orderBy(desc(notifications.createdAt))
     .limit(limit + 1) // fetch one extra to detect hasMore
@@ -262,10 +262,10 @@ export async function listNotifications(
     type: r.type as NotificationType,
     title: r.title,
     body: r.body,
-    kinId: r.kinId,
-    kinName: r.kinName ?? null,
-    kinSlug: r.kinSlug ?? null,
-    kinAvatarUrl: r.kinId ? kinAvatarUrl(r.kinId, r.kinAvatarPath ?? null, r.kinUpdatedAt) : null,
+    agentId: r.agentId,
+    agentName: r.agentName ?? null,
+    agentSlug: r.agentSlug ?? null,
+    agentAvatarUrl: r.agentId ? agentAvatarUrl(r.agentId, r.agentAvatarPath ?? null, r.agentUpdatedAt) : null,
     relatedId: r.relatedId,
     relatedType: r.relatedType as NotificationRelatedType | null,
     isRead: r.isRead,

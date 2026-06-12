@@ -10,7 +10,7 @@ async function openContactsSettings(page: Page) {
 
   await page.getByRole('dialog').getByText('Contacts', { exact: true }).click()
   await expect(
-    page.getByText('Manage the shared contact registry accessible by all Kins.'),
+    page.getByText('Manage the shared contact registry accessible by all Agents.'),
   ).toBeVisible({ timeout: 5_000 })
 }
 
@@ -116,11 +116,11 @@ test.describe.serial('Contact management', () => {
     await mockProviderModels(page)
 
     await page.goto('/')
-    await expect(page.getByText('Sign in to your KinBot workspace')).toBeVisible({
+    await expect(page.getByText('Sign in to your Hivekeep workspace')).toBeVisible({
       timeout: 10_000,
     })
     await loginAs(page)
-    await expect(page.getByText('Kins', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Agents', { exact: true })).toBeVisible({ timeout: 10_000 })
   })
 
   test('should navigate to contacts settings and see existing contacts', async ({ page }) => {

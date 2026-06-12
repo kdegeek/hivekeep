@@ -18,8 +18,8 @@ const REACT_APP_JSON = JSON.stringify({
   dependencies: {
     'react': 'https://esm.sh/react@19',
     'react-dom/client': 'https://esm.sh/react-dom@19/client',
-    '@kinbot/react': '/api/mini-apps/sdk/kinbot-react.js',
-    '@kinbot/components': '/api/mini-apps/sdk/kinbot-components.js',
+    '@hivekeep/react': '/api/mini-apps/sdk/hivekeep-react.js',
+    '@hivekeep/components': '/api/mini-apps/sdk/hivekeep-components.js',
   },
 }, null, 2)
 
@@ -27,7 +27,7 @@ const TEMPLATES: MiniAppTemplate[] = [
   {
     id: 'dashboard',
     name: 'Dashboard',
-    description: 'A rich analytics dashboard with interactive charts (LineChart, BarChart, PieChart, SparkLine), stats, tables, and activity feed. Showcases the full @kinbot/components library.',
+    description: 'A rich analytics dashboard with interactive charts (LineChart, BarChart, PieChart, SparkLine), stats, tables, and activity feed. Showcases the full @hivekeep/components library.',
     icon: '📊',
     tags: ['data', 'charts', 'statistics', 'components', 'analytics'],
     suggestedSlug: 'dashboard',
@@ -61,11 +61,11 @@ const TEMPLATES: MiniAppTemplate[] = [
   <script type="text/jsx">
     import { useState } from 'react'
     import { createRoot } from 'react-dom/client'
-    import { useKinBot } from '@kinbot/react'
+    import { useHivekeep } from '@hivekeep/react'
     import {
       Card, Stat, Badge, Table, List, ProgressBar, Tabs, Spinner, Stack,
       LineChart, BarChart, PieChart, SparkLine
-    } from '@kinbot/components'
+    } from '@hivekeep/components'
 
     // --- Data ---
     const revenueData = [
@@ -129,7 +129,7 @@ const TEMPLATES: MiniAppTemplate[] = [
     ]
 
     function App() {
-      const { ready } = useKinBot()
+      const { ready } = useHivekeep()
       const [tab, setTab] = useState('overview')
 
       if (!ready) return <Stack align="center" style={{ padding: '2rem' }}><Spinner /></Stack>
@@ -278,10 +278,10 @@ const TEMPLATES: MiniAppTemplate[] = [
   <script type="text/jsx">
     import { useState } from 'react'
     import { createRoot } from 'react-dom/client'
-    import { useKinBot, useStorage } from '@kinbot/react'
+    import { useHivekeep, useStorage } from '@hivekeep/react'
 
     function App() {
-      const { ready } = useKinBot()
+      const { ready } = useHivekeep()
       if (!ready) return <div className="empty-state">Loading...</div>
       return <TodoApp />
     }
@@ -341,7 +341,7 @@ const TEMPLATES: MiniAppTemplate[] = [
   {
     id: 'form',
     name: 'Form Builder',
-    description: 'A contact form with client validation (useForm), async backend submission (useAsync), server-side validation, and submission history. Uses @kinbot/components (Card, Input, Select, Textarea, Checkbox, Switch, RadioGroup, DatePicker, Button, Alert, Divider, Stack, Badge, Table, Tabs, Spinner, EmptyState, Stat).',
+    description: 'A contact form with client validation (useForm), async backend submission (useAsync), server-side validation, and submission history. Uses @hivekeep/components (Card, Input, Select, Textarea, Checkbox, Switch, RadioGroup, DatePicker, Button, Alert, Divider, Stack, Badge, Table, Tabs, Spinner, EmptyState, Stat).',
     icon: '📝',
     tags: ['form', 'input', 'data-entry', 'components', 'validation', 'useForm', 'useAsync', 'backend'],
     suggestedSlug: 'form',
@@ -400,11 +400,11 @@ export default {
   <script type="text/jsx">
     import { useState, useCallback } from 'react'
     import { createRoot } from 'react-dom/client'
-    import { useKinBot, useForm, useAsync, useApi, toast } from '@kinbot/react'
-    import { Card, Input, Select, Textarea, Checkbox, Switch, RadioGroup, DatePicker, Button, Alert, Divider, Stack, Badge, Table, Tabs, Spinner, EmptyState, Stat } from '@kinbot/components'
+    import { useHivekeep, useForm, useAsync, useApi, toast } from '@hivekeep/react'
+    import { Card, Input, Select, Textarea, Checkbox, Switch, RadioGroup, DatePicker, Button, Alert, Divider, Stack, Badge, Table, Tabs, Spinner, EmptyState, Stat } from '@hivekeep/components'
 
     function App() {
-      const { ready } = useKinBot()
+      const { ready } = useHivekeep()
       if (!ready) return <Stack align="center" style={{ padding: '2rem' }}><Spinner /></Stack>
       return <FormApp />
     }
@@ -434,7 +434,7 @@ export default {
       const [serverErrors, setServerErrors] = useState({})
 
       const { run: submitToServer, loading: submitting, error: submitError } = useAsync(async (values) => {
-        const res = await KinBot.api('/submit', { method: 'POST', body: values })
+        const res = await Hivekeep.api('/submit', { method: 'POST', body: values })
         if (!res.ok) {
           setServerErrors(res.errors || {})
           throw new Error('Server validation failed')
@@ -592,7 +592,7 @@ export default {
   {
     id: 'data-viewer',
     name: 'Data Viewer',
-    description: 'A searchable data table with pagination using @kinbot/components (Card, Table, Badge, Pagination, Input, Button, EmptyState).',
+    description: 'A searchable data table with pagination using @hivekeep/components (Card, Table, Badge, Pagination, Input, Button, EmptyState).',
     icon: '🗂️',
     tags: ['table', 'data', 'search', 'components'],
     suggestedSlug: 'data-viewer',
@@ -613,8 +613,8 @@ export default {
   <script type="text/jsx">
     import { useState, useMemo } from 'react'
     import { createRoot } from 'react-dom/client'
-    import { useKinBot, toast, prompt } from '@kinbot/react'
-    import { Card, Table, Badge, Pagination, Input, Button, ButtonGroup, EmptyState, Stack, Spinner } from '@kinbot/components'
+    import { useHivekeep, toast, prompt } from '@hivekeep/react'
+    import { Card, Table, Badge, Pagination, Input, Button, ButtonGroup, EmptyState, Stack, Spinner } from '@hivekeep/components'
 
     const INITIAL_DATA = [
       { id: 1, name: 'Alice Martin', email: 'alice@example.com', status: 'active' },
@@ -639,7 +639,7 @@ export default {
     ]
 
     function App() {
-      const { ready } = useKinBot()
+      const { ready } = useHivekeep()
       if (!ready) return <Stack align="center" style={{ padding: '2rem' }}><Spinner /></Stack>
       return <DataViewer />
     }
@@ -735,8 +735,8 @@ export default {
   <script type="text/jsx">
     import { useState } from 'react'
     import { createRoot } from 'react-dom/client'
-    import { useKinBot, useStorage } from '@kinbot/react'
-    import { Kanban, Spinner } from '@kinbot/components'
+    import { useHivekeep, useStorage } from '@hivekeep/react'
+    import { Kanban, Spinner } from '@hivekeep/components'
 
     const DEFAULT_COLUMNS = [
       { id: 'todo', title: 'To Do', cards: [
@@ -753,7 +753,7 @@ export default {
     ]
 
     function App() {
-      const { ready } = useKinBot()
+      const { ready } = useHivekeep()
       const [columns, setColumns, loading] = useStorage('kanban-columns', DEFAULT_COLUMNS)
 
       if (!ready || loading) return <div style={{ padding: '2rem', textAlign: 'center' }}><Spinner /></div>
@@ -769,7 +769,7 @@ export default {
             allowDeleteCards
             allowDeleteColumns
             allowEditCards
-            onCardClick={(card) => KinBot.toast(card.title)}
+            onCardClick={(card) => Hivekeep.toast(card.title)}
           />
         </div>
       )
@@ -784,7 +784,7 @@ export default {
   {
     id: 'chat',
     name: 'Chat Interface',
-    description: 'A conversational chat interface that uses KinBot.sendMessage() to talk to the Kin and KinBot.memory to search/store memories. Great for building custom chat experiences or knowledge assistants.',
+    description: 'A conversational chat interface that uses Hivekeep.sendMessage() to talk to the Agent and Hivekeep.memory to search/store memories. Great for building custom chat experiences or knowledge assistants.',
     icon: '💬',
     tags: ['chat', 'messaging', 'memory', 'conversational'],
     suggestedSlug: 'chat',
@@ -822,11 +822,11 @@ export default {
   <script type="text/jsx">
     import { useState, useRef, useEffect } from 'react'
     import { createRoot } from 'react-dom/client'
-    import { useKinBot, useStorage, toast } from '@kinbot/react'
-    import { Button, Badge, Spinner } from '@kinbot/components'
+    import { useHivekeep, useStorage, toast } from '@hivekeep/react'
+    import { Button, Badge, Spinner } from '@hivekeep/components'
 
     function App() {
-      const { ready } = useKinBot()
+      const { ready } = useHivekeep()
       if (!ready) return <div style={{ padding: '2rem', textAlign: 'center' }}><Spinner size="lg" /></div>
       return <ChatApp />
     }
@@ -848,7 +848,7 @@ export default {
         setMessages(prev => [...prev, userMsg])
         setSending(true)
         try {
-          const reply = await KinBot.sendMessage(text)
+          const reply = await Hivekeep.sendMessage(text)
           setMessages(prev => [...prev, { role: 'bot', text: reply?.text || reply || 'No response', time: Date.now() }])
         } catch (err) {
           toast('Failed to send message', 'error')
@@ -860,7 +860,7 @@ export default {
         const q = input.trim()
         if (!q) return
         try {
-          const results = await KinBot.memory.search(q, 5)
+          const results = await Hivekeep.memory.search(q, 5)
           setMemories(results)
         } catch { toast('Memory search failed', 'error') }
       }
@@ -956,8 +956,8 @@ export default {
   <script type="text/jsx">
     import { useState } from 'react'
     import { createRoot } from 'react-dom/client'
-    import { useKinBot, useStorage, toast } from '@kinbot/react'
-    import { Panel, Switch, Select, RadioGroup, Slider, Input, Button, Badge, Stack, Spinner, Divider } from '@kinbot/components'
+    import { useHivekeep, useStorage, toast } from '@hivekeep/react'
+    import { Panel, Switch, Select, RadioGroup, Slider, Input, Button, Badge, Stack, Spinner, Divider } from '@hivekeep/components'
 
     const DEFAULTS = {
       theme: 'auto',
@@ -972,7 +972,7 @@ export default {
     }
 
     function App() {
-      const { ready } = useKinBot()
+      const { ready } = useHivekeep()
       if (!ready) return <Stack align="center" style={{ padding: '2rem' }}><Spinner /></Stack>
       return <SettingsPanel />
     }
@@ -1129,8 +1129,8 @@ export default {
   <script type="text/jsx">
     import { useState } from 'react'
     import { createRoot } from 'react-dom/client'
-    import { useKinBot, useForm, useStorage, toast } from '@kinbot/react'
-    import { Card, Input, Select, Textarea, Switch, RadioGroup, Button, Alert, Divider, Stack, Spinner, Stepper, StepperContent, Badge } from '@kinbot/components'
+    import { useHivekeep, useForm, useStorage, toast } from '@hivekeep/react'
+    import { Card, Input, Select, Textarea, Switch, RadioGroup, Button, Alert, Divider, Stack, Spinner, Stepper, StepperContent, Badge } from '@hivekeep/components'
 
     const STEPS = [
       { label: 'Account', icon: '👤' },
@@ -1146,7 +1146,7 @@ export default {
     }
 
     function App() {
-      const { ready } = useKinBot()
+      const { ready } = useHivekeep()
       if (!ready) return <Stack align="center" style={{ padding: '2rem' }}><Spinner /></Stack>
       return <WizardForm />
     }
@@ -1407,8 +1407,8 @@ export default {
   <script type="text/jsx">
     import { useState, useCallback } from 'react'
     import { createRoot } from 'react-dom/client'
-    import { useKinBot, useApi, useFetch, useAsync, useEventStream, toast } from '@kinbot/react'
-    import { Card, Tabs, Badge, Button, Input, Textarea, Stack, Spinner, Divider, Alert, Stat, Select } from '@kinbot/components'
+    import { useHivekeep, useApi, useFetch, useAsync, useEventStream, toast } from '@hivekeep/react'
+    import { Card, Tabs, Badge, Button, Input, Textarea, Stack, Spinner, Divider, Alert, Stat, Select } from '@hivekeep/components'
 
     // ── Tab 1: Backend API (useApi) ──
     function BackendTab() {
@@ -1463,7 +1463,7 @@ export default {
 
       return (
         <Stack gap="1.5rem">
-          <Card title="External API" subtitle="useFetch(url) — proxied through KinBot.http()">
+          <Card title="External API" subtitle="useFetch(url) — proxied through Hivekeep.http()">
             <Stack direction="row" gap="0.5rem" align="end">
               <div style={{ flex: 1 }}>
                 <Input label="URL" value={url} onChange={e => setUrl(e.target.value)}
@@ -1488,7 +1488,7 @@ export default {
     function MutationTab() {
       const [payload, setPayload] = useState(JSON.stringify({ message: 'Hello!', n: 42 }, null, 2))
       const echo = useAsync(async (body) => {
-        const res = await window.KinBot.api('/echo', { method: 'POST', body })
+        const res = await window.Hivekeep.api('/echo', { method: 'POST', body })
         return res
       })
 
@@ -1567,7 +1567,7 @@ export default {
 
     // ── Main App ──
     function App() {
-      const { ready } = useKinBot()
+      const { ready } = useHivekeep()
       if (!ready) return <Stack align="center" style={{ padding: '3rem' }}><Spinner size="lg" /></Stack>
 
       const tabs = [
@@ -1611,7 +1611,7 @@ export default {
   {
     id: 'component-showcase',
     name: 'Component Showcase',
-    description: 'An interactive storybook that demos all 49 @kinbot/components with live examples. Browse by category: Layout, Forms, Data Display, Feedback, Navigation, Overlays, Charts, and Extra.',
+    description: 'An interactive storybook that demos all 49 @hivekeep/components with live examples. Browse by category: Layout, Forms, Data Display, Feedback, Navigation, Overlays, Charts, and Extra.',
     icon: '🧩',
     tags: ['components', 'storybook', 'demo', 'reference', 'ui'],
     suggestedSlug: 'component-showcase',
@@ -1666,7 +1666,7 @@ export default {
   <script type="text/jsx">
     import { useState, useRef } from 'react'
     import { createRoot } from 'react-dom/client'
-    import { useKinBot } from '@kinbot/react'
+    import { useHivekeep } from '@hivekeep/react'
     import {
       Stack, Divider, Card, Button, ButtonGroup, Input, Textarea, Select,
       Checkbox, Switch, Badge, Tag, Stat, Avatar, Tooltip, ProgressBar,
@@ -1677,7 +1677,7 @@ export default {
       Stepper, StepperContent,
       FileUpload, CodeBlock, Timeline, AvatarGroup, NumberInput,
       Combobox, TagInput, ColorPicker, MarkdownEditor, Calendar, DateRangePicker, Kanban
-    } from '@kinbot/components'
+    } from '@hivekeep/components'
 
     const CATEGORIES = [
       { id: 'layout', label: 'Layout', items: ['Stack','Divider','Card','Grid','Panel'] },
@@ -1773,7 +1773,7 @@ export default {
               {value:'br',label:'Brazil',icon:'🇧🇷',description:'South America'},
               {value:'de',label:'Germany',icon:'🇩🇪',description:'Western Europe'},
             ]}
-            onChange={v => KinBot.toast('Selected: ' + v)} />
+            onChange={v => Hivekeep.toast('Selected: ' + v)} />
         </div>
         <div className="demo-box" style={{maxWidth:'350px'}}>
           <div className="demo-label">TagInput</div>
@@ -1960,13 +1960,13 @@ export default {
         <div className="demo-box">
           <div className="demo-label">FileUpload</div>
           <FileUpload accept="image/*" multiple maxSize={5*1024*1024} maxFiles={3}
-            onFiles={files => KinBot.toast('Received ' + files.length + ' file(s)')}
-            onError={err => KinBot.toast(err, 'error')}
+            onFiles={files => Hivekeep.toast('Received ' + files.length + ' file(s)')}
+            onError={err => Hivekeep.toast(err, 'error')}
             label="Drop images here" hint="Max 5MB, up to 3 files" />
         </div>
         <div className="demo-box">
           <div className="demo-label">CodeBlock</div>
-          <CodeBlock language="javascript" showLineNumbers code={\`function greet(name) {\\n  return \\\`Hello, \\\${name}!\\\`;\\n}\\n\\nconsole.log(greet('KinBot'));\`} />
+          <CodeBlock language="javascript" showLineNumbers code={\`function greet(name) {\\n  return \\\`Hello, \\\${name}!\\\`;\\n}\\n\\nconsole.log(greet('Hivekeep'));\`} />
         </div>
         <div className="demo-box">
           <div className="demo-label">Timeline</div>
@@ -1989,7 +1989,7 @@ export default {
         </div>
         <div className="demo-box">
           <div className="demo-label">Calendar (single)</div>
-          <Calendar value="2026-03-15" onChange={d => KinBot.toast('Selected: ' + d)}
+          <Calendar value="2026-03-15" onChange={d => Hivekeep.toast('Selected: ' + d)}
             events={[
               { date: '2026-03-05', color: 'var(--color-primary)', label: 'Today' },
               { date: '2026-03-10', color: 'var(--color-success)', label: 'Meeting' },
@@ -1999,14 +1999,14 @@ export default {
         <div className="demo-box">
           <div className="demo-label">Calendar (range)</div>
           <Calendar mode="range" value={{ start: '2026-03-10', end: '2026-03-18' }}
-            onChange={r => KinBot.toast('Range: ' + r.start + ' → ' + r.end)} />
+            onChange={r => Hivekeep.toast('Range: ' + r.start + ' → ' + r.end)} />
         </div>
         <div className="demo-box">
           <div className="demo-label">DateRangePicker (with presets)</div>
           <DateRangePicker
             label="Select period"
             value={{ start: '2026-03-01', end: '2026-03-15' }}
-            onChange={r => KinBot.toast('Range: ' + (r.start || '?') + ' → ' + (r.end || '?'))}
+            onChange={r => Hivekeep.toast('Range: ' + (r.start || '?') + ' → ' + (r.end || '?'))}
             presets={[
               { label: 'Last 7 days', start: '2026-02-26', end: '2026-03-05' },
               { label: 'This month', start: '2026-03-01', end: '2026-03-31' },
@@ -2029,7 +2029,7 @@ export default {
                 { id: '4', title: 'Setup CI', tags: ['devops'] },
               ]},
             ]}
-            onChange={cols => KinBot.toast('Board updated: ' + cols.map(c => c.title + '(' + c.cards.length + ')').join(', '))}
+            onChange={cols => Hivekeep.toast('Board updated: ' + cols.map(c => c.title + '(' + c.cards.length + ')').join(', '))}
             allowAddCards
             allowEditCards
             allowDeleteCards
@@ -2050,7 +2050,7 @@ export default {
     }
 
     function App() {
-      const { theme } = useKinBot()
+      const { theme } = useHivekeep()
       const [active, setActive] = useState('layout')
       const section = SECTIONS[active]
 
@@ -2165,8 +2165,8 @@ export default {
   <script type="module">
     import React, { useState, useCallback } from 'react'
     import { createRoot } from 'react-dom/client'
-    import { useApi, usePagination, useInfiniteScroll, useTheme } from '@kinbot/react'
-    import { Card, Stack, Tabs, Badge, Input, Select, Button, ButtonGroup, Table, Spinner, EmptyState, Stat, Divider, Pagination, Tag, Alert } from '@kinbot/components'
+    import { useApi, usePagination, useInfiniteScroll, useTheme } from '@hivekeep/react'
+    import { Card, Stack, Tabs, Badge, Input, Select, Button, ButtonGroup, Table, Spinner, EmptyState, Stat, Divider, Pagination, Tag, Alert } from '@hivekeep/components'
 
     // ─── Filters (shared between both views) ────────────────────────────────
     function Filters({ query, setQuery, department, setDepartment, status, setStatus, departments }) {
@@ -2367,11 +2367,11 @@ export default {
   <script type="text/jsx">
     import { useState } from 'react'
     import { createRoot } from 'react-dom/client'
-    import { useKinBot, useBreakpoint } from '@kinbot/react'
+    import { useHivekeep, useBreakpoint } from '@hivekeep/react'
     import {
       Card, Stat, Badge, Tabs, Spinner, Stack, Grid, ProgressBar,
       List, Tag, Alert, Divider, SparkLine
-    } from '@kinbot/components'
+    } from '@hivekeep/components'
 
     const skills = [
       { name: 'React', level: 92 },
@@ -2394,7 +2394,7 @@ export default {
     const activity = [12, 18, 8, 24, 15, 22, 30, 28, 19, 35, 42, 38]
 
     function App() {
-      const { ready } = useKinBot()
+      const { ready } = useHivekeep()
       const bp = useBreakpoint()
       const [tab, setTab] = useState('skills')
 
@@ -2511,7 +2511,7 @@ export default {
   {
     id: 'multi-page',
     name: 'Multi-Page App',
-    description: 'A multi-page mini-app demonstrating hash-based routing with useHashRouter, Route, and Link from @kinbot/react. Includes a nav bar, home, about, and settings pages.',
+    description: 'A multi-page mini-app demonstrating hash-based routing with useHashRouter, Route, and Link from @hivekeep/react. Includes a nav bar, home, about, and settings pages.',
     icon: '🗺️',
     tags: ['routing', 'multi-page', 'navigation', 'spa'],
     suggestedSlug: 'multi-page-app',
@@ -2547,8 +2547,8 @@ export default {
   <script type="text/jsx">
     import { useState } from 'react'
     import { createRoot } from 'react-dom/client'
-    import { useKinBot, useHashRouter, Route, Link } from '@kinbot/react'
-    import { Card, Stack, Switch, Select, Button, Alert } from '@kinbot/components'
+    import { useHivekeep, useHashRouter, Route, Link } from '@hivekeep/react'
+    import { Card, Stack, Switch, Select, Button, Alert } from '@hivekeep/components'
 
     function HomePage() {
       return <div className="page">
@@ -2558,7 +2558,7 @@ export default {
           <Stack gap="0.5rem">
             <strong>How it works</strong>
             <p style={{ margin: 0, fontSize: '0.85rem' }}>
-              This app uses <code>useHashRouter</code> from <code>@kinbot/react</code> for
+              This app uses <code>useHashRouter</code> from <code>@hivekeep/react</code> for
               client-side routing. No page reloads needed. Try the browser back/forward buttons too!
             </p>
           </Stack>
@@ -2569,7 +2569,7 @@ export default {
     function AboutPage() {
       return <div className="page">
         <h1>ℹ️ About</h1>
-        <p>This template demonstrates hash-based routing in a KinBot mini-app.</p>
+        <p>This template demonstrates hash-based routing in a Hivekeep mini-app.</p>
         <Alert variant="info" title="Routing primitives" style={{ marginTop: '1rem' }}>
           <code>useHashRouter()</code> returns path, params, navigate, and back.
           <code>Route</code> and <code>Link</code> handle rendering and navigation.
@@ -2589,7 +2589,7 @@ export default {
               { value: 'fr', label: 'Français' },
               { value: 'de', label: 'Deutsch' },
             ]} placeholder="Choose..." />
-            <Button onClick={() => KinBot.toast('Settings saved!')}>Save</Button>
+            <Button onClick={() => Hivekeep.toast('Settings saved!')}>Save</Button>
           </Stack>
         </Card>
       </div>
@@ -2707,11 +2707,11 @@ export default {
   <script type="text/jsx">
     import { useState, useCallback } from 'react'
     import { createRoot } from 'react-dom/client'
-    import { useKinBot, useForm, useApi, toast } from '@kinbot/react'
+    import { useHivekeep, useForm, useApi, toast } from '@hivekeep/react'
     import {
       Card, Stack, Button, Input, Combobox, TagInput, DataGrid, Modal,
       Badge, Stat, Divider, Spinner, EmptyState, Alert
-    } from '@kinbot/components'
+    } from '@hivekeep/components'
 
     const ROLES = [
       { value: 'Engineering', label: 'Engineering', icon: '⚙️' },
@@ -2731,7 +2731,7 @@ export default {
 
       const save = useCallback(async (vals) => {
         setServerErrors({})
-        const res = await KinBot.api('/contacts', { method: 'POST', body: JSON.stringify(vals), headers: { 'Content-Type': 'application/json' } })
+        const res = await Hivekeep.api('/contacts', { method: 'POST', body: JSON.stringify(vals), headers: { 'Content-Type': 'application/json' } })
         const data = await res.json()
         if (!data.ok) { setServerErrors(data.errors || {}); throw new Error('Validation failed') }
         toast.success(initial?.id ? 'Contact updated' : 'Contact created')
@@ -2763,7 +2763,7 @@ export default {
     }
 
     function App() {
-      const { ready } = useKinBot()
+      const { ready } = useHivekeep()
       if (!ready) return <Stack align="center" style={{ padding: '2rem' }}><Spinner /></Stack>
       return <ContactApp />
     }
@@ -2788,8 +2788,8 @@ export default {
             <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setEditing(row); setModalOpen(true) }}>Edit</Button>
             <Button variant="ghost" size="sm" onClick={async (e) => {
               e.stopPropagation()
-              if (await KinBot.confirm('Delete ' + row.name + '?')) {
-                await KinBot.api('/contacts/' + row.id, { method: 'DELETE' })
+              if (await Hivekeep.confirm('Delete ' + row.name + '?')) {
+                await Hivekeep.api('/contacts/' + row.id, { method: 'DELETE' })
                 toast.success('Deleted')
                 refetch()
               }
@@ -2819,6 +2819,147 @@ export default {
             <ContactForm initial={editing} onSave={() => { setModalOpen(false); refetch() }} onCancel={() => setModalOpen(false)} />
           </Modal>
         </div>
+      )
+    }
+
+    createRoot(document.getElementById('root')).render(<App />)
+  </script>
+</body>
+</html>`,
+    },
+  },
+  {
+    id: 'background-service',
+    name: 'Background Service',
+    description: 'A live background app: "background": true in app.json, onStart/onStop lifecycle, a ctx.schedule cron job polling an external API via ctx.fetch, ctx.notify platform notifications, SSE push to the UI, and an onClientEvent upstream channel. The reference starting point for apps that keep working while nobody has them open.',
+    icon: '📡',
+    tags: ['background', 'cron', 'schedule', 'notifications', 'sse', 'lifecycle', 'backend'],
+    suggestedSlug: 'watcher',
+    files: {
+      'app.json': JSON.stringify({
+        background: true,
+        dependencies: {
+          'react': 'https://esm.sh/react@19',
+          'react-dom/client': 'https://esm.sh/react-dom@19/client',
+          '@hivekeep/react': '/api/mini-apps/sdk/hivekeep-react.js',
+          '@hivekeep/components': '/api/mini-apps/sdk/hivekeep-components.js',
+        },
+      }, null, 2),
+      '_server.js': `// Background service: polls a public API on a schedule, stores results,
+// pushes live updates over SSE and notifies the user on changes.
+// Loaded at server boot because app.json declares "background": true.
+
+async function poll(ctx) {
+  try {
+    // ctx.fetch is SSRF-guarded (public hosts only) and times out after 30s
+    const res = await ctx.fetch('https://api.github.com/repos/oven-sh/bun')
+    const repo = await res.json()
+    const previous = (await ctx.storage.get('stars')) ?? null
+    const stars = repo.stargazers_count
+
+    await ctx.storage.set('stars', stars)
+    await ctx.storage.set('lastCheckedAt', Date.now())
+
+    // Push to every open UI (use { userId } as 3rd arg to target one user)
+    ctx.events.emit('stats', { stars, lastCheckedAt: Date.now() })
+
+    if (previous !== null && stars !== previous) {
+      // Platform notification: notification center + the user's external channels
+      await ctx.notify('Star count changed', previous + ' → ' + stars)
+    }
+    ctx.log.info('Polled: ' + stars + ' stars')
+  } catch (err) {
+    ctx.log.error('Poll failed: ' + err.message)
+  }
+}
+
+export async function onStart(ctx) {
+  // Cron job: every 30 minutes (croner syntax, max 10 jobs, runs >= 15s apart).
+  // Jobs and ctx.timers are cleaned up automatically when the app reloads.
+  ctx.schedule('poll', '*/30 * * * *', () => poll(ctx))
+  // Prime the data right away
+  await poll(ctx)
+}
+
+export async function onStop(ctx) {
+  ctx.log.info('Service stopping')
+}
+
+// UI → backend channel (Hivekeep.events.send). Return value goes back to the caller.
+export function onClientEvent(ctx, event, data, meta) {
+  if (event === 'refresh-now') {
+    poll(ctx)
+    return { ok: true }
+  }
+}
+
+export default function (ctx) {
+  const app = new ctx.Hono()
+  app.get('/stats', async (c) => c.json({
+    stars: (await ctx.storage.get('stars')) ?? null,
+    lastCheckedAt: (await ctx.storage.get('lastCheckedAt')) ?? null,
+  }))
+  return app
+}
+`,
+      'index.html': `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Watcher</title>
+  <style>body { padding: 1.5rem; }</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/jsx">
+    import { useState, useEffect } from 'react'
+    import { createRoot } from 'react-dom/client'
+    import { useHivekeep, useApi, useEventStream } from '@hivekeep/react'
+    import { Card, Stack, Heading, Text, Stat, Button, Badge, Spinner } from '@hivekeep/components'
+
+    function App() {
+      const { ready } = useHivekeep()
+      if (!ready) return <Spinner />
+      return <Watcher />
+    }
+
+    function Watcher() {
+      const { data, loading, refetch } = useApi('/stats')
+      const [live, setLive] = useState(null)
+      const { send, connected } = useEventStream('stats', (s) => setLive(s))
+
+      const stars = live?.stars ?? data?.stars
+      const checkedAt = live?.lastCheckedAt ?? data?.lastCheckedAt
+
+      const refreshNow = async () => {
+        await send('refresh-now')   // → backend onClientEvent
+      }
+
+      return (
+        <Stack gap={4}>
+          <Stack direction="row" align="center" justify="space-between">
+            <Heading as="h2">Repo Watcher</Heading>
+            <Badge variant={connected ? 'success' : 'outline'}>{connected ? 'live' : 'offline'}</Badge>
+          </Stack>
+          <Card>
+            <Card.Content>
+              {loading && stars == null ? <Spinner /> : (
+                <Stack gap={2}>
+                  <Stat label="GitHub stars (oven-sh/bun)" value={stars ?? '—'} />
+                  <Text muted size="sm">
+                    Last checked: {checkedAt ? new Date(checkedAt).toLocaleTimeString() : 'never'}
+                    {' '}(auto-polls every 30 min, even with this panel closed)
+                  </Text>
+                </Stack>
+              )}
+            </Card.Content>
+          </Card>
+          <Stack direction="row" gap={2}>
+            <Button onClick={refreshNow}>Refresh now</Button>
+            <Button variant="secondary" onClick={refetch}>Reload stats</Button>
+          </Stack>
+        </Stack>
       )
     }
 

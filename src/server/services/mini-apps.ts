@@ -5,7 +5,7 @@ import { mkdir, unlink, readdir, stat, rm, rename } from 'fs/promises'
 import { existsSync } from 'fs'
 import { db } from '@/server/db/index'
 import { createLogger } from '@/server/logger'
-import { miniApps, miniAppStorage, miniAppSnapshots, kins } from '@/server/db/schema'
+import { miniApps, miniAppStorage, miniAppSnapshots, agents } from '@/server/db/schema'
 import { config } from '@/server/config'
 import { buildMiniAppIconPrompt, generateImage, ImageGenerationError } from '@/server/services/image-generation'
 import type { MiniAppSummary } from '@/shared/types'
@@ -18,8 +18,8 @@ type MiniAppRow = typeof miniApps.$inferSelect
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function appDir(kinId: string, appId: string): string {
-  return join(config.miniApps.dir, kinId, appId)
+function appDir(agentId: string, appId: string): string {
+  return join(config.miniApps.dir, agentId, appId)
 }
 
 /** Validate that a resolved path stays within the app directory */
@@ -47,18 +47,34 @@ function guessMimeType(filename: string): string {
   return map[ext] ?? 'application/octet-stream'
 }
 
-function serializeApp(row: MiniAppRow, kinName: string, kinAvatarUrl: string | null): MiniAppSummary {
+/**
+ * Notify the backend runtime that app files changed, without a static import
+ * (mini-app-backend.ts imports this module — a static import would be a cycle).
+ */
+function notifyBackendFilesChanged(appId: string, relativePath: string): void {
+  void import('@/server/services/mini-app-backend')
+    .then((m) => m.handleAppFilesChanged(appId, relativePath))
+    .catch(() => {})
+}
+
+function notifyBackendRestart(appId: string): void {
+  void import('@/server/services/mini-app-backend')
+    .then((m) => m.restartBackend(appId))
+    .catch(() => {})
+}
+
+function serializeApp(row: MiniAppRow, agentName: string, agentAvatarUrl: string | null): MiniAppSummary {
   return {
     id: row.id,
-    maintainerKinId: row.kinId,
-    maintainerKinName: kinName,
-    maintainerKinAvatarUrl: kinAvatarUrl,
+    maintainerAgentId: row.agentId,
+    maintainerAgentName: agentName,
+    maintainerAgentAvatarUrl: agentAvatarUrl,
     // Backward-compat aliases (pre-decoupling field names) so a client still
-    // running a stale bundle doesn't crash on `app.kinName.slice(...)`. Safe to
+    // running a stale bundle doesn't crash on `app.agentName.slice(...)`. Safe to
     // remove once all clients have reloaded the new bundle.
-    kinId: row.kinId,
-    kinName,
-    kinAvatarUrl,
+    agentId: row.agentId,
+    agentName,
+    agentAvatarUrl,
     name: row.name,
     slug: row.slug,
     description: row.description,
@@ -76,7 +92,7 @@ function serializeApp(row: MiniAppRow, kinName: string, kinAvatarUrl: string | n
 // ─── Create ─────────────────────────────────────────────────────────────────
 
 export interface CreateMiniAppParams {
-  kinId: string
+  agentId: string
   name: string
   slug: string
   description?: string
@@ -85,30 +101,30 @@ export interface CreateMiniAppParams {
 }
 
 export async function createMiniApp(params: CreateMiniAppParams): Promise<MiniAppSummary> {
-  const { kinId, name, slug, description, icon, entryFile } = params
+  const { agentId, name, slug, description, icon, entryFile } = params
 
-  // Check max apps per kin
-  const existing = await db.select().from(miniApps).where(eq(miniApps.kinId, kinId)).all()
-  if (existing.length >= config.miniApps.maxAppsPerKin) {
-    throw new Error(`Maximum of ${config.miniApps.maxAppsPerKin} apps per Kin reached`)
+  // Check max apps per agent
+  const existing = await db.select().from(miniApps).where(eq(miniApps.agentId, agentId)).all()
+  if (existing.length >= config.miniApps.maxAppsPerAgent) {
+    throw new Error(`Maximum of ${config.miniApps.maxAppsPerAgent} apps per Agent reached`)
   }
 
-  // Check slug uniqueness within kin
+  // Check slug uniqueness within agent
   const slugExists = await db.select().from(miniApps)
-    .where(and(eq(miniApps.kinId, kinId), eq(miniApps.slug, slug)))
+    .where(and(eq(miniApps.agentId, agentId), eq(miniApps.slug, slug)))
     .get()
   if (slugExists) {
-    throw new Error(`An app with slug "${slug}" already exists for this Kin`)
+    throw new Error(`An app with slug "${slug}" already exists for this Agent`)
   }
 
   const id = uuid()
-  const dir = appDir(kinId, id)
+  const dir = appDir(agentId, id)
   await mkdir(dir, { recursive: true })
 
   const now = new Date()
   await db.insert(miniApps).values({
     id,
-    kinId,
+    agentId,
     name,
     slug,
     description: description ?? null,
@@ -121,13 +137,13 @@ export async function createMiniApp(params: CreateMiniAppParams): Promise<MiniAp
     updatedAt: now,
   })
 
-  log.info({ kinId, appId: id, name, slug }, 'Mini-app created')
+  log.info({ agentId, appId: id, name, slug }, 'Mini-app created')
 
-  const kin = await db.select().from(kins).where(eq(kins.id, kinId)).get()
+  const agent = await db.select().from(agents).where(eq(agents.id, agentId)).get()
   return serializeApp(
     (await db.select().from(miniApps).where(eq(miniApps.id, id)).get())!,
-    kin?.name ?? 'Unknown',
-    kin?.avatarPath ? `/api/uploads/kins/${kinId}/avatar${extname(kin.avatarPath)}` : null,
+    agent?.name ?? 'Unknown',
+    agent?.avatarPath ? `/api/uploads/agents/${agentId}/avatar${extname(agent.avatarPath)}` : null,
   )
 }
 
@@ -136,34 +152,34 @@ export async function createMiniApp(params: CreateMiniAppParams): Promise<MiniAp
 export async function getMiniApp(id: string): Promise<MiniAppSummary | null> {
   const row = await db.select().from(miniApps).where(eq(miniApps.id, id)).get()
   if (!row) return null
-  const kin = await db.select().from(kins).where(eq(kins.id, row.kinId)).get()
-  return serializeApp(row, kin?.name ?? 'Unknown', kin?.avatarPath ? `/api/uploads/kins/${row.kinId}/avatar${extname(kin.avatarPath)}` : null)
+  const agent = await db.select().from(agents).where(eq(agents.id, row.agentId)).get()
+  return serializeApp(row, agent?.name ?? 'Unknown', agent?.avatarPath ? `/api/uploads/agents/${row.agentId}/avatar${extname(agent.avatarPath)}` : null)
 }
 
-export async function getMiniAppBySlug(kinId: string, slug: string): Promise<MiniAppSummary | null> {
+export async function getMiniAppBySlug(agentId: string, slug: string): Promise<MiniAppSummary | null> {
   const row = await db.select().from(miniApps)
-    .where(and(eq(miniApps.kinId, kinId), eq(miniApps.slug, slug)))
+    .where(and(eq(miniApps.agentId, agentId), eq(miniApps.slug, slug)))
     .get()
   if (!row) return null
-  const kin = await db.select().from(kins).where(eq(kins.id, kinId)).get()
-  return serializeApp(row, kin?.name ?? 'Unknown', kin?.avatarPath ? `/api/uploads/kins/${kinId}/avatar${extname(kin.avatarPath)}` : null)
+  const agent = await db.select().from(agents).where(eq(agents.id, agentId)).get()
+  return serializeApp(row, agent?.name ?? 'Unknown', agent?.avatarPath ? `/api/uploads/agents/${agentId}/avatar${extname(agent.avatarPath)}` : null)
 }
 
 // ─── List ───────────────────────────────────────────────────────────────────
 
-export async function listMiniApps(kinId: string): Promise<MiniAppSummary[]> {
+export async function listMiniApps(agentId: string): Promise<MiniAppSummary[]> {
   const rows = await db.select().from(miniApps)
-    .where(eq(miniApps.kinId, kinId))
+    .where(eq(miniApps.agentId, agentId))
     .orderBy(desc(miniApps.createdAt))
     .all()
 
   if (rows.length === 0) return []
 
-  const kin = await db.select().from(kins).where(eq(kins.id, kinId)).get()
-  const kinName = kin?.name ?? 'Unknown'
-  const kinAvatarUrl = kin?.avatarPath ? `/api/uploads/kins/${kinId}/avatar${extname(kin.avatarPath)}` : null
+  const agent = await db.select().from(agents).where(eq(agents.id, agentId)).get()
+  const agentName = agent?.name ?? 'Unknown'
+  const agentAvatarUrl = agent?.avatarPath ? `/api/uploads/agents/${agentId}/avatar${extname(agent.avatarPath)}` : null
 
-  return rows.map((row) => serializeApp(row, kinName, kinAvatarUrl))
+  return rows.map((row) => serializeApp(row, agentName, agentAvatarUrl))
 }
 
 // ─── Update ─────────────────────────────────────────────────────────────────
@@ -191,38 +207,47 @@ export async function updateMiniApp(id: string, params: UpdateMiniAppParams): Pr
 
   await db.update(miniApps).set(updates).where(eq(miniApps.id, id))
   log.info({ appId: id }, 'Mini-app updated')
+
+  // Activation changes affect the running backend: stop when deactivated,
+  // (re)start background apps when reactivated.
+  if (params.isActive !== undefined) notifyBackendRestart(id)
+
   return getMiniApp(id)
 }
 
 // ─── Reassign maintainer ──────────────────────────────────────────────────────
 
 /**
- * Reassign the maintainer Kin of a mini-app. Because app files live on disk at
- * `dir/<maintainerKinId>/<appId>/`, the directory is moved to the new
+ * Reassign the maintainer Agent of a mini-app. Because app files live on disk at
+ * `dir/<maintainerAgentId>/<appId>/`, the directory is moved to the new
  * maintainer's namespace so file/serve/snapshot paths keep resolving.
  * Returns the updated summary, or null if the app doesn't exist.
  */
-export async function setMiniAppMaintainer(appId: string, newMaintainerKinId: string): Promise<MiniAppSummary | null> {
+export async function setMiniAppMaintainer(appId: string, newMaintainerAgentId: string): Promise<MiniAppSummary | null> {
   const app = await db.select().from(miniApps).where(eq(miniApps.id, appId)).get()
   if (!app) return null
-  if (app.kinId === newMaintainerKinId) return getMiniApp(appId)
+  if (app.agentId === newMaintainerAgentId) return getMiniApp(appId)
 
-  // Validate the target Kin exists.
-  const targetKin = await db.select().from(kins).where(eq(kins.id, newMaintainerKinId)).get()
-  if (!targetKin) throw new Error('Target Kin not found')
+  // Validate the target Agent exists.
+  const targetAgent = await db.select().from(agents).where(eq(agents.id, newMaintainerAgentId)).get()
+  if (!targetAgent) throw new Error('Target Agent not found')
 
   // Move the on-disk directory to the new namespace (best-effort: an app with no
   // files yet simply has no source dir).
-  const oldDir = appDir(app.kinId, appId)
-  const newDir = appDir(newMaintainerKinId, appId)
+  const oldDir = appDir(app.agentId, appId)
+  const newDir = appDir(newMaintainerAgentId, appId)
   if (existsSync(oldDir) && oldDir !== newDir) {
     await mkdir(dirname(newDir), { recursive: true })
     if (existsSync(newDir)) await rm(newDir, { recursive: true, force: true })
     await rename(oldDir, newDir)
   }
 
-  await db.update(miniApps).set({ kinId: newMaintainerKinId, updatedAt: new Date() }).where(eq(miniApps.id, appId))
-  log.info({ appId, fromKinId: app.kinId, toKinId: newMaintainerKinId }, 'Mini-app maintainer reassigned')
+  await db.update(miniApps).set({ agentId: newMaintainerAgentId, updatedAt: new Date() }).where(eq(miniApps.id, appId))
+  log.info({ appId, fromAgentId: app.agentId, toAgentId: newMaintainerAgentId }, 'Mini-app maintainer reassigned')
+
+  // The on-disk dir moved: the cached backend module points at the old path.
+  notifyBackendRestart(appId)
+
   return getMiniApp(appId)
 }
 
@@ -233,7 +258,7 @@ export async function deleteMiniApp(id: string): Promise<boolean> {
   if (!app) return false
 
   // Delete files from disk
-  const dir = appDir(app.kinId, id)
+  const dir = appDir(app.agentId, id)
   try {
     if (existsSync(dir)) {
       await rm(dir, { recursive: true, force: true })
@@ -243,6 +268,12 @@ export async function deleteMiniApp(id: string): Promise<boolean> {
   }
 
   await db.delete(miniApps).where(eq(miniApps.id, id))
+
+  // Stop any running backend instance and drop the SSE emitter.
+  void import('@/server/services/mini-app-backend')
+    .then((m) => m.removeBackend(id))
+    .catch(() => {})
+
   log.info({ appId: id, name: app.name }, 'Mini-app deleted')
   return true
 }
@@ -257,7 +288,7 @@ export async function writeAppFile(
   const app = await db.select().from(miniApps).where(eq(miniApps.id, appId)).get()
   if (!app) throw new Error('App not found')
 
-  const dir = appDir(app.kinId, appId)
+  const dir = appDir(app.agentId, appId)
   const filePath = validatePath(dir, relativePath)
 
   const buffer = typeof content === 'string' ? Buffer.from(content, 'utf-8') : content
@@ -279,6 +310,8 @@ export async function writeAppFile(
   }
   await db.update(miniApps).set(updates).where(eq(miniApps.id, appId))
 
+  notifyBackendFilesChanged(appId, relativePath)
+
   log.debug({ appId, path: relativePath, size: buffer.length }, 'App file written')
   return { path: relativePath, size: buffer.length }
 }
@@ -287,7 +320,7 @@ export async function readAppFile(appId: string, relativePath: string): Promise<
   const app = await db.select().from(miniApps).where(eq(miniApps.id, appId)).get()
   if (!app) throw new Error('App not found')
 
-  const dir = appDir(app.kinId, appId)
+  const dir = appDir(app.agentId, appId)
   const filePath = validatePath(dir, relativePath)
 
   if (!existsSync(filePath)) {
@@ -301,7 +334,7 @@ export async function deleteAppFile(appId: string, relativePath: string): Promis
   const app = await db.select().from(miniApps).where(eq(miniApps.id, appId)).get()
   if (!app) throw new Error('App not found')
 
-  const dir = appDir(app.kinId, appId)
+  const dir = appDir(app.agentId, appId)
   const filePath = validatePath(dir, relativePath)
 
   if (!existsSync(filePath)) return false
@@ -318,6 +351,8 @@ export async function deleteAppFile(appId: string, relativePath: string): Promis
   }
   await db.update(miniApps).set(updates).where(eq(miniApps.id, appId))
 
+  notifyBackendFilesChanged(appId, relativePath)
+
   log.debug({ appId, path: relativePath }, 'App file deleted')
   return true
 }
@@ -332,7 +367,7 @@ export async function listAppFiles(appId: string): Promise<AppFileInfo[]> {
   const app = await db.select().from(miniApps).where(eq(miniApps.id, appId)).get()
   if (!app) throw new Error('App not found')
 
-  const dir = appDir(app.kinId, appId)
+  const dir = appDir(app.agentId, appId)
   if (!existsSync(dir)) return []
 
   const files: AppFileInfo[] = []
@@ -360,18 +395,107 @@ async function walkDir(base: string, current: string, results: AppFileInfo[]): P
 // ─── Serve helpers ──────────────────────────────────────────────────────────
 
 /** Get the absolute path of the app directory on disk */
-export function getAppDir(kinId: string, appId: string): string {
-  return appDir(kinId, appId)
+export function getAppDir(agentId: string, appId: string): string {
+  return appDir(agentId, appId)
 }
 
-/** Get the raw DB row (for routes that need kinId) */
+/** Get the raw DB row (for routes that need agentId) */
 export async function getMiniAppRow(id: string): Promise<MiniAppRow | null> {
   return db.select().from(miniApps).where(eq(miniApps.id, id)).get() ?? null
 }
 
+// ─── Manifest (app.json) ─────────────────────────────────────────────────────
+
+/** Parsed `app.json` manifest fields the host cares about. */
+export interface MiniAppManifest {
+  dependencies?: Record<string, string>
+  importmap?: { imports?: Record<string, string> }
+  /** When true, the backend is loaded at server boot and restarted on edits. */
+  background?: boolean
+  /** Capabilities the backend requests (granted by the user, see mini-app permissions). */
+  permissions?: string[]
+  [key: string]: unknown
+}
+
+/** Read and parse the app's `app.json`. Returns {} when absent or malformed. */
+export async function readAppManifest(appId: string): Promise<MiniAppManifest> {
+  const app = await db.select().from(miniApps).where(eq(miniApps.id, appId)).get()
+  if (!app) return {}
+  const manifestPath = join(appDir(app.agentId, appId), 'app.json')
+  if (!existsSync(manifestPath)) return {}
+  try {
+    const parsed = JSON.parse(await Bun.file(manifestPath).text())
+    return parsed && typeof parsed === 'object' ? (parsed as MiniAppManifest) : {}
+  } catch {
+    return {}
+  }
+}
+
+// ─── Capability permissions ──────────────────────────────────────────────────
+
+/**
+ * Grant capability permissions to a mini-app (additive — grants are never
+ * silently revoked here). Only permissions actually requested in app.json can
+ * be granted. The backend is restarted so the new grants take effect.
+ */
+export async function grantMiniAppPermissions(
+  appId: string,
+  grant: string[],
+): Promise<{ requested: string[]; granted: string[]; invalid: string[] } | null> {
+  const { parseRequestedPermissions, parseGrantedPermissions, isKnownPermission } = await import('@/server/services/mini-app-capabilities')
+
+  const app = await db.select().from(miniApps).where(eq(miniApps.id, appId)).get()
+  if (!app) return null
+
+  const manifest = await readAppManifest(appId)
+  const requested = parseRequestedPermissions(manifest)
+  const current = parseGrantedPermissions(app.grantedPermissions)
+
+  const invalid: string[] = []
+  const accepted: string[] = []
+  for (const p of grant) {
+    if (typeof p !== 'string' || !isKnownPermission(p) || !requested.includes(p)) invalid.push(String(p))
+    else accepted.push(p)
+  }
+
+  const granted = [...new Set([...current, ...accepted])]
+  await db.update(miniApps)
+    .set({ grantedPermissions: JSON.stringify(granted), updatedAt: new Date() })
+    .where(eq(miniApps.id, appId))
+
+  if (accepted.length > 0) notifyBackendRestart(appId)
+
+  log.info({ appId, accepted, invalid }, 'Mini-app permissions granted')
+  return { requested, granted, invalid }
+}
+
+/** Current permission state of an app: requested (manifest) vs granted (DB). */
+export async function getMiniAppPermissions(
+  appId: string,
+): Promise<{ requested: string[]; granted: string[]; missing: string[] } | null> {
+  const { parseRequestedPermissions, parseGrantedPermissions } = await import('@/server/services/mini-app-capabilities')
+
+  const app = await db.select().from(miniApps).where(eq(miniApps.id, appId)).get()
+  if (!app) return null
+
+  const manifest = await readAppManifest(appId)
+  const requested = parseRequestedPermissions(manifest)
+  const granted = parseGrantedPermissions(app.grantedPermissions).filter((p) => requested.includes(p))
+  return { requested, granted, missing: requested.filter((p) => !granted.includes(p)) }
+}
+
+/** Ids of all active apps that have a backend (for boot-time background loading). */
+export async function listBackendAppIds(): Promise<string[]> {
+  const rows = await db.select({ id: miniApps.id })
+    .from(miniApps)
+    .where(and(eq(miniApps.hasBackend, true), eq(miniApps.isActive, true)))
+    .all()
+  return rows.map((r) => r.id)
+}
+
 export { guessMimeType }
 
-// ─── Gallery (cross-kin browsing & cloning) ─────────────────────────────────
+// ─── Gallery (cross-agent browsing & cloning) ─────────────────────────────────
 
 export async function listAllMiniApps(): Promise<MiniAppSummary[]> {
   const rows = await db.select().from(miniApps)
@@ -381,22 +505,22 @@ export async function listAllMiniApps(): Promise<MiniAppSummary[]> {
 
   if (rows.length === 0) return []
 
-  // Batch-load kin info
-  const kinIds = [...new Set(rows.map((r) => r.kinId))]
-  const kinRows = await Promise.all(kinIds.map((id) => db.select().from(kins).where(eq(kins.id, id)).get()))
-  const kinMap = new Map<string, { name: string; avatarUrl: string | null }>()
-  for (let i = 0; i < kinIds.length; i++) {
-    const kinId = kinIds[i]!
-    const kin = kinRows[i]
-    const avatarPath = kin?.avatarPath ?? null
-    kinMap.set(kinId, {
-      name: kin?.name ?? 'Unknown',
-      avatarUrl: avatarPath ? `/api/uploads/kins/${kinId}/avatar${extname(avatarPath)}` : null,
+  // Batch-load agent info
+  const agentIds = [...new Set(rows.map((r) => r.agentId))]
+  const agentRows = await Promise.all(agentIds.map((id) => db.select().from(agents).where(eq(agents.id, id)).get()))
+  const agentMap = new Map<string, { name: string; avatarUrl: string | null }>()
+  for (let i = 0; i < agentIds.length; i++) {
+    const agentId = agentIds[i]!
+    const agent = agentRows[i]
+    const avatarPath = agent?.avatarPath ?? null
+    agentMap.set(agentId, {
+      name: agent?.name ?? 'Unknown',
+      avatarUrl: avatarPath ? `/api/uploads/agents/${agentId}/avatar${extname(avatarPath)}` : null,
     })
   }
 
   return rows.map((row) => {
-    const info = kinMap.get(row.kinId) ?? { name: 'Unknown', avatarUrl: null }
+    const info = agentMap.get(row.agentId) ?? { name: 'Unknown', avatarUrl: null }
     return serializeApp(row, info.name, info.avatarUrl)
   })
 }
@@ -482,8 +606,8 @@ export interface SnapshotSummary {
   createdAt: number
 }
 
-function snapshotDir(kinId: string, appId: string, version: number): string {
-  return join(config.miniApps.dir, kinId, appId, '.snapshots', String(version))
+function snapshotDir(agentId: string, appId: string, version: number): string {
+  return join(config.miniApps.dir, agentId, appId, '.snapshots', String(version))
 }
 
 /**
@@ -494,7 +618,7 @@ export async function createSnapshot(appId: string, label?: string): Promise<Sna
   const app = await db.select().from(miniApps).where(eq(miniApps.id, appId)).get()
   if (!app) return null
 
-  const dir = appDir(app.kinId, appId)
+  const dir = appDir(app.agentId, appId)
   if (!existsSync(dir)) return null
 
   // Collect current files (excluding .snapshots dir)
@@ -504,7 +628,7 @@ export async function createSnapshot(appId: string, label?: string): Promise<Sna
   if (files.length === 0) return null
 
   // Copy files to snapshot directory
-  const snapDir = snapshotDir(app.kinId, appId, app.version)
+  const snapDir = snapshotDir(app.agentId, appId, app.version)
   await mkdir(snapDir, { recursive: true })
 
   for (const file of files) {
@@ -539,7 +663,7 @@ export async function createSnapshot(appId: string, label?: string): Promise<Sna
     for (const snap of toDelete) {
       await db.delete(miniAppSnapshots).where(eq(miniAppSnapshots.id, snap.id))
       // Remove snapshot files
-      const oldSnapDir = snapshotDir(app.kinId, appId, snap.version)
+      const oldSnapDir = snapshotDir(app.agentId, appId, snap.version)
       if (existsSync(oldSnapDir)) {
         await rm(oldSnapDir, { recursive: true, force: true }).catch(() => {})
       }
@@ -591,14 +715,14 @@ export async function rollbackToSnapshot(appId: string, targetVersion: number): 
 
   if (!snapshot) return { success: false, message: `Snapshot for version ${targetVersion} not found` }
 
-  const snapDir = snapshotDir(app.kinId, appId, targetVersion)
+  const snapDir = snapshotDir(app.agentId, appId, targetVersion)
   if (!existsSync(snapDir)) return { success: false, message: 'Snapshot files not found on disk' }
 
   // Create a snapshot of current state first (auto-backup)
   await createSnapshot(appId, `auto-backup before rollback to v${targetVersion}`)
 
   // Clear current app files (except .snapshots)
-  const dir = appDir(app.kinId, appId)
+  const dir = appDir(app.agentId, appId)
   const currentFiles: { path: string; size: number }[] = []
   await walkDirForSnapshot(dir, dir, currentFiles)
   for (const file of currentFiles) {
@@ -628,6 +752,9 @@ export async function rollbackToSnapshot(appId: string, targetVersion: number): 
     updatedAt: new Date(),
   }).where(eq(miniApps.id, appId))
 
+  // The restored file set may carry a different _server.js / app.json.
+  notifyBackendRestart(appId)
+
   log.info({ appId, fromVersion: app.version, toVersion: targetVersion, newVersion }, 'App rolled back')
 
   return {
@@ -636,12 +763,14 @@ export async function rollbackToSnapshot(appId: string, targetVersion: number): 
   }
 }
 
-/** Walk directory excluding .snapshots */
+/** Walk directory excluding .snapshots and the runtime data dir (_data) */
 async function walkDirForSnapshot(base: string, current: string, results: { path: string; size: number }[]): Promise<void> {
   if (!existsSync(current)) return
   const entries = await readdir(current, { withFileTypes: true })
   for (const entry of entries) {
     if (entry.name === '.snapshots') continue
+    // ctx.files runtime data is not source code: never snapshotted/rolled back
+    if (current === base && entry.name === '_data') continue
     const fullPath = join(current, entry.name)
     if (entry.isDirectory()) {
       await walkDirForSnapshot(base, fullPath, results)
@@ -676,7 +805,7 @@ export async function generateMiniAppIcon(
   })
 
   // Save icon file to app directory
-  const dir = appDir(row.kinId, appId)
+  const dir = appDir(row.agentId, appId)
   await mkdir(dir, { recursive: true })
   const ext = result.mediaType === 'image/webp' ? 'webp' : 'png'
   const iconPath = join(dir, `_icon.${ext}`)

@@ -7,16 +7,30 @@ import { FormField } from '@/client/components/common/FormField'
 import { Label } from '@/client/components/ui/label'
 import { Switch } from '@/client/components/ui/switch'
 import { InfoTip } from '@/client/components/common/InfoTip'
-import { KinSelector } from '@/client/components/common/KinSelector'
+import { AgentSelector } from '@/client/components/common/AgentSelector'
 import { api, getErrorMessage } from '@/client/lib/api'
 import type { StoredFileData } from '@/client/components/file-storage/FileStorageCard'
+
+/** Creation-summary shape returned by the share endpoints (url included). */
+export interface SavedStoredFile {
+  id: string
+  name: string
+  url: string
+}
 
 interface FileStorageFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSaved: () => void
+  /** Carries the created file in workspaceSource mode (URL-copy step). */
+  onSaved: (file?: SavedStoredFile) => void
   file?: StoredFileData | null
-  kins: { id: string; name: string }[]
+  agents: { id: string; name: string }[]
+  /**
+   * Share-from-workspace mode (Files section, files.md § 4.4): hides the file
+   * input + agent selector, prefills the name with the basename and submits a
+   * SNAPSHOT to POST /api/file-storage/from-workspace.
+   */
+  workspaceSource?: { agentId: string; path: string } | null
 }
 
 export function FileStorageFormDialog({
@@ -24,17 +38,19 @@ export function FileStorageFormDialog({
   onOpenChange,
   onSaved,
   file,
-  kins,
+  agents,
+  workspaceSource,
 }: FileStorageFormDialogProps) {
   const { t } = useTranslation()
   const isEditing = !!file
+  const isWorkspaceShare = !!workspaceSource && !isEditing
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [kinId, setKinId] = useState('')
+  const [agentId, setAgentId] = useState('')
   const [isPublic, setIsPublic] = useState(true)
   const [password, setPassword] = useState('')
   const [expiresIn, setExpiresIn] = useState('')
@@ -45,17 +61,27 @@ export function FileStorageFormDialog({
     if (open && file) {
       setName(file.name)
       setDescription(file.description ?? '')
-      setKinId(file.kinId)
+      setAgentId(file.agentId)
       setIsPublic(file.isPublic)
       setPassword('')
       setExpiresIn('')
       setReadAndBurn(file.readAndBurn)
       setSelectedFile(null)
       setError('')
+    } else if (open && workspaceSource) {
+      setName(workspaceSource.path.split('/').pop() ?? '')
+      setDescription('')
+      setAgentId(workspaceSource.agentId)
+      setIsPublic(true)
+      setPassword('')
+      setExpiresIn('')
+      setReadAndBurn(false)
+      setSelectedFile(null)
+      setError('')
     } else if (open) {
       setName('')
       setDescription('')
-      setKinId(kins[0]?.id ?? '')
+      setAgentId(agents[0]?.id ?? '')
       setIsPublic(true)
       setPassword('')
       setExpiresIn('')
@@ -63,7 +89,7 @@ export function FileStorageFormDialog({
       setSelectedFile(null)
       setError('')
     }
-  }, [open, file, kins])
+  }, [open, file, agents, workspaceSource])
 
   const handleClose = () => {
     onOpenChange(false)
@@ -85,6 +111,21 @@ export function FileStorageFormDialog({
         if (Object.keys(body).length > 0) {
           await api.patch(`/file-storage/${file.id}`, body)
         }
+      } else if (isWorkspaceShare && workspaceSource) {
+        const created = await api.post<{ file: SavedStoredFile }>('/file-storage/from-workspace', {
+          agentId: workspaceSource.agentId,
+          path: workspaceSource.path,
+          name: name || undefined,
+          description: description || undefined,
+          isPublic,
+          password: password || undefined,
+          expiresIn: expiresIn ? Number(expiresIn) : undefined,
+          readAndBurn,
+        })
+        onSaved(created.file)
+        handleClose()
+        setIsSaving(false)
+        return
       } else {
         if (!selectedFile) {
           setError(t('settings.files.fileRequired'))
@@ -94,7 +135,7 @@ export function FileStorageFormDialog({
 
         const formData = new FormData()
         formData.append('file', selectedFile)
-        formData.append('kinId', kinId)
+        formData.append('agentId', agentId)
         formData.append('name', name || selectedFile.name)
         if (description) formData.append('description', description)
         formData.append('isPublic', String(isPublic))
@@ -122,22 +163,28 @@ export function FileStorageFormDialog({
     }
   }
 
-  const canSave = isEditing ? true : !!selectedFile && !!kinId
+  const canSave = isEditing || isWorkspaceShare ? true : !!selectedFile && !!agentId
 
   return (
     <FormDialog
       open={open}
       onOpenChange={(v) => { if (!v) handleClose() }}
-      title={isEditing ? t('settings.files.edit') : t('settings.files.add')}
-      description={isEditing ? t('settings.files.editHint') : t('settings.files.addHint')}
+      title={isEditing ? t('settings.files.edit') : isWorkspaceShare ? t('files.share.title') : t('settings.files.add')}
+      description={
+        isEditing
+          ? t('settings.files.editHint')
+          : isWorkspaceShare
+            ? t('files.share.snapshotNotice')
+            : t('settings.files.addHint')
+      }
       size="md"
       error={error || null}
       onSubmit={handleSave}
       isSubmitting={isSaving}
       submitDisabled={!canSave}
-      submitLabel={isEditing ? t('common.save') : t('settings.files.add')}
+      submitLabel={isEditing ? t('common.save') : isWorkspaceShare ? t('files.share.submit') : t('settings.files.add')}
     >
-      {!isEditing && (
+      {!isEditing && !isWorkspaceShare && (
         <>
           <FormField label={t('settings.files.file')} htmlFor="file-storage-file">
             <Input
@@ -153,14 +200,14 @@ export function FileStorageFormDialog({
           </FormField>
 
           <FormField
-            label={t('settings.files.kin')}
-            htmlFor="file-storage-kin"
-            tip={t('settings.files.kinTip')}
+            label={t('settings.files.agent')}
+            htmlFor="file-storage-agent"
+            tip={t('settings.files.agentTip')}
           >
-            <KinSelector
-              value={kinId}
-              onValueChange={setKinId}
-              kins={kins}
+            <AgentSelector
+              value={agentId}
+              onValueChange={setAgentId}
+              agents={agents}
             />
           </FormField>
         </>

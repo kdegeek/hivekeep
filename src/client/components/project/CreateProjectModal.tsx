@@ -5,7 +5,6 @@ import { FormField } from '@/client/components/common/FormField'
 import { Input } from '@/client/components/ui/input'
 import { MarkdownEditor } from '@/client/components/ui/markdown-editor'
 import { Label } from '@/client/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/client/components/ui/select'
 import { ModelPicker, modelPickerValue } from '@/client/components/common/ModelPicker'
 import { ToolboxMultiSelect } from '@/client/components/toolbox/ToolboxMultiSelect'
 import { useModels } from '@/client/hooks/useModels'
@@ -14,8 +13,10 @@ import { VaultPatPicker } from '@/client/components/project/VaultPatPicker'
 import { GithubRepoPicker } from '@/client/components/project/GithubRepoPicker'
 import { getErrorMessage } from '@/client/lib/api'
 import { choiceToConfig, type ThinkingChoice } from '@/client/lib/thinking-choice'
+import { ThinkingEffortSelect } from '@/client/components/common/ThinkingEffortSelect'
+import { modelReasoningInfo } from '@/client/lib/model-efforts'
 import { toast } from 'sonner'
-import type { KinThinkingConfig } from '@/shared/types'
+import type { AgentThinkingConfig } from '@/shared/types'
 
 interface CreateProjectInputSubset {
   title: string
@@ -27,7 +28,8 @@ interface CreateProjectInputSubset {
   providerId?: string | null
   scoutModel?: string | null
   scoutProviderId?: string | null
-  thinkingConfig?: KinThinkingConfig | null
+  scoutThinkingConfig?: AgentThinkingConfig | null
+  thinkingConfig?: AgentThinkingConfig | null
   defaultToolboxIds?: string[] | null
 }
 
@@ -52,6 +54,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreate, onCreated }: 
   const [scoutModel, setScoutModel] = useState('')
   const [scoutProviderId, setScoutProviderId] = useState('')
   const [thinkingChoice, setThinkingChoice] = useState<ThinkingChoice>('inherit')
+  const [scoutThinkingChoice, setScoutThinkingChoice] = useState<ThinkingChoice>('inherit')
   const [defaultToolboxIds, setDefaultToolboxIds] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -95,6 +98,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreate, onCreated }: 
         scoutModel: scoutBothSet ? scoutModel : undefined,
         scoutProviderId: scoutBothSet ? scoutProviderId : undefined,
         thinkingConfig: thinkingChoice !== 'inherit' ? choiceToConfig(thinkingChoice) : undefined,
+        scoutThinkingConfig: scoutThinkingChoice !== 'inherit' ? choiceToConfig(scoutThinkingChoice) : undefined,
         // Empty selection = inherit (built-in default). Only send when chosen.
         defaultToolboxIds: defaultToolboxIds.length > 0 ? defaultToolboxIds : undefined,
       })
@@ -140,7 +144,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreate, onCreated }: 
         />
       </FormField>
 
-      {/* Sub-Kin defaults: model + thinking effort. Pre-setting them at
+      {/* Sub-Agent defaults: model + thinking effort. Pre-setting them at
           creation time mirrors the edit modal so the user doesn't have
           to reopen the project to wire them up before spawning tasks. */}
       <FormField label={t('projects.edit.modelField')} hint={t('projects.edit.modelHint')}>
@@ -157,7 +161,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreate, onCreated }: 
       </FormField>
 
       {/* Default scout model for tasks on this project's tickets.
-          Empty = inherit the global scout default, then the Kin's model. */}
+          Empty = inherit the global scout default, then the Agent's model. */}
       <FormField label={t('projects.edit.scoutModelField')} hint={t('projects.edit.scoutModelHint')}>
         <ModelPicker
           models={llmModels}
@@ -172,27 +176,23 @@ export function CreateProjectModal({ open, onOpenChange, onCreate, onCreated }: 
         />
       </FormField>
 
+      <FormField label={t('projects.edit.scoutThinkingField')} hint={t('projects.edit.scoutThinkingHint')}>
+        <ThinkingEffortSelect
+          value={scoutThinkingChoice}
+          onChange={setScoutThinkingChoice}
+          inheritLabel={t('projects.edit.scoutThinkingInherit')}
+          reasoning={scoutModel
+            ? modelReasoningInfo(llmModels.find((m) => m.id === scoutModel && (!scoutProviderId || m.providerId === scoutProviderId)))
+            : undefined}
+        />
+      </FormField>
+
       <FormField label={t('projects.edit.thinkingField')} hint={t('projects.edit.thinkingHint')}>
-        <Select
+        <ThinkingEffortSelect
           value={thinkingChoice}
-          onValueChange={(v) => setThinkingChoice(v as ThinkingChoice)}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="inherit">
-              <span className="italic text-muted-foreground">
-                {t('projects.edit.thinkingInherit')}
-              </span>
-            </SelectItem>
-            <SelectItem value="off">{t('chat.thinkingPicker.effort.off')}</SelectItem>
-            <SelectItem value="low">{t('chat.thinkingPicker.effort.low')}</SelectItem>
-            <SelectItem value="medium">{t('chat.thinkingPicker.effort.medium')}</SelectItem>
-            <SelectItem value="high">{t('chat.thinkingPicker.effort.high')}</SelectItem>
-            <SelectItem value="max">{t('chat.thinkingPicker.effort.max')}</SelectItem>
-          </SelectContent>
-        </Select>
+          onChange={setThinkingChoice}
+          inheritLabel={t('projects.edit.thinkingInherit')}
+        />
       </FormField>
 
       {/* Default toolboxes for tasks started on this project's tickets.

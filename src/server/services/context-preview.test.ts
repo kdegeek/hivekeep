@@ -430,45 +430,45 @@ describe('excluded tool sets', () => {
   // exclusions to catch accidental removals.
 
   const SUB_KIN_EXCLUDED = new Set([
-    'spawn_self', 'spawn_kin',
+    'spawn_self', 'spawn_agent',
     'respond_to_task', 'cancel_task', 'list_tasks',
     'reply',
     'create_cron', 'update_cron', 'delete_cron', 'list_crons',
     'add_mcp_server', 'update_mcp_server', 'remove_mcp_server', 'list_mcp_servers',
     'create_custom_tool', 'list_custom_tools',
-    'create_kin', 'update_kin', 'delete_kin', 'get_kin_details',
+    'create_agent', 'update_agent', 'delete_agent', 'get_agent_details',
   ])
 
   const QUICK_SESSION_EXCLUDED = new Set([
-    'spawn_self', 'spawn_kin', 'respond_to_task', 'cancel_task', 'list_tasks',
+    'spawn_self', 'spawn_agent', 'respond_to_task', 'cancel_task', 'list_tasks',
     'report_to_parent', 'update_task_status', 'request_input',
     'send_message', 'reply', 'list_kins',
     'create_cron', 'update_cron', 'delete_cron', 'list_crons', 'get_cron_journal',
     'add_mcp_server', 'update_mcp_server', 'remove_mcp_server', 'list_mcp_servers',
     'create_custom_tool', 'list_custom_tools',
-    'create_kin', 'update_kin', 'delete_kin', 'get_kin_details',
+    'create_agent', 'update_agent', 'delete_agent', 'get_agent_details',
     'create_webhook', 'update_webhook', 'delete_webhook', 'list_webhooks',
     'send_channel_message', 'list_channel_conversations',
     'get_platform_logs',
     'memorize', 'update_memory', 'forget',
   ])
 
-  it('sub-kin exclusion set contains expected tools', () => {
+  it('sub-agent exclusion set contains expected tools', () => {
     expect(SUB_KIN_EXCLUDED.size).toBe(20)
     expect(SUB_KIN_EXCLUDED.has('spawn_self')).toBe(true)
     expect(SUB_KIN_EXCLUDED.has('reply')).toBe(true)
-    expect(SUB_KIN_EXCLUDED.has('create_kin')).toBe(true)
+    expect(SUB_KIN_EXCLUDED.has('create_agent')).toBe(true)
   })
 
-  it('quick session exclusion set is a superset of sub-kin exclusions for shared tools', () => {
-    // Quick sessions exclude more tools than sub-kins
+  it('quick session exclusion set is a superset of sub-agent exclusions for shared tools', () => {
+    // Quick sessions exclude more tools than sub-agents
     expect(QUICK_SESSION_EXCLUDED.size).toBeGreaterThan(SUB_KIN_EXCLUDED.size)
 
-    // Memory tools are excluded from quick sessions but not sub-kins
+    // Memory tools are excluded from quick sessions but not sub-agents
     expect(QUICK_SESSION_EXCLUDED.has('memorize')).toBe(true)
     expect(SUB_KIN_EXCLUDED.has('memorize')).toBe(false)
 
-    // Webhook tools are excluded from quick sessions but not sub-kins
+    // Webhook tools are excluded from quick sessions but not sub-agents
     expect(QUICK_SESSION_EXCLUDED.has('create_webhook')).toBe(true)
     expect(SUB_KIN_EXCLUDED.has('create_webhook')).toBe(false)
   })

@@ -9,7 +9,7 @@ import type { ToolExecutionContext } from '@/server/tools/types'
 
 // Use a real temp directory for filesystem tests (more reliable than mocking fs)
 const TEST_BASE = resolve(import.meta.dir, '../../../.test-workspace-fs')
-const KIN_ID = 'test-kin-fs'
+const KIN_ID = 'test-agent-fs'
 const KIN_DIR = join(TEST_BASE, KIN_ID)
 
 mock.module('@/server/config', () => ({
@@ -39,8 +39,8 @@ const {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const ctx: ToolExecutionContext = {
-  kinId: KIN_ID,
-  isSubKin: false,
+  agentId: KIN_ID,
+  isSubAgent: false,
 }
 
 function createTool(reg: ToolRegistration) {
@@ -345,16 +345,16 @@ describe('filesystem-tools', () => {
     })
 
     // Read-before-edit guard. Built on top of the per-task tool-call tracker,
-    // only fires when ctx.taskId is set (sub-Kin context). Main-Kin context
+    // only fires when ctx.taskId is set (sub-Agent context). Main-Agent context
     // bypasses the guard, which is what the rest of this file exercises.
-    describe('read-before-edit guard (sub-Kin only)', () => {
-      const subKinCtx: ToolExecutionContext = {
-        kinId: KIN_ID,
-        isSubKin: true,
+    describe('read-before-edit guard (sub-Agent only)', () => {
+      const subAgentCtx: ToolExecutionContext = {
+        agentId: KIN_ID,
+        isSubAgent: true,
         taskId: 'task-readguard-1',
       }
-      const subKinEdit = (editFileTool.create(subKinCtx) as any).execute as (p: any) => Promise<any>
-      const subKinRead = (readFileTool.create(subKinCtx) as any).execute as (p: any) => Promise<any>
+      const subAgentEdit = (editFileTool.create(subAgentCtx) as any).execute as (p: any) => Promise<any>
+      const subAgentRead = (readFileTool.create(subAgentCtx) as any).execute as (p: any) => Promise<any>
 
       beforeEach(async () => {
         const { _resetTracker } = await import('@/server/services/tool-call-tracker')
@@ -363,15 +363,15 @@ describe('filesystem-tools', () => {
 
       it('refuses an edit on a file the task has not read', async () => {
         writeFileSync(p('untouched.txt'), 'hello')
-        const result = await subKinEdit({ path: p('untouched.txt'), oldText: 'hello', newText: 'world' })
+        const result = await subAgentEdit({ path: p('untouched.txt'), oldText: 'hello', newText: 'world' })
         expect(result.success).toBe(false)
         expect(result.error).toContain('have not read this file')
       })
 
       it('allows the edit after a prior read_file in the same task', async () => {
         writeFileSync(p('ready.txt'), 'hello')
-        await subKinRead({ path: p('ready.txt') })
-        const result = await subKinEdit({ path: p('ready.txt'), oldText: 'hello', newText: 'world' })
+        await subAgentRead({ path: p('ready.txt') })
+        const result = await subAgentEdit({ path: p('ready.txt'), oldText: 'hello', newText: 'world' })
         expect(result.success).toBe(true)
       })
     })
@@ -495,7 +495,7 @@ describe('filesystem-tools', () => {
   describe('tool registration', () => {
     it('all tools have correct availability', () => {
       for (const tool of [readFileTool, writeFileTool, editFileTool, listDirectoryTool]) {
-        expect(tool.availability).toEqual(['main', 'sub-kin'])
+        expect(tool.availability).toEqual(['main', 'sub-agent'])
       }
     })
 

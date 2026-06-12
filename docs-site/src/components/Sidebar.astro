@@ -7,18 +7,38 @@ import Default from '@astrojs/starlight/components/Sidebar.astro';
 <style>
 	/* ─── Sidebar glass styling ───────────────────────── */
 
-	/* Active link: gradient left border + subtle glow */
+	/* Active link: readable high-contrast text on an accent-tinted background,
+	 * plus the gradient left accent bar.
+	 * Starlight's default sets the current link to `color: var(--sl-color-text-invert)`
+	 * (a near-black in dark mode) on a solid accent fill. We only tint the
+	 * background, so the dark invert text became unreadable. Force near-white
+	 * text (the aurora accent-high in light mode) and bump the tint slightly. */
 	:global(nav.sidebar a[aria-current='page']) {
 		position: relative;
-		background: oklch(0.60 0.22 300 / 0.15) !important;
+		color: var(--sl-color-white) !important;
+		font-weight: 600 !important;
+		background: oklch(0.72 0.19 305 / 0.22) !important;
 		border-radius: 0.5rem !important;
 		padding-inline-start: 0.875rem !important;
 		margin-inline-start: -0.25rem;
-		transition: background 0.2s ease !important;
+		transition: background 0.2s ease, color 0.2s ease !important;
+	}
+
+	:global(nav.sidebar a[aria-current='page']:hover),
+	:global(nav.sidebar a[aria-current='page']:focus) {
+		color: var(--sl-color-white) !important;
+		background: oklch(0.72 0.19 305 / 0.28) !important;
 	}
 
 	:global(:root[data-theme='light'] nav.sidebar a[aria-current='page']) {
-		background: oklch(0.60 0.22 300 / 0.10) !important;
+		color: var(--sl-color-accent-high) !important;
+		background: oklch(0.52 0.21 305 / 0.12) !important;
+	}
+
+	:global(:root[data-theme='light'] nav.sidebar a[aria-current='page']:hover),
+	:global(:root[data-theme='light'] nav.sidebar a[aria-current='page']:focus) {
+		color: var(--sl-color-accent-high) !important;
+		background: oklch(0.52 0.21 305 / 0.16) !important;
 	}
 
 	:global(nav.sidebar a[aria-current='page'])::before {
@@ -30,15 +50,25 @@ import Default from '@astrojs/starlight/components/Sidebar.astro';
 		border-radius: 2px;
 		background: linear-gradient(
 			180deg,
-			oklch(0.60 0.22 300),
-			oklch(0.66 0.24 340)
+			oklch(0.72 0.19 305),
+			oklch(0.72 0.22 342)
 		);
 	}
 
 	/* Hover effect on sidebar links */
 	:global(nav.sidebar a:not([aria-current='page']):hover) {
-		background: oklch(0.60 0.22 300 / 0.04) !important;
+		background: oklch(0.72 0.19 305 / 0.04) !important;
 		border-radius: 0.5rem;
+	}
+
+	/* ─── Tighter, conventional docs scale ─────────────────
+	 * Reduce link font-size and vertical spacing so more items fit
+	 * without scrolling, while keeping group headings legible.
+	 * Starlight default link is ~0.875rem with 0.3em block padding. */
+	:global(nav.sidebar a) {
+		font-size: 0.8125rem !important;
+		line-height: 1.4 !important;
+		padding-block: 0.28rem !important;
 	}
 
 	/* Section group headings */
@@ -47,24 +77,25 @@ import Default from '@astrojs/starlight/components/Sidebar.astro';
 		letter-spacing: -0.01em;
 		text-transform: none !important;
 		font-size: 0.8125rem !important;
+		padding-block: 0.35rem !important;
 	}
 
 	:global(.sidebar-content .top-level > li > details > summary span) {
 		background: linear-gradient(
 			135deg,
-			oklch(0.60 0.22 300 / 0.9),
-			oklch(0.66 0.24 340 / 0.9)
+			oklch(0.72 0.19 305 / 0.9),
+			oklch(0.72 0.22 342 / 0.9)
 		);
 		-webkit-background-clip: text;
 		-webkit-text-fill-color: transparent;
 		background-clip: text;
 	}
 
-	/* Sidebar separator between groups */
+	/* Sidebar separator between groups (tightened from the ~0.75rem default) */
 	:global(.sidebar-content .top-level > li + li) {
-		border-top: 1px solid oklch(0.60 0.22 300 / 0.08);
-		padding-top: 0.5rem;
-		margin-top: 0.25rem;
+		border-top: 1px solid oklch(0.72 0.19 305 / 0.08);
+		padding-top: 0.4rem !important;
+		margin-top: 0.4rem !important;
 	}
 
 	/* Sidebar bottom fade */
@@ -76,7 +107,7 @@ import Default from '@astrojs/starlight/components/Sidebar.astro';
 		height: 2rem;
 		background: linear-gradient(
 			to top,
-			var(--sl-color-bg-sidebar, oklch(0.13 0.03 298 / 0.60)),
+			var(--sl-color-bg-sidebar, oklch(0.155 0.032 312 / 0.60)),
 			transparent
 		);
 		pointer-events: none;

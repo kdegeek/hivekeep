@@ -21,7 +21,7 @@ import { listEmailProviders } from '@/server/email/registry'
 import { listContactsProviders } from '@/server/contacts/registry'
 import { listCalendarProviders } from '@/server/calendar/registry'
 import { createLogger } from '@/server/logger'
-import type { ConfigField } from '@kinbot-developer/sdk'
+import type { ConfigField } from '@hivekeep/sdk'
 
 const log = createLogger('connected-accounts')
 
@@ -47,7 +47,7 @@ export interface ConnectedAccount {
   capabilities: string[]
   /** Email send mode when the account serves email; null otherwise. */
   sendMode: 'direct' | 'approval' | null
-  allowedKinIds: string[] | null
+  allowedAgentIds: string[] | null
   isValid: boolean
   lastError: string | null
 }
@@ -56,7 +56,7 @@ interface StoredConfig {
   email_address?: string
   account_label?: string
   send_mode?: 'direct' | 'approval'
-  allowed_kin_ids?: string[] | null
+  allowed_agent_ids?: string[] | null
 }
 
 /** List every connected account (any account capability) with its capability set. */
@@ -71,7 +71,7 @@ export async function listConnectedAccounts(): Promise<ConnectedAccount[]> {
     } catch {
       // Unreadable config — still surface the account so it can be removed.
     }
-    const allowed = cfg.allowed_kin_ids && cfg.allowed_kin_ids.length > 0 ? cfg.allowed_kin_ids : null
+    const allowed = cfg.allowed_agent_ids && cfg.allowed_agent_ids.length > 0 ? cfg.allowed_agent_ids : null
     out.push({
       id: row.id,
       slug: row.slug,
@@ -80,7 +80,7 @@ export async function listConnectedAccounts(): Promise<ConnectedAccount[]> {
       label: cfg.email_address || cfg.account_label || row.name,
       capabilities: caps,
       sendMode: caps.includes('email') ? cfg.send_mode ?? 'direct' : null,
-      allowedKinIds: allowed,
+      allowedAgentIds: allowed,
       isValid: row.isValid,
       lastError: row.lastError,
     })
@@ -173,9 +173,9 @@ export function setAccountSendMode(id: string, mode: 'direct' | 'approval'): Pro
   })
 }
 
-export function setAccountAllowList(id: string, kinIds: string[] | null): Promise<void> {
+export function setAccountAllowList(id: string, agentIds: string[] | null): Promise<void> {
   return mutateRowConfig(id, (cfg) => {
-    cfg.allowed_kin_ids = kinIds && kinIds.length > 0 ? kinIds : null
+    cfg.allowed_agent_ids = agentIds && agentIds.length > 0 ? agentIds : null
   })
 }
 
@@ -238,7 +238,7 @@ export async function createConfigAccount(opts: {
     account_label: opts.label,
     credentials: opts.credentials,
     send_mode: servesEmail ? 'direct' : undefined,
-    allowed_kin_ids: null,
+    allowed_agent_ids: null,
   }
   await db.insert(providers).values({
     id,

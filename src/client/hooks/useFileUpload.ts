@@ -23,11 +23,11 @@ export interface PendingFile {
  * Files are uploaded immediately to `POST /api/files/upload`, then their IDs
  * are passed alongside the message content on send.
  */
-export function useFileUpload(kinId: string) {
+export function useFileUpload(agentId: string) {
   const { t } = useTranslation()
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
-  const kinIdRef = useRef(kinId)
-  kinIdRef.current = kinId
+  const agentIdRef = useRef(agentId)
+  agentIdRef.current = agentId
 
   const addFiles = useCallback(
     async (fileList: FileList | File[]) => {
@@ -51,10 +51,10 @@ export function useFileUpload(kinId: string) {
 
       // Upload each file in parallel
       for (const entry of entries) {
-        uploadSingleFile(entry, kinIdRef.current, setPendingFiles)
+        uploadSingleFile(entry, agentIdRef.current, setPendingFiles)
       }
     },
-    [], // kinId accessed via ref to avoid stale closure
+    [], // agentId accessed via ref to avoid stale closure
   )
 
   const removeFile = useCallback((localId: string) => {
@@ -74,7 +74,7 @@ export function useFileUpload(kinId: string) {
     })
   }, [])
 
-  // Clear files when switching Kins
+  // Clear files when switching Agents
   useEffect(() => {
     return () => {
       setPendingFiles((prev) => {
@@ -84,7 +84,7 @@ export function useFileUpload(kinId: string) {
         return []
       })
     }
-  }, [kinId])
+  }, [agentId])
 
   const isUploading = pendingFiles.some((f) => f.status === 'uploading')
 
@@ -93,13 +93,13 @@ export function useFileUpload(kinId: string) {
 
 async function uploadSingleFile(
   entry: PendingFile,
-  kinId: string,
+  agentId: string,
   setPendingFiles: React.Dispatch<React.SetStateAction<PendingFile[]>>,
 ) {
   try {
     const formData = new FormData()
     formData.append('file', entry.file)
-    formData.append('kinId', kinId)
+    formData.append('agentId', agentId)
 
     const res = await fetch('/api/files/upload', {
       method: 'POST',

@@ -97,7 +97,7 @@ registerRenderer('delete_event', CalendarResultRenderer)
 
 // Tasks — spawn confirmation / task detail card
 registerRenderer('spawn_self', TaskSpawnRenderer)
-registerRenderer('spawn_kin', TaskSpawnRenderer)
+registerRenderer('spawn_agent', TaskSpawnRenderer)
 registerRenderer('get_task_detail', TaskSpawnRenderer)
 
 // Crons — single cron / cron list / execution journal

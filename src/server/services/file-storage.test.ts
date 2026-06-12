@@ -315,8 +315,8 @@ describe('buildShareUrl contract', () => {
   }
 
   it('constructs share URL from public URL and token', () => {
-    expect(buildShareUrlLocal('https://kinbot.example.com', 'abc123'))
-      .toBe('https://kinbot.example.com/s/abc123')
+    expect(buildShareUrlLocal('https://hivekeep.example.com', 'abc123'))
+      .toBe('https://hivekeep.example.com/s/abc123')
   })
 
   it('handles trailing slash on publicUrl', () => {
@@ -327,7 +327,7 @@ describe('buildShareUrl contract', () => {
 
   it('handles long hex tokens', () => {
     const token = 'a'.repeat(64)
-    const url = buildShareUrlLocal('https://kinbot.example.com', token)
+    const url = buildShareUrlLocal('https://hivekeep.example.com', token)
     expect(url).toContain('/s/')
     expect(url.endsWith(token)).toBe(true)
   })

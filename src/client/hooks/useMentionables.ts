@@ -8,7 +8,7 @@ export interface MentionableUser {
   avatarUrl: string | null
 }
 
-export interface MentionableKin {
+export interface MentionableAgent {
   id: string
   slug: string | null
   name: string
@@ -17,15 +17,15 @@ export interface MentionableKin {
 
 export interface Mentionables {
   users: MentionableUser[]
-  kins: MentionableKin[]
+  agents: MentionableAgent[]
 }
 
 /**
- * Fetch the combined list of users and kins for @mention autocomplete.
+ * Fetch the combined list of users and agents for @mention autocomplete.
  * Fetches once on mount.
  */
 export function useMentionables() {
-  const [data, setData] = useState<Mentionables>({ users: [], kins: [] })
+  const [data, setData] = useState<Mentionables>({ users: [], agents: [] })
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {

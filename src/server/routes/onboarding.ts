@@ -6,7 +6,7 @@ import { auth } from '@/server/auth/index'
 import { createLogger } from '@/server/logger'
 import { createContact, findContactByLinkedUserId } from '@/server/services/contacts'
 import { validateInvitation, markInvitationUsed } from '@/server/services/invitations'
-import { SUPPORTED_LANGUAGES } from '@/shared/constants'
+import { SUPPORTED_LANGUAGES, AGENT_LANGUAGE_CODES } from '@/shared/constants'
 
 const log = createLogger('routes:onboarding')
 const onboardingRoutes = new Hono()
@@ -81,17 +81,18 @@ onboardingRoutes.post('/profile', async (c) => {
   }
 
   const body = await c.req.json()
-  const { firstName, lastName, pseudonym, language, invitationToken } = body as {
+  const { firstName, lastName, pseudonym, language, agentLanguage, invitationToken } = body as {
     firstName: string
-    lastName: string
+    lastName?: string
     pseudonym: string
     language: string
+    agentLanguage?: string | null
     invitationToken?: string
   }
 
-  if (!firstName || !lastName || !pseudonym) {
+  if (!firstName || !pseudonym) {
     return c.json(
-      { error: { code: 'VALIDATION_ERROR', message: 'firstName, lastName, and pseudonym are required' } },
+      { error: { code: 'VALIDATION_ERROR', message: 'firstName and pseudonym are required' } },
       400,
     )
   }
@@ -102,19 +103,19 @@ onboardingRoutes.post('/profile', async (c) => {
   const PSEUDONYM_REGEX = /^[a-zA-Z0-9_-]+$/
 
   const trimmedFirstName = String(firstName).trim()
-  const trimmedLastName = String(lastName).trim()
+  const trimmedLastName = String(lastName ?? '').trim()
   const trimmedPseudonym = String(pseudonym).trim()
 
   const validationErrors: string[] = []
 
   if (!trimmedFirstName) validationErrors.push('firstName cannot be empty')
   if (trimmedFirstName.length > MAX_NAME_LENGTH) validationErrors.push(`firstName must be under ${MAX_NAME_LENGTH} characters`)
-  if (!trimmedLastName) validationErrors.push('lastName cannot be empty')
   if (trimmedLastName.length > MAX_NAME_LENGTH) validationErrors.push(`lastName must be under ${MAX_NAME_LENGTH} characters`)
   if (!trimmedPseudonym || trimmedPseudonym.length < 2) validationErrors.push('pseudonym must be at least 2 characters')
   if (trimmedPseudonym.length > MAX_PSEUDONYM_LENGTH) validationErrors.push(`pseudonym must be under ${MAX_PSEUDONYM_LENGTH} characters`)
   if (trimmedPseudonym.length > 0 && !PSEUDONYM_REGEX.test(trimmedPseudonym)) validationErrors.push('pseudonym can only contain letters, numbers, underscores, and hyphens')
   if (language && !SUPPORTED_LANGUAGES.includes(language as typeof SUPPORTED_LANGUAGES[number])) validationErrors.push(`language must be one of: ${SUPPORTED_LANGUAGES.join(', ')}`)
+  if (agentLanguage != null && !AGENT_LANGUAGE_CODES.includes(agentLanguage)) validationErrors.push('agentLanguage must be a supported agent language code')
 
   if (validationErrors.length > 0) {
     return c.json(
@@ -155,13 +156,14 @@ onboardingRoutes.post('/profile', async (c) => {
     lastName: trimmedLastName,
     pseudonym: trimmedPseudonym,
     language: language || 'en',
+    agentLanguage: agentLanguage ?? null,
     role,
   })
 
   // Update name in Better Auth user table
   await db
     .update(user)
-    .set({ name: `${trimmedFirstName} ${trimmedLastName}`, updatedAt: new Date() })
+    .set({ name: `${trimmedFirstName} ${trimmedLastName}`.trim(), updatedAt: new Date() })
     .where(eq(user.id, userId))
 
   // Auto-create a contact for this user
@@ -193,11 +195,12 @@ onboardingRoutes.post('/profile', async (c) => {
     lastName: trimmedLastName,
     pseudonym: trimmedPseudonym,
     language: language || 'en',
+    agentLanguage: agentLanguage ?? null,
     role,
   }, 201)
 })
 
-// POST /api/onboarding/configurator — seed the configurator Kin (Sherpa) bound
+// POST /api/onboarding/configurator — seed the configurator Agent (Queenie) bound
 // to the bootstrap LLM provider. Admin-only, idempotent. Called by the
 // onboarding flow right after the first LLM provider is connected.
 onboardingRoutes.post('/configurator', async (c) => {
@@ -228,15 +231,15 @@ onboardingRoutes.post('/configurator', async (c) => {
   }
 
   try {
-    const { seedConfiguratorKin } = await import('@/server/services/configurator')
-    const kin = await seedConfiguratorKin(session.user.id, providerId)
+    const { seedConfiguratorAgent } = await import('@/server/services/configurator')
+    const agent = await seedConfiguratorAgent(session.user.id, providerId)
     return c.json({
-      kin: kin
-        ? { id: kin.id, slug: kin.slug, name: kin.name, kind: kin.kind }
+      agent: agent
+        ? { id: agent.id, slug: agent.slug, name: agent.name, kind: agent.kind }
         : null,
     }, 201)
   } catch (err) {
-    log.error({ providerId, err }, 'Failed to seed configurator Kin')
+    log.error({ providerId, err }, 'Failed to seed configurator Agent')
     return c.json({ error: { code: 'SEED_FAILED', message: 'Failed to create the configurator assistant' } }, 500)
   }
 })

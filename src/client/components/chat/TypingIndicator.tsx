@@ -5,8 +5,8 @@ import { ChatAvatar } from '@/client/components/chat/ChatAvatar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/client/components/ui/tooltip'
 
 interface TypingIndicatorProps {
-  kinName?: string
-  kinAvatarUrl?: string | null
+  agentName?: string
+  agentAvatarUrl?: string | null
   /** Server-side epoch (ms) when processing started — timer resumes correctly after navigation */
   startedAt?: number
   /** Live estimate of output tokens generated so far this turn (0 hides the counter) */
@@ -24,8 +24,8 @@ function formatTokens(n: number): string {
 }
 
 export function TypingIndicator({
-  kinName,
-  kinAvatarUrl,
+  agentName,
+  agentAvatarUrl,
   startedAt,
   tokenCount = 0,
   toolCallCount = 0,
@@ -53,11 +53,11 @@ export function TypingIndicator({
 
   return (
     <div className="flex gap-3 px-4 py-2 animate-fade-in-up">
-      <ChatAvatar avatarUrl={kinAvatarUrl} name={kinName} fallbackClassName="text-xs" />
+      <ChatAvatar avatarUrl={agentAvatarUrl} name={agentName} fallbackClassName="text-xs" />
 
       <div className="space-y-1">
-        {kinName && (
-          <p className="text-xs font-medium text-muted-foreground">{kinName}</p>
+        {agentName && (
+          <p className="text-xs font-medium text-muted-foreground">{agentName}</p>
         )}
         <div className="inline-flex items-center gap-2 rounded-2xl rounded-tl-md bg-muted px-4 py-2.5">
           <div className="flex gap-1">

@@ -5,20 +5,20 @@ import { useSSE, useSSEResync } from '@/client/hooks/useSSE'
 import type { HumanPromptSummary } from '@/shared/types'
 
 /**
- * Manages pending human prompts for a given Kin (and optionally a specific task).
+ * Manages pending human prompts for a given Agent (and optionally a specific task).
  * Fetches pending prompts on mount, listens for SSE events, and provides a respond function.
  */
-export function useHumanPrompts(kinId: string | null, taskId?: string | null) {
+export function useHumanPrompts(agentId: string | null, taskId?: string | null) {
   const [prompts, setPrompts] = useState<HumanPromptSummary[]>([])
   const [isResponding, setIsResponding] = useState(false)
 
-  // Fetch pending prompts on mount / kinId change
+  // Fetch pending prompts on mount / agentId change
   const fetchPending = useCallback(async () => {
-    if (!kinId) {
+    if (!agentId) {
       setPrompts([])
       return
     }
-    const params = new URLSearchParams({ kinId })
+    const params = new URLSearchParams({ agentId })
     if (taskId) params.set('taskId', taskId)
     try {
       const data = await api.get<{ prompts: HumanPromptSummary[] }>(`/prompts/pending?${params}`)
@@ -26,7 +26,7 @@ export function useHumanPrompts(kinId: string | null, taskId?: string | null) {
     } catch {
       // Ignore fetch errors — prompts will appear via SSE
     }
-  }, [kinId, taskId])
+  }, [agentId, taskId])
 
   useEffect(() => {
     fetchPending()
@@ -35,12 +35,12 @@ export function useHumanPrompts(kinId: string | null, taskId?: string | null) {
   // SSE handlers
   useSSE({
     'prompt:pending': (data) => {
-      if (data.kinId !== kinId) return
+      if (data.agentId !== agentId) return
       if (taskId !== undefined && taskId !== null && data.taskId !== taskId) return
 
       const newPrompt: HumanPromptSummary = {
         id: data.promptId as string,
-        kinId: data.kinId as string,
+        agentId: data.agentId as string,
         taskId: (data.taskId as string) ?? null,
         promptType: data.promptType as HumanPromptSummary['promptType'],
         question: data.question as string,
@@ -54,7 +54,7 @@ export function useHumanPrompts(kinId: string | null, taskId?: string | null) {
       setPrompts((prev) => [...prev, newPrompt])
     },
     'prompt:answered': (data) => {
-      if (data.kinId !== kinId) return
+      if (data.agentId !== agentId) return
       const promptId = data.promptId as string
       setPrompts((prev) => prev.filter((p) => p.id !== promptId))
     },
@@ -64,7 +64,7 @@ export function useHumanPrompts(kinId: string | null, taskId?: string | null) {
     // POST returned TASK_ALREADY_FINISHED). This SSE handles the rare cross-
     // tab / multi-client case where ANOTHER session expired the prompt.
     'prompt:expired': (data) => {
-      if (data.kinId !== kinId) return
+      if (data.agentId !== agentId) return
       const promptId = data.promptId as string
       setPrompts((prev) => prev.filter((p) => p.id !== promptId))
     },

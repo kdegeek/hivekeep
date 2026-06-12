@@ -10,23 +10,23 @@ test.describe.serial('Chat flow', () => {
     await page.goto('/')
     await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible({ timeout: 10_000 })
     await loginAs(page)
-    await expect(page.getByText('Kins', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Agents', { exact: true })).toBeVisible({ timeout: 10_000 })
   })
 
-  test('create a kin', async ({ page }) => {
-    // Click the "+" button to create a new Kin (title="New Kin")
-    await page.getByTitle('New Kin').click()
+  test('create an agent', async ({ page }) => {
+    // Click the "+" button to create a new Agent (title="New Agent")
+    await page.getByTitle('New Agent').click()
 
-    // The wizard dialog should open with "Describe your Kin"
+    // The wizard dialog should open with "Describe your Agent"
     await expect(page.getByRole('dialog')).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Describe your Kin' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Describe your Agent' })).toBeVisible()
 
     // Skip the AI wizard and go to manual form
     await page.getByRole('button', { name: 'Create manually' }).click()
 
     // Fill the form
-    await page.fill('#kinFormName', 'Test Assistant')
-    await page.fill('#kinFormRole', 'General helper for testing')
+    await page.fill('#agentFormName', 'Test Assistant')
+    await page.fill('#agentFormRole', 'General helper for testing')
 
     // Select a model from the model picker
     const modelPicker = page.getByRole('combobox').first()
@@ -35,17 +35,17 @@ test.describe.serial('Chat flow', () => {
     await page.getByRole('option', { name: /GPT-4o/i }).click()
 
     // Close the model picker popover by clicking elsewhere
-    await page.locator('#kinFormName').click()
+    await page.locator('#agentFormName').click()
 
     // Submit the form
-    await page.getByRole('button', { name: 'Create Kin' }).click()
+    await page.getByRole('button', { name: 'Create Agent' }).click()
 
-    // The new kin should appear in the sidebar after dialog closes
+    // The new agent should appear in the sidebar after dialog closes
     await expect(page.getByText('Test Assistant').first()).toBeVisible({ timeout: 15_000 })
   })
 
   test('send a message', async ({ page }) => {
-    // The kin created in the previous test should be in the sidebar
+    // The agent created in the previous test should be in the sidebar
     // Click on it to open the chat
     await page.getByText('Test Assistant').first().click()
 
@@ -64,7 +64,7 @@ test.describe.serial('Chat flow', () => {
   })
 
   test('search messages in conversation', async ({ page }) => {
-    // Open the kin with a message from the previous test
+    // Open the agent with a message from the previous test
     await page.getByText('Test Assistant').first().click()
     await expect(page.getByPlaceholder('Send a message...')).toBeVisible({ timeout: 10_000 })
 
@@ -94,7 +94,7 @@ test.describe.serial('Chat flow', () => {
   })
 
   test('open more actions dropdown and see export options', async ({ page }) => {
-    // Open the kin
+    // Open the agent
     await page.getByText('Test Assistant').first().click()
     await expect(page.getByPlaceholder('Send a message...')).toBeVisible({ timeout: 10_000 })
 
@@ -110,7 +110,7 @@ test.describe.serial('Chat flow', () => {
   })
 
   test('clear conversation', async ({ page }) => {
-    // Open the kin
+    // Open the agent
     await page.getByText('Test Assistant').first().click()
     await expect(page.getByPlaceholder('Send a message...')).toBeVisible({ timeout: 10_000 })
 
@@ -129,12 +129,12 @@ test.describe.serial('Chat flow', () => {
     // Confirm the clear action
     await page.getByRole('button', { name: 'Clear all messages' }).click()
 
-    // The conversation should now be empty — ChatEmptyState shows "Chat with <kin name>"
+    // The conversation should now be empty — ChatEmptyState shows "Chat with <agent name>"
     await expect(page.getByText('Chat with Test Assistant')).toBeVisible({ timeout: 10_000 })
   })
 
   test('send message after clearing shows in conversation', async ({ page }) => {
-    // Open the kin (cleared in previous test)
+    // Open the agent (cleared in previous test)
     await page.getByText('Test Assistant').first().click()
     const messageInput = page.getByPlaceholder('Send a message...')
     await expect(messageInput).toBeVisible({ timeout: 10_000 })
@@ -150,11 +150,11 @@ test.describe.serial('Chat flow', () => {
     await expect(page.getByText('Message after clear').first()).toBeVisible({ timeout: 10_000 })
   })
 
-  test('conversation header shows kin name, role, and model picker', async ({ page }) => {
+  test('conversation header shows agent name, role, and model picker', async ({ page }) => {
     await page.getByText('Test Assistant').first().click()
     await expect(page.getByPlaceholder('Send a message...')).toBeVisible({ timeout: 10_000 })
 
-    // Header should display kin name as heading
+    // Header should display agent name as heading
     await expect(page.getByRole('main').getByRole('heading', { name: 'Test Assistant', level: 2 })).toBeVisible()
 
     // Header should display the role text (desktop only, scoped to main to avoid sidebar match)
@@ -182,18 +182,18 @@ test.describe.serial('Chat flow', () => {
     await toolsButton.click()
   })
 
-  test('kin settings button opens edit modal', async ({ page }) => {
+  test('agent settings button opens edit modal', async ({ page }) => {
     await page.getByText('Test Assistant').first().click()
     await expect(page.getByPlaceholder('Send a message...')).toBeVisible({ timeout: 10_000 })
 
-    // Click the settings button (aria-label "Kin settings")
-    await page.getByRole('button', { name: 'Kin settings' }).click()
+    // Click the settings button (aria-label "Agent settings")
+    await page.getByRole('button', { name: 'Agent settings' }).click()
 
-    // The kin edit dialog should open
+    // The agent edit dialog should open
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 })
 
-    // Should show the kin name in the form
-    const nameInput = page.locator('#kinFormName')
+    // Should show the agent name in the form
+    const nameInput = page.locator('#agentFormName')
     await expect(nameInput).toHaveValue('Test Assistant')
 
     // Close dialog

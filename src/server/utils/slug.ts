@@ -1,5 +1,5 @@
 /**
- * Slug generation and validation utilities for Kin identifiers.
+ * Slug generation and validation utilities for Agent identifiers.
  */
 
 /**

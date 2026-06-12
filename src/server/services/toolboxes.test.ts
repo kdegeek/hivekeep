@@ -56,7 +56,7 @@ const NATIVE_TOOL = '__toolbox_wildcard_test_native__'
 const PLUGIN_TOOL = 'plugin___toolbox_wildcard_test__'
 
 const fakeTool = (): ToolRegistration => ({
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: () =>
     ({ description: '', inputSchema: undefined as any, execute: async () => null } as unknown as Tool<
       any,

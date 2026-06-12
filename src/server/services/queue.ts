@@ -24,7 +24,7 @@ const queueClientMessageId = new Map<string, string>()
 /**
  * In-memory sideband for free-form structured metadata attached to queue items
  * (e.g. channel adapter context like modality, presence, channel info).
- * Read once by the kin-engine when persisting the user message and merged
+ * Read once by the agent-engine when persisting the user message and merged
  * into messages.metadata. Single-process, lost on restart.
  */
 const queueMessageMetadata = new Map<string, Record<string, unknown>>()
@@ -36,7 +36,7 @@ export function popQueueMessageMetadata(itemId: string): Record<string, unknown>
 }
 
 export interface EnqueueParams {
-  kinId: string
+  agentId: string
   messageType: string
   content: string
   sourceType: string
@@ -68,15 +68,15 @@ export interface EnqueueParams {
 }
 
 /**
- * Enqueue a message for a Kin. Returns the queue item ID and position.
+ * Enqueue a message for an Agent. Returns the queue item ID and position.
  */
 export async function enqueueMessage(params: EnqueueParams) {
   const id = params.id ?? uuid()
-  const priority = params.priority ?? (params.sourceType === 'user' ? config.queue.userPriority : config.queue.kinPriority)
+  const priority = params.priority ?? (params.sourceType === 'user' ? config.queue.userPriority : config.queue.agentPriority)
 
   await db.insert(queueItems).values({
     id,
-    kinId: params.kinId,
+    agentId: params.agentId,
     messageType: params.messageType,
     content: params.content,
     sourceType: params.sourceType,
@@ -95,24 +95,24 @@ export async function enqueueMessage(params: EnqueueParams) {
   const pending = await db
     .select()
     .from(queueItems)
-    .where(and(eq(queueItems.kinId, params.kinId), eq(queueItems.status, 'pending')))
+    .where(and(eq(queueItems.agentId, params.agentId), eq(queueItems.status, 'pending')))
     .all()
 
   const queuePosition = pending.length
 
   // Emit queue update via SSE. Reflect the REAL processing state: a message
-  // enqueued WHILE the Kin is mid-turn must not report isProcessing:false —
+  // enqueued WHILE the Agent is mid-turn must not report isProcessing:false —
   // that clobbers the client's queue state and makes the live thinking bubble
   // disappear until a manual refresh. Scope to the message's lane (quick
   // session vs main thread) so each reflects its own processing status.
-  const processing = await isKinProcessing(params.kinId, params.sessionId ? 'quick' : 'main')
-  sseManager.sendToKin(params.kinId, {
+  const processing = await isAgentProcessing(params.agentId, params.sessionId ? 'quick' : 'main')
+  sseManager.sendToAgent(params.agentId, {
     type: 'queue:update',
-    kinId: params.kinId,
-    data: { kinId: params.kinId, queueSize: queuePosition, isProcessing: processing },
+    agentId: params.agentId,
+    data: { agentId: params.agentId, queueSize: queuePosition, isProcessing: processing },
   })
 
-  // Store file IDs in sideband map for later retrieval by kin-engine
+  // Store file IDs in sideband map for later retrieval by agent-engine
   if (params.fileIds && params.fileIds.length > 0) {
     queueFileIds.set(id, params.fileIds)
   }
@@ -122,18 +122,18 @@ export async function enqueueMessage(params: EnqueueParams) {
     queueClientMessageId.set(id, params.clientMessageId)
   }
 
-  // Store free-form message metadata in sideband for later retrieval by kin-engine
+  // Store free-form message metadata in sideband for later retrieval by agent-engine
   if (params.messageMetadata && Object.keys(params.messageMetadata).length > 0) {
     queueMessageMetadata.set(id, params.messageMetadata)
   }
 
-  log.debug({ kinId: params.kinId, itemId: id, messageType: params.messageType, sourceType: params.sourceType, queuePosition }, 'Message enqueued')
+  log.debug({ agentId: params.agentId, itemId: id, messageType: params.messageType, sourceType: params.sourceType, queuePosition }, 'Message enqueued')
 
   return { id, queuePosition }
 }
 
 /**
- * Dequeue the next message for a Kin. Returns null if the queue is empty.
+ * Dequeue the next message for an Agent. Returns null if the queue is empty.
  * Messages are ordered by priority (DESC) then creation time (ASC).
  *
  * Uses a single atomic UPDATE ... RETURNING * to prevent race conditions:
@@ -142,14 +142,14 @@ export async function enqueueMessage(params: EnqueueParams) {
  * @param mode - 'main' filters for session_id IS NULL (main session + tasks),
  *               'quick' filters for session_id IS NOT NULL (quick sessions).
  */
-export async function dequeueMessage(kinId: string, mode: 'main' | 'quick' = 'main') {
+export async function dequeueMessage(agentId: string, mode: 'main' | 'quick' = 'main') {
   const sessionFilter = mode === 'main'
     ? 'AND session_id IS NULL'
     : 'AND session_id IS NOT NULL'
 
   const row = sqlite.query<{
     id: string
-    kin_id: string
+    agent_id: string
     message_type: string
     content: string
     source_type: string
@@ -169,12 +169,12 @@ export async function dequeueMessage(kinId: string, mode: 'main' | 'quick' = 'ma
     SET status = 'processing'
     WHERE id = (
       SELECT id FROM queue_items
-      WHERE kin_id = ? AND status = 'pending' ${sessionFilter}
+      WHERE agent_id = ? AND status = 'pending' ${sessionFilter}
       ORDER BY priority DESC, created_at ASC
       LIMIT 1
     )
     RETURNING *
-  `).get(kinId)
+  `).get(agentId)
 
   if (!row) return null
 
@@ -188,7 +188,7 @@ export async function dequeueMessage(kinId: string, mode: 'main' | 'quick' = 'ma
 
   return {
     id: row.id,
-    kinId: row.kin_id,
+    agentId: row.agent_id,
     messageType: row.message_type,
     content: row.content,
     sourceType: row.source_type,
@@ -219,48 +219,48 @@ export async function markQueueItemDone(itemId: string) {
 }
 
 /**
- * Check if a Kin is currently processing a message.
+ * Check if an Agent is currently processing a message.
  * @param mode - 'main' checks only main/task items, 'quick' checks only quick session items.
  */
-export async function isKinProcessing(kinId: string, mode: 'main' | 'quick' = 'main'): Promise<boolean> {
+export async function isAgentProcessing(agentId: string, mode: 'main' | 'quick' = 'main'): Promise<boolean> {
   const sessionFilter = mode === 'main'
     ? 'AND session_id IS NULL'
     : 'AND session_id IS NOT NULL'
 
   const row = sqlite.query<{ id: string }, [string]>(
-    `SELECT id FROM queue_items WHERE kin_id = ? AND status = 'processing' ${sessionFilter} LIMIT 1`,
-  ).get(kinId)
+    `SELECT id FROM queue_items WHERE agent_id = ? AND status = 'processing' ${sessionFilter} LIMIT 1`,
+  ).get(agentId)
 
   return !!row
 }
 
 /**
- * Get the queue size for a Kin.
+ * Get the queue size for an Agent.
  */
-export async function getQueueSize(kinId: string): Promise<number> {
+export async function getQueueSize(agentId: string): Promise<number> {
   const pending = await db
     .select()
     .from(queueItems)
-    .where(and(eq(queueItems.kinId, kinId), eq(queueItems.status, 'pending')))
+    .where(and(eq(queueItems.agentId, agentId), eq(queueItems.status, 'pending')))
     .all()
 
   return pending.length
 }
 
 /**
- * List pending queue items for a Kin (ordered by priority DESC, creation time ASC).
+ * List pending queue items for an Agent (ordered by priority DESC, creation time ASC).
  */
-export async function getPendingQueueItems(kinId: string) {
+export async function getPendingQueueItems(agentId: string) {
   const rows = await db
     .select()
     .from(queueItems)
-    .where(and(eq(queueItems.kinId, kinId), eq(queueItems.status, 'pending')))
+    .where(and(eq(queueItems.agentId, agentId), eq(queueItems.status, 'pending')))
     .orderBy(desc(queueItems.priority), asc(queueItems.createdAt))
     .all()
 
   return rows.map((r) => ({
     id: r.id,
-    kinId: r.kinId,
+    agentId: r.agentId,
     messageType: r.messageType,
     content: r.content,
     sourceType: r.sourceType,
@@ -273,10 +273,10 @@ export async function getPendingQueueItems(kinId: string) {
 /**
  * Remove a pending queue item. Returns true if removed, false if not found or not pending.
  */
-export async function removeQueueItem(kinId: string, itemId: string): Promise<boolean> {
+export async function removeQueueItem(agentId: string, itemId: string): Promise<boolean> {
   const result = sqlite.run(
-    `DELETE FROM queue_items WHERE id = ? AND kin_id = ? AND status = 'pending'`,
-    [itemId, kinId],
+    `DELETE FROM queue_items WHERE id = ? AND agent_id = ? AND status = 'pending'`,
+    [itemId, agentId],
   )
 
   if (result.changes > 0) {
@@ -284,15 +284,15 @@ export async function removeQueueItem(kinId: string, itemId: string): Promise<bo
     queueFileIds.delete(itemId)
 
     // Emit updated queue state
-    const size = await getQueueSize(kinId)
-    const processing = await isKinProcessing(kinId)
-    sseManager.sendToKin(kinId, {
+    const size = await getQueueSize(agentId)
+    const processing = await isAgentProcessing(agentId)
+    sseManager.sendToAgent(agentId, {
       type: 'queue:update',
-      kinId,
-      data: { kinId, queueSize: size, isProcessing: processing },
+      agentId,
+      data: { agentId, queueSize: size, isProcessing: processing },
     })
 
-    log.debug({ kinId, itemId }, 'Queue item removed')
+    log.debug({ agentId, itemId }, 'Queue item removed')
     return true
   }
 

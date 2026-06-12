@@ -1,11 +1,12 @@
 import { Hono } from 'hono'
+import { THINKING_EFFORTS } from '@/shared/constants'
 import { eq, and, asc, desc, inArray, sql } from 'drizzle-orm'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/server/db/index'
-import { quickSessions, messages, kins, memories } from '@/server/db/schema'
+import { quickSessions, messages, agents, memories } from '@/server/db/schema'
 import { enqueueMessage } from '@/server/services/queue'
-import { abortQuickSessionStream } from '@/server/services/kin-engine'
-import { resolveKinId } from '@/server/services/kin-resolver'
+import { abortQuickSessionStream } from '@/server/services/agent-engine'
+import { resolveAgentId } from '@/server/services/agent-resolver'
 import { getFilesForMessages, serializeFile } from '@/server/services/files'
 import { createMemory } from '@/server/services/memory'
 import { config } from '@/server/config'
@@ -16,16 +17,16 @@ import type { QuickSessionStatus, QuickSessionSummary } from '@/shared/types'
 
 const log = createLogger('routes:quick-sessions')
 
-// ─── Kin-scoped routes: /api/kins/:kinId/quick-sessions ──────────────────────
+// ─── Agent-scoped routes: /api/agents/:agentId/quick-sessions ──────────────────────
 
-const kinScopedRoutes = new Hono<{ Variables: AppVariables }>()
+const agentScopedRoutes = new Hono<{ Variables: AppVariables }>()
 
 // POST / — create a new quick session
-kinScopedRoutes.post('/', async (c) => {
-  const kinIdParam = c.req.param('kinId')
-  const kinId = kinIdParam ? resolveKinId(kinIdParam) : null
-  if (!kinId) {
-    return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Kin not found' } }, 404)
+agentScopedRoutes.post('/', async (c) => {
+  const agentIdParam = c.req.param('agentId')
+  const agentId = agentIdParam ? resolveAgentId(agentIdParam) : null
+  if (!agentId) {
+    return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Agent not found' } }, 404)
   }
 
   const user = c.get('user') as { id: string; name: string }
@@ -38,27 +39,27 @@ kinScopedRoutes.post('/', async (c) => {
     return c.json({ error: { code: 'TITLE_TOO_LONG', message: 'Title must be 200 characters or less' } }, 400)
   }
 
-  // Check max active sessions per user per kin
+  // Check max active sessions per user per agent
   const activeCount = await db
     .select()
     .from(quickSessions)
     .where(and(
-      eq(quickSessions.kinId, kinId),
+      eq(quickSessions.agentId, agentId),
       eq(quickSessions.createdBy, user.id),
       eq(quickSessions.status, 'active'),
     ))
     .all()
 
-  if (activeCount.length >= config.quickSessions.maxActivePerUserPerKin) {
+  if (activeCount.length >= config.quickSessions.maxActivePerUserPerAgent) {
     return c.json({
-      error: { code: 'MAX_QUICK_SESSIONS', message: 'Maximum active quick sessions reached for this Kin' },
+      error: { code: 'MAX_QUICK_SESSIONS', message: 'Maximum active quick sessions reached for this Agent' },
     }, 409)
   }
 
   const now = new Date()
   const session = {
     id: uuid(),
-    kinId,
+    agentId,
     createdBy: user.id,
     title: title || null,
     status: 'active' as const,
@@ -69,11 +70,11 @@ kinScopedRoutes.post('/', async (c) => {
 
   await db.insert(quickSessions).values(session)
 
-  log.debug({ kinId, sessionId: session.id, userId: user.id }, 'Quick session created')
+  log.debug({ agentId, sessionId: session.id, userId: user.id }, 'Quick session created')
 
   return c.json({
     id: session.id,
-    kinId: session.kinId,
+    agentId: session.agentId,
     title: session.title,
     status: session.status,
     createdAt: session.createdAt.getTime(),
@@ -82,15 +83,15 @@ kinScopedRoutes.post('/', async (c) => {
   } satisfies QuickSessionSummary, 201)
 })
 
-// GET / — list quick sessions for the current user on this kin
+// GET / — list quick sessions for the current user on this agent
 // Query params:
 //   ?status=active (default) | closed | all
 //   ?limit=N (default 20, max 50, only for closed/all)
-kinScopedRoutes.get('/', async (c) => {
-  const kinIdParam = c.req.param('kinId')
-  const kinId = kinIdParam ? resolveKinId(kinIdParam) : null
-  if (!kinId) {
-    return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Kin not found' } }, 404)
+agentScopedRoutes.get('/', async (c) => {
+  const agentIdParam = c.req.param('agentId')
+  const agentId = agentIdParam ? resolveAgentId(agentIdParam) : null
+  if (!agentId) {
+    return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Agent not found' } }, 404)
   }
 
   const user = c.get('user') as { id: string; name: string }
@@ -99,7 +100,7 @@ kinScopedRoutes.get('/', async (c) => {
   const offsetParam = Math.max(parseInt(c.req.query('offset') ?? '0', 10) || 0, 0)
 
   const conditions = [
-    eq(quickSessions.kinId, kinId),
+    eq(quickSessions.agentId, agentId),
     eq(quickSessions.createdBy, user.id),
   ]
 
@@ -139,7 +140,7 @@ kinScopedRoutes.get('/', async (c) => {
   return c.json({
     sessions: sessions.map((s) => ({
       id: s.id,
-      kinId: s.kinId,
+      agentId: s.agentId,
       title: s.title,
       status: s.status as QuickSessionStatus,
       createdAt: (s.createdAt as Date).getTime(),
@@ -191,21 +192,25 @@ sessionRoutes.get('/:id', async (c) => {
   const messageIds = sessionMessages.map((m) => m.id)
   const fileMap = await getFilesForMessages(messageIds)
 
-  // Resolve kin info for assistant messages
-  const kin = await db.select({ name: kins.name, avatarPath: kins.avatarPath }).from(kins).where(eq(kins.id, session!.kinId)).get()
-  const kinAvatarUrl = kin?.avatarPath
-    ? `/api/uploads/kins/${session!.kinId}/avatar.${kin.avatarPath.split('.').pop() ?? 'png'}`
+  // Resolve agent info for assistant messages
+  const agent = await db.select({ name: agents.name, avatarPath: agents.avatarPath }).from(agents).where(eq(agents.id, session!.agentId)).get()
+  const agentAvatarUrl = agent?.avatarPath
+    ? `/api/uploads/agents/${session!.agentId}/avatar.${agent.avatarPath.split('.').pop() ?? 'png'}`
     : null
 
   return c.json({
     session: {
       id: session!.id,
-      kinId: session!.kinId,
+      agentId: session!.agentId,
       title: session!.title,
       status: session!.status as QuickSessionStatus,
       createdAt: (session!.createdAt as Date).getTime(),
       closedAt: session!.closedAt ? (session!.closedAt as Date).getTime() : null,
       expiresAt: session!.expiresAt ? (session!.expiresAt as Date).getTime() : null,
+      model: session!.model ?? null,
+      providerId: session!.providerId ?? null,
+      thinkingEnabled: session!.thinkingEnabled ?? null,
+      thinkingEffort: (session!.thinkingEffort as QuickSessionSummary['thinkingEffort']) ?? null,
     } satisfies QuickSessionSummary,
     messages: sessionMessages.map((m) => {
       let meta: Record<string, unknown> | null = null
@@ -218,19 +223,97 @@ sessionRoutes.get('/:id', async (c) => {
         content: m.content,
         sourceType: m.sourceType,
         sourceId: m.sourceId,
-        sourceName: m.role === 'assistant' ? kin?.name ?? null : null,
-        sourceAvatarUrl: m.role === 'assistant' ? kinAvatarUrl : null,
+        sourceName: m.role === 'assistant' ? agent?.name ?? null : null,
+        sourceAvatarUrl: m.role === 'assistant' ? agentAvatarUrl : null,
         isRedacted: m.isRedacted,
         toolCalls: m.toolCalls ? JSON.parse(m.toolCalls as string) : null,
         resolvedTaskId: null,
         injectedMemories: meta?.injectedMemories ?? null,
         stepLimitReached: meta?.stepLimitReached ?? false,
+        emptyTurn: meta?.emptyTurn ?? false,
+        finishReason: meta?.finishReason ?? null,
+        silentStop: meta?.silentStop ?? false,
         tokenUsage: meta?.tokenUsage ?? null,
         reasoning,
         files: (fileMap.get(m.id) ?? []).map(serializeFile),
         createdAt: m.createdAt,
       }
     }),
+  })
+})
+
+// PATCH /:id — update the session's per-session LLM overrides (model/effort).
+// null clears an override back to "inherit the agent's configuration". Only
+// the session owner can change it; the next turn picks the values up.
+sessionRoutes.patch('/:id', async (c) => {
+  const user = c.get('user') as { id: string; name: string }
+  const { error, session } = await loadSession(c.req.param('id'), user.id)
+
+  if (error === 'NOT_FOUND') {
+    return c.json({ error: { code: 'SESSION_NOT_FOUND', message: 'Quick session not found' } }, 404)
+  }
+  if (error === 'FORBIDDEN') {
+    return c.json({ error: { code: 'FORBIDDEN', message: 'You do not own this session' } }, 403)
+  }
+  if (session!.status !== 'active') {
+    return c.json({ error: { code: 'SESSION_CLOSED', message: 'This quick session is closed' } }, 409)
+  }
+
+  const body = (await c.req.json().catch(() => ({}))) as {
+    model?: string | null
+    providerId?: string | null
+    thinkingEnabled?: boolean | null
+    thinkingEffort?: string | null
+  }
+
+  const set: Record<string, unknown> = {}
+  if ('model' in body) {
+    if (body.model !== null && (typeof body.model !== 'string' || !body.model.trim())) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: 'model must be a non-empty string or null' } }, 400)
+    }
+    set.model = body.model
+  }
+  if ('providerId' in body) {
+    if (body.providerId !== null && typeof body.providerId !== 'string') {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: 'providerId must be a string or null' } }, 400)
+    }
+    set.providerId = body.providerId
+  }
+  if ('thinkingEnabled' in body) {
+    if (body.thinkingEnabled !== null && typeof body.thinkingEnabled !== 'boolean') {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: 'thinkingEnabled must be a boolean or null' } }, 400)
+    }
+    set.thinkingEnabled = body.thinkingEnabled
+  }
+  if ('thinkingEffort' in body) {
+    if (body.thinkingEffort !== null && !(THINKING_EFFORTS as readonly string[]).includes(body.thinkingEffort as string)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: `thinkingEffort must be one of ${THINKING_EFFORTS.join(' | ')} or null` } }, 400)
+    }
+    set.thinkingEffort = body.thinkingEffort
+  }
+  if (Object.keys(set).length === 0) {
+    return c.json({ error: { code: 'VALIDATION_ERROR', message: 'Nothing to update' } }, 400)
+  }
+
+  await db.update(quickSessions).set(set).where(eq(quickSessions.id, session!.id))
+  const updated = await db.select().from(quickSessions).where(eq(quickSessions.id, session!.id)).get()
+
+  log.debug({ sessionId: session!.id, set }, 'Quick session overrides updated')
+
+  return c.json({
+    session: {
+      id: updated!.id,
+      agentId: updated!.agentId,
+      title: updated!.title,
+      status: updated!.status as QuickSessionStatus,
+      createdAt: (updated!.createdAt as Date).getTime(),
+      closedAt: updated!.closedAt ? (updated!.closedAt as Date).getTime() : null,
+      expiresAt: updated!.expiresAt ? (updated!.expiresAt as Date).getTime() : null,
+      model: updated!.model ?? null,
+      providerId: updated!.providerId ?? null,
+      thinkingEnabled: updated!.thinkingEnabled ?? null,
+      thinkingEffort: (updated!.thinkingEffort as QuickSessionSummary['thinkingEffort']) ?? null,
+    } satisfies QuickSessionSummary,
   })
 })
 
@@ -275,7 +358,7 @@ sessionRoutes.post('/:id/messages', async (c) => {
   }
 
   const { id, queuePosition } = await enqueueMessage({
-    kinId: session!.kinId,
+    agentId: session!.agentId,
     messageType: 'user',
     content: content ?? '',
     sourceType: 'user',
@@ -284,7 +367,7 @@ sessionRoutes.post('/:id/messages', async (c) => {
     fileIds: hasFiles ? fileIds : undefined,
   })
 
-  log.debug({ sessionId: session!.id, kinId: session!.kinId, messageId: id }, 'Quick session message enqueued')
+  log.debug({ sessionId: session!.id, agentId: session!.agentId, messageId: id }, 'Quick session message enqueued')
 
   return c.json({ messageId: id, queuePosition }, 202)
 })
@@ -343,13 +426,13 @@ sessionRoutes.post('/:id/close', async (c) => {
 
   // Save memory if requested (uses createMemory to generate embedding + vector index)
   if (saveMemory && memorySummary) {
-    const memory = await createMemory(session!.kinId, {
+    const memory = await createMemory(session!.agentId, {
       content: memorySummary.trim(),
       category: 'knowledge',
       subject: session!.title ?? 'Quick session',
       sourceChannel: 'explicit',
     })
-    log.debug({ sessionId: session!.id, kinId: session!.kinId, memoryId: memory.id }, 'Quick session memory saved')
+    log.debug({ sessionId: session!.id, agentId: session!.agentId, memoryId: memory.id }, 'Quick session memory saved')
   }
 
   // Close the session
@@ -359,9 +442,9 @@ sessionRoutes.post('/:id/close', async (c) => {
   }).where(eq(quickSessions.id, session!.id))
 
   // Notify via SSE
-  sseManager.sendToKin(session!.kinId, {
+  sseManager.sendToAgent(session!.agentId, {
     type: 'quick-session:closed',
-    kinId: session!.kinId,
+    agentId: session!.agentId,
     data: { sessionId: session!.id },
   })
 
@@ -370,4 +453,4 @@ sessionRoutes.post('/:id/close', async (c) => {
   return c.json({ ok: true })
 })
 
-export { kinScopedRoutes as quickSessionKinRoutes, sessionRoutes as quickSessionDetailRoutes }
+export { agentScopedRoutes as quickSessionAgentRoutes, sessionRoutes as quickSessionDetailRoutes }

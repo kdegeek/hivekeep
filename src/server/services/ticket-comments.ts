@@ -1,7 +1,7 @@
 import { eq, asc, inArray } from 'drizzle-orm'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/server/db/index'
-import { ticketComments, tickets, kins, user, userProfiles } from '@/server/db/schema'
+import { ticketComments, tickets, agents, user, userProfiles } from '@/server/db/schema'
 import { sseManager } from '@/server/sse/index'
 import { createLogger } from '@/server/logger'
 import type { TicketComment, TicketCommentAuthor, TicketCommentMetadata } from '@/shared/types'
@@ -27,7 +27,7 @@ interface RawCommentRow {
   ticketId: string
   authorType: string
   authorUserId: string | null
-  authorKinId: string | null
+  authorAgentId: string | null
   content: string
   metadata: string | null
   createdAt: Date | number
@@ -37,32 +37,32 @@ interface RawCommentRow {
 /**
  * Resolve the author block for a single comment row. Mirrors the pattern of
  * `fetchReporterForTicket` in services/tickets.ts. Falls back to a stub author
- * if the underlying user/kin has been deleted, so the UI keeps rendering.
+ * if the underlying user/agent has been deleted, so the UI keeps rendering.
  */
 async function resolveAuthor(
   authorType: string,
   authorUserId: string | null,
-  authorKinId: string | null,
+  authorAgentId: string | null,
 ): Promise<TicketCommentAuthor> {
-  if (authorType === 'kin' && authorKinId) {
+  if (authorType === 'agent' && authorAgentId) {
     const k = db
-      .select({ id: kins.id, slug: kins.slug, name: kins.name, avatarPath: kins.avatarPath, updatedAt: kins.updatedAt })
-      .from(kins)
-      .where(eq(kins.id, authorKinId))
+      .select({ id: agents.id, slug: agents.slug, name: agents.name, avatarPath: agents.avatarPath, updatedAt: agents.updatedAt })
+      .from(agents)
+      .where(eq(agents.id, authorAgentId))
       .get()
     if (k) {
       return {
-        type: 'kin',
+        type: 'agent',
         id: k.id,
         slug: k.slug ?? undefined,
         name: k.name,
         avatarUrl: k.avatarPath
-          ? `/api/uploads/kins/${k.id}/avatar.${k.avatarPath.split('.').pop() ?? 'png'}?v=${toMillis(k.updatedAt)}`
+          ? `/api/uploads/agents/${k.id}/avatar.${k.avatarPath.split('.').pop() ?? 'png'}?v=${toMillis(k.updatedAt)}`
           : null,
       }
     }
-    // Kin was deleted — keep the comment readable.
-    return { type: 'kin', id: authorKinId, name: 'Deleted Kin', avatarUrl: null }
+    // Agent was deleted — keep the comment readable.
+    return { type: 'agent', id: authorAgentId, name: 'Deleted Agent', avatarUrl: null }
   }
   if (authorType === 'user' && authorUserId) {
     const row = db
@@ -96,7 +96,7 @@ async function resolveAuthor(
 }
 
 async function rowToComment(row: RawCommentRow): Promise<TicketComment> {
-  const author = await resolveAuthor(row.authorType, row.authorUserId, row.authorKinId)
+  const author = await resolveAuthor(row.authorType, row.authorUserId, row.authorAgentId)
   return {
     id: row.id,
     ticketId: row.ticketId,
@@ -138,7 +138,7 @@ export async function listTicketComments(
 
 export interface CreateTicketCommentInput {
   ticketId: string
-  author: { type: 'user' | 'kin'; id: string }
+  author: { type: 'user' | 'agent'; id: string }
   content: string
   metadata?: TicketCommentMetadata | null
 }
@@ -156,7 +156,7 @@ export async function createTicketComment(input: CreateTicketCommentInput): Prom
   const now = new Date()
   const authorType = input.author.type
   const authorUserId = authorType === 'user' ? input.author.id : null
-  const authorKinId = authorType === 'kin' ? input.author.id : null
+  const authorAgentId = authorType === 'agent' ? input.author.id : null
   const metadataRaw = input.metadata ? JSON.stringify(input.metadata) : null
 
   db.insert(ticketComments)
@@ -165,7 +165,7 @@ export async function createTicketComment(input: CreateTicketCommentInput): Prom
       ticketId: input.ticketId,
       authorType,
       authorUserId,
-      authorKinId,
+      authorAgentId,
       content,
       metadata: metadataRaw,
       createdAt: now,
@@ -178,7 +178,7 @@ export async function createTicketComment(input: CreateTicketCommentInput): Prom
     ticketId: input.ticketId,
     authorType,
     authorUserId,
-    authorKinId,
+    authorAgentId,
     content,
     metadata: metadataRaw,
     createdAt: now,
@@ -199,21 +199,21 @@ export interface UpdateTicketCommentInput {
 
 export type CommentCaller =
   | { type: 'user'; id: string }
-  | { type: 'kin'; id: string }
+  | { type: 'agent'; id: string }
 
 /**
  * Permission model:
  *   - user callers can edit/delete any comment (single-tenant platform — users
  *     are admins of their own deployment).
- *   - kin callers can only edit/delete their own comments.
+ *   - agent callers can only edit/delete their own comments.
  */
 function callerCanMutate(
-  comment: { authorType: string; authorKinId: string | null },
+  comment: { authorType: string; authorAgentId: string | null },
   caller: CommentCaller,
 ): boolean {
   if (caller.type === 'user') return true
-  if (caller.type === 'kin') {
-    return comment.authorType === 'kin' && comment.authorKinId === caller.id
+  if (caller.type === 'agent') {
+    return comment.authorType === 'agent' && comment.authorAgentId === caller.id
   }
   return false
 }
@@ -263,7 +263,7 @@ export async function deleteTicketComment(
       id: ticketComments.id,
       ticketId: ticketComments.ticketId,
       authorType: ticketComments.authorType,
-      authorKinId: ticketComments.authorKinId,
+      authorAgentId: ticketComments.authorAgentId,
     })
     .from(ticketComments)
     .where(eq(ticketComments.id, commentId))
@@ -286,14 +286,14 @@ export async function deleteTicketComment(
 /**
  * Fetch the latest N comments on a ticket, in chronological order, lightly
  * decorated for prompt injection (no avatars / SSE shape). Used by
- * `buildTicketAssignmentInfo` to feed the sub-Kin's system prompt.
+ * `buildTicketAssignmentInfo` to feed the sub-Agent's system prompt.
  */
 export async function listRecentCommentsForPrompt(
   ticketId: string,
   limit = 50,
 ): Promise<Array<{
   authorName: string
-  authorType: 'user' | 'kin'
+  authorType: 'user' | 'agent'
   createdAt: number
   content: string
   autoGenerated: boolean
@@ -309,17 +309,17 @@ export async function listRecentCommentsForPrompt(
   if (rows.length === 0) return []
 
   // Bulk-resolve author names (best-effort) — keep this cheap by deduping ids.
-  const kinIds = Array.from(new Set(rows.map((r) => r.authorKinId).filter((id): id is string => !!id)))
+  const agentIds = Array.from(new Set(rows.map((r) => r.authorAgentId).filter((id): id is string => !!id)))
   const userIds = Array.from(new Set(rows.map((r) => r.authorUserId).filter((id): id is string => !!id)))
 
-  const kinMap = new Map<string, string>()
-  if (kinIds.length > 0) {
-    const kinRows = db
-      .select({ id: kins.id, name: kins.name })
-      .from(kins)
-      .where(inArray(kins.id, kinIds))
+  const agentMap = new Map<string, string>()
+  if (agentIds.length > 0) {
+    const agentRows = db
+      .select({ id: agents.id, name: agents.name })
+      .from(agents)
+      .where(inArray(agents.id, agentIds))
       .all()
-    for (const k of kinRows) kinMap.set(k.id, k.name)
+    for (const k of agentRows) agentMap.set(k.id, k.name)
   }
 
   const userMap = new Map<string, string>()
@@ -346,9 +346,9 @@ export async function listRecentCommentsForPrompt(
 
   return rows.map((r) => {
     const meta = parseMetadata(r.metadata)
-    const authorType = (r.authorType === 'kin' ? 'kin' : 'user') as 'user' | 'kin'
-    const authorName = authorType === 'kin'
-      ? (r.authorKinId ? kinMap.get(r.authorKinId) ?? 'Deleted Kin' : 'Unknown Kin')
+    const authorType = (r.authorType === 'agent' ? 'agent' : 'user') as 'user' | 'agent'
+    const authorName = authorType === 'agent'
+      ? (r.authorAgentId ? agentMap.get(r.authorAgentId) ?? 'Deleted Agent' : 'Unknown Agent')
       : (r.authorUserId ? userMap.get(r.authorUserId) ?? 'Deleted user' : 'Unknown user')
     return {
       authorName,

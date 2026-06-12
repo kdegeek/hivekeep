@@ -4,7 +4,7 @@ import { Badge } from '@/client/components/ui/badge'
 import { Card, CardContent } from '@/client/components/ui/card'
 import { Switch } from '@/client/components/ui/switch'
 import { PlatformIcon } from '@/client/components/common/PlatformIcon'
-import { KinBadge } from '@/client/components/common/KinBadge'
+import { AgentBadge } from '@/client/components/common/AgentBadge'
 import { Pencil, Send, MessageSquare, Clock, ChevronDown, Plug, Loader2 } from 'lucide-react'
 import { ConfirmDeleteButton } from '@/client/components/common/ConfirmDeleteButton'
 import { cn } from '@/client/lib/utils'
@@ -42,7 +42,7 @@ export function ChannelCard({ channel, expanded, testing, onToggleExpand, onEdit
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-sm font-medium truncate">{channel.name}</p>
-              <KinBadge name={channel.kinName} avatarUrl={channel.kinAvatarUrl} />
+              <AgentBadge name={channel.agentName} avatarUrl={channel.agentAvatarUrl} />
  <Badge variant="outline" size="xs" className="shrink-0 capitalize">
                 {channel.platform}
               </Badge>

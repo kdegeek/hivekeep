@@ -113,7 +113,7 @@ export const createCustomToolTool: ToolRegistration = {
             domainSlug: domainSlug ?? null,
             timeoutMs: timeoutMs ?? null,
             translations: translations ?? null,
-            createdBy: 'kin',
+            createdBy: 'agent',
           })
           if (code !== undefined) {
             await writeCustomToolFile(slug, entry, code)
@@ -181,7 +181,7 @@ export const testCustomToolTool: ToolRegistration = {
       execute: async ({ slug, args, timeout }) => {
         const callArgs = args ?? {}
         const result = await executeCustomTool(slug, callArgs, timeout)
-        // When the tool ships a renderer, validate it in the SAME test so the Kin
+        // When the tool ships a renderer, validate it in the SAME test so the Agent
         // sees front-end renderer health alongside the script output. Best-effort:
         // a validator-internal failure must not break the execution report.
         if (customToolHasRenderer(slug)) {

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/client/components/ui/button'
 import { Badge } from '@/client/components/ui/badge'
 import { Card, CardContent } from '@/client/components/ui/card'
-import { KinBadge } from '@/client/components/common/KinBadge'
+import { AgentBadge } from '@/client/components/common/AgentBadge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/client/components/ui/tooltip'
 import { CheckCircle, Pencil, Plug, RefreshCw, Loader2 } from 'lucide-react'
 import { ConfirmDeleteButton } from '@/client/components/common/ConfirmDeleteButton'
@@ -17,15 +17,15 @@ export interface McpServerData {
   args: string[]
   env: Record<string, string> | null
   status: string
-  createdByKinId: string | null
+  createdByAgentId: string | null
   createdAt: number
   updatedAt: number
 }
 
 interface McpServerCardProps {
   server: McpServerData
-  kinName?: string
-  kinAvatarUrl?: string | null
+  agentName?: string
+  agentAvatarUrl?: string | null
   onApprove?: () => void
   onEdit?: () => void
   onDelete?: () => void
@@ -37,7 +37,7 @@ interface ConnectionStatus {
   error?: string
 }
 
-export function McpServerCard({ server, kinName, kinAvatarUrl, onApprove, onEdit, onDelete }: McpServerCardProps) {
+export function McpServerCard({ server, agentName, agentAvatarUrl, onApprove, onEdit, onDelete }: McpServerCardProps) {
   const { t } = useTranslation()
   const [connStatus, setConnStatus] = useState<ConnectionStatus | null>(null)
   const [testing, setTesting] = useState(false)
@@ -107,8 +107,8 @@ export function McpServerCard({ server, kinName, kinAvatarUrl, onApprove, onEdit
                   </TooltipContent>
                 </Tooltip>
               )}
-              {server.createdByKinId && kinName && (
-                <KinBadge name={kinName} avatarUrl={kinAvatarUrl} />
+              {server.createdByAgentId && agentName && (
+                <AgentBadge name={agentName} avatarUrl={agentAvatarUrl} />
               )}
             </div>
             <p className="text-xs text-muted-foreground truncate">

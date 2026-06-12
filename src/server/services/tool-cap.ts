@@ -1,5 +1,5 @@
 /**
- * Tool-cap helper — extracted from kin-engine.ts so it's testable
+ * Tool-cap helper — extracted from agent-engine.ts so it's testable
  * without dragging in the full engine module graph (and the mock-
  * pollution surface that comes with it).
  *
@@ -22,10 +22,10 @@
  *
  * Provider-agnostic on purpose: zero hardcoded type names here. New
  * providers (built-in or plugin) declare their cap on themselves and
- * KinBot picks it up automatically.
+ * Hivekeep picks it up automatically.
  */
 
-import type { LLMModel } from '@kinbot-developer/sdk'
+import type { LLMModel } from '@hivekeep/sdk'
 import { getLLMProvider } from '@/server/llm/llm/registry'
 
 /** OpenAI-compatible conservative limit — matches every major

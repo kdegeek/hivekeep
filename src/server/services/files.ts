@@ -15,13 +15,13 @@ const log = createLogger('files')
 const MAX_FILE_SIZE = config.upload.maxFileSizeMb * 1024 * 1024
 
 interface UploadParams {
-  kinId: string
+  agentId: string
   uploadedBy: string
   file: File
 }
 
 export async function uploadFile(params: UploadParams) {
-  const { kinId, uploadedBy, file } = params
+  const { agentId, uploadedBy, file } = params
 
   // Validate size
   if (file.size > MAX_FILE_SIZE) {
@@ -36,7 +36,7 @@ export async function uploadFile(params: UploadParams) {
   const id = uuid()
   const ext = getExtension(file.name)
   const storedName = `${id}${ext ? `.${ext}` : ''}`
-  const dir = join(config.upload.dir, 'messages', kinId)
+  const dir = join(config.upload.dir, 'messages', agentId)
   const storedPath = join(dir, storedName)
 
   // Ensure directory exists
@@ -49,7 +49,7 @@ export async function uploadFile(params: UploadParams) {
   // Save to DB
   await db.insert(files).values({
     id,
-    kinId,
+    agentId,
     uploadedBy,
     originalName: file.name,
     storedPath,
@@ -58,14 +58,14 @@ export async function uploadFile(params: UploadParams) {
     createdAt: new Date(),
   })
 
-  log.info({ kinId, fileId: id, fileName: file.name, size: file.size, mimeType: file.type }, 'File uploaded')
+  log.info({ agentId, fileId: id, fileName: file.name, size: file.size, mimeType: file.type }, 'File uploaded')
 
   return {
     id,
     name: file.name,
     mimeType: file.type || 'application/octet-stream',
     size: file.size,
-    url: `/api/uploads/messages/${kinId}/${storedName}`,
+    url: `/api/uploads/messages/${agentId}/${storedName}`,
   }
 }
 
@@ -122,7 +122,7 @@ export function serializeFile(f: typeof files.$inferSelect) {
     name: f.originalName,
     mimeType: f.mimeType,
     size: f.size,
-    url: `/api/uploads/messages/${f.kinId}/${storedName}`,
+    url: `/api/uploads/messages/${f.agentId}/${storedName}`,
   }
 }
 
@@ -145,7 +145,7 @@ const MIME_TO_EXT: Record<string, string> = {
 }
 
 interface DownloadAttachmentParams {
-  kinId: string
+  agentId: string
   attachment: IncomingAttachment
   /** Direct download URL (may differ from attachment.url, e.g. Telegram getFile URL) */
   downloadUrl: string
@@ -156,7 +156,7 @@ interface DownloadAttachmentParams {
  * Returns the file ID for queue sideband, or null if download failed.
  */
 export async function downloadAndStoreAttachment(params: DownloadAttachmentParams): Promise<string | null> {
-  const { kinId, attachment, downloadUrl } = params
+  const { agentId, attachment, downloadUrl } = params
 
   try {
     const fetchOpts: RequestInit = {}
@@ -192,7 +192,7 @@ export async function downloadAndStoreAttachment(params: DownloadAttachmentParam
     const id = uuid()
     const ext = getExtension(fileName)
     const storedName = `${id}${ext ? `.${ext}` : ''}`
-    const dir = join(config.upload.dir, 'messages', kinId)
+    const dir = join(config.upload.dir, 'messages', agentId)
     const storedPath = join(dir, storedName)
 
     await mkdir(dir, { recursive: true })
@@ -200,7 +200,7 @@ export async function downloadAndStoreAttachment(params: DownloadAttachmentParam
 
     await db.insert(files).values({
       id,
-      kinId,
+      agentId,
       uploadedBy: 'channel',
       originalName: fileName,
       storedPath,
@@ -210,7 +210,7 @@ export async function downloadAndStoreAttachment(params: DownloadAttachmentParam
     })
 
     log.info(
-      { kinId, fileId: id, fileName, size: buffer.byteLength, mimeType },
+      { agentId, fileId: id, fileName, size: buffer.byteLength, mimeType },
       'Channel attachment downloaded and stored',
     )
 
@@ -239,7 +239,7 @@ export interface DownloadChannelAttachmentsResult {
  * Returns successful file IDs and info about failed attachments.
  */
 export async function downloadChannelAttachments(
-  kinId: string,
+  agentId: string,
   attachments: IncomingAttachment[],
 ): Promise<DownloadChannelAttachmentsResult> {
   const fileIds: string[] = []
@@ -257,7 +257,7 @@ export async function downloadChannelAttachments(
       continue
     }
 
-    const fileId = await downloadAndStoreAttachment({ kinId, attachment, downloadUrl })
+    const fileId = await downloadAndStoreAttachment({ agentId, attachment, downloadUrl })
     if (fileId) {
       fileIds.push(fileId)
     } else {

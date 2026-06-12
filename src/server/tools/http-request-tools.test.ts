@@ -4,7 +4,7 @@ import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test'
 // direct helper below mirrors the source logic for edge-case unit coverage
 // while integration tests verify the real tool behavior.
 //
-// The TOOLBOX is the sole tool-grant primitive: there is no per-Kin network
+// The TOOLBOX is the sole tool-grant primitive: there is no per-Agent network
 // flag. When `http_request` is granted it may reach private/local hosts — the
 // only hard, non-toggleable blocks are loopback / unspecified addresses, the
 // cloud-metadata endpoint, non-HTTP(S) schemes, and invalid URLs.
@@ -100,13 +100,13 @@ describe('httpRequestTool registration', () => {
   it('imports and has correct shape', async () => {
     const { httpRequestTool } = await import('./http-request-tools')
     expect(httpRequestTool).toBeDefined()
-    expect(httpRequestTool.availability).toEqual(['main', 'sub-kin'])
+    expect(httpRequestTool.availability).toEqual(['main', 'sub-agent'])
     expect(typeof httpRequestTool.create).toBe('function')
   })
 
   it('create() returns a tool object', async () => {
     const { httpRequestTool } = await import('./http-request-tools')
-    const created = httpRequestTool.create({ kinId: 'kin-1', isSubKin: false })
+    const created = httpRequestTool.create({ agentId: 'agent-1', isSubAgent: false })
     expect(created).toBeDefined()
   })
 })
@@ -135,8 +135,8 @@ describe('httpRequestTool execute', () => {
   async function getExecute() {
     const { httpRequestTool } = await import('./http-request-tools')
     const created = httpRequestTool.create({
-      kinId: 'kin-1',
-      isSubKin: false,
+      agentId: 'agent-1',
+      isSubAgent: false,
     })
     return (created as any).execute
   }

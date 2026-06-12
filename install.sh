@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# KinBot installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/MarlBurroW/kinbot/main/install.sh | bash
-# Or:    KINBOT_PORT=8080 bash install.sh
-# Non-interactive: KINBOT_NO_PROMPT=true bash install.sh
+# Hivekeep installer
+# Usage: curl -fsSL https://raw.githubusercontent.com/MarlBurroW/hivekeep/main/install.sh | bash
+# Or:    HIVEKEEP_PORT=8080 bash install.sh
+# Non-interactive: HIVEKEEP_NO_PROMPT=true bash install.sh
 set -euo pipefail
 
 # ─── Root detection ──────────────────────────────────────────────────────────
@@ -11,26 +11,33 @@ IS_ROOT=false
 
 # ─── Configurable via env vars ───────────────────────────────────────────────
 if [ "$IS_ROOT" = true ]; then
-  KINBOT_DIR="${KINBOT_DIR:-/opt/kinbot}"
-  KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-/var/lib/kinbot}"
-  KINBOT_USER="${KINBOT_USER:-kinbot}"
+  HIVEKEEP_DIR="${HIVEKEEP_DIR:-/opt/hivekeep}"
+  HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-/var/lib/hivekeep}"
+  HIVEKEEP_USER="${HIVEKEEP_USER:-hivekeep}"
 else
-  KINBOT_DIR="${KINBOT_DIR:-$HOME/kinbot}"
-  KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-$HOME/.local/share/kinbot}"
+  HIVEKEEP_DIR="${HIVEKEEP_DIR:-$HOME/hivekeep}"
+  HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-$HOME/.local/share/hivekeep}"
 fi
 
-KINBOT_PORT="${KINBOT_PORT:-3000}"
-KINBOT_PUBLIC_URL="${KINBOT_PUBLIC_URL:-}"
-KINBOT_REPO="MarlBurroW/kinbot"
-KINBOT_BRANCH="${KINBOT_BRANCH:-main}"
-KINBOT_DRY_RUN=false
-KINBOT_QUIET="${KINBOT_QUIET:-false}"
-KINBOT_START_TIME=""
-KINBOT_YES="${KINBOT_YES:-false}"
+HIVEKEEP_PORT="${HIVEKEEP_PORT:-3000}"
+HIVEKEEP_PUBLIC_URL="${HIVEKEEP_PUBLIC_URL:-}"
+HIVEKEEP_REPO="MarlBurroW/hivekeep"
+# Explicitly requesting a branch implies the edge channel (tracking a branch
+# head instead of release tags).
+HIVEKEEP_BRANCH_EXPLICIT=false
+[ -n "${HIVEKEEP_BRANCH:-}" ] && HIVEKEEP_BRANCH_EXPLICIT=true
+HIVEKEEP_BRANCH="${HIVEKEEP_BRANCH:-main}"
+# Update channel: stable (release tags, default) | edge (HEAD of main).
+# Empty = auto-detect (existing checkout state, HIVEKEEP_BRANCH, else stable).
+HIVEKEEP_CHANNEL="${HIVEKEEP_CHANNEL:-}"
+HIVEKEEP_DRY_RUN=false
+HIVEKEEP_QUIET="${HIVEKEEP_QUIET:-false}"
+HIVEKEEP_START_TIME=""
+HIVEKEEP_YES="${HIVEKEEP_YES:-false}"
 
 # ─── Colors (auto-detect terminal support) ───────────────────────────────────
 setup_colors() {
-  if [ "${NO_COLOR:-}" = "1" ] || [ "${KINBOT_NO_COLOR:-}" = "true" ]; then
+  if [ "${NO_COLOR:-}" = "1" ] || [ "${HIVEKEEP_NO_COLOR:-}" = "true" ]; then
     RED='' GREEN='' YELLOW='' CYAN='' DIM='' BOLD='' NC=''
   elif [ -t 1 ] && [ -t 2 ]; then
     RED='\033[0;31m'
@@ -47,21 +54,21 @@ setup_colors() {
 }
 setup_colors
 
-info()    { [ "$KINBOT_QUIET" = true ] && return; echo -e "${CYAN}▸${NC} $*"; }
-success() { [ "$KINBOT_QUIET" = true ] && return; echo -e "${GREEN}✓${NC} $*"; }
+info()    { [ "$HIVEKEEP_QUIET" = true ] && return; echo -e "${CYAN}▸${NC} $*"; }
+success() { [ "$HIVEKEEP_QUIET" = true ] && return; echo -e "${GREEN}✓${NC} $*"; }
 warn()    { echo -e "${YELLOW}⚠${NC} $*" >&2; }
 error()   { echo -e "${RED}✗ ERROR:${NC} $*" >&2; exit 1; }
-header()  { [ "$KINBOT_QUIET" = true ] && return; echo -e "\n${BOLD}$*${NC}"; }
+header()  { [ "$HIVEKEEP_QUIET" = true ] && return; echo -e "\n${BOLD}$*${NC}"; }
 
 # ─── Elapsed time tracking ──────────────────────────────────────────────────
-start_timer() { KINBOT_START_TIME="$(date +%s)"; }
+start_timer() { HIVEKEEP_START_TIME="$(date +%s)"; }
 
 # Returns human-readable elapsed time since start_timer() was called
 format_elapsed() {
-  [ -z "$KINBOT_START_TIME" ] && return
+  [ -z "$HIVEKEEP_START_TIME" ] && return
   local now elapsed
   now="$(date +%s)"
-  elapsed=$((now - KINBOT_START_TIME))
+  elapsed=$((now - HIVEKEEP_START_TIME))
   if [ "$elapsed" -lt 5 ] 2>/dev/null; then
     echo "< 5s"
   elif [ "$elapsed" -lt 60 ] 2>/dev/null; then
@@ -85,7 +92,7 @@ STEP_TOTAL=0
 
 step() {
   STEP_CURRENT=$((STEP_CURRENT + 1))
-  [ "$KINBOT_QUIET" = true ] && return
+  [ "$HIVEKEEP_QUIET" = true ] && return
   local progress=""
   if [ "$STEP_TOTAL" -gt 0 ] 2>/dev/null; then
     progress="${DIM}[${STEP_CURRENT}/${STEP_TOTAL}]${NC} "
@@ -100,10 +107,10 @@ step() {
 check_installer_update() {
   # Skip if piped (no local file to update), quiet mode, CI, or no-prompt
   [ ! -t 0 ] && return 0
-  [ "$KINBOT_QUIET" = true ] && return 0
-  [ "${KINBOT_NO_PROMPT:-}" = "true" ] && return 0
+  [ "$HIVEKEEP_QUIET" = true ] && return 0
+  [ "${HIVEKEEP_NO_PROMPT:-}" = "true" ] && return 0
   [ "${CI:-}" = "true" ] && return 0
-  [ "${KINBOT_SKIP_SELF_UPDATE:-}" = "true" ] && return 0
+  [ "${HIVEKEEP_SKIP_SELF_UPDATE:-}" = "true" ] && return 0
 
   # Only check if we can identify the running script file
   local self_path="${BASH_SOURCE[0]:-}"
@@ -122,7 +129,7 @@ check_installer_update() {
   [ -z "$local_hash" ] && return 0
 
   # Fetch remote installer (lightweight: just the hash via a temp file)
-  local remote_url="https://raw.githubusercontent.com/$KINBOT_REPO/$KINBOT_BRANCH/install.sh"
+  local remote_url="https://raw.githubusercontent.com/$HIVEKEEP_REPO/$HIVEKEEP_BRANCH/install.sh"
   local tmp_remote
   tmp_remote="$(mktemp)"
 
@@ -156,7 +163,7 @@ check_installer_update() {
     rm -f "$tmp_remote"
     success "Installer updated"
     # Re-exec with same arguments, skip self-update to avoid loop
-    KINBOT_SKIP_SELF_UPDATE=true exec bash "$self_path" "$@"
+    HIVEKEEP_SKIP_SELF_UPDATE=true exec bash "$self_path" "$@"
   fi
 
   rm -f "$tmp_remote"
@@ -202,7 +209,7 @@ run_with_spinner() {
   shift
 
   # If not a terminal or quiet mode, just run silently
-  if [ "$KINBOT_QUIET" = true ]; then
+  if [ "$HIVEKEEP_QUIET" = true ]; then
     "$@" >/dev/null 2>&1
     return
   fi
@@ -271,7 +278,7 @@ run_with_spinner() {
 
   if [ $exit_code -eq 0 ]; then
     if [ -n "$final_elapsed" ]; then
-      [ "$KINBOT_QUIET" = true ] && return
+      [ "$HIVEKEEP_QUIET" = true ] && return
       echo -e "${GREEN}✓${NC} ${label}${final_elapsed}" >&2
     else
       success "$label"
@@ -322,48 +329,48 @@ retry() {
 # Running two installers at the same time (e.g. two cron-triggered updates,
 # or a user running install while an update is in progress) can corrupt the
 # build, git state, or database. We use a lockfile to serialize access.
-KINBOT_LOCKFILE=""
+HIVEKEEP_LOCKFILE=""
 
 acquire_lock() {
   local lock_dir="${TMPDIR:-/tmp}"
-  KINBOT_LOCKFILE="$lock_dir/kinbot-installer.lock"
+  HIVEKEEP_LOCKFILE="$lock_dir/hivekeep-installer.lock"
 
   # Try to create the lockfile atomically
-  if ( set -o noclobber; echo "$$" > "$KINBOT_LOCKFILE" ) 2>/dev/null; then
+  if ( set -o noclobber; echo "$$" > "$HIVEKEEP_LOCKFILE" ) 2>/dev/null; then
     # We got the lock — register cleanup
     return 0
   fi
 
   # Lockfile exists — check if the holder is still alive
   local holder_pid
-  holder_pid="$(cat "$KINBOT_LOCKFILE" 2>/dev/null || echo "")"
+  holder_pid="$(cat "$HIVEKEEP_LOCKFILE" 2>/dev/null || echo "")"
 
   if [ -n "$holder_pid" ] && kill -0 "$holder_pid" 2>/dev/null; then
-    error "Another installer is already running (PID $holder_pid). Wait for it to finish or remove $KINBOT_LOCKFILE"
+    error "Another installer is already running (PID $holder_pid). Wait for it to finish or remove $HIVEKEEP_LOCKFILE"
   fi
 
   # Stale lockfile — previous run crashed without cleanup
   warn "Removing stale lockfile (previous PID $holder_pid is gone)"
-  rm -f "$KINBOT_LOCKFILE"
+  rm -f "$HIVEKEEP_LOCKFILE"
 
-  if ( set -o noclobber; echo "$$" > "$KINBOT_LOCKFILE" ) 2>/dev/null; then
+  if ( set -o noclobber; echo "$$" > "$HIVEKEEP_LOCKFILE" ) 2>/dev/null; then
     return 0
   fi
 
   # Race condition: another process grabbed it between our rm and write
-  error "Another installer is already running. Wait for it to finish or remove $KINBOT_LOCKFILE"
+  error "Another installer is already running. Wait for it to finish or remove $HIVEKEEP_LOCKFILE"
 }
 
 release_lock() {
-  if [ -n "${KINBOT_LOCKFILE:-}" ] && [ -f "${KINBOT_LOCKFILE:-}" ]; then
+  if [ -n "${HIVEKEEP_LOCKFILE:-}" ] && [ -f "${HIVEKEEP_LOCKFILE:-}" ]; then
     # Only remove if we own it
     local holder_pid
-    holder_pid="$(cat "$KINBOT_LOCKFILE" 2>/dev/null || echo "")"
+    holder_pid="$(cat "$HIVEKEEP_LOCKFILE" 2>/dev/null || echo "")"
     if [ "$holder_pid" = "$$" ]; then
-      rm -f "$KINBOT_LOCKFILE"
+      rm -f "$HIVEKEEP_LOCKFILE"
     fi
   fi
-  KINBOT_LOCKFILE=""
+  HIVEKEEP_LOCKFILE=""
 }
 
 # ─── OS detection ────────────────────────────────────────────────────────────
@@ -402,7 +409,7 @@ detect_os() {
       INIT_SYSTEM="launchd"
       ;;
     *)
-      error "Unsupported OS: $OS. KinBot supports Linux and macOS."
+      error "Unsupported OS: $OS. Hivekeep supports Linux and macOS."
       ;;
   esac
 
@@ -420,7 +427,7 @@ detect_os() {
   if [ "$INIT_SYSTEM" = "script" ]; then
     warn "systemd not available — will use a start/stop script instead"
     if [ "$IS_WSL" = true ]; then
-      info "WSL detected. Service won't auto-start on boot; use the kinbot script to start manually."
+      info "WSL detected. Service won't auto-start on boot; use the hivekeep script to start manually."
     fi
   fi
 }
@@ -505,7 +512,7 @@ preflight_checks() {
 
   # Check available disk space (need ~500MB for clone + deps + build)
   local install_parent
-  install_parent="$(dirname "$KINBOT_DIR")"
+  install_parent="$(dirname "$HIVEKEEP_DIR")"
   mkdir -p "$install_parent" 2>/dev/null || true
 
   local avail_kb
@@ -522,24 +529,37 @@ preflight_checks() {
   fi
 
   # Check if target port is already in use (skip on update — our own service may be running)
-  if [ -d "$KINBOT_DIR/.git" ]; then
+  if [ -d "$HIVEKEEP_DIR/.git" ]; then
     : # skip port check on update
-  elif [ -n "${KINBOT_PORT:-}" ]; then
+  elif [ -n "${HIVEKEEP_PORT:-}" ]; then
     local port_in_use=false
     if command -v ss &>/dev/null; then
-      ss -tlnp 2>/dev/null | grep -q ":${KINBOT_PORT} " && port_in_use=true
+      ss -tlnp 2>/dev/null | grep -q ":${HIVEKEEP_PORT} " && port_in_use=true
     elif command -v lsof &>/dev/null; then
-      lsof -i ":${KINBOT_PORT}" -sTCP:LISTEN &>/dev/null && port_in_use=true
+      lsof -i ":${HIVEKEEP_PORT}" -sTCP:LISTEN &>/dev/null && port_in_use=true
     elif command -v netstat &>/dev/null; then
-      netstat -tlnp 2>/dev/null | grep -q ":${KINBOT_PORT} " && port_in_use=true
+      netstat -tlnp 2>/dev/null | grep -q ":${HIVEKEEP_PORT} " && port_in_use=true
     fi
 
     if [ "$port_in_use" = true ]; then
-      warn "Port $KINBOT_PORT is already in use. You may need to choose a different port."
-      warn "Set KINBOT_PORT=<number> or change it during the configuration step."
+      warn "Port $HIVEKEEP_PORT is already in use. You may need to choose a different port."
+      warn "Set HIVEKEEP_PORT=<number> or change it during the configuration step."
     else
-      success "Port $KINBOT_PORT is available"
+      success "Port $HIVEKEEP_PORT is available"
     fi
+  fi
+
+  # Proactively warn about privileged ports (<1024) for non-root installs.
+  # Binding these requires root; a normal user install will otherwise fail at
+  # startup with an opaque permission error. Hoisted out of the install-only
+  # branch above so it also fires on updates and under -y/CI (where the
+  # configure wizard is skipped). Runs exactly once per preflight.
+  if [ -n "${HIVEKEEP_PORT:-}" ] && [ "$IS_ROOT" != true ] && [ "$HIVEKEEP_PORT" -lt 1024 ] 2>/dev/null; then
+    warn "Port $HIVEKEEP_PORT is a privileged port (<1024) and you are not root."
+    warn "A non-root service cannot bind it and will fail to start."
+    info "Pick a port >= 1024 (e.g. 3000), or expose port 80/443 with a reverse proxy"
+    info "(Caddy, nginx, Traefik) in front of Hivekeep. To run on the privileged port"
+    info "directly, re-run the installer as root."
   fi
 
   # Check available memory (Bun builds can OOM on small machines)
@@ -631,7 +651,7 @@ preflight_checks() {
     warn "Running inside a $container_type environment"
 
     # If this is a fresh install (not --docker mode), suggest Docker mode instead
-    if [ ! -d "$KINBOT_DIR/.git" ]; then
+    if [ ! -d "$HIVEKEEP_DIR/.git" ]; then
       info "Consider using ${BOLD}bash install.sh --docker${NC} instead, which generates"
       info "a docker-compose.yml and avoids building inside the container."
     fi
@@ -652,7 +672,7 @@ prompt_value() {
   local answer
 
   # Auto-accept defaults in non-interactive / --yes mode
-  if [ "$KINBOT_YES" = true ] || [ "${KINBOT_NO_PROMPT:-}" = "true" ] || [ "${CI:-}" = "true" ]; then
+  if [ "$HIVEKEEP_YES" = true ] || [ "${HIVEKEEP_NO_PROMPT:-}" = "true" ] || [ "${CI:-}" = "true" ]; then
     printf -v "$var_name" '%s' "$default"
     return
   fi
@@ -678,7 +698,7 @@ detect_local_ip() {
 
 # ─── Configuration wizard ────────────────────────────────────────────────────
 configure() {
-  local env_file="$KINBOT_DATA_DIR/kinbot.env"
+  local env_file="$HIVEKEEP_DATA_DIR/hivekeep.env"
 
   # Skip on update if config already exists — don't overwrite user's settings
   if [ "${IS_UPDATE:-false}" = true ] && [ -f "$env_file" ]; then
@@ -686,23 +706,23 @@ configure() {
     # Still read the port from it for the summary
     # shellcheck disable=SC1090
     . "$env_file" 2>/dev/null || true
-    KINBOT_PORT="${PORT:-$KINBOT_PORT}"
-    KINBOT_PUBLIC_URL="${PUBLIC_URL:-$KINBOT_PUBLIC_URL}"
+    HIVEKEEP_PORT="${PORT:-$HIVEKEEP_PORT}"
+    HIVEKEEP_PUBLIC_URL="${PUBLIC_URL:-$HIVEKEEP_PUBLIC_URL}"
     # Fallback: build URL from local IP if still empty
-    if [ -z "$KINBOT_PUBLIC_URL" ]; then
+    if [ -z "$HIVEKEEP_PUBLIC_URL" ]; then
       local local_ip
       local_ip="$(detect_local_ip)"
-      KINBOT_PUBLIC_URL="http://${local_ip}:${KINBOT_PORT}"
+      HIVEKEEP_PUBLIC_URL="http://${local_ip}:${HIVEKEEP_PORT}"
     fi
     return
   fi
 
   # Skip wizard if env vars already set or non-interactive
   local skip_wizard=false
-  [ "${KINBOT_NO_PROMPT:-}" = "true" ] && skip_wizard=true
+  [ "${HIVEKEEP_NO_PROMPT:-}" = "true" ] && skip_wizard=true
   [ "${CI:-}" = "true" ] && skip_wizard=true
   # If all key vars were explicitly set via env, no need to ask
-  [ -n "${KINBOT_PORT_EXPLICIT:-}" ] && [ -n "${KINBOT_PUBLIC_URL}" ] && skip_wizard=true
+  [ -n "${HIVEKEEP_PORT_EXPLICIT:-}" ] && [ -n "${HIVEKEEP_PUBLIC_URL}" ] && skip_wizard=true
 
   if [ "$skip_wizard" = true ]; then
     : # use defaults / env vars as-is
@@ -715,30 +735,36 @@ configure() {
     echo -e "${DIM}Press Enter to accept the default value shown in brackets.${NC}"
     echo ""
 
-    prompt_value KINBOT_PORT "Port" "$KINBOT_PORT"
+    prompt_value HIVEKEEP_PORT "Port" "$HIVEKEEP_PORT"
 
-    local default_url="http://${local_ip}:${KINBOT_PORT}"
-    [ -n "$KINBOT_PUBLIC_URL" ] && default_url="$KINBOT_PUBLIC_URL"
-    prompt_value KINBOT_PUBLIC_URL "Public URL (for webhooks & invite links)" "$default_url"
+    # Warn if a non-root user picked a privileged port (<1024): it won't bind.
+    if [ "$IS_ROOT" != true ] && [ "$HIVEKEEP_PORT" -lt 1024 ] 2>/dev/null; then
+      warn "Port $HIVEKEEP_PORT is privileged (<1024) and you are not root, so the service won't be able to bind it."
+      warn "Choose a port >= 1024 (e.g. 3000), or put a reverse proxy in front of Hivekeep for ports 80/443."
+    fi
+
+    local default_url="http://${local_ip}:${HIVEKEEP_PORT}"
+    [ -n "$HIVEKEEP_PUBLIC_URL" ] && default_url="$HIVEKEEP_PUBLIC_URL"
+    prompt_value HIVEKEEP_PUBLIC_URL "Public URL (for webhooks & invite links)" "$default_url"
   fi
 
   # Fallback if public URL still empty
-  if [ -z "$KINBOT_PUBLIC_URL" ]; then
+  if [ -z "$HIVEKEEP_PUBLIC_URL" ]; then
     local local_ip
     local_ip="$(detect_local_ip)"
-    KINBOT_PUBLIC_URL="http://${local_ip}:${KINBOT_PORT}"
+    HIVEKEEP_PUBLIC_URL="http://${local_ip}:${HIVEKEEP_PORT}"
   fi
 
   # Write config file
-  mkdir -p "$KINBOT_DATA_DIR"
+  mkdir -p "$HIVEKEEP_DATA_DIR"
   cat > "$env_file" << ENV
-# KinBot configuration — generated by installer
-# Edit this file to change settings, then restart: systemctl --user restart kinbot
+# Hivekeep configuration — generated by installer
+# Edit this file to change settings, then restart: systemctl --user restart hivekeep
 NODE_ENV=production
-PORT=${KINBOT_PORT}
+PORT=${HIVEKEEP_PORT}
 HOST=0.0.0.0
-KINBOT_DATA_DIR=${KINBOT_DATA_DIR}
-PUBLIC_URL=${KINBOT_PUBLIC_URL}
+HIVEKEEP_DATA_DIR=${HIVEKEEP_DATA_DIR}
+PUBLIC_URL=${HIVEKEEP_PUBLIC_URL}
 ENV
   chmod 600 "$env_file"
   success "Config written to $env_file"
@@ -777,7 +803,7 @@ ensure_bun() {
     armv7l|armv6l|armhf)
       echo ""
       error "Bun does not support 32-bit ARM ($ARCH).\n\n" \
-            " KinBot requires Bun, which only runs on x86_64 or ARM64 (aarch64).\n" \
+            " Hivekeep requires Bun, which only runs on x86_64 or ARM64 (aarch64).\n" \
             " If you're on a Raspberry Pi, you need a 64-bit OS:\n" \
             "   ${DIM}• Raspberry Pi OS (64-bit): https://www.raspberrypi.com/software/${NC}\n" \
             "   ${DIM}• Ubuntu Server 64-bit for Pi: https://ubuntu.com/download/raspberry-pi${NC}\n\n" \
@@ -786,7 +812,7 @@ ensure_bun() {
       ;;
     i386|i686)
       error "Bun does not support 32-bit x86 ($ARCH).\n\n" \
-            " KinBot requires a 64-bit system (x86_64 or ARM64).\n" \
+            " Hivekeep requires a 64-bit system (x86_64 or ARM64).\n" \
             " Alternatively, use Docker: ${DIM}bash install.sh --docker${NC}"
       ;;
     *)
@@ -842,20 +868,20 @@ ensure_bun() {
 BACKUP_DB_PATH=""
 
 backup_database() {
-  local db_file="$KINBOT_DATA_DIR/kinbot.db"
+  local db_file="$HIVEKEEP_DATA_DIR/hivekeep.db"
   [ ! -f "$db_file" ] && return
 
-  local backup_dir="$KINBOT_DATA_DIR/backups"
+  local backup_dir="$HIVEKEEP_DATA_DIR/backups"
   mkdir -p "$backup_dir"
 
   local timestamp
   timestamp="$(date +%Y%m%d-%H%M%S)"
   local version_tag
-  version_tag="$(git -C "$KINBOT_DIR" describe --tags 2>/dev/null || git -C "$KINBOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+  version_tag="$(git -C "$HIVEKEEP_DIR" describe --tags 2>/dev/null || git -C "$HIVEKEEP_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
   # Sanitize version for filename
   version_tag="$(echo "$version_tag" | tr '/' '-')"
 
-  BACKUP_DB_PATH="$backup_dir/kinbot-${version_tag}-${timestamp}.db"
+  BACKUP_DB_PATH="$backup_dir/hivekeep-${version_tag}-${timestamp}.db"
 
   # Use sqlite3 .backup if available (safe even if DB is in use), else cp
   if command -v sqlite3 &>/dev/null; then
@@ -876,9 +902,9 @@ backup_database() {
 
   # Prune old backups: keep last 5
   local count
-  count="$(find "$backup_dir" -maxdepth 1 -name 'kinbot-*.db' -type f 2>/dev/null | wc -l)"
+  count="$(find "$backup_dir" -maxdepth 1 -name 'hivekeep-*.db' -type f 2>/dev/null | wc -l)"
   if [ "$count" -gt 5 ] 2>/dev/null; then
-    find "$backup_dir" -maxdepth 1 -name 'kinbot-*.db' -type f -printf '%T@ %p\n' 2>/dev/null \
+    find "$backup_dir" -maxdepth 1 -name 'hivekeep-*.db' -type f -printf '%T@ %p\n' 2>/dev/null \
       | sort -n \
       | head -n "$((count - 5))" \
       | awk '{print $2}' \
@@ -889,37 +915,199 @@ backup_database() {
   fi
 }
 
+# ─── Update channels ─────────────────────────────────────────────────────────
+# stable: follows release tags (vX.Y.Z), uses prebuilt client assets from the
+#         GitHub release when available.
+# edge:   follows the HEAD of $HIVEKEEP_BRANCH (main), builds locally.
+HIVEKEEP_TARGET_TAG=""
+
+resolve_channel() {
+  # 1. Explicit --channel flag / HIVEKEEP_CHANNEL env wins
+  if [ -n "$HIVEKEEP_CHANNEL" ]; then
+    echo "$HIVEKEEP_CHANNEL"
+    return
+  fi
+  # 2. Explicitly requested branch = edge semantics
+  if [ "$HIVEKEEP_BRANCH_EXPLICIT" = true ]; then
+    echo "edge"
+    return
+  fi
+  # 3. Existing install: a branch checkout tracks that branch (edge), a
+  #    detached HEAD (left by a tag checkout) tracks releases (stable).
+  if [ -d "$HIVEKEEP_DIR/.git" ]; then
+    local cur_branch
+    cur_branch="$(git -C "$HIVEKEEP_DIR" branch --show-current 2>/dev/null || echo "")"
+    if [ -n "$cur_branch" ]; then
+      echo "edge"
+    else
+      echo "stable"
+    fi
+    return
+  fi
+  # 4. Fresh install: stable
+  echo "stable"
+}
+
+# Newest non-prerelease vX.Y.Z tag. Prefers the local repo (after a fetch);
+# falls back to the remote so it also works before cloning. Memoized: a single
+# update flow resolves the tag several times (check, install, build) and each
+# remote resolution is a network round-trip.
+_LATEST_STABLE_TAG_CACHE=""
+get_latest_stable_tag() {
+  if [ -n "$_LATEST_STABLE_TAG_CACHE" ]; then
+    echo "$_LATEST_STABLE_TAG_CACHE"
+    return
+  fi
+  local tags=""
+  if [ -d "${HIVEKEEP_DIR:-/nonexistent}/.git" ]; then
+    tags="$(git -C "$HIVEKEEP_DIR" tag -l 'v*' 2>/dev/null)"
+  fi
+  if [ -z "$tags" ]; then
+    tags="$(git ls-remote --tags --refs "https://github.com/$HIVEKEEP_REPO.git" 'v*' 2>/dev/null | awk -F/ '{print $NF}')"
+  fi
+  _LATEST_STABLE_TAG_CACHE="$(echo "$tags" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+  echo "$_LATEST_STABLE_TAG_CACHE"
+}
+
+# Download the prebuilt client assets attached to a release by CI
+# (hivekeep-client-vX.Y.Z.tar.gz + .sha256) and extract them into
+# $HIVEKEEP_DIR/dist/client. Returns non-zero when unavailable or invalid so
+# the caller can fall back to a local build.
+download_prebuilt_client() {
+  local tag="$1"
+  [ -z "$tag" ] && return 1
+
+  local asset="hivekeep-client-${tag}.tar.gz"
+  local base="https://github.com/$HIVEKEEP_REPO/releases/download/${tag}"
+  local tmp
+  tmp="$(mktemp -d)" || return 1
+
+  if ! curl -fsSL --connect-timeout 10 --max-time 300 -o "$tmp/$asset" "$base/$asset" 2>/dev/null; then
+    rm -rf "$tmp"
+    return 1
+  fi
+  if ! curl -fsSL --connect-timeout 10 --max-time 60 -o "$tmp/$asset.sha256" "$base/$asset.sha256" 2>/dev/null; then
+    rm -rf "$tmp"
+    return 1
+  fi
+
+  # Verify the checksum (sha256sum on Linux, shasum on macOS)
+  local expected actual
+  expected="$(awk '{print $1}' "$tmp/$asset.sha256")"
+  if command -v sha256sum &>/dev/null; then
+    actual="$(sha256sum "$tmp/$asset" | awk '{print $1}')"
+  elif command -v shasum &>/dev/null; then
+    actual="$(shasum -a 256 "$tmp/$asset" | awk '{print $1}')"
+  else
+    warn "No sha256 tool available — skipping prebuilt assets"
+    rm -rf "$tmp"
+    return 1
+  fi
+  if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+    warn "Prebuilt client checksum mismatch — falling back to local build"
+    rm -rf "$tmp"
+    return 1
+  fi
+
+  # Extract to a staging dir, sanity-check, then swap into place
+  if ! tar -xzf "$tmp/$asset" -C "$tmp" 2>/dev/null || [ ! -f "$tmp/dist/client/index.html" ]; then
+    warn "Prebuilt client archive is malformed — falling back to local build"
+    rm -rf "$tmp"
+    return 1
+  fi
+
+  rm -rf "${HIVEKEEP_DIR:?}/dist/client"
+  mkdir -p "$HIVEKEEP_DIR/dist"
+  mv "$tmp/dist/client" "$HIVEKEEP_DIR/dist/client"
+  rm -rf "$tmp"
+  return 0
+}
+
 # ─── Clone or update ─────────────────────────────────────────────────────────
 ROLLBACK_COMMIT=""
-KINBOT_NO_CHANGES=false
+HIVEKEEP_NO_CHANGES=false
 
 install_or_update() {
-  step "Installing KinBot"
+  step "Installing Hivekeep"
 
-  if [ -d "$KINBOT_DIR/.git" ]; then
-    info "Existing installation found at $KINBOT_DIR — updating..."
+  local channel
+  channel="$(resolve_channel)"
+
+  if [ -d "$HIVEKEEP_DIR/.git" ]; then
+    info "Existing installation found at $HIVEKEEP_DIR — updating (${BOLD}${channel}${NC} channel)..."
 
     # Backup database before update
     backup_database
 
     # Save current commit for rollback on failure
-    ROLLBACK_COMMIT="$(git -C "$KINBOT_DIR" rev-parse HEAD 2>/dev/null || echo "")"
+    ROLLBACK_COMMIT="$(git -C "$HIVEKEEP_DIR" rev-parse HEAD 2>/dev/null || echo "")"
     local old_version
     old_version="$(get_installed_version)"
     if [ -n "$ROLLBACK_COMMIT" ]; then
       info "Current version: $old_version (rollback point: ${ROLLBACK_COMMIT:0:8})"
     fi
 
-    retry 3 "git fetch" git -C "$KINBOT_DIR" fetch origin
-    git -C "$KINBOT_DIR" checkout "$KINBOT_BRANCH"
-    retry 3 "git pull" git -C "$KINBOT_DIR" pull origin "$KINBOT_BRANCH"
+    retry 3 "git fetch" git -C "$HIVEKEEP_DIR" fetch --tags origin
+
+    # Detect a dirty working tree before switching versions. A plain checkout/
+    # pull aborts with a cryptic "local changes would be overwritten" error if
+    # any tracked file was edited, so handle it explicitly.
+    local working_tree_dirty=false
+    if [ -n "$(git -C "$HIVEKEEP_DIR" status --porcelain 2>/dev/null | grep -v '^??' || true)" ]; then
+      working_tree_dirty=true
+    fi
+
+    if [ "$channel" = "stable" ]; then
+      # Stable: check out the newest release tag (detached HEAD — the repo
+      # state IS the release, which is also how install state is detected).
+      HIVEKEEP_TARGET_TAG="$(get_latest_stable_tag)"
+      if [ -z "$HIVEKEEP_TARGET_TAG" ]; then
+        error "Could not resolve the latest release tag. Check your internet connection, or use --channel edge to track main."
+      fi
+
+      if [ "$working_tree_dirty" = true ]; then
+        warn "Local changes detected in $HIVEKEEP_DIR. Stashing them before updating."
+        git -C "$HIVEKEEP_DIR" stash push -m "pre-update $(date +%Y%m%d-%H%M%S)" &>/dev/null || true
+        info "Recover them later with: git -C \"$HIVEKEEP_DIR\" stash list"
+      fi
+
+      git -C "$HIVEKEEP_DIR" checkout --detach "$HIVEKEEP_TARGET_TAG" &>/dev/null || \
+        error "Could not check out $HIVEKEEP_TARGET_TAG.
+  ${BOLD}Fix:${NC} reset to a clean copy (your data and config are preserved):
+    ${DIM}bash install.sh --reset${NC}"
+    else
+      # Edge: fast-forward the tracked branch.
+      git -C "$HIVEKEEP_DIR" checkout "$HIVEKEEP_BRANCH" &>/dev/null || \
+        git -C "$HIVEKEEP_DIR" checkout -B "$HIVEKEEP_BRANCH" "origin/$HIVEKEEP_BRANCH"
+
+      if [ "$working_tree_dirty" = true ]; then
+        warn "Local changes detected in $HIVEKEEP_DIR. Stashing them before updating."
+        # Run as a SINGLE attempt: a merge conflict is not transient, so retrying
+        # would only re-fail with "a rebase is in progress" after each backoff and
+        # could leave a half-finished rebase tree littered with conflict markers.
+        if git -C "$HIVEKEEP_DIR" -c rebase.autoStash=true pull --rebase origin "$HIVEKEEP_BRANCH"; then
+          info "Your local changes were stashed and re-applied on top of the update."
+          info "If anything looks off, run: git -C \"$HIVEKEEP_DIR\" stash list"
+        else
+          # Abort any in-progress rebase so the tree is left clean (guarded: this is
+          # a no-op if no rebase is actually in progress).
+          git -C "$HIVEKEEP_DIR" rebase --abort &>/dev/null || true
+          error "Update could not merge your local changes automatically.
+  Your installation has uncommitted edits that conflict with the new version.
+  ${BOLD}Fix:${NC} reset to a clean copy (your data and config are preserved):
+    ${DIM}bash install.sh --reset${NC}"
+        fi
+      else
+        retry 3 "git pull" git -C "$HIVEKEEP_DIR" pull origin "$HIVEKEEP_BRANCH"
+      fi
+    fi
 
     local new_version
     new_version="$(get_installed_version)"
     local new_head
-    new_head="$(git -C "$KINBOT_DIR" rev-parse HEAD 2>/dev/null || echo "")"
+    new_head="$(git -C "$HIVEKEEP_DIR" rev-parse HEAD 2>/dev/null || echo "")"
     if [ "$old_version" = "$new_version" ] && [ "$ROLLBACK_COMMIT" = "$new_head" ]; then
-      KINBOT_NO_CHANGES=true
+      HIVEKEEP_NO_CHANGES=true
       success "Already up to date ($new_version)"
     else
       success "Updated: $old_version → $new_version"
@@ -931,8 +1119,20 @@ install_or_update() {
     fi
     IS_UPDATE=true
   else
-    mkdir -p "$(dirname "$KINBOT_DIR")"
-    run_with_spinner "Cloning KinBot to $KINBOT_DIR..." retry 3 "git clone" git clone "https://github.com/$KINBOT_REPO.git" "$KINBOT_DIR" --branch "$KINBOT_BRANCH" --depth 1
+    mkdir -p "$(dirname "$HIVEKEEP_DIR")"
+    if [ "$channel" = "stable" ]; then
+      HIVEKEEP_TARGET_TAG="$(get_latest_stable_tag)"
+      if [ -n "$HIVEKEEP_TARGET_TAG" ]; then
+        info "Installing latest release: ${BOLD}${HIVEKEEP_TARGET_TAG}${NC}"
+        run_with_spinner "Cloning Hivekeep to $HIVEKEEP_DIR..." retry 3 "git clone" git clone "https://github.com/$HIVEKEEP_REPO.git" "$HIVEKEEP_DIR" --branch "$HIVEKEEP_TARGET_TAG" --depth 1
+      else
+        warn "Could not resolve the latest release tag — falling back to the $HIVEKEEP_BRANCH branch"
+        run_with_spinner "Cloning Hivekeep to $HIVEKEEP_DIR..." retry 3 "git clone" git clone "https://github.com/$HIVEKEEP_REPO.git" "$HIVEKEEP_DIR" --branch "$HIVEKEEP_BRANCH" --depth 1
+      fi
+    else
+      info "Installing the ${BOLD}edge${NC} channel (branch: $HIVEKEEP_BRANCH)"
+      run_with_spinner "Cloning Hivekeep to $HIVEKEEP_DIR..." retry 3 "git clone" git clone "https://github.com/$HIVEKEEP_REPO.git" "$HIVEKEEP_DIR" --branch "$HIVEKEEP_BRANCH" --depth 1
+    fi
     IS_UPDATE=false
   fi
 }
@@ -952,10 +1152,10 @@ rollback() {
   fi
 
   # Rollback git to previous commit on update
-  if [ -n "${ROLLBACK_COMMIT:-}" ] && [ -d "$KINBOT_DIR/.git" ]; then
+  if [ -n "${ROLLBACK_COMMIT:-}" ] && [ -d "$HIVEKEEP_DIR/.git" ]; then
     echo ""
     warn "Rolling back to previous version (${ROLLBACK_COMMIT:0:8})..."
-    if git -C "$KINBOT_DIR" reset --hard "$ROLLBACK_COMMIT" &>/dev/null; then
+    if git -C "$HIVEKEEP_DIR" reset --hard "$ROLLBACK_COMMIT" &>/dev/null; then
       success "Code rolled back to ${ROLLBACK_COMMIT:0:8}"
 
       # Try to rebuild the old version so the service can restart
@@ -963,7 +1163,7 @@ rollback() {
       BUN_INSTALL="${BUN_INSTALL:-$HOME/.bun}"
       export PATH="$BUN_INSTALL/bin:$PATH"
       if command -v bun &>/dev/null; then
-        cd "$KINBOT_DIR"
+        cd "$HIVEKEEP_DIR"
         if bun install --frozen-lockfile &>/dev/null && bun run build &>/dev/null; then
           success "Previous version rebuilt"
         else
@@ -975,62 +1175,62 @@ rollback() {
       if [ "${IS_UPDATE:-false}" = true ]; then
         info "Restarting service with previous version..."
         if [ "${INIT_SYSTEM:-}" = "launchd" ]; then
-          local plist="$HOME/Library/LaunchAgents/io.kinbot.server.plist"
+          local plist="$HOME/Library/LaunchAgents/io.hivekeep.server.plist"
           [ -f "$plist" ] && launchctl load "$plist" 2>/dev/null
         elif [ "${INIT_SYSTEM:-}" = "script" ]; then
-          local script_path="$KINBOT_DIR/kinbot"
+          local script_path="$HIVEKEEP_DIR/hivekeep"
           if [ -x "$script_path" ]; then "$script_path" start 2>/dev/null || true; fi
         elif [ "${IS_ROOT:-false}" = true ]; then
-          systemctl start kinbot 2>/dev/null || true
+          systemctl start hivekeep 2>/dev/null || true
         else
-          systemctl --user start kinbot 2>/dev/null || true
+          systemctl --user start hivekeep 2>/dev/null || true
         fi
         success "Service restarted with previous version"
       fi
     else
       warn "Rollback failed — manual intervention needed"
-      warn "Try: cd $KINBOT_DIR && git reset --hard $ROLLBACK_COMMIT"
+      warn "Try: cd $HIVEKEEP_DIR && git reset --hard $ROLLBACK_COMMIT"
     fi
-  elif [ "${IS_UPDATE:-false}" != true ] && [ -d "$KINBOT_DIR" ]; then
+  elif [ "${IS_UPDATE:-false}" != true ] && [ -d "$HIVEKEEP_DIR" ]; then
     # Fresh install failed — clean up the partial clone
     warn "Cleaning up partial installation..."
-    rm -rf "$KINBOT_DIR"
-    success "Removed $KINBOT_DIR"
+    rm -rf "$HIVEKEEP_DIR"
+    success "Removed $HIVEKEEP_DIR"
   fi
 
   # Mention database backup if one was made
   if [ -n "${BACKUP_DB_PATH:-}" ] && [ -f "${BACKUP_DB_PATH:-}" ]; then
     echo ""
     info "Database backup is available at: $BACKUP_DB_PATH"
-    info "To restore: cp '$BACKUP_DB_PATH' '$KINBOT_DATA_DIR/kinbot.db'"
+    info "To restore: cp '$BACKUP_DB_PATH' '$HIVEKEEP_DATA_DIR/hivekeep.db'"
   fi
 
   echo ""
   echo -e "${RED}Please check the error above and try again.${NC}"
-  echo -e "${DIM}If the problem persists, open an issue: https://github.com/$KINBOT_REPO/issues${NC}"
+  echo -e "${DIM}If the problem persists, open an issue: https://github.com/$HIVEKEEP_REPO/issues${NC}"
   echo ""
 
   release_lock
 }
 
 # ─── Build ───────────────────────────────────────────────────────────────────
-build_kinbot() {
+build_hivekeep() {
   step "Installing dependencies and building"
 
-  cd "$KINBOT_DIR"
+  cd "$HIVEKEEP_DIR"
 
   # Skip build entirely if nothing changed and build output already exists.
   # This makes `bash install.sh` fast when run as a health check on an
   # up-to-date installation (avoids expensive bun install + build).
-  if [ "$KINBOT_NO_CHANGES" = true ]; then
+  if [ "$HIVEKEEP_NO_CHANGES" = true ]; then
     local has_build=false
     for dir in .output dist; do
-      if [ -d "${KINBOT_DIR}/$dir" ] && [ -n "$(find "${KINBOT_DIR}/$dir" -type f -print -quit 2>/dev/null)" ]; then
+      if [ -d "${HIVEKEEP_DIR}/$dir" ] && [ -n "$(find "${HIVEKEEP_DIR}/$dir" -type f -print -quit 2>/dev/null)" ]; then
         has_build=true
         break
       fi
     done
-    if [ "$has_build" = true ] && [ -d "$KINBOT_DIR/node_modules" ]; then
+    if [ "$has_build" = true ] && [ -d "$HIVEKEEP_DIR/node_modules" ]; then
       success "No changes detected, skipping build"
       return 0
     fi
@@ -1041,7 +1241,7 @@ build_kinbot() {
   # Prevents serving outdated/broken builds if the build step layout changed.
   if [ "${IS_UPDATE:-false}" = true ]; then
     for dir in .output dist .nuxt; do
-      [ -d "${KINBOT_DIR:?}/$dir" ] && rm -rf "${KINBOT_DIR:?}/$dir"
+      [ -d "${HIVEKEEP_DIR:?}/$dir" ] && rm -rf "${HIVEKEEP_DIR:?}/$dir"
     done
   fi
 
@@ -1049,54 +1249,155 @@ build_kinbot() {
   # from a previously interrupted install), remove node_modules and retry clean.
   if ! run_with_spinner "Installing dependencies..." retry 3 "bun install" bun install --frozen-lockfile; then
     warn "Dependency install failed — cleaning node_modules and retrying from scratch..."
-    rm -rf "$KINBOT_DIR/node_modules" "$KINBOT_DIR/bun.lockb.tmp" 2>/dev/null || true
+    rm -rf "$HIVEKEEP_DIR/node_modules" "$HIVEKEEP_DIR/bun.lockb.tmp" 2>/dev/null || true
     run_with_spinner "Installing dependencies (clean retry)..." retry 3 "bun install" bun install --frozen-lockfile
+  fi
+
+  # Stable channel: prefer the prebuilt client attached to the GitHub release
+  # by CI (sha256-verified) — skips the expensive local Vite build entirely.
+  local built=false
+  if [ -n "$HIVEKEEP_TARGET_TAG" ]; then
+    if run_with_spinner "Downloading prebuilt client assets ($HIVEKEEP_TARGET_TAG)..." download_prebuilt_client "$HIVEKEEP_TARGET_TAG"; then
+      success "Prebuilt client assets installed (no local build needed)"
+      built=true
+    else
+      info "Prebuilt assets unavailable for $HIVEKEEP_TARGET_TAG — building locally"
+    fi
   fi
 
   # Build with retry. If the build fails (OOM, stale cache), clean build
   # artifacts and retry once. This handles cases where a previous interrupted
   # build left partial output that confuses the bundler.
-  if ! run_with_spinner "Building KinBot..." bun run build; then
-    warn "Build failed — cleaning build artifacts and retrying..."
-    rm -rf "$KINBOT_DIR/.output" "$KINBOT_DIR/dist" "$KINBOT_DIR/.nuxt" 2>/dev/null || true
-    run_with_spinner "Building KinBot (clean retry)..." bun run build
+  if [ "$built" != true ]; then
+    if ! run_with_spinner "Building Hivekeep..." bun run build; then
+      warn "Build failed — cleaning build artifacts and retrying..."
+      rm -rf "$HIVEKEEP_DIR/.output" "$HIVEKEEP_DIR/dist" "$HIVEKEEP_DIR/.nuxt" 2>/dev/null || true
+      run_with_spinner "Building Hivekeep (clean retry)..." bun run build
+    fi
   fi
+
+  # Install the headless browser the browse_url / screenshot_url / browser_*
+  # session tools need at runtime (driven via playwright-extra → playwright).
+  install_chromium
+}
+
+# ─── Headless browser (Playwright Chromium) ──────────────────────────────────
+# The browse_url / screenshot_url tools and the browser_* session tools launch a
+# headless Chromium via playwright-extra. Without the browser binary they fail at
+# runtime ("Executable doesn't exist … run `playwright install`").
+#
+# This step is best-effort: a failure here (e.g. no sudo for system libs) must
+# NOT abort the install — the rest of Hivekeep works fine, browsing tools just
+# stay unavailable until Chromium is present. Idempotent: re-running is a cheap
+# no-op once the matching browser build is already installed.
+install_chromium() {
+  cd "$HIVEKEEP_DIR" || return 0
+
+  # Install the browser INSIDE the install dir (not the caller's ~/.cache) so it
+  # lives somewhere the runtime service user can read. In the root/system-install
+  # flow the service runs as a separate '$HIVEKEEP_USER' account, and setup_system_user
+  # chowns the whole install dir to it — a browser under root's $HOME would be
+  # invisible to the service. We persist PLAYWRIGHT_BROWSERS_PATH into hivekeep.env
+  # so the running server looks in the same place.
+  local browsers_path="${HIVEKEEP_DIR}/.cache/ms-playwright"
+  mkdir -p "$browsers_path"
+  persist_browsers_path "$browsers_path"
+
+  # Run the project-local playwright CLI (matches the installed library version;
+  # a pinned version could pull a mismatched browser build).
+  if [ "$OS" = "Darwin" ]; then
+    # macOS: Homebrew/the system already provides the shared libs Chromium needs,
+    # and `--with-deps` isn't supported on macOS — plain install only.
+    if ! run_with_spinner "Installing headless browser (Chromium)..." \
+        env PLAYWRIGHT_BROWSERS_PATH="$browsers_path" bun x playwright install chromium; then
+      warn "Could not install Chromium for the browser tools (browse_url / screenshot_url / browser sessions)."
+      warn "Hivekeep is installed and will run; install it later with:"
+      warn "  cd ${HIVEKEEP_DIR} && PLAYWRIGHT_BROWSERS_PATH='${browsers_path}' bun x playwright install chromium"
+    fi
+  else
+    # Linux: prefer `--with-deps` so apt pulls Chromium's system libraries. That
+    # needs root/sudo; if neither is available, fall back to a plain browser
+    # install and tell the user how to add the OS libs themselves.
+    if [ "$IS_ROOT" = true ]; then
+      if ! run_with_spinner "Installing headless browser (Chromium + system libs)..." \
+          env PLAYWRIGHT_BROWSERS_PATH="$browsers_path" bun x playwright install --with-deps chromium; then
+        warn "Could not install Chromium for the browser tools (browse_url / screenshot_url / browser sessions)."
+        warn "Hivekeep is installed and will run; install it later with:"
+        warn "  cd ${HIVEKEEP_DIR} && PLAYWRIGHT_BROWSERS_PATH='${browsers_path}' bun x playwright install --with-deps chromium"
+      fi
+    elif command -v sudo &>/dev/null && sudo -n true 2>/dev/null; then
+      # `--with-deps` shells out to apt internally, so it must run under sudo;
+      # pass the browsers path through so the binary also lands in the shared dir.
+      if ! run_with_spinner "Installing headless browser (Chromium + system libs)..." \
+          sudo env PLAYWRIGHT_BROWSERS_PATH="$browsers_path" bun x playwright install --with-deps chromium; then
+        warn "Could not install Chromium for the browser tools (browse_url / screenshot_url / browser sessions)."
+        warn "Hivekeep is installed and will run; install it later with:"
+        warn "  cd ${HIVEKEEP_DIR} && sudo env PLAYWRIGHT_BROWSERS_PATH='${browsers_path}' bun x playwright install --with-deps chromium"
+      fi
+    else
+      # No sudo for the OS libs — install just the browser binary and tell the
+      # user how to add the system dependencies in a separate one-time step.
+      if ! run_with_spinner "Installing headless browser (Chromium)..." \
+          env PLAYWRIGHT_BROWSERS_PATH="$browsers_path" bun x playwright install chromium; then
+        warn "Could not install Chromium for the browser tools (browse_url / screenshot_url / browser sessions)."
+      else
+        warn "Chromium installed without system libraries (no sudo available)."
+        warn "If browsing tools fail to launch, install the OS deps once with:"
+        warn "  cd ${HIVEKEEP_DIR} && sudo bun x playwright install-deps chromium"
+      fi
+    fi
+  fi
+}
+
+# Persist PLAYWRIGHT_BROWSERS_PATH into hivekeep.env so the systemd/launchd
+# service (which may run as a different user than the installer) finds the
+# browser installed above. Idempotent: replaces any existing line.
+persist_browsers_path() {
+  local browsers_path="$1"
+  local env_file="$HIVEKEEP_DATA_DIR/hivekeep.env"
+  [ -f "$env_file" ] || return 0
+  # Drop a stale line then append the current value.
+  if command -v sed &>/dev/null; then
+    sed -i.bak '/^PLAYWRIGHT_BROWSERS_PATH=/d' "$env_file" 2>/dev/null || true
+    rm -f "${env_file}.bak" 2>/dev/null || true
+  fi
+  printf 'PLAYWRIGHT_BROWSERS_PATH=%s\n' "$browsers_path" >> "$env_file"
 }
 
 # ─── Database ────────────────────────────────────────────────────────────────
 setup_database() {
   step "Setting up database"
 
-  mkdir -p "$KINBOT_DATA_DIR"
+  mkdir -p "$HIVEKEEP_DATA_DIR"
 
   # Skip migrations if nothing changed and database already exists
-  if [ "$KINBOT_NO_CHANGES" = true ] && [ -f "$KINBOT_DATA_DIR/kinbot.db" ]; then
+  if [ "$HIVEKEEP_NO_CHANGES" = true ] && [ -f "$HIVEKEEP_DATA_DIR/hivekeep.db" ]; then
     success "No changes detected, skipping migrations"
     return 0
   fi
 
-  cd "$KINBOT_DIR"
-  run_with_spinner "Running database migrations..." env KINBOT_DATA_DIR="$KINBOT_DATA_DIR" DB_PATH="$KINBOT_DATA_DIR/kinbot.db" bun run db:migrate
+  cd "$HIVEKEEP_DIR"
+  run_with_spinner "Running database migrations..." env HIVEKEEP_DATA_DIR="$HIVEKEEP_DATA_DIR" DB_PATH="$HIVEKEEP_DATA_DIR/hivekeep.db" bun run db:migrate
 }
 
 # ─── System user + ownership (root only) ─────────────────────────────────────
 setup_system_user() {
   [ "$IS_ROOT" != true ] && return
 
-  if ! id "$KINBOT_USER" &>/dev/null; then
-    info "Creating system user '$KINBOT_USER'..."
+  if ! id "$HIVEKEEP_USER" &>/dev/null; then
+    info "Creating system user '$HIVEKEEP_USER'..."
     useradd \
       --system \
-      --home-dir "$KINBOT_DIR" \
+      --home-dir "$HIVEKEEP_DIR" \
       --shell /usr/sbin/nologin \
-      --comment "KinBot service account" \
-      "$KINBOT_USER"
-    success "User '$KINBOT_USER' created"
+      --comment "Hivekeep service account" \
+      "$HIVEKEEP_USER"
+    success "User '$HIVEKEEP_USER' created"
   else
-    success "User '$KINBOT_USER' already exists"
+    success "User '$HIVEKEEP_USER' already exists"
   fi
 
-  chown -R "$KINBOT_USER:$KINBOT_USER" "$KINBOT_DIR" "$KINBOT_DATA_DIR"
+  chown -R "$HIVEKEEP_USER:$HIVEKEEP_USER" "$HIVEKEEP_DIR" "$HIVEKEEP_DATA_DIR"
   success "Permissions set"
 }
 
@@ -1113,65 +1414,65 @@ resolve_bun_path() {
 
 # ─── Service: systemd system (root) ──────────────────────────────────────────
 create_systemd_system_service() {
-  local env_file="$KINBOT_DATA_DIR/kinbot.env"
-  UNIT_FILE="/etc/systemd/system/kinbot.service"
+  local env_file="$HIVEKEEP_DATA_DIR/hivekeep.env"
+  UNIT_FILE="/etc/systemd/system/hivekeep.service"
 
-  if [ "$IS_UPDATE" = true ] && systemctl is-active --quiet kinbot 2>/dev/null; then
+  if [ "$IS_UPDATE" = true ] && systemctl is-active --quiet hivekeep 2>/dev/null; then
     info "Stopping existing service..."
-    systemctl stop kinbot
+    systemctl stop hivekeep
   fi
 
   cat > "$UNIT_FILE" << UNIT
 [Unit]
-Description=KinBot — AI Agent Platform
+Description=Hivekeep — AI Agent Platform
 After=network.target
 StartLimitIntervalSec=60
 StartLimitBurst=3
 
 [Service]
 Type=simple
-User=$KINBOT_USER
-Group=$KINBOT_USER
-WorkingDirectory=$KINBOT_DIR
+User=$HIVEKEEP_USER
+Group=$HIVEKEEP_USER
+WorkingDirectory=$HIVEKEEP_DIR
 EnvironmentFile=-${env_file}
 ExecStart=$BUN_BIN src/server/index.ts
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=kinbot
+SyslogIdentifier=hivekeep
 
 [Install]
 WantedBy=multi-user.target
 UNIT
 
   systemctl daemon-reload
-  systemctl enable kinbot
-  systemctl start kinbot
+  systemctl enable hivekeep
+  systemctl start hivekeep
   success "systemd system service started"
 }
 
 # ─── Service: systemd user (non-root) ────────────────────────────────────────
 create_systemd_user_service() {
-  local env_file="$KINBOT_DATA_DIR/kinbot.env"
+  local env_file="$HIVEKEEP_DATA_DIR/hivekeep.env"
   UNIT_DIR="$HOME/.config/systemd/user"
-  UNIT_FILE="$UNIT_DIR/kinbot.service"
+  UNIT_FILE="$UNIT_DIR/hivekeep.service"
 
   mkdir -p "$UNIT_DIR"
 
-  if [ "$IS_UPDATE" = true ] && systemctl --user is-active --quiet kinbot 2>/dev/null; then
+  if [ "$IS_UPDATE" = true ] && systemctl --user is-active --quiet hivekeep 2>/dev/null; then
     info "Stopping existing service..."
-    systemctl --user stop kinbot
+    systemctl --user stop hivekeep
   fi
 
   cat > "$UNIT_FILE" << UNIT
 [Unit]
-Description=KinBot — AI Agent Platform
+Description=Hivekeep — AI Agent Platform
 After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=$KINBOT_DIR
+WorkingDirectory=$HIVEKEEP_DIR
 EnvironmentFile=-${env_file}
 ExecStart=$BUN_BIN src/server/index.ts
 Restart=always
@@ -1182,8 +1483,8 @@ WantedBy=default.target
 UNIT
 
   systemctl --user daemon-reload
-  systemctl --user enable kinbot
-  systemctl --user start kinbot
+  systemctl --user enable hivekeep
+  systemctl --user start hivekeep
 
   loginctl enable-linger "$USER" 2>/dev/null || \
     warn "Could not enable lingering (service won't auto-start on boot without login). Run: sudo loginctl enable-linger $USER"
@@ -1193,10 +1494,10 @@ UNIT
 
 # ─── Service: launchd (macOS) ────────────────────────────────────────────────
 create_launchd_service() {
-  local env_file="$KINBOT_DATA_DIR/kinbot.env"
+  local env_file="$HIVEKEEP_DATA_DIR/hivekeep.env"
   PLIST_DIR="$HOME/Library/LaunchAgents"
-  PLIST_PATH="$PLIST_DIR/io.kinbot.server.plist"
-  LOG_DIR="$HOME/Library/Logs/kinbot"
+  PLIST_PATH="$PLIST_DIR/io.hivekeep.server.plist"
+  LOG_DIR="$HOME/Library/Logs/hivekeep"
 
   mkdir -p "$PLIST_DIR" "$LOG_DIR"
 
@@ -1204,7 +1505,7 @@ create_launchd_service() {
     launchctl unload "$PLIST_PATH" 2>/dev/null || true
   fi
 
-  # Build env dict from kinbot.env for launchd (it doesn't support EnvironmentFile)
+  # Build env dict from hivekeep.env for launchd (it doesn't support EnvironmentFile)
   local env_dict=""
   if [ -f "$env_file" ]; then
     while IFS='=' read -r key value; do
@@ -1221,7 +1522,7 @@ create_launchd_service() {
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>io.kinbot.server</string>
+  <string>io.hivekeep.server</string>
 
   <key>ProgramArguments</key>
   <array>
@@ -1230,7 +1531,7 @@ create_launchd_service() {
   </array>
 
   <key>WorkingDirectory</key>
-  <string>$KINBOT_DIR</string>
+  <string>$HIVEKEEP_DIR</string>
 
   <key>EnvironmentVariables</key>
   <dict>
@@ -1244,10 +1545,10 @@ $(printf '%b' "$env_dict")    <key>PATH</key><string>$(dirname "$BUN_BIN"):/usr/
   <true/>
 
   <key>StandardOutPath</key>
-  <string>$LOG_DIR/kinbot.log</string>
+  <string>$LOG_DIR/hivekeep.log</string>
 
   <key>StandardErrorPath</key>
-  <string>$LOG_DIR/kinbot-error.log</string>
+  <string>$LOG_DIR/hivekeep-error.log</string>
 </dict>
 </plist>
 PLIST
@@ -1258,20 +1559,20 @@ PLIST
 
 # ─── Service: start/stop script (WSL / no-systemd fallback) ──────────────────
 create_script_service() {
-  local env_file="$KINBOT_DATA_DIR/kinbot.env"
-  local script_path="$KINBOT_DIR/kinbot"
-  local pid_file="$KINBOT_DATA_DIR/kinbot.pid"
-  local log_file="$KINBOT_DATA_DIR/kinbot.log"
+  local env_file="$HIVEKEEP_DATA_DIR/hivekeep.env"
+  local script_path="$HIVEKEEP_DIR/hivekeep"
+  local pid_file="$HIVEKEEP_DATA_DIR/hivekeep.pid"
+  local log_file="$HIVEKEEP_DATA_DIR/hivekeep.log"
 
   cat > "$script_path" << 'SCRIPT_HEADER'
 #!/usr/bin/env bash
-# KinBot service manager (for systems without systemd)
+# Hivekeep service manager (for systems without systemd)
 set -euo pipefail
 SCRIPT_HEADER
 
   cat >> "$script_path" << SCRIPT_VARS
-KINBOT_DIR="$KINBOT_DIR"
-DATA_DIR="$KINBOT_DATA_DIR"
+HIVEKEEP_DIR="$HIVEKEEP_DIR"
+DATA_DIR="$HIVEKEEP_DATA_DIR"
 ENV_FILE="$env_file"
 PID_FILE="$pid_file"
 LOG_FILE="$log_file"
@@ -1280,25 +1581,25 @@ SCRIPT_VARS
 
   cat >> "$script_path" << 'SCRIPT_BODY'
 
-# Verify PID file points to an actual KinBot process (not a recycled PID)
+# Verify PID file points to an actual Hivekeep process (not a recycled PID)
 is_running() {
   [ -f "$PID_FILE" ] || return 1
   local pid
   pid="$(cat "$PID_FILE" 2>/dev/null)" || return 1
   [ -n "$pid" ] || return 1
   kill -0 "$pid" 2>/dev/null || return 1
-  # Guard against recycled PIDs: verify the process is actually bun/kinbot
+  # Guard against recycled PIDs: verify the process is actually bun/hivekeep
   if [ -d "/proc/$pid" ]; then
     local cmdline
     cmdline="$(cat "/proc/$pid/cmdline" 2>/dev/null | tr '\0' ' ')" || true
-    if echo "$cmdline" | grep -qiE 'bun|kinbot'; then
+    if echo "$cmdline" | grep -qiE 'bun|hivekeep'; then
       return 0
     fi
-    # PID exists but isn't KinBot — stale PID file
+    # PID exists but isn't Hivekeep — stale PID file
     return 1
   fi
   # No /proc (macOS/BSD) — fall back to ps
-  if ps -p "$pid" -o args= 2>/dev/null | grep -qiE 'bun|kinbot'; then
+  if ps -p "$pid" -o args= 2>/dev/null | grep -qiE 'bun|hivekeep'; then
     return 0
   fi
   return 1
@@ -1309,7 +1610,7 @@ get_pid() {
 }
 
 # Rotate log file if it exceeds the threshold
-# Keeps up to 3 archived logs: kinbot.log.1 (newest) .. kinbot.log.3 (oldest)
+# Keeps up to 3 archived logs: hivekeep.log.1 (newest) .. hivekeep.log.3 (oldest)
 rotate_logs() {
   local max_bytes="${1:-52428800}"  # default 50MB
   local max_archives=3
@@ -1339,32 +1640,32 @@ rotate_logs() {
 case "${1:-}" in
   start)
     if is_running; then
-      echo "KinBot is already running (PID $(get_pid))"
+      echo "Hivekeep is already running (PID $(get_pid))"
       exit 0
     fi
     # Clean up stale PID file if present
     rm -f "$PID_FILE"
     # Auto-rotate logs before starting if they're large
     rotate_logs
-    echo "Starting KinBot..."
-    cd "$KINBOT_DIR"
+    echo "Starting Hivekeep..."
+    cd "$HIVEKEEP_DIR"
     set -a
     # shellcheck disable=SC1090
     [ -f "$ENV_FILE" ] && . "$ENV_FILE"
     set +a
     nohup "$BUN_BIN" src/server/index.ts >> "$LOG_FILE" 2>&1 &
     echo $! > "$PID_FILE"
-    echo "KinBot started (PID $!)"
+    echo "Hivekeep started (PID $!)"
     echo "Logs: tail -f $LOG_FILE"
     ;;
   stop)
     if ! is_running; then
-      echo "KinBot is not running"
+      echo "Hivekeep is not running"
       rm -f "$PID_FILE"
       exit 0
     fi
     _pid="$(get_pid)"
-    echo "Stopping KinBot (PID $_pid)..."
+    echo "Stopping Hivekeep (PID $_pid)..."
     kill "$_pid" 2>/dev/null || true
 
     # Wait up to 10 seconds for graceful shutdown
@@ -1382,7 +1683,7 @@ case "${1:-}" in
     fi
 
     rm -f "$PID_FILE"
-    echo "KinBot stopped"
+    echo "Hivekeep stopped"
     ;;
   restart)
     "$0" stop
@@ -1392,13 +1693,13 @@ case "${1:-}" in
   status)
     # ── Version ──
     _ver=""
-    if [ -d "$KINBOT_DIR/.git" ]; then
-      _ver="$(git -C "$KINBOT_DIR" describe --tags 2>/dev/null || git -C "$KINBOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+    if [ -d "$HIVEKEEP_DIR/.git" ]; then
+      _ver="$(git -C "$HIVEKEEP_DIR" describe --tags 2>/dev/null || git -C "$HIVEKEEP_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
     fi
 
     if is_running; then
       _pid="$(get_pid)"
-      echo "● KinBot is running (PID $_pid)"
+      echo "● Hivekeep is running (PID $_pid)"
       [ -n "$_ver" ] && echo "  Version: $_ver"
 
       # Show uptime
@@ -1452,7 +1753,7 @@ case "${1:-}" in
       fi
 
       # Show database info
-      _db_file="$DATA_DIR/kinbot.db"
+      _db_file="$DATA_DIR/hivekeep.db"
       if [ -f "$_db_file" ]; then
         _db_size="$(du -h "$_db_file" 2>/dev/null | awk '{print $1}')" || _db_size=""
         [ -n "$_db_size" ] && echo "  DB:      $_db_size"
@@ -1483,12 +1784,12 @@ case "${1:-}" in
       fi
 
       # Check for available updates (quick, non-blocking)
-      if [ -d "$KINBOT_DIR/.git" ]; then
-        _branch="$(git -C "$KINBOT_DIR" branch --show-current 2>/dev/null || echo "main")"
-        if git -C "$KINBOT_DIR" fetch --dry-run origin "$_branch" 2>&1 | grep -q "$_branch" 2>/dev/null; then
-          _behind="$(git -C "$KINBOT_DIR" rev-list HEAD.."origin/$_branch" --count 2>/dev/null || echo "0")"
+      if [ -d "$HIVEKEEP_DIR/.git" ]; then
+        _branch="$(git -C "$HIVEKEEP_DIR" branch --show-current 2>/dev/null || echo "main")"
+        if git -C "$HIVEKEEP_DIR" fetch --dry-run origin "$_branch" 2>&1 | grep -q "$_branch" 2>/dev/null; then
+          _behind="$(git -C "$HIVEKEEP_DIR" rev-list HEAD.."origin/$_branch" --count 2>/dev/null || echo "0")"
           if [ "$_behind" -gt 0 ] 2>/dev/null; then
-            _remote_ver="$(git -C "$KINBOT_DIR" describe --tags "origin/$_branch" 2>/dev/null || git -C "$KINBOT_DIR" rev-parse --short "origin/$_branch" 2>/dev/null || echo "?")"
+            _remote_ver="$(git -C "$HIVEKEEP_DIR" describe --tags "origin/$_branch" 2>/dev/null || git -C "$HIVEKEEP_DIR" rev-parse --short "origin/$_branch" 2>/dev/null || echo "?")"
             echo ""
             echo "  ⬆ Update available: $_ver → $_remote_ver ($_behind commits behind)"
             echo "    Run: $0 update"
@@ -1496,7 +1797,7 @@ case "${1:-}" in
         fi
       fi
     else
-      echo "○ KinBot is not running"
+      echo "○ Hivekeep is not running"
       [ -n "$_ver" ] && echo "  Version: $_ver"
       rm -f "$PID_FILE"
       # Show last few log lines as a hint
@@ -1517,11 +1818,11 @@ case "${1:-}" in
     fi
     ;;
   version)
-    if [ -d "$KINBOT_DIR/.git" ]; then
-      _ver="$(git -C "$KINBOT_DIR" describe --tags 2>/dev/null || git -C "$KINBOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
-      echo "KinBot $_ver"
+    if [ -d "$HIVEKEEP_DIR/.git" ]; then
+      _ver="$(git -C "$HIVEKEEP_DIR" describe --tags 2>/dev/null || git -C "$HIVEKEEP_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+      echo "Hivekeep $_ver"
     else
-      echo "KinBot (version unknown)"
+      echo "Hivekeep (version unknown)"
     fi
     ;;
   log-rotate)
@@ -1536,17 +1837,17 @@ case "${1:-}" in
     ;;
   update)
     # Convenience wrapper: re-run the installer in update mode
-    _install_sh="$KINBOT_DIR/install.sh"
+    _install_sh="$HIVEKEEP_DIR/install.sh"
     if [ ! -f "$_install_sh" ]; then
       echo "install.sh not found at $_install_sh"
       echo "Download and run manually:"
-      echo "  curl -fsSL https://raw.githubusercontent.com/MarlBurroW/kinbot/main/install.sh | bash"
+      echo "  curl -fsSL https://raw.githubusercontent.com/MarlBurroW/hivekeep/main/install.sh | bash"
       exit 1
     fi
     exec bash "$_install_sh" --update "$@"
     ;;
   backup)
-    _install_sh="$KINBOT_DIR/install.sh"
+    _install_sh="$HIVEKEEP_DIR/install.sh"
     if [ ! -f "$_install_sh" ]; then
       echo "install.sh not found at $_install_sh"
       exit 1
@@ -1554,7 +1855,7 @@ case "${1:-}" in
     exec bash "$_install_sh" --backup "${2:-}"
     ;;
   doctor)
-    _install_sh="$KINBOT_DIR/install.sh"
+    _install_sh="$HIVEKEEP_DIR/install.sh"
     if [ ! -f "$_install_sh" ]; then
       echo "install.sh not found at $_install_sh"
       exit 1
@@ -1562,7 +1863,7 @@ case "${1:-}" in
     exec bash "$_install_sh" --doctor
     ;;
   test)
-    _install_sh="$KINBOT_DIR/install.sh"
+    _install_sh="$HIVEKEEP_DIR/install.sh"
     if [ ! -f "$_install_sh" ]; then
       echo "install.sh not found at $_install_sh"
       exit 1
@@ -1570,7 +1871,7 @@ case "${1:-}" in
     exec bash "$_install_sh" --test
     ;;
   config)
-    _install_sh="$KINBOT_DIR/install.sh"
+    _install_sh="$HIVEKEEP_DIR/install.sh"
     if [ ! -f "$_install_sh" ]; then
       echo "install.sh not found at $_install_sh"
       exit 1
@@ -1578,7 +1879,7 @@ case "${1:-}" in
     exec bash "$_install_sh" --config
     ;;
   env)
-    _install_sh="$KINBOT_DIR/install.sh"
+    _install_sh="$HIVEKEEP_DIR/install.sh"
     if [ ! -f "$_install_sh" ]; then
       echo "install.sh not found at $_install_sh"
       exit 1
@@ -1587,7 +1888,7 @@ case "${1:-}" in
     exec bash "$_install_sh" --env "${2:-}"
     ;;
   restore)
-    _install_sh="$KINBOT_DIR/install.sh"
+    _install_sh="$HIVEKEEP_DIR/install.sh"
     if [ ! -f "$_install_sh" ]; then
       echo "install.sh not found at $_install_sh"
       exit 1
@@ -1595,7 +1896,7 @@ case "${1:-}" in
     exec bash "$_install_sh" --restore "${2:-}"
     ;;
   reset)
-    _install_sh="$KINBOT_DIR/install.sh"
+    _install_sh="$HIVEKEEP_DIR/install.sh"
     if [ ! -f "$_install_sh" ]; then
       echo "install.sh not found at $_install_sh"
       exit 1
@@ -1603,7 +1904,7 @@ case "${1:-}" in
     exec bash "$_install_sh" --reset
     ;;
   cron)
-    _install_sh="$KINBOT_DIR/install.sh"
+    _install_sh="$HIVEKEEP_DIR/install.sh"
     if [ ! -f "$_install_sh" ]; then
       echo "install.sh not found at $_install_sh"
       exit 1
@@ -1671,15 +1972,15 @@ case "${1:-}" in
     [ "$_healthy" = true ] && exit 0 || exit 1
     ;;
   *)
-    echo "KinBot service manager"
+    echo "Hivekeep service manager"
     echo ""
     echo "Usage: $0 <command> [args]"
     echo ""
     echo "Service:"
-    echo "  start         Start KinBot in the background"
-    echo "  stop          Stop KinBot (graceful, then force after 10s)"
-    echo "  restart       Stop and start KinBot"
-    echo "  status        Show KinBot status, uptime, and resource usage"
+    echo "  start         Start Hivekeep in the background"
+    echo "  stop          Stop Hivekeep (graceful, then force after 10s)"
+    echo "  restart       Stop and start Hivekeep"
+    echo "  status        Show Hivekeep status, uptime, and resource usage"
     echo "  health        Quick health check for monitoring (exit 0/1, use --json)"
     echo "  logs          Tail the log file (use 'logs -n 50' for recent lines)"
     echo "  log-rotate    Rotate the log file now (archives to .1/.2/.3)"
@@ -1704,9 +2005,9 @@ SCRIPT_BODY
 
   chmod +x "$script_path"
 
-  # Start KinBot
+  # Start Hivekeep
   "$script_path" start
-  success "KinBot started via $script_path"
+  success "Hivekeep started via $script_path"
 }
 
 # ─── Create service (dispatch) ───────────────────────────────────────────────
@@ -1725,7 +2026,7 @@ create_service() {
 }
 
 # ─── Post-start health check ─────────────────────────────────────────────────
-KINBOT_HEALTHY=false
+HIVEKEEP_HEALTHY=false
 
 # Analyze recent logs and provide actionable hints for common failures
 diagnose_startup_failure() {
@@ -1733,15 +2034,15 @@ diagnose_startup_failure() {
 
   # Grab last 50 lines of logs depending on init system
   if [ "$INIT_SYSTEM" = "launchd" ]; then
-    local log_file="$HOME/Library/Logs/kinbot/kinbot.log"
+    local log_file="$HOME/Library/Logs/hivekeep/hivekeep.log"
     [ -f "$log_file" ] && log_lines="$(tail -50 "$log_file" 2>/dev/null)"
   elif [ "$INIT_SYSTEM" = "script" ]; then
-    local log_file="$KINBOT_DATA_DIR/kinbot.log"
+    local log_file="$HIVEKEEP_DATA_DIR/hivekeep.log"
     [ -f "$log_file" ] && log_lines="$(tail -50 "$log_file" 2>/dev/null)"
   elif [ "$IS_ROOT" = true ]; then
-    log_lines="$(journalctl -u kinbot --no-pager -n 50 2>/dev/null)"
+    log_lines="$(journalctl -u hivekeep --no-pager -n 50 2>/dev/null)"
   else
-    log_lines="$(journalctl --user -u kinbot --no-pager -n 50 2>/dev/null)"
+    log_lines="$(journalctl --user -u hivekeep --no-pager -n 50 2>/dev/null)"
   fi
 
   if [ -z "$log_lines" ]; then
@@ -1749,13 +2050,13 @@ diagnose_startup_failure() {
     echo ""
     echo -e "  ${BOLD}Check that the service is registered:${NC}"
     if [ "$INIT_SYSTEM" = "launchd" ]; then
-      echo -e "  ${DIM}  launchctl list | grep kinbot${NC}"
+      echo -e "  ${DIM}  launchctl list | grep hivekeep${NC}"
     elif [ "$INIT_SYSTEM" = "script" ]; then
-      echo -e "  ${DIM}  $KINBOT_DIR/kinbot status${NC}"
+      echo -e "  ${DIM}  $HIVEKEEP_DIR/hivekeep status${NC}"
     elif [ "$IS_ROOT" = true ]; then
-      echo -e "  ${DIM}  sudo systemctl status kinbot${NC}"
+      echo -e "  ${DIM}  sudo systemctl status hivekeep${NC}"
     else
-      echo -e "  ${DIM}  systemctl --user status kinbot${NC}"
+      echo -e "  ${DIM}  systemctl --user status hivekeep${NC}"
     fi
     return
   fi
@@ -1765,15 +2066,15 @@ diagnose_startup_failure() {
   # Pattern: port already in use
   if echo "$log_lines" | grep -qi 'EADDRINUSE\|address already in use\|port.*already.*in.*use'; then
     echo ""
-    echo -e "  ${RED}Diagnosis:${NC} Port $KINBOT_PORT is already in use by another process."
+    echo -e "  ${RED}Diagnosis:${NC} Port $HIVEKEEP_PORT is already in use by another process."
     echo -e "  ${BOLD}Fix:${NC}"
     echo -e "  ${DIM}  # Find what's using the port:${NC}"
     if command -v ss &>/dev/null; then
-      echo -e "  ${DIM}  ss -tlnp | grep :${KINBOT_PORT}${NC}"
+      echo -e "  ${DIM}  ss -tlnp | grep :${HIVEKEEP_PORT}${NC}"
     elif command -v lsof &>/dev/null; then
-      echo -e "  ${DIM}  lsof -i :${KINBOT_PORT}${NC}"
+      echo -e "  ${DIM}  lsof -i :${HIVEKEEP_PORT}${NC}"
     fi
-    echo -e "  ${DIM}  # Then either stop that process, or change KinBot's port:${NC}"
+    echo -e "  ${DIM}  # Then either stop that process, or change Hivekeep's port:${NC}"
     echo -e "  ${DIM}  bash install.sh --config${NC}"
     hints_shown=$((hints_shown + 1))
   fi
@@ -1781,7 +2082,7 @@ diagnose_startup_failure() {
   # Pattern: out of memory
   if echo "$log_lines" | grep -qi 'out of memory\|OOM\|Cannot allocate memory\|JavaScript heap\|ENOMEM'; then
     echo ""
-    echo -e "  ${RED}Diagnosis:${NC} KinBot ran out of memory."
+    echo -e "  ${RED}Diagnosis:${NC} Hivekeep ran out of memory."
     echo -e "  ${BOLD}Fix:${NC}"
     echo -e "  ${DIM}  # Check available memory:${NC}"
     echo -e "  ${DIM}  free -h${NC}"
@@ -1797,13 +2098,13 @@ diagnose_startup_failure() {
     echo -e "  ${BOLD}Fix:${NC}"
     if [ "$IS_ROOT" = true ]; then
       echo -e "  ${DIM}  # Re-apply ownership:${NC}"
-      echo -e "  ${DIM}  sudo chown -R ${KINBOT_USER}:${KINBOT_USER} ${KINBOT_DIR} ${KINBOT_DATA_DIR}${NC}"
+      echo -e "  ${DIM}  sudo chown -R ${HIVEKEEP_USER}:${HIVEKEEP_USER} ${HIVEKEEP_DIR} ${HIVEKEEP_DATA_DIR}${NC}"
     else
       echo -e "  ${DIM}  # Check file ownership:${NC}"
-      echo -e "  ${DIM}  ls -la ${KINBOT_DIR}/ ${KINBOT_DATA_DIR}/${NC}"
+      echo -e "  ${DIM}  ls -la ${HIVEKEEP_DIR}/ ${HIVEKEEP_DATA_DIR}/${NC}"
     fi
-    if [ "$KINBOT_PORT" -lt 1024 ] 2>/dev/null; then
-      echo -e "  ${DIM}  # Port $KINBOT_PORT requires root. Use a port >= 1024 or run as root.${NC}"
+    if [ "$HIVEKEEP_PORT" -lt 1024 ] 2>/dev/null; then
+      echo -e "  ${DIM}  # Port $HIVEKEEP_PORT requires root. Use a port >= 1024 or run as root.${NC}"
     fi
     hints_shown=$((hints_shown + 1))
   fi
@@ -1813,8 +2114,8 @@ diagnose_startup_failure() {
     echo ""
     echo -e "  ${RED}Diagnosis:${NC} Database issue (locked or corrupted)."
     echo -e "  ${BOLD}Fix:${NC}"
-    echo -e "  ${DIM}  # If locked, make sure no other KinBot process is running:${NC}"
-    echo -e "  ${DIM}  pgrep -f 'kinbot.*server' && echo 'Found stale process!'${NC}"
+    echo -e "  ${DIM}  # If locked, make sure no other Hivekeep process is running:${NC}"
+    echo -e "  ${DIM}  pgrep -f 'hivekeep.*server' && echo 'Found stale process!'${NC}"
     echo -e "  ${DIM}  # If corrupted, restore from a backup:${NC}"
     echo -e "  ${DIM}  bash install.sh --restore${NC}"
     hints_shown=$((hints_shown + 1))
@@ -1847,33 +2148,33 @@ diagnose_startup_failure() {
     done
     echo ""
     echo -e "  ${DIM}If the issue isn't clear, run: bash install.sh --test${NC}"
-    echo -e "  ${DIM}Or open an issue: https://github.com/$KINBOT_REPO/issues${NC}"
+    echo -e "  ${DIM}Or open an issue: https://github.com/$HIVEKEEP_REPO/issues${NC}"
   fi
 }
 
 verify_running() {
-  step "Verifying KinBot is running"
+  step "Verifying Hivekeep is running"
 
-  local url="http://localhost:${KINBOT_PORT}"
+  local url="http://localhost:${HIVEKEEP_PORT}"
   local attempts=0
   local max_attempts=15
 
   # In quiet mode, reduce wait time
-  [ "$KINBOT_QUIET" = true ] && max_attempts=10
+  [ "$HIVEKEEP_QUIET" = true ] && max_attempts=10
 
   while [ $attempts -lt $max_attempts ]; do
     local http_code
     http_code="$(curl -s -o /dev/null -w '%{http_code}' "${url}/" --max-time 2 2>/dev/null || echo "000")"
     if [ "$http_code" != "000" ]; then
-      KINBOT_HEALTHY=true
-      success "KinBot is up and responding (HTTP $http_code)"
+      HIVEKEEP_HEALTHY=true
+      success "Hivekeep is up and responding (HTTP $http_code)"
       return
     fi
     sleep 2
     attempts=$((attempts + 1))
   done
 
-  warn "KinBot hasn't responded after 30 seconds"
+  warn "Hivekeep hasn't responded after 30 seconds"
 
   # Try to diagnose the actual problem instead of just saying "check the logs"
   diagnose_startup_failure
@@ -1882,13 +2183,13 @@ verify_running() {
   echo ""
   echo -e "  ${BOLD}Full logs:${NC}"
   if [ "$INIT_SYSTEM" = "launchd" ]; then
-    echo -e "  ${DIM}  tail -f ~/Library/Logs/kinbot/kinbot.log${NC}"
+    echo -e "  ${DIM}  tail -f ~/Library/Logs/hivekeep/hivekeep.log${NC}"
   elif [ "$INIT_SYSTEM" = "script" ]; then
-    echo -e "  ${DIM}  $KINBOT_DIR/kinbot logs${NC}"
+    echo -e "  ${DIM}  $HIVEKEEP_DIR/hivekeep logs${NC}"
   elif [ "$IS_ROOT" = true ]; then
-    echo -e "  ${DIM}  sudo journalctl -u kinbot -f${NC}"
+    echo -e "  ${DIM}  sudo journalctl -u hivekeep -f${NC}"
   else
-    echo -e "  ${DIM}  journalctl --user -u kinbot -f${NC}"
+    echo -e "  ${DIM}  journalctl --user -u hivekeep -f${NC}"
   fi
 }
 
@@ -1904,17 +2205,17 @@ print_summary() {
   elapsed="$(format_elapsed)"
 
   # In quiet mode, just print the essential one-liner
-  if [ "$KINBOT_QUIET" = true ]; then
+  if [ "$HIVEKEEP_QUIET" = true ]; then
     local status_icon="●"
-    [ "$KINBOT_HEALTHY" = true ] && status_icon="${GREEN}●${NC}" || status_icon="${YELLOW}●${NC}"
+    [ "$HIVEKEEP_HEALTHY" = true ] && status_icon="${GREEN}●${NC}" || status_icon="${YELLOW}●${NC}"
     local quiet_extra=""
     [ -n "$elapsed" ] && quiet_extra=" in ${elapsed}"
-    echo -e "${status_icon} KinBot ${version} ${ACTION}${quiet_extra} — ${KINBOT_PUBLIC_URL}"
+    echo -e "${status_icon} Hivekeep ${version} ${ACTION}${quiet_extra} — ${HIVEKEEP_PUBLIC_URL}"
     return
   fi
 
   echo ""
-  local msg="KinBot ${version} ${ACTION} successfully!"
+  local msg="Hivekeep ${version} ${ACTION} successfully!"
   local pad_len=$(( 40 - ${#msg} ))
   local padding=""
   for (( i=0; i<pad_len; i++ )); do padding+=" "; done
@@ -1922,14 +2223,14 @@ print_summary() {
   echo -e "${BOLD}║  ${msg}${padding}║${NC}"
   echo -e "${BOLD}╚════════════════════════════════════════════╝${NC}"
   echo ""
-  echo -e "  ${CYAN}Access URL:${NC}   $KINBOT_PUBLIC_URL"
-  echo -e "  ${CYAN}Install dir:${NC}  $KINBOT_DIR"
-  echo -e "  ${CYAN}Data dir:${NC}     $KINBOT_DATA_DIR"
-  echo -e "  ${CYAN}Config file:${NC}  $KINBOT_DATA_DIR/kinbot.env"
+  echo -e "  ${CYAN}Access URL:${NC}   $HIVEKEEP_PUBLIC_URL"
+  echo -e "  ${CYAN}Install dir:${NC}  $HIVEKEEP_DIR"
+  echo -e "  ${CYAN}Data dir:${NC}     $HIVEKEEP_DATA_DIR"
+  echo -e "  ${CYAN}Config file:${NC}  $HIVEKEEP_DATA_DIR/hivekeep.env"
   if [ -n "${BACKUP_DB_PATH:-}" ] && [ -f "${BACKUP_DB_PATH:-}" ]; then
     echo -e "  ${CYAN}DB backup:${NC}    $(basename "$BACKUP_DB_PATH")"
   fi
-  if [ "$KINBOT_HEALTHY" = true ]; then
+  if [ "$HIVEKEEP_HEALTHY" = true ]; then
     echo -e "  ${GREEN}●${NC} ${BOLD}Status:${NC}       Running"
   else
     echo -e "  ${YELLOW}●${NC} ${BOLD}Status:${NC}       Starting (check logs if it doesn't come up)"
@@ -1941,14 +2242,14 @@ print_summary() {
 
   if [ "${IS_UPDATE:-false}" != true ]; then
     echo -e "  ${BOLD}Getting started:${NC}"
-    echo -e "  1. Open ${CYAN}$KINBOT_PUBLIC_URL${NC} in your browser"
+    echo -e "  1. Open ${CYAN}$HIVEKEEP_PUBLIC_URL${NC} in your browser"
     echo -e "  2. Create your admin account"
     echo -e "  3. Add an AI provider (Anthropic, OpenAI, or Google Gemini)"
     echo -e "  4. Create your first agent and start chatting!"
     echo ""
     echo -e "  ${DIM}You'll need at least one AI provider API key.${NC}"
   else
-    echo -e "  Visit ${CYAN}$KINBOT_PUBLIC_URL${NC} to continue using KinBot."
+    echo -e "  Visit ${CYAN}$HIVEKEEP_PUBLIC_URL${NC} to continue using Hivekeep."
   fi
   echo ""
 
@@ -1957,12 +2258,12 @@ print_summary() {
   local url_is_http=false
   local url_is_remote=false
 
-  if [[ "$KINBOT_PUBLIC_URL" =~ ^http:// ]]; then
+  if [[ "$HIVEKEEP_PUBLIC_URL" =~ ^http:// ]]; then
     url_is_http=true
   fi
   # Check if URL points to a non-localhost address
   local url_host
-  url_host="$(echo "$KINBOT_PUBLIC_URL" | sed -E 's|^https?://||; s|[:/].*||')"
+  url_host="$(echo "$HIVEKEEP_PUBLIC_URL" | sed -E 's|^https?://||; s|[:/].*||')"
   case "$url_host" in
     localhost|127.0.0.1|::1) ;;
     *) url_is_remote=true ;;
@@ -1974,7 +2275,7 @@ print_summary() {
 
   # Check if ENCRYPTION_KEY is missing from config
   local has_encryption_key=false
-  local env_file_path="$KINBOT_DATA_DIR/kinbot.env"
+  local env_file_path="$HIVEKEEP_DATA_DIR/hivekeep.env"
   if [ -f "$env_file_path" ] && grep -q '^ENCRYPTION_KEY=.\+' "$env_file_path" 2>/dev/null; then
     has_encryption_key=true
   fi
@@ -1992,7 +2293,7 @@ print_summary() {
       echo -e "    ${DIM}    # Install: https://caddyserver.com/docs/install${NC}"
       echo -e "    ${DIM}    # Caddyfile:${NC}"
       echo -e "    ${DIM}    your-domain.com {${NC}"
-      echo -e "    ${DIM}        reverse_proxy localhost:${KINBOT_PORT}${NC}"
+      echo -e "    ${DIM}        reverse_proxy localhost:${HIVEKEEP_PORT}${NC}"
       echo -e "    ${DIM}    }${NC}"
       echo ""
       echo -e "    ${BOLD}Nginx${NC}${DIM} + certbot, ${BOLD}Traefik${NC}${DIM}, or any reverse proxy also work.${NC}"
@@ -2001,50 +2302,55 @@ print_summary() {
     fi
 
     if [ "$has_encryption_key" = false ]; then
-      echo -e "  ${YELLOW}▸${NC} Set an ${BOLD}encryption key${NC} to protect stored API keys at rest:"
-      echo -e "    ${DIM}bash install.sh --env ENCRYPTION_KEY=\$(openssl rand -hex 32)${NC}"
+      echo -e "  ${YELLOW}▸${NC} Your secrets ${BOLD}are encrypted at rest${NC}. Hivekeep auto-generates an"
+      echo -e "    encryption key on first run and saves it to:"
+      echo -e "    ${CYAN}$HIVEKEEP_DATA_DIR/.encryption-key${NC}"
+      echo -e "    ${BOLD}Back up this file together with your database.${NC} Without it, stored"
+      echo -e "    API keys and vault secrets cannot be decrypted after a restore."
+      echo -e "    ${DIM}Optional: pin the key in the environment for easy portability:${NC}"
+      echo -e "    ${DIM}bash install.sh --env ENCRYPTION_KEY=\$(cat $HIVEKEEP_DATA_DIR/.encryption-key)${NC}"
       echo ""
     fi
   fi
 
   if [ "$INIT_SYSTEM" = "script" ]; then
     echo -e "  ${BOLD}Service commands:${NC}"
-    echo -e "    $KINBOT_DIR/kinbot status"
-    echo -e "    $KINBOT_DIR/kinbot restart"
-    echo -e "    $KINBOT_DIR/kinbot logs"
+    echo -e "    $HIVEKEEP_DIR/hivekeep status"
+    echo -e "    $HIVEKEEP_DIR/hivekeep restart"
+    echo -e "    $HIVEKEEP_DIR/hivekeep logs"
     if [ "$IS_WSL" = true ]; then
       echo ""
-      echo -e "  ${YELLOW}Note:${NC} On WSL, KinBot won't auto-start on boot."
+      echo -e "  ${YELLOW}Note:${NC} On WSL, Hivekeep won't auto-start on boot."
       echo -e "  Add to your ~/.bashrc or ~/.profile:"
-      echo -e "    ${DIM}$KINBOT_DIR/kinbot start${NC}"
+      echo -e "    ${DIM}$HIVEKEEP_DIR/hivekeep start${NC}"
     fi
   elif [ "$INIT_SYSTEM" = "systemd" ]; then
     if [ "$IS_ROOT" = true ]; then
       echo -e "  ${BOLD}Service commands:${NC}"
-      echo -e "    sudo systemctl status kinbot"
-      echo -e "    sudo systemctl restart kinbot"
-      echo -e "    sudo journalctl -u kinbot -f"
+      echo -e "    sudo systemctl status hivekeep"
+      echo -e "    sudo systemctl restart hivekeep"
+      echo -e "    sudo journalctl -u hivekeep -f"
     else
       echo -e "  ${BOLD}Service commands:${NC}"
-      echo -e "    systemctl --user status kinbot"
-      echo -e "    systemctl --user restart kinbot"
-      echo -e "    journalctl --user -u kinbot -f"
+      echo -e "    systemctl --user status hivekeep"
+      echo -e "    systemctl --user restart hivekeep"
+      echo -e "    journalctl --user -u hivekeep -f"
     fi
   else
     echo -e "  ${BOLD}Service commands:${NC}"
-    echo -e "    launchctl list | grep kinbot"
-    echo -e "    tail -f ~/Library/Logs/kinbot/kinbot.log"
-    echo -e "    launchctl unload ~/Library/LaunchAgents/io.kinbot.server.plist"
+    echo -e "    launchctl list | grep hivekeep"
+    echo -e "    tail -f ~/Library/Logs/hivekeep/hivekeep.log"
+    echo -e "    launchctl unload ~/Library/LaunchAgents/io.hivekeep.server.plist"
   fi
 
   echo ""
-  echo -e "  ${DIM}To change settings: edit $KINBOT_DATA_DIR/kinbot.env"
+  echo -e "  ${DIM}To change settings: edit $HIVEKEEP_DATA_DIR/hivekeep.env"
   if [ "$INIT_SYSTEM" = "systemd" ]; then
-    local restart_cmd="systemctl --user restart kinbot"
-    [ "$IS_ROOT" = true ] && restart_cmd="sudo systemctl restart kinbot"
+    local restart_cmd="systemctl --user restart hivekeep"
+    [ "$IS_ROOT" = true ] && restart_cmd="sudo systemctl restart hivekeep"
     echo -e "  then run: $restart_cmd${NC}"
   elif [ "$INIT_SYSTEM" = "script" ]; then
-    echo -e "  then run: $KINBOT_DIR/kinbot restart${NC}"
+    echo -e "  then run: $HIVEKEEP_DIR/hivekeep restart${NC}"
   fi
   echo ""
 }
@@ -2052,7 +2358,7 @@ print_summary() {
 # ─── Uninstall ───────────────────────────────────────────────────────────────
 uninstall() {
   echo ""
-  echo -e "${BOLD}KinBot Uninstaller${NC}"
+  echo -e "${BOLD}Hivekeep Uninstaller${NC}"
   echo ""
 
   detect_os
@@ -2060,7 +2366,7 @@ uninstall() {
   # Stop and disable service
   header "Stopping service..."
   if [ "$INIT_SYSTEM" = "launchd" ]; then
-    local plist="$HOME/Library/LaunchAgents/io.kinbot.server.plist"
+    local plist="$HOME/Library/LaunchAgents/io.hivekeep.server.plist"
     if [ -f "$plist" ]; then
       launchctl unload "$plist" 2>/dev/null || true
       rm -f "$plist"
@@ -2069,13 +2375,13 @@ uninstall() {
       info "No launchd service found"
     fi
   elif [ "$INIT_SYSTEM" = "script" ]; then
-    local script_path="$KINBOT_DIR/kinbot"
+    local script_path="$HIVEKEEP_DIR/hivekeep"
     if [ -x "$script_path" ]; then
       "$script_path" stop 2>/dev/null || true
-      success "KinBot stopped"
+      success "Hivekeep stopped"
     else
       # Try killing by PID file
-      local pid_file="$KINBOT_DATA_DIR/kinbot.pid"
+      local pid_file="$HIVEKEEP_DATA_DIR/hivekeep.pid"
       if [ -f "$pid_file" ]; then
         kill "$(cat "$pid_file")" 2>/dev/null || true
         rm -f "$pid_file"
@@ -2083,60 +2389,60 @@ uninstall() {
       info "No service script found"
     fi
   elif [ "$IS_ROOT" = true ]; then
-    if systemctl is-active --quiet kinbot 2>/dev/null; then
-      systemctl stop kinbot
+    if systemctl is-active --quiet hivekeep 2>/dev/null; then
+      systemctl stop hivekeep
     fi
-    systemctl disable kinbot 2>/dev/null || true
-    rm -f /etc/systemd/system/kinbot.service
+    systemctl disable hivekeep 2>/dev/null || true
+    rm -f /etc/systemd/system/hivekeep.service
     systemctl daemon-reload
     success "systemd system service removed"
   else
-    if systemctl --user is-active --quiet kinbot 2>/dev/null; then
-      systemctl --user stop kinbot
+    if systemctl --user is-active --quiet hivekeep 2>/dev/null; then
+      systemctl --user stop hivekeep
     fi
-    systemctl --user disable kinbot 2>/dev/null || true
-    rm -f "$HOME/.config/systemd/user/kinbot.service"
+    systemctl --user disable hivekeep 2>/dev/null || true
+    rm -f "$HOME/.config/systemd/user/hivekeep.service"
     systemctl --user daemon-reload
     success "systemd user service removed"
   fi
 
   # Remove app directory
   header "Removing application files..."
-  if [ -d "$KINBOT_DIR" ]; then
-    rm -rf "$KINBOT_DIR"
-    success "Removed $KINBOT_DIR"
+  if [ -d "$HIVEKEEP_DIR" ]; then
+    rm -rf "$HIVEKEEP_DIR"
+    success "Removed $HIVEKEEP_DIR"
   else
-    info "$KINBOT_DIR not found — skipping"
+    info "$HIVEKEEP_DIR not found — skipping"
   fi
 
   # Remove system user (root only)
-  if [ "$IS_ROOT" = true ] && id "${KINBOT_USER:-kinbot}" &>/dev/null; then
-    userdel "${KINBOT_USER:-kinbot}" 2>/dev/null || true
-    success "System user '${KINBOT_USER:-kinbot}' removed"
+  if [ "$IS_ROOT" = true ] && id "${HIVEKEEP_USER:-hivekeep}" &>/dev/null; then
+    userdel "${HIVEKEEP_USER:-hivekeep}" 2>/dev/null || true
+    success "System user '${HIVEKEEP_USER:-hivekeep}' removed"
   fi
 
   # Ask about data directory
   echo ""
   local remove_data="n"
-  if [ "${KINBOT_NO_PROMPT:-}" = "true" ] || [ "${CI:-}" = "true" ]; then
+  if [ "${HIVEKEEP_NO_PROMPT:-}" = "true" ] || [ "${CI:-}" = "true" ]; then
     remove_data="n"
-  elif [ -d "$KINBOT_DATA_DIR" ]; then
+  elif [ -d "$HIVEKEEP_DATA_DIR" ]; then
     # Show what's in the data directory before asking
     local data_size
-    data_size="$(du -sh "$KINBOT_DATA_DIR" 2>/dev/null | awk '{print $1}' || echo "unknown")"
+    data_size="$(du -sh "$HIVEKEEP_DATA_DIR" 2>/dev/null | awk '{print $1}' || echo "unknown")"
     local has_db=false
-    [ -f "$KINBOT_DATA_DIR/kinbot.db" ] && has_db=true
+    [ -f "$HIVEKEEP_DATA_DIR/hivekeep.db" ] && has_db=true
 
-    echo -e "  ${DIM}Data directory: $KINBOT_DATA_DIR ($data_size)${NC}"
+    echo -e "  ${DIM}Data directory: $HIVEKEEP_DATA_DIR ($data_size)${NC}"
     if [ "$has_db" = true ]; then
       local db_size
-      db_size="$(du -h "$KINBOT_DATA_DIR/kinbot.db" 2>/dev/null | awk '{print $1}' || echo "?")"
+      db_size="$(du -h "$HIVEKEEP_DATA_DIR/hivekeep.db" 2>/dev/null | awk '{print $1}' || echo "?")"
       echo -e "  ${DIM}  Database: $db_size${NC}"
     fi
-    [ -f "$KINBOT_DATA_DIR/kinbot.env" ] && echo -e "  ${DIM}  Config: kinbot.env${NC}"
+    [ -f "$HIVEKEEP_DATA_DIR/hivekeep.env" ] && echo -e "  ${DIM}  Config: hivekeep.env${NC}"
     local backup_count=0
-    if [ -d "$KINBOT_DATA_DIR/backups" ]; then
-      backup_count="$(find "$KINBOT_DATA_DIR/backups" -maxdepth 1 -name 'kinbot-*.db' -type f 2>/dev/null | wc -l)"
+    if [ -d "$HIVEKEEP_DATA_DIR/backups" ]; then
+      backup_count="$(find "$HIVEKEEP_DATA_DIR/backups" -maxdepth 1 -name 'hivekeep-*.db' -type f 2>/dev/null | wc -l)"
       [ "$backup_count" -gt 0 ] && echo -e "  ${DIM}  Backups: $backup_count${NC}"
     fi
     echo ""
@@ -2154,11 +2460,11 @@ uninstall() {
 
       if [[ "$do_backup" =~ ^[Yy]$ ]]; then
         local backup_dest
-        backup_dest="$HOME/kinbot-backup-$(date +%Y%m%d-%H%M%S).db"
-        if cp "$KINBOT_DATA_DIR/kinbot.db" "$backup_dest" 2>/dev/null; then
+        backup_dest="$HOME/hivekeep-backup-$(date +%Y%m%d-%H%M%S).db"
+        if cp "$HIVEKEEP_DATA_DIR/hivekeep.db" "$backup_dest" 2>/dev/null; then
           # Also copy the config alongside the DB
-          if [ -f "$KINBOT_DATA_DIR/kinbot.env" ]; then
-            cp "$KINBOT_DATA_DIR/kinbot.env" "${backup_dest%.db}.env" 2>/dev/null || true
+          if [ -f "$HIVEKEEP_DATA_DIR/hivekeep.env" ]; then
+            cp "$HIVEKEEP_DATA_DIR/hivekeep.env" "${backup_dest%.db}.env" 2>/dev/null || true
           fi
           success "Backup saved to $backup_dest"
         else
@@ -2168,26 +2474,26 @@ uninstall() {
       fi
     fi
   else
-    info "$KINBOT_DATA_DIR not found — nothing to remove"
+    info "$HIVEKEEP_DATA_DIR not found — nothing to remove"
   fi
 
   if [[ "$remove_data" =~ ^[Yy]$ ]]; then
-    if [ -d "$KINBOT_DATA_DIR" ]; then
-      rm -rf "$KINBOT_DATA_DIR"
-      success "Removed $KINBOT_DATA_DIR"
+    if [ -d "$HIVEKEEP_DATA_DIR" ]; then
+      rm -rf "$HIVEKEEP_DATA_DIR"
+      success "Removed $HIVEKEEP_DATA_DIR"
     fi
-  elif [ -d "$KINBOT_DATA_DIR" ]; then
-    info "Data kept at $KINBOT_DATA_DIR"
+  elif [ -d "$HIVEKEEP_DATA_DIR" ]; then
+    info "Data kept at $HIVEKEEP_DATA_DIR"
   fi
 
   # Remove auto-update cron job if present
   header "Cleaning up scheduled tasks..."
-  KINBOT_CRON_TAG="# kinbot-auto-update"
+  HIVEKEEP_CRON_TAG="# hivekeep-auto-update"
   local existing_crontab
   existing_crontab="$(crontab -l 2>/dev/null || echo "")"
-  if echo "$existing_crontab" | grep -q "$KINBOT_CRON_TAG"; then
+  if echo "$existing_crontab" | grep -q "$HIVEKEEP_CRON_TAG"; then
     local new_crontab
-    new_crontab="$(echo "$existing_crontab" | grep -v "$KINBOT_CRON_TAG")"
+    new_crontab="$(echo "$existing_crontab" | grep -v "$HIVEKEEP_CRON_TAG")"
     if [ -n "$new_crontab" ]; then
       echo "$new_crontab" | crontab -
     else
@@ -2200,7 +2506,7 @@ uninstall() {
 
   # Remove launchd auto-update plist (macOS)
   if [ "$INIT_SYSTEM" = "launchd" ]; then
-    local update_plist="$HOME/Library/LaunchAgents/io.kinbot.auto-update.plist"
+    local update_plist="$HOME/Library/LaunchAgents/io.hivekeep.auto-update.plist"
     if [ -f "$update_plist" ]; then
       launchctl unload "$update_plist" 2>/dev/null || true
       rm -f "$update_plist"
@@ -2209,22 +2515,22 @@ uninstall() {
   fi
 
   # Remove lockfile
-  local lock_file="${TMPDIR:-/tmp}/kinbot-installer.lock"
+  local lock_file="${TMPDIR:-/tmp}/hivekeep-installer.lock"
   if [ -f "$lock_file" ]; then
     rm -f "$lock_file"
     success "Lockfile removed"
   fi
 
   echo ""
-  echo -e "${GREEN}${BOLD}KinBot uninstalled.${NC}"
+  echo -e "${GREEN}${BOLD}Hivekeep uninstalled.${NC}"
 
   # Post-uninstall hints
   local hints=()
   if command -v bun &>/dev/null; then
     hints+=("Bun runtime is still installed. Remove it with: rm -rf ~/.bun")
   fi
-  if [ -d "$KINBOT_DATA_DIR" ] && [[ ! "$remove_data" =~ ^[Yy]$ ]]; then
-    hints+=("Data preserved at $KINBOT_DATA_DIR (re-install will reuse it)")
+  if [ -d "$HIVEKEEP_DATA_DIR" ] && [[ ! "$remove_data" =~ ^[Yy]$ ]]; then
+    hints+=("Data preserved at $HIVEKEEP_DATA_DIR (re-install will reuse it)")
   fi
 
   if [ ${#hints[@]} -gt 0 ]; then
@@ -2247,7 +2553,7 @@ show_categorized_commits() {
   local max_per_cat="${2:-0}"  # 0 = no limit
 
   local commits
-  commits="$(git -C "$KINBOT_DIR" log --oneline "$range" 2>/dev/null)"
+  commits="$(git -C "$HIVEKEEP_DIR" log --oneline "$range" 2>/dev/null)"
   [ -z "$commits" ] && return 1
 
   # Extract categories
@@ -2290,9 +2596,9 @@ show_categorized_commits() {
 }
 
 get_installed_version() {
-  if [ -d "$KINBOT_DIR/.git" ]; then
-    git -C "$KINBOT_DIR" describe --tags 2>/dev/null || \
-      git -C "$KINBOT_DIR" rev-parse --short HEAD 2>/dev/null || \
+  if [ -d "$HIVEKEEP_DIR/.git" ]; then
+    git -C "$HIVEKEEP_DIR" describe --tags 2>/dev/null || \
+      git -C "$HIVEKEEP_DIR" rev-parse --short HEAD 2>/dev/null || \
       echo "unknown"
   else
     echo "not installed"
@@ -2300,16 +2606,16 @@ get_installed_version() {
 }
 
 get_installed_branch() {
-  if [ -d "$KINBOT_DIR/.git" ]; then
-    git -C "$KINBOT_DIR" branch --show-current 2>/dev/null || echo "unknown"
+  if [ -d "$HIVEKEEP_DIR/.git" ]; then
+    git -C "$HIVEKEEP_DIR" branch --show-current 2>/dev/null || echo "unknown"
   else
     echo "n/a"
   fi
 }
 
 get_installed_date() {
-  if [ -d "$KINBOT_DIR/.git" ]; then
-    git -C "$KINBOT_DIR" log -1 --format='%ci' 2>/dev/null | cut -d' ' -f1 || echo "unknown"
+  if [ -d "$HIVEKEEP_DIR/.git" ]; then
+    git -C "$HIVEKEEP_DIR" log -1 --format='%ci' 2>/dev/null | cut -d' ' -f1 || echo "unknown"
   else
     echo "n/a"
   fi
@@ -2321,45 +2627,65 @@ show_version() {
   IS_ROOT=false
   [ "$(id -u)" -eq 0 ] && IS_ROOT=true
   if [ "$IS_ROOT" = true ]; then
-    KINBOT_DIR="${KINBOT_DIR:-/opt/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-/opt/hivekeep}"
   else
-    KINBOT_DIR="${KINBOT_DIR:-$HOME/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-$HOME/hivekeep}"
   fi
 
   local version
   version="$(get_installed_version)"
 
   if [ "$version" = "not installed" ]; then
-    echo "KinBot is not installed at $KINBOT_DIR"
+    echo "Hivekeep is not installed at $HIVEKEEP_DIR"
     exit 1
   fi
 
-  local branch date_str commit_count
+  local branch date_str commit_count channel
   branch="$(get_installed_branch)"
   date_str="$(get_installed_date)"
-  commit_count="$(git -C "$KINBOT_DIR" rev-list HEAD --count 2>/dev/null || echo "?")"
+  commit_count="$(git -C "$HIVEKEEP_DIR" rev-list HEAD --count 2>/dev/null || echo "?")"
+  channel="$(resolve_channel)"
 
-  echo -e "${BOLD}KinBot${NC} $version"
-  echo -e "  Branch: $branch"
+  echo -e "${BOLD}Hivekeep${NC} $version"
+  echo -e "  Channel: $channel"
+  if [ -n "$branch" ] && [ "$branch" != "unknown" ]; then
+    echo -e "  Branch: $branch"
+  fi
   echo -e "  Last update: $date_str"
   echo -e "  Commits: $commit_count"
-  echo -e "  Install: $KINBOT_DIR"
+  echo -e "  Install: $HIVEKEEP_DIR"
 
   # Check if updates are available
-  if git -C "$KINBOT_DIR" fetch --dry-run origin "$branch" 2>&1 | grep -q "$branch"; then
-    local remote_version
-    remote_version="$(git -C "$KINBOT_DIR" describe --tags "origin/$branch" 2>/dev/null || \
-      git -C "$KINBOT_DIR" rev-parse --short "origin/$branch" 2>/dev/null || echo "unknown")"
-    local behind
-    behind="$(git -C "$KINBOT_DIR" rev-list HEAD.."origin/$branch" --count 2>/dev/null || echo "0")"
-    if [ "$behind" -gt 0 ] 2>/dev/null; then
-      echo ""
-      echo -e "  ${YELLOW}⚠ $behind commit(s) behind${NC} → $remote_version"
-      echo -e "  ${DIM}Run install.sh to update${NC}"
-    else
-      echo ""
-      echo -e "  ${GREEN}✓ Up to date${NC}"
+  local remote_version="" behind="0"
+  if [ "$channel" = "stable" ]; then
+    if git -C "$HIVEKEEP_DIR" fetch --tags origin --quiet 2>/dev/null; then
+      remote_version="$(get_latest_stable_tag)"
+      if [ -n "$remote_version" ]; then
+        local remote_head local_head
+        remote_head="$(git -C "$HIVEKEEP_DIR" rev-parse "${remote_version}^{commit}" 2>/dev/null || echo "")"
+        local_head="$(git -C "$HIVEKEEP_DIR" rev-parse HEAD 2>/dev/null || echo "")"
+        if [ -n "$remote_head" ] && [ "$remote_head" != "$local_head" ]; then
+          behind="$(git -C "$HIVEKEEP_DIR" rev-list "HEAD..$remote_head" --count 2>/dev/null || echo "1")"
+          [ "$behind" = "0" ] && behind="1"
+        fi
+      fi
     fi
+  else
+    [ -z "$branch" ] || [ "$branch" = "unknown" ] && branch="main"
+    if git -C "$HIVEKEEP_DIR" fetch origin "$branch" --quiet 2>/dev/null; then
+      remote_version="$(git -C "$HIVEKEEP_DIR" describe --tags "origin/$branch" 2>/dev/null || \
+        git -C "$HIVEKEEP_DIR" rev-parse --short "origin/$branch" 2>/dev/null || echo "unknown")"
+      behind="$(git -C "$HIVEKEEP_DIR" rev-list HEAD.."origin/$branch" --count 2>/dev/null || echo "0")"
+    fi
+  fi
+
+  if [ "$behind" -gt 0 ] 2>/dev/null; then
+    echo ""
+    echo -e "  ${YELLOW}⚠ $behind commit(s) behind${NC} → $remote_version"
+    echo -e "  ${DIM}Run: bash install.sh --update${NC}"
+  elif [ -n "$remote_version" ]; then
+    echo ""
+    echo -e "  ${GREEN}✓ Up to date${NC}"
   fi
 }
 
@@ -2370,55 +2696,67 @@ show_changelog() {
   IS_ROOT=false
   [ "$(id -u)" -eq 0 ] && IS_ROOT=true
   if [ "$IS_ROOT" = true ]; then
-    KINBOT_DIR="${KINBOT_DIR:-/opt/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-/opt/hivekeep}"
   else
-    KINBOT_DIR="${KINBOT_DIR:-$HOME/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-$HOME/hivekeep}"
   fi
 
-  if [ ! -d "$KINBOT_DIR/.git" ]; then
-    echo "KinBot is not installed at $KINBOT_DIR"
+  if [ ! -d "$HIVEKEEP_DIR/.git" ]; then
+    echo "Hivekeep is not installed at $HIVEKEEP_DIR"
     exit 1
   fi
 
-  local branch
-  branch="$(git -C "$KINBOT_DIR" branch --show-current 2>/dev/null || echo "main")"
+  local channel target_ref target_label
+  channel="$(resolve_channel)"
 
   # Fetch latest from remote
-  info "Fetching latest changes..."
-  if ! git -C "$KINBOT_DIR" fetch origin "$branch" --quiet 2>/dev/null; then
-    error "Could not fetch from remote. Check your internet connection."
+  info "Fetching latest changes (${channel} channel)..."
+  if [ "$channel" = "stable" ]; then
+    if ! git -C "$HIVEKEEP_DIR" fetch --tags origin --quiet 2>/dev/null; then
+      error "Could not fetch from remote. Check your internet connection."
+    fi
+    target_ref="$(get_latest_stable_tag)"
+    [ -z "$target_ref" ] && error "Could not resolve the latest release tag."
+    target_label="$target_ref"
+  else
+    local branch
+    branch="$(git -C "$HIVEKEEP_DIR" branch --show-current 2>/dev/null || echo "main")"
+    if ! git -C "$HIVEKEEP_DIR" fetch origin "$branch" --quiet 2>/dev/null; then
+      error "Could not fetch from remote. Check your internet connection."
+    fi
+    target_ref="origin/$branch"
+    target_label="$(git -C "$HIVEKEEP_DIR" describe --tags "$target_ref" 2>/dev/null || git -C "$HIVEKEEP_DIR" rev-parse --short "$target_ref")"
   fi
 
   local local_ref remote_ref
-  local_ref="$(git -C "$KINBOT_DIR" rev-parse HEAD 2>/dev/null)"
-  remote_ref="$(git -C "$KINBOT_DIR" rev-parse "origin/$branch" 2>/dev/null)"
+  local_ref="$(git -C "$HIVEKEEP_DIR" rev-parse HEAD 2>/dev/null)"
+  remote_ref="$(git -C "$HIVEKEEP_DIR" rev-parse "${target_ref}^{commit}" 2>/dev/null)"
 
   if [ "$local_ref" = "$remote_ref" ]; then
     local version
     version="$(get_installed_version)"
     echo ""
-    echo -e "  ${GREEN}✓ Up to date${NC} ($version)"
-    echo -e "  ${DIM}No new changes on ${branch}.${NC}"
+    echo -e "  ${GREEN}✓ Up to date${NC} ($version, $channel channel)"
     echo ""
     exit 0
   fi
 
   local behind
-  behind="$(git -C "$KINBOT_DIR" rev-list HEAD.."origin/$branch" --count 2>/dev/null || echo "0")"
-  local current_version new_version
+  behind="$(git -C "$HIVEKEEP_DIR" rev-list "HEAD..$remote_ref" --count 2>/dev/null || echo "0")"
+  local current_version
   current_version="$(get_installed_version)"
-  new_version="$(git -C "$KINBOT_DIR" describe --tags "origin/$branch" 2>/dev/null || git -C "$KINBOT_DIR" rev-parse --short "origin/$branch")"
 
   echo ""
-  echo -e "${BOLD}KinBot Changelog${NC}"
+  echo -e "${BOLD}Hivekeep Changelog${NC}"
   echo ""
+  echo -e "  ${CYAN}Channel:${NC}    $channel"
   echo -e "  ${CYAN}Installed:${NC}  $current_version"
-  echo -e "  ${CYAN}Latest:${NC}     $new_version"
-  echo -e "  ${CYAN}Changes:${NC}    $behind commit(s) on ${branch}"
+  echo -e "  ${CYAN}Latest:${NC}     $target_label"
+  echo -e "  ${CYAN}Changes:${NC}    $behind commit(s)"
   echo ""
 
   # Show categorized changelog
-  if ! show_categorized_commits "HEAD..origin/$branch"; then
+  if ! show_categorized_commits "HEAD..$remote_ref"; then
     echo -e "  ${DIM}No commits to show.${NC}"
     echo ""
     exit 0
@@ -2426,15 +2764,13 @@ show_changelog() {
 
   # Show tags in the range (version milestones)
   local tags_in_range
-  tags_in_range="$(git -C "$KINBOT_DIR" tag --sort=-version:refname --contains HEAD --no-contains "origin/$branch" 2>/dev/null || true)"
-  # Actually we want tags between HEAD and origin/branch
-  tags_in_range="$(git -C "$KINBOT_DIR" log --simplify-by-decoration --decorate=short --pretty=format:'%D' "HEAD..origin/$branch" 2>/dev/null | grep -oE 'tag: [^,)]+' | sed 's/tag: //' || true)"
+  tags_in_range="$(git -C "$HIVEKEEP_DIR" log --simplify-by-decoration --decorate=short --pretty=format:'%D' "HEAD..$remote_ref" 2>/dev/null | grep -oE 'tag: [^,)]+' | sed 's/tag: //' || true)"
   if [ -n "$tags_in_range" ]; then
     echo -e "  ${CYAN}${BOLD}Version tags in this range:${NC}"
     echo "$tags_in_range" | while IFS= read -r tag; do
       [ -z "$tag" ] && continue
       local tag_date
-      tag_date="$(git -C "$KINBOT_DIR" log -1 --format='%ci' "$tag" 2>/dev/null | cut -d' ' -f1 || echo "")"
+      tag_date="$(git -C "$HIVEKEEP_DIR" log -1 --format='%ci' "$tag" 2>/dev/null | cut -d' ' -f1 || echo "")"
       echo -e "    ${BOLD}$tag${NC} ${DIM}($tag_date)${NC}"
     done
     echo ""
@@ -2447,26 +2783,27 @@ show_changelog() {
 # ─── Help ────────────────────────────────────────────────────────────────────
 show_help() {
   echo ""
-  echo -e "${BOLD}KinBot Installer${NC} — Self-hosted AI agent platform"
+  echo -e "${BOLD}Hivekeep Installer${NC} — Self-hosted AI agent platform"
   echo ""
   echo -e "${BOLD}USAGE${NC}"
-  echo "  curl -fsSL https://kinbot.sh | bash          # Fresh install"
+  echo "  curl -fsSL https://raw.githubusercontent.com/MarlBurroW/hivekeep/main/install.sh | bash   # Fresh install"
   echo "  bash install.sh [COMMAND] [OPTIONS]           # Local install or manage"
   echo ""
 
   echo -e "${BOLD}INSTALL & UPDATE${NC}"
-  echo "  ${DIM}(no command)${NC}      Install KinBot (or update if already installed)"
+  echo "  ${DIM}(no command)${NC}      Install Hivekeep (or update if already installed)"
   echo "  --update        Check for updates and apply if available"
+  echo "  --channel CHAN  Update channel: stable (release tags, default) or edge (main branch)"
   echo "  --docker        Docker Compose setup (no Bun/build needed)"
   echo "  --dry-run       Preview what would happen without making changes"
   echo "  --reset         Fix broken install: re-clone & rebuild, keep data"
-  echo "  --uninstall     Remove KinBot (keeps data unless confirmed)"
+  echo "  --uninstall     Remove Hivekeep (keeps data unless confirmed)"
   echo ""
 
   echo -e "${BOLD}SERVICE${NC}"
-  echo "  --start         Start the KinBot service"
-  echo "  --stop          Stop the KinBot service"
-  echo "  --restart       Restart the KinBot service"
+  echo "  --start         Start the Hivekeep service"
+  echo "  --stop          Stop the Hivekeep service"
+  echo "  --restart       Restart the Hivekeep service"
   echo "  --logs [N]      Show logs (follow live, or last N lines)"
   echo "                  --grep PATTERN: filter lines; --since TIME: journalctl time"
   echo ""
@@ -2511,24 +2848,25 @@ show_help() {
   echo ""
 
   echo -e "${BOLD}ENVIRONMENT VARIABLES${NC}"
-  echo "  KINBOT_PORT         Port to run on (default: 3000)"
-  echo "  KINBOT_DIR          Installation directory"
-  echo "  KINBOT_DATA_DIR     Data directory (database, config)"
-  echo "  KINBOT_PUBLIC_URL   Public URL for webhooks & invite links"
-  echo "  KINBOT_BRANCH       Git branch to install (default: main)"
-  echo "  KINBOT_NO_PROMPT    Skip interactive prompts (default: false)"
-  echo "  KINBOT_YES          Auto-confirm all prompts (same as --yes)"
-  echo "  KINBOT_QUIET        Suppress non-essential output (same as --quiet)"
-  echo "  KINBOT_CRON_SCHEDULE    Cron expression for auto-updates (default: 0 3 * * 0)"
-  echo "  KINBOT_SKIP_SELF_UPDATE  Skip installer self-update check"
+  echo "  HIVEKEEP_PORT         Port to run on (default: 3000)"
+  echo "  HIVEKEEP_DIR          Installation directory"
+  echo "  HIVEKEEP_DATA_DIR     Data directory (database, config)"
+  echo "  HIVEKEEP_PUBLIC_URL   Public URL for webhooks & invite links"
+  echo "  HIVEKEEP_CHANNEL      Update channel: stable (default) or edge (same as --channel)"
+  echo "  HIVEKEEP_BRANCH       Git branch for the edge channel (default: main; implies edge)"
+  echo "  HIVEKEEP_NO_PROMPT    Skip interactive prompts (default: false)"
+  echo "  HIVEKEEP_YES          Auto-confirm all prompts (same as --yes)"
+  echo "  HIVEKEEP_QUIET        Suppress non-essential output (same as --quiet)"
+  echo "  HIVEKEEP_CRON_SCHEDULE    Cron expression for auto-updates (default: 0 3 * * 0)"
+  echo "  HIVEKEEP_SKIP_SELF_UPDATE  Skip installer self-update check"
   echo ""
 
   echo -e "${BOLD}QUICK START${NC}"
   echo -e "  ${DIM}# Install with defaults${NC}"
-  echo "  curl -fsSL https://kinbot.sh | bash"
+  echo "  curl -fsSL https://raw.githubusercontent.com/MarlBurroW/hivekeep/main/install.sh | bash"
   echo ""
   echo -e "  ${DIM}# Custom port, non-interactive${NC}"
-  echo "  KINBOT_PORT=8080 bash install.sh -y"
+  echo "  HIVEKEEP_PORT=8080 bash install.sh -y"
   echo ""
   echo -e "  ${DIM}# Docker (no build tools needed)${NC}"
   echo "  bash install.sh --docker"
@@ -2542,7 +2880,7 @@ show_help() {
   echo "  bash install.sh --cron enable"
   echo ""
   echo -e "  ${DIM}# Or daily auto-updates${NC}"
-  echo "  KINBOT_CRON_SCHEDULE='0 3 * * *' bash install.sh --cron enable"
+  echo "  HIVEKEEP_CRON_SCHEDULE='0 3 * * *' bash install.sh --cron enable"
   echo ""
   echo -e "  ${DIM}# Change config${NC}"
   echo "  bash install.sh --config"
@@ -2551,8 +2889,8 @@ show_help() {
   echo "  bash install.sh --env ENCRYPTION_KEY=\$(openssl rand -hex 32)"
   echo ""
   echo -e "  ${DIM}# Back up and restore${NC}"
-  echo "  bash install.sh --backup ~/kinbot-backup.db"
-  echo "  bash install.sh --restore ~/kinbot-backup.db"
+  echo "  bash install.sh --backup ~/hivekeep-backup.db"
+  echo "  bash install.sh --restore ~/hivekeep-backup.db"
   echo ""
   echo -e "  ${DIM}# Monitoring / health checks${NC}"
   echo "  bash install.sh --health              ${DIM}# exit 0=ok, 1=fail${NC}"
@@ -2569,14 +2907,14 @@ show_help() {
   echo -e "  ${DIM}# Enable tab completion${NC}"
   echo "  eval \"\$(bash install.sh --completions bash)\"   ${DIM}# bash${NC}"
   echo "  eval \"\$(bash install.sh --completions zsh)\"    ${DIM}# zsh${NC}"
-  echo "  bash install.sh --completions fish > ~/.config/fish/completions/kinbot.fish"
+  echo "  bash install.sh --completions fish > ~/.config/fish/completions/hivekeep.fish"
   echo ""
 }
 
 # ─── Status check ────────────────────────────────────────────────────────────
 check_status() {
   echo ""
-  echo -e "${BOLD}KinBot Status Check${NC}"
+  echo -e "${BOLD}Hivekeep Status Check${NC}"
   echo ""
 
   detect_os
@@ -2585,50 +2923,50 @@ check_status() {
 
   # Check installation directory
   header "Installation"
-  if [ -d "$KINBOT_DIR/.git" ]; then
+  if [ -d "$HIVEKEEP_DIR/.git" ]; then
     local version
-    version="$(git -C "$KINBOT_DIR" describe --tags 2>/dev/null || git -C "$KINBOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+    version="$(git -C "$HIVEKEEP_DIR" describe --tags 2>/dev/null || git -C "$HIVEKEEP_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
     local branch
-    branch="$(git -C "$KINBOT_DIR" branch --show-current 2>/dev/null || echo "unknown")"
-    success "Installed at $KINBOT_DIR (${branch} @ ${version})"
+    branch="$(git -C "$HIVEKEEP_DIR" branch --show-current 2>/dev/null || echo "unknown")"
+    success "Installed at $HIVEKEEP_DIR (${branch} @ ${version})"
   else
-    error_noexit "KinBot not found at $KINBOT_DIR"
+    error_noexit "Hivekeep not found at $HIVEKEEP_DIR"
     has_issues=true
   fi
 
   # Check data directory
-  if [ -d "$KINBOT_DATA_DIR" ]; then
-    success "Data directory: $KINBOT_DATA_DIR"
-    if [ -f "$KINBOT_DATA_DIR/kinbot.env" ]; then
+  if [ -d "$HIVEKEEP_DATA_DIR" ]; then
+    success "Data directory: $HIVEKEEP_DATA_DIR"
+    if [ -f "$HIVEKEEP_DATA_DIR/hivekeep.env" ]; then
       success "Config file exists"
       # shellcheck disable=SC1090,SC1091
-      . "$KINBOT_DATA_DIR/kinbot.env" 2>/dev/null || true
-      KINBOT_PORT="${PORT:-$KINBOT_PORT}"
+      . "$HIVEKEEP_DATA_DIR/hivekeep.env" 2>/dev/null || true
+      HIVEKEEP_PORT="${PORT:-$HIVEKEEP_PORT}"
     else
-      warn "No config file found at $KINBOT_DATA_DIR/kinbot.env"
+      warn "No config file found at $HIVEKEEP_DATA_DIR/hivekeep.env"
       has_issues=true
     fi
-    if [ -f "$KINBOT_DATA_DIR/kinbot.db" ]; then
+    if [ -f "$HIVEKEEP_DATA_DIR/hivekeep.db" ]; then
       local db_size
-      db_size="$(du -h "$KINBOT_DATA_DIR/kinbot.db" 2>/dev/null | awk '{print $1}')"
+      db_size="$(du -h "$HIVEKEEP_DATA_DIR/hivekeep.db" 2>/dev/null | awk '{print $1}')"
       success "Database: $db_size"
     else
       warn "No database found"
       has_issues=true
     fi
     # Show backup info
-    local backup_dir="$KINBOT_DATA_DIR/backups"
+    local backup_dir="$HIVEKEEP_DATA_DIR/backups"
     if [ -d "$backup_dir" ]; then
       local backup_count
-      backup_count="$(find "$backup_dir" -maxdepth 1 -name 'kinbot-*.db' -type f 2>/dev/null | wc -l)"
+      backup_count="$(find "$backup_dir" -maxdepth 1 -name 'hivekeep-*.db' -type f 2>/dev/null | wc -l)"
       if [ "$backup_count" -gt 0 ] 2>/dev/null; then
         local latest_backup
-        latest_backup="$(find "$backup_dir" -maxdepth 1 -name 'kinbot-*.db' -type f -printf '%T@ %f\n' 2>/dev/null | sort -rn | head -1 | awk '{print $2}')"
+        latest_backup="$(find "$backup_dir" -maxdepth 1 -name 'hivekeep-*.db' -type f -printf '%T@ %f\n' 2>/dev/null | sort -rn | head -1 | awk '{print $2}')"
         success "Backups: $backup_count (latest: $latest_backup)"
       fi
     fi
   else
-    error_noexit "Data directory not found at $KINBOT_DATA_DIR"
+    error_noexit "Data directory not found at $HIVEKEEP_DATA_DIR"
     has_issues=true
   fi
 
@@ -2653,20 +2991,20 @@ check_status() {
   # Check service
   header "Service"
   if [ "$INIT_SYSTEM" = "launchd" ]; then
-    if launchctl list 2>/dev/null | grep -q io.kinbot.server; then
+    if launchctl list 2>/dev/null | grep -q io.hivekeep.server; then
       success "launchd service is loaded"
     else
       warn "launchd service not loaded"
       has_issues=true
     fi
   elif [ "$INIT_SYSTEM" = "script" ]; then
-    local script_path="$KINBOT_DIR/kinbot"
-    local pid_file="$KINBOT_DATA_DIR/kinbot.pid"
+    local script_path="$HIVEKEEP_DIR/hivekeep"
+    local pid_file="$HIVEKEEP_DATA_DIR/hivekeep.pid"
     if [ -x "$script_path" ]; then
       if [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-        success "KinBot is running (PID $(cat "$pid_file"), managed by script)"
+        success "Hivekeep is running (PID $(cat "$pid_file"), managed by script)"
       else
-        warn "KinBot is not running (start with: $script_path start)"
+        warn "Hivekeep is not running (start with: $script_path start)"
         has_issues=true
       fi
     else
@@ -2674,9 +3012,9 @@ check_status() {
       has_issues=true
     fi
   elif [ "$IS_ROOT" = true ]; then
-    if systemctl is-active --quiet kinbot 2>/dev/null; then
+    if systemctl is-active --quiet hivekeep 2>/dev/null; then
       success "systemd service is running"
-    elif systemctl is-enabled --quiet kinbot 2>/dev/null; then
+    elif systemctl is-enabled --quiet hivekeep 2>/dev/null; then
       warn "systemd service is enabled but not running"
       has_issues=true
     else
@@ -2684,9 +3022,9 @@ check_status() {
       has_issues=true
     fi
   else
-    if systemctl --user is-active --quiet kinbot 2>/dev/null; then
+    if systemctl --user is-active --quiet hivekeep 2>/dev/null; then
       success "systemd user service is running"
-    elif systemctl --user is-enabled --quiet kinbot 2>/dev/null; then
+    elif systemctl --user is-enabled --quiet hivekeep 2>/dev/null; then
       warn "systemd user service is enabled but not running"
       has_issues=true
     else
@@ -2698,17 +3036,17 @@ check_status() {
   # Check port
   header "Network"
   if command -v ss &>/dev/null; then
-    if ss -tlnp 2>/dev/null | grep -q ":${KINBOT_PORT} "; then
-      success "Port $KINBOT_PORT is listening"
+    if ss -tlnp 2>/dev/null | grep -q ":${HIVEKEEP_PORT} "; then
+      success "Port $HIVEKEEP_PORT is listening"
     else
-      warn "Port $KINBOT_PORT is not listening"
+      warn "Port $HIVEKEEP_PORT is not listening"
       has_issues=true
     fi
   elif command -v lsof &>/dev/null; then
-    if lsof -i ":${KINBOT_PORT}" -sTCP:LISTEN &>/dev/null; then
-      success "Port $KINBOT_PORT is listening"
+    if lsof -i ":${HIVEKEEP_PORT}" -sTCP:LISTEN &>/dev/null; then
+      success "Port $HIVEKEEP_PORT is listening"
     else
-      warn "Port $KINBOT_PORT is not listening"
+      warn "Port $HIVEKEEP_PORT is not listening"
       has_issues=true
     fi
   else
@@ -2718,17 +3056,17 @@ check_status() {
   # HTTP health check
   if command -v curl &>/dev/null; then
     local http_code
-    http_code="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${KINBOT_PORT}/" --max-time 3 2>/dev/null || echo "000")"
+    http_code="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${HIVEKEEP_PORT}/" --max-time 3 2>/dev/null || echo "000")"
     if [ "$http_code" != "000" ]; then
       success "HTTP responding (status $http_code)"
     else
-      warn "HTTP not responding on localhost:${KINBOT_PORT}"
+      warn "HTTP not responding on localhost:${HIVEKEEP_PORT}"
       has_issues=true
     fi
 
     # Check PUBLIC_URL reachability (important for webhooks)
-    local public_url="${PUBLIC_URL:-$KINBOT_PUBLIC_URL}"
-    if [ -n "$public_url" ] && [ "$public_url" != "http://localhost:${KINBOT_PORT}" ]; then
+    local public_url="${PUBLIC_URL:-$HIVEKEEP_PUBLIC_URL}"
+    if [ -n "$public_url" ] && [ "$public_url" != "http://localhost:${HIVEKEEP_PORT}" ]; then
       # Extract host from URL to check if it's a local/private IP (skip those)
       local url_host
       url_host="$(echo "$public_url" | sed -E 's|^https?://||; s|[:/].*||')"
@@ -2791,27 +3129,27 @@ check_status() {
   # Check process resources (uptime, memory, disk, logs)
   header "Resources"
 
-  # Process uptime & memory (find the KinBot PID)
-  local kinbot_pid=""
+  # Process uptime & memory (find the Hivekeep PID)
+  local hivekeep_pid=""
   if [ "$INIT_SYSTEM" = "script" ]; then
-    local pid_file="$KINBOT_DATA_DIR/kinbot.pid"
-    [ -f "$pid_file" ] && kinbot_pid="$(cat "$pid_file" 2>/dev/null)"
+    local pid_file="$HIVEKEEP_DATA_DIR/hivekeep.pid"
+    [ -f "$pid_file" ] && hivekeep_pid="$(cat "$pid_file" 2>/dev/null)"
   elif [ "$INIT_SYSTEM" = "launchd" ]; then
-    kinbot_pid="$(pgrep -f 'bun.*server/index' 2>/dev/null | head -1 || echo "")"
+    hivekeep_pid="$(pgrep -f 'bun.*server/index' 2>/dev/null | head -1 || echo "")"
   elif [ "$IS_ROOT" = true ]; then
-    kinbot_pid="$(systemctl show kinbot -p MainPID --value 2>/dev/null || echo "")"
-    [ "$kinbot_pid" = "0" ] && kinbot_pid=""
+    hivekeep_pid="$(systemctl show hivekeep -p MainPID --value 2>/dev/null || echo "")"
+    [ "$hivekeep_pid" = "0" ] && hivekeep_pid=""
   else
-    kinbot_pid="$(systemctl --user show kinbot -p MainPID --value 2>/dev/null || echo "")"
-    [ "$kinbot_pid" = "0" ] && kinbot_pid=""
+    hivekeep_pid="$(systemctl --user show hivekeep -p MainPID --value 2>/dev/null || echo "")"
+    [ "$hivekeep_pid" = "0" ] && hivekeep_pid=""
   fi
 
-  if [ -n "$kinbot_pid" ] && kill -0 "$kinbot_pid" 2>/dev/null; then
+  if [ -n "$hivekeep_pid" ] && kill -0 "$hivekeep_pid" 2>/dev/null; then
     # Uptime
     local proc_uptime=""
-    if [ -d "/proc/$kinbot_pid" ]; then
+    if [ -d "/proc/$hivekeep_pid" ]; then
       local start_time_epoch
-      start_time_epoch="$(stat -c %Y "/proc/$kinbot_pid" 2>/dev/null)" || start_time_epoch=""
+      start_time_epoch="$(stat -c %Y "/proc/$hivekeep_pid" 2>/dev/null)" || start_time_epoch=""
       if [ -n "$start_time_epoch" ]; then
         local now_epoch uptime_s
         now_epoch="$(date +%s)"
@@ -2827,18 +3165,18 @@ check_status() {
       fi
     elif [ "$OS" = "Darwin" ]; then
       local elapsed
-      elapsed="$(ps -p "$kinbot_pid" -o etime= 2>/dev/null | tr -d ' ')" || elapsed=""
+      elapsed="$(ps -p "$hivekeep_pid" -o etime= 2>/dev/null | tr -d ' ')" || elapsed=""
       [ -n "$elapsed" ] && proc_uptime="$elapsed"
     fi
-    [ -n "$proc_uptime" ] && success "Process uptime: $proc_uptime (PID $kinbot_pid)"
+    [ -n "$proc_uptime" ] && success "Process uptime: $proc_uptime (PID $hivekeep_pid)"
 
     # Memory RSS
     local mem_kb=""
-    if [ -f "/proc/$kinbot_pid/status" ]; then
-      mem_kb="$(awk '/^VmRSS:/ {print $2}' "/proc/$kinbot_pid/status" 2>/dev/null)" || mem_kb=""
+    if [ -f "/proc/$hivekeep_pid/status" ]; then
+      mem_kb="$(awk '/^VmRSS:/ {print $2}' "/proc/$hivekeep_pid/status" 2>/dev/null)" || mem_kb=""
     fi
     if [ -z "$mem_kb" ]; then
-      mem_kb="$(ps -p "$kinbot_pid" -o rss= 2>/dev/null | tr -d ' ')" || mem_kb=""
+      mem_kb="$(ps -p "$hivekeep_pid" -o rss= 2>/dev/null | tr -d ' ')" || mem_kb=""
     fi
     if [ -n "$mem_kb" ] && [ "$mem_kb" -gt 0 ] 2>/dev/null; then
       local mem_mb=$((mem_kb / 1024))
@@ -2853,7 +3191,7 @@ check_status() {
 
   # Disk space
   local install_parent
-  install_parent="$(dirname "$KINBOT_DIR")"
+  install_parent="$(dirname "$HIVEKEEP_DIR")"
   local avail_kb=""
   avail_kb="$(df -k "$install_parent" 2>/dev/null | awk 'NR==2 {print $4}')" || avail_kb=""
   if [ -n "$avail_kb" ] && [ "$avail_kb" -gt 0 ] 2>/dev/null; then
@@ -2872,21 +3210,21 @@ check_status() {
   fi
 
   # Data directory size
-  if [ -d "$KINBOT_DATA_DIR" ]; then
+  if [ -d "$HIVEKEEP_DATA_DIR" ]; then
     local data_size
-    data_size="$(du -sh "$KINBOT_DATA_DIR" 2>/dev/null | awk '{print $1}')"
+    data_size="$(du -sh "$HIVEKEEP_DATA_DIR" 2>/dev/null | awk '{print $1}')"
     [ -n "$data_size" ] && info "Data directory size: $data_size"
   fi
 
   # Log file size (for script-managed installs)
   if [ "$INIT_SYSTEM" = "script" ]; then
-    local log_file="$KINBOT_DATA_DIR/kinbot.log"
+    local log_file="$HIVEKEEP_DATA_DIR/hivekeep.log"
     if [ -f "$log_file" ]; then
       local log_kb
       log_kb="$(du -k "$log_file" 2>/dev/null | awk '{print $1}')" || log_kb="0"
       if [ "$log_kb" -gt 102400 ] 2>/dev/null; then
         local log_mb=$((log_kb / 1024))
-        warn "Log file: ${log_mb}MB (large, run: bash install.sh --start && $KINBOT_DIR/kinbot log-rotate)"
+        warn "Log file: ${log_mb}MB (large, run: bash install.sh --start && $HIVEKEEP_DIR/hivekeep log-rotate)"
         has_issues=true
       elif [ "$log_kb" -gt 10240 ] 2>/dev/null; then
         local log_mb=$((log_kb / 1024))
@@ -2897,36 +3235,46 @@ check_status() {
 
   # Check for available updates
   header "Updates"
-  if [ -d "$KINBOT_DIR/.git" ]; then
-    local local_ref remote_ref
-    local_ref="$(git -C "$KINBOT_DIR" rev-parse HEAD 2>/dev/null || echo "")"
-    local branch
-    branch="$(git -C "$KINBOT_DIR" branch --show-current 2>/dev/null || echo "main")"
+  if [ -d "$HIVEKEEP_DIR/.git" ]; then
+    local local_ref remote_ref channel
+    local_ref="$(git -C "$HIVEKEEP_DIR" rev-parse HEAD 2>/dev/null || echo "")"
+    channel="$(resolve_channel)"
 
-    if [ -n "$local_ref" ] && git -C "$KINBOT_DIR" fetch origin "$branch" --quiet 2>/dev/null; then
-      remote_ref="$(git -C "$KINBOT_DIR" rev-parse "origin/$branch" 2>/dev/null || echo "")"
-
-      if [ -n "$remote_ref" ] && [ "$local_ref" != "$remote_ref" ]; then
-        local behind_count
-        behind_count="$(git -C "$KINBOT_DIR" rev-list HEAD.."origin/$branch" --count 2>/dev/null || echo "0")"
-        if [ "$behind_count" -gt 0 ] 2>/dev/null; then
-          # Check if there's a newer tag on remote
-          local local_tag remote_tag
-          local_tag="$(git -C "$KINBOT_DIR" describe --tags --abbrev=0 HEAD 2>/dev/null || echo "")"
-          remote_tag="$(git -C "$KINBOT_DIR" describe --tags --abbrev=0 "origin/$branch" 2>/dev/null || echo "")"
-
-          if [ -n "$remote_tag" ] && [ "$remote_tag" != "$local_tag" ]; then
-            echo -e "  ${CYAN}⬆${NC}  ${BOLD}Update available:${NC} ${local_tag:-$(echo "$local_ref" | cut -c1-8)} → ${BOLD}${remote_tag}${NC} (${behind_count} commit(s) behind)"
-          else
-            echo -e "  ${CYAN}⬆${NC}  ${BOLD}Update available:${NC} ${behind_count} new commit(s) on ${branch}"
-          fi
+    if [ "$channel" = "stable" ]; then
+      if [ -n "$local_ref" ] && git -C "$HIVEKEEP_DIR" fetch --tags origin --quiet 2>/dev/null; then
+        local latest_tag
+        latest_tag="$(get_latest_stable_tag)"
+        remote_ref="$(git -C "$HIVEKEEP_DIR" rev-parse "${latest_tag}^{commit}" 2>/dev/null || echo "")"
+        if [ -n "$remote_ref" ] && [ "$local_ref" != "$remote_ref" ]; then
+          local local_tag
+          local_tag="$(git -C "$HIVEKEEP_DIR" describe --tags --exact-match HEAD 2>/dev/null || echo "$(echo "$local_ref" | cut -c1-8)")"
+          echo -e "  ${CYAN}⬆${NC}  ${BOLD}Update available:${NC} ${local_tag} → ${BOLD}${latest_tag}${NC} (stable channel)"
           echo -e "  ${DIM}   Run: bash install.sh --update${NC}"
+        else
+          success "Up to date (stable channel)"
         fi
       else
-        success "Up to date"
+        info "Could not check for updates (network unavailable)"
       fi
     else
-      info "Could not check for updates (network unavailable)"
+      local branch
+      branch="$(git -C "$HIVEKEEP_DIR" branch --show-current 2>/dev/null || echo "main")"
+      if [ -n "$local_ref" ] && git -C "$HIVEKEEP_DIR" fetch origin "$branch" --quiet 2>/dev/null; then
+        remote_ref="$(git -C "$HIVEKEEP_DIR" rev-parse "origin/$branch" 2>/dev/null || echo "")"
+
+        if [ -n "$remote_ref" ] && [ "$local_ref" != "$remote_ref" ]; then
+          local behind_count
+          behind_count="$(git -C "$HIVEKEEP_DIR" rev-list HEAD.."origin/$branch" --count 2>/dev/null || echo "0")"
+          if [ "$behind_count" -gt 0 ] 2>/dev/null; then
+            echo -e "  ${CYAN}⬆${NC}  ${BOLD}Update available:${NC} ${behind_count} new commit(s) on ${branch} (edge channel)"
+            echo -e "  ${DIM}   Run: bash install.sh --update${NC}"
+          fi
+        else
+          success "Up to date (edge channel)"
+        fi
+      else
+        info "Could not check for updates (network unavailable)"
+      fi
     fi
   else
     info "Cannot check updates (not a git install)"
@@ -2946,7 +3294,7 @@ check_status() {
 error_noexit() { echo -e "${RED}✗${NC} $*" >&2; }
 
 # ─── Service lifecycle (start/stop/restart) ──────────────────────────────────
-# Helpers to manage the KinBot service from the installer itself,
+# Helpers to manage the Hivekeep service from the installer itself,
 # so users don't need to remember systemctl vs launchctl vs script commands.
 
 _service_env_setup() {
@@ -2954,93 +3302,93 @@ _service_env_setup() {
   IS_ROOT=false
   [ "$(id -u)" -eq 0 ] && IS_ROOT=true
   if [ "$IS_ROOT" = true ]; then
-    KINBOT_DIR="${KINBOT_DIR:-/opt/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-/var/lib/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-/opt/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-/var/lib/hivekeep}"
   else
-    KINBOT_DIR="${KINBOT_DIR:-$HOME/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-$HOME/.local/share/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-$HOME/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-$HOME/.local/share/hivekeep}"
   fi
   detect_os
 }
 
 _service_start() {
   if [ "$INIT_SYSTEM" = "launchd" ]; then
-    local plist="$HOME/Library/LaunchAgents/io.kinbot.server.plist"
+    local plist="$HOME/Library/LaunchAgents/io.hivekeep.server.plist"
     if [ ! -f "$plist" ]; then
       error "launchd service not installed. Run the installer first: bash install.sh"
     fi
-    if launchctl list 2>/dev/null | grep -q io.kinbot.server; then
-      warn "KinBot is already running"
+    if launchctl list 2>/dev/null | grep -q io.hivekeep.server; then
+      warn "Hivekeep is already running"
       return 0
     fi
     launchctl load "$plist"
-    success "KinBot started (launchd)"
+    success "Hivekeep started (launchd)"
   elif [ "$INIT_SYSTEM" = "script" ]; then
-    local script_path="$KINBOT_DIR/kinbot"
+    local script_path="$HIVEKEEP_DIR/hivekeep"
     if [ ! -x "$script_path" ]; then
       error "Service script not found. Run the installer first: bash install.sh"
     fi
     "$script_path" start
   elif [ "$IS_ROOT" = true ]; then
-    if ! systemctl is-enabled --quiet kinbot 2>/dev/null; then
+    if ! systemctl is-enabled --quiet hivekeep 2>/dev/null; then
       error "systemd service not installed. Run the installer first: sudo bash install.sh"
     fi
-    if systemctl is-active --quiet kinbot 2>/dev/null; then
-      warn "KinBot is already running"
+    if systemctl is-active --quiet hivekeep 2>/dev/null; then
+      warn "Hivekeep is already running"
       return 0
     fi
-    systemctl start kinbot
-    success "KinBot started (systemd)"
+    systemctl start hivekeep
+    success "Hivekeep started (systemd)"
   else
-    if ! systemctl --user is-enabled --quiet kinbot 2>/dev/null; then
+    if ! systemctl --user is-enabled --quiet hivekeep 2>/dev/null; then
       error "systemd user service not installed. Run the installer first: bash install.sh"
     fi
-    if systemctl --user is-active --quiet kinbot 2>/dev/null; then
-      warn "KinBot is already running"
+    if systemctl --user is-active --quiet hivekeep 2>/dev/null; then
+      warn "Hivekeep is already running"
       return 0
     fi
-    systemctl --user start kinbot
-    success "KinBot started (systemd user service)"
+    systemctl --user start hivekeep
+    success "Hivekeep started (systemd user service)"
   fi
 }
 
 _service_stop() {
   if [ "$INIT_SYSTEM" = "launchd" ]; then
-    local plist="$HOME/Library/LaunchAgents/io.kinbot.server.plist"
-    if ! launchctl list 2>/dev/null | grep -q io.kinbot.server; then
-      warn "KinBot is not running"
+    local plist="$HOME/Library/LaunchAgents/io.hivekeep.server.plist"
+    if ! launchctl list 2>/dev/null | grep -q io.hivekeep.server; then
+      warn "Hivekeep is not running"
       return 0
     fi
     launchctl unload "$plist" 2>/dev/null || true
-    success "KinBot stopped (launchd)"
+    success "Hivekeep stopped (launchd)"
   elif [ "$INIT_SYSTEM" = "script" ]; then
-    local script_path="$KINBOT_DIR/kinbot"
+    local script_path="$HIVEKEEP_DIR/hivekeep"
     if [ ! -x "$script_path" ]; then
       error "Service script not found at $script_path"
     fi
     "$script_path" stop
   elif [ "$IS_ROOT" = true ]; then
-    if ! systemctl is-active --quiet kinbot 2>/dev/null; then
-      warn "KinBot is not running"
+    if ! systemctl is-active --quiet hivekeep 2>/dev/null; then
+      warn "Hivekeep is not running"
       return 0
     fi
-    systemctl stop kinbot
-    success "KinBot stopped (systemd)"
+    systemctl stop hivekeep
+    success "Hivekeep stopped (systemd)"
   else
-    if ! systemctl --user is-active --quiet kinbot 2>/dev/null; then
-      warn "KinBot is not running"
+    if ! systemctl --user is-active --quiet hivekeep 2>/dev/null; then
+      warn "Hivekeep is not running"
       return 0
     fi
-    systemctl --user stop kinbot
-    success "KinBot stopped (systemd user service)"
+    systemctl --user stop hivekeep
+    success "Hivekeep stopped (systemd user service)"
   fi
 }
 
 do_start() {
   echo ""
   _service_env_setup
-  if [ ! -d "$KINBOT_DIR/.git" ]; then
-    error "KinBot is not installed at $KINBOT_DIR. Run the installer first: bash install.sh"
+  if [ ! -d "$HIVEKEEP_DIR/.git" ]; then
+    error "Hivekeep is not installed at $HIVEKEEP_DIR. Run the installer first: bash install.sh"
   fi
   _service_start
   echo ""
@@ -3049,8 +3397,8 @@ do_start() {
 do_stop() {
   echo ""
   _service_env_setup
-  if [ ! -d "$KINBOT_DIR/.git" ]; then
-    error "KinBot is not installed at $KINBOT_DIR. Run the installer first: bash install.sh"
+  if [ ! -d "$HIVEKEEP_DIR/.git" ]; then
+    error "Hivekeep is not installed at $HIVEKEEP_DIR. Run the installer first: bash install.sh"
   fi
   _service_stop
   echo ""
@@ -3059,29 +3407,29 @@ do_stop() {
 do_restart() {
   echo ""
   _service_env_setup
-  if [ ! -d "$KINBOT_DIR/.git" ]; then
-    error "KinBot is not installed at $KINBOT_DIR. Run the installer first: bash install.sh"
+  if [ ! -d "$HIVEKEEP_DIR/.git" ]; then
+    error "Hivekeep is not installed at $HIVEKEEP_DIR. Run the installer first: bash install.sh"
   fi
-  info "Restarting KinBot..."
+  info "Restarting Hivekeep..."
 
   if [ "$INIT_SYSTEM" = "launchd" ]; then
-    local plist="$HOME/Library/LaunchAgents/io.kinbot.server.plist"
+    local plist="$HOME/Library/LaunchAgents/io.hivekeep.server.plist"
     launchctl unload "$plist" 2>/dev/null || true
     sleep 1
     launchctl load "$plist"
-    success "KinBot restarted (launchd)"
+    success "Hivekeep restarted (launchd)"
   elif [ "$INIT_SYSTEM" = "script" ]; then
-    local script_path="$KINBOT_DIR/kinbot"
+    local script_path="$HIVEKEEP_DIR/hivekeep"
     if [ ! -x "$script_path" ]; then
       error "Service script not found at $script_path"
     fi
     "$script_path" restart
   elif [ "$IS_ROOT" = true ]; then
-    systemctl restart kinbot
-    success "KinBot restarted (systemd)"
+    systemctl restart hivekeep
+    success "Hivekeep restarted (systemd)"
   else
-    systemctl --user restart kinbot
-    success "KinBot restarted (systemd user service)"
+    systemctl --user restart hivekeep
+    success "Hivekeep restarted (systemd user service)"
   fi
   echo ""
 }
@@ -3094,17 +3442,17 @@ do_doctor() {
   IS_ROOT=false
   [ "$(id -u)" -eq 0 ] && IS_ROOT=true
   if [ "$IS_ROOT" = true ]; then
-    KINBOT_DIR="${KINBOT_DIR:-/opt/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-/var/lib/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-/opt/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-/var/lib/hivekeep}"
   else
-    KINBOT_DIR="${KINBOT_DIR:-$HOME/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-$HOME/.local/share/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-$HOME/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-$HOME/.local/share/hivekeep}"
   fi
 
   detect_os 2>/dev/null || true
 
   # Everything goes to stdout as plain text, suitable for pasting into a GitHub issue
-  echo "# KinBot Diagnostic Report"
+  echo "# Hivekeep Diagnostic Report"
   echo "Generated: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
   echo ""
 
@@ -3148,35 +3496,35 @@ do_doctor() {
 
   # Disk
   local install_parent
-  install_parent="$(dirname "$KINBOT_DIR")"
+  install_parent="$(dirname "$HIVEKEEP_DIR")"
   local disk_info
   disk_info="$(df -h "$install_parent" 2>/dev/null | awk 'NR==2 {printf "%s available / %s total (%s used)", $4, $2, $5}')"
   [ -n "$disk_info" ] && echo "- Disk ($install_parent): $disk_info"
 
   echo ""
 
-  # ── KinBot installation ──
-  echo "## KinBot"
-  if [ -d "$KINBOT_DIR/.git" ]; then
+  # ── Hivekeep installation ──
+  echo "## Hivekeep"
+  if [ -d "$HIVEKEEP_DIR/.git" ]; then
     local version branch commit commit_date
-    version="$(git -C "$KINBOT_DIR" describe --tags 2>/dev/null || echo "no tags")"
-    branch="$(git -C "$KINBOT_DIR" branch --show-current 2>/dev/null || echo "unknown")"
-    commit="$(git -C "$KINBOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
-    commit_date="$(git -C "$KINBOT_DIR" log -1 --format='%ci' 2>/dev/null | cut -d' ' -f1 || echo "unknown")"
+    version="$(git -C "$HIVEKEEP_DIR" describe --tags 2>/dev/null || echo "no tags")"
+    branch="$(git -C "$HIVEKEEP_DIR" branch --show-current 2>/dev/null || echo "unknown")"
+    commit="$(git -C "$HIVEKEEP_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+    commit_date="$(git -C "$HIVEKEEP_DIR" log -1 --format='%ci' 2>/dev/null | cut -d' ' -f1 || echo "unknown")"
     echo "- Version: $version"
     echo "- Branch: $branch"
     echo "- Commit: $commit ($commit_date)"
-    echo "- Install dir: $KINBOT_DIR"
+    echo "- Install dir: $HIVEKEEP_DIR"
 
     # Check if behind upstream
     local behind=""
-    if git -C "$KINBOT_DIR" fetch --dry-run origin "$branch" 2>&1 | grep -q "$branch"; then
+    if git -C "$HIVEKEEP_DIR" fetch --dry-run origin "$branch" 2>&1 | grep -q "$branch"; then
       local local_head remote_head
-      local_head="$(git -C "$KINBOT_DIR" rev-parse HEAD 2>/dev/null)"
-      remote_head="$(git -C "$KINBOT_DIR" rev-parse "origin/$branch" 2>/dev/null)"
+      local_head="$(git -C "$HIVEKEEP_DIR" rev-parse HEAD 2>/dev/null)"
+      remote_head="$(git -C "$HIVEKEEP_DIR" rev-parse "origin/$branch" 2>/dev/null)"
       if [ "$local_head" != "$remote_head" ]; then
         local count_behind
-        count_behind="$(git -C "$KINBOT_DIR" rev-list HEAD..origin/"$branch" --count 2>/dev/null || echo "?")"
+        count_behind="$(git -C "$HIVEKEEP_DIR" rev-list HEAD..origin/"$branch" --count 2>/dev/null || echo "?")"
         echo "- Behind upstream: $count_behind commit(s)"
       else
         echo "- Up to date with origin/$branch"
@@ -3184,17 +3532,17 @@ do_doctor() {
     fi
 
     # Dirty state
-    if ! git -C "$KINBOT_DIR" diff --quiet HEAD 2>/dev/null; then
+    if ! git -C "$HIVEKEEP_DIR" diff --quiet HEAD 2>/dev/null; then
       echo "- Working tree: DIRTY (uncommitted changes)"
     fi
   else
-    echo "- Not installed at $KINBOT_DIR"
+    echo "- Not installed at $HIVEKEEP_DIR"
   fi
 
-  echo "- Data dir: $KINBOT_DATA_DIR"
-  if [ -d "$KINBOT_DATA_DIR" ]; then
+  echo "- Data dir: $HIVEKEEP_DATA_DIR"
+  if [ -d "$HIVEKEEP_DATA_DIR" ]; then
     local data_size
-    data_size="$(du -sh "$KINBOT_DATA_DIR" 2>/dev/null | awk '{print $1}')"
+    data_size="$(du -sh "$HIVEKEEP_DATA_DIR" 2>/dev/null | awk '{print $1}')"
     echo "- Data size: $data_size"
   fi
 
@@ -3217,7 +3565,7 @@ do_doctor() {
 
   # ── Config (sanitized) ──
   echo "## Config"
-  local env_file="$KINBOT_DATA_DIR/kinbot.env"
+  local env_file="$HIVEKEEP_DATA_DIR/hivekeep.env"
   if [ -f "$env_file" ]; then
     local perms
     perms="$(stat -c '%a' "$env_file" 2>/dev/null || stat -f '%Lp' "$env_file" 2>/dev/null || echo "?")"
@@ -3251,7 +3599,7 @@ do_doctor() {
 
   # ── Database ──
   echo "## Database"
-  local db_file="$KINBOT_DATA_DIR/kinbot.db"
+  local db_file="$HIVEKEEP_DATA_DIR/hivekeep.db"
   if [ -f "$db_file" ]; then
     local db_size
     db_size="$(du -h "$db_file" 2>/dev/null | awk '{print $1}')"
@@ -3272,10 +3620,10 @@ do_doctor() {
   fi
 
   # Backups
-  local backup_dir="$KINBOT_DATA_DIR/backups"
+  local backup_dir="$HIVEKEEP_DATA_DIR/backups"
   if [ -d "$backup_dir" ]; then
     local backup_count
-    backup_count="$(find "$backup_dir" -maxdepth 1 -name 'kinbot-*.db' -type f 2>/dev/null | wc -l)"
+    backup_count="$(find "$backup_dir" -maxdepth 1 -name 'hivekeep-*.db' -type f 2>/dev/null | wc -l)"
     echo "- Backups: $backup_count"
   fi
 
@@ -3284,13 +3632,13 @@ do_doctor() {
   # ── Service ──
   echo "## Service"
   if [ "$INIT_SYSTEM" = "launchd" ]; then
-    if launchctl list 2>/dev/null | grep -q io.kinbot.server; then
+    if launchctl list 2>/dev/null | grep -q io.hivekeep.server; then
       echo "- Status: loaded (launchd)"
     else
       echo "- Status: not loaded (launchd)"
     fi
   elif [ "$INIT_SYSTEM" = "script" ]; then
-    local pid_file="$KINBOT_DATA_DIR/kinbot.pid"
+    local pid_file="$HIVEKEEP_DATA_DIR/hivekeep.pid"
     if [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
       echo "- Status: running (PID $(cat "$pid_file"), script-managed)"
     else
@@ -3298,25 +3646,25 @@ do_doctor() {
     fi
   elif [ "$IS_ROOT" = true ]; then
     local svc_status
-    svc_status="$(systemctl is-active kinbot 2>/dev/null || echo "unknown")"
+    svc_status="$(systemctl is-active hivekeep 2>/dev/null || echo "unknown")"
     echo "- Status: $svc_status (systemd system)"
     if [ "$svc_status" = "failed" ]; then
-      echo "- Exit code: $(systemctl show kinbot -p ExecMainStatus --value 2>/dev/null || echo "?")"
+      echo "- Exit code: $(systemctl show hivekeep -p ExecMainStatus --value 2>/dev/null || echo "?")"
     fi
   else
     local svc_status
-    svc_status="$(systemctl --user is-active kinbot 2>/dev/null || echo "unknown")"
+    svc_status="$(systemctl --user is-active hivekeep 2>/dev/null || echo "unknown")"
     echo "- Status: $svc_status (systemd user)"
     if [ "$svc_status" = "failed" ]; then
-      echo "- Exit code: $(systemctl --user show kinbot -p ExecMainStatus --value 2>/dev/null || echo "?")"
+      echo "- Exit code: $(systemctl --user show hivekeep -p ExecMainStatus --value 2>/dev/null || echo "?")"
     fi
   fi
 
   # Port check
-  local port="${KINBOT_PORT:-3000}"
-  if [ -f "$KINBOT_DATA_DIR/kinbot.env" ]; then
+  local port="${HIVEKEEP_PORT:-3000}"
+  if [ -f "$HIVEKEEP_DATA_DIR/hivekeep.env" ]; then
     # shellcheck disable=SC1090
-    . "$KINBOT_DATA_DIR/kinbot.env" 2>/dev/null || true
+    . "$HIVEKEEP_DATA_DIR/hivekeep.env" 2>/dev/null || true
     port="${PORT:-$port}"
   fi
 
@@ -3392,35 +3740,35 @@ do_doctor() {
   echo "## Recent Logs (last 25 lines)"
   echo '```'
   if [ "$INIT_SYSTEM" = "launchd" ]; then
-    local log_file="$HOME/Library/Logs/kinbot/kinbot.log"
+    local log_file="$HOME/Library/Logs/hivekeep/hivekeep.log"
     if [ -f "$log_file" ]; then
       tail -25 "$log_file" 2>/dev/null
     else
       echo "(no log file found)"
     fi
   elif [ "$INIT_SYSTEM" = "script" ]; then
-    local log_file="$KINBOT_DATA_DIR/kinbot.log"
+    local log_file="$HIVEKEEP_DATA_DIR/hivekeep.log"
     if [ -f "$log_file" ]; then
       tail -25 "$log_file" 2>/dev/null
     else
       echo "(no log file found)"
     fi
   elif [ "$IS_ROOT" = true ]; then
-    journalctl -u kinbot --no-pager -n 25 2>/dev/null || echo "(no journal entries)"
+    journalctl -u hivekeep --no-pager -n 25 2>/dev/null || echo "(no journal entries)"
   else
-    journalctl --user -u kinbot --no-pager -n 25 2>/dev/null || echo "(no journal entries)"
+    journalctl --user -u hivekeep --no-pager -n 25 2>/dev/null || echo "(no journal entries)"
   fi
   echo '```'
 
   echo ""
   echo "---"
-  echo "Paste this into a GitHub issue: https://github.com/$KINBOT_REPO/issues/new"
+  echo "Paste this into a GitHub issue: https://github.com/$HIVEKEEP_REPO/issues/new"
 }
 
 # ─── Dry run ─────────────────────────────────────────────────────────────────
 dry_run() {
   echo ""
-  echo -e "${BOLD}KinBot Installer — Dry Run${NC}"
+  echo -e "${BOLD}Hivekeep Installer — Dry Run${NC}"
   echo -e "${DIM}No changes will be made. This shows what would happen.${NC}"
   echo ""
 
@@ -3428,16 +3776,17 @@ dry_run() {
 
   # Check existing installation
   header "Installation plan"
-  if [ -d "$KINBOT_DIR/.git" ]; then
+  if [ -d "$HIVEKEEP_DIR/.git" ]; then
     local current_version
-    current_version="$(git -C "$KINBOT_DIR" describe --tags 2>/dev/null || git -C "$KINBOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
-    info "Mode: ${BOLD}UPDATE${NC} (existing install at $KINBOT_DIR, currently $current_version)"
+    current_version="$(git -C "$HIVEKEEP_DIR" describe --tags 2>/dev/null || git -C "$HIVEKEEP_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+    info "Mode: ${BOLD}UPDATE${NC} (existing install at $HIVEKEEP_DIR, currently $current_version)"
   else
     info "Mode: ${BOLD}FRESH INSTALL${NC}"
-    info "Will clone to: $KINBOT_DIR"
+    info "Will clone to: $HIVEKEEP_DIR"
   fi
-  info "Data directory: $KINBOT_DATA_DIR"
-  info "Branch: $KINBOT_BRANCH"
+  info "Data directory: $HIVEKEEP_DATA_DIR"
+  info "Channel: $(resolve_channel)"
+  info "Branch: $HIVEKEEP_BRANCH"
 
   # Prerequisites
   header "Prerequisites"
@@ -3467,7 +3816,7 @@ dry_run() {
   # Disk space & memory
   header "Resources"
   local install_parent
-  install_parent="$(dirname "$KINBOT_DIR")"
+  install_parent="$(dirname "$HIVEKEEP_DIR")"
   local avail_kb
   if avail_kb="$(df -k "$install_parent" 2>/dev/null | awk 'NR==2 {print $4}')"; then
     local avail_mb=$((avail_kb / 1024))
@@ -3506,23 +3855,23 @@ dry_run() {
 
   # Port
   header "Network"
-  info "Will listen on port $KINBOT_PORT"
+  info "Will listen on port $HIVEKEEP_PORT"
   local port_in_use=false
   if command -v ss &>/dev/null; then
-    ss -tlnp 2>/dev/null | grep -q ":${KINBOT_PORT} " && port_in_use=true
+    ss -tlnp 2>/dev/null | grep -q ":${HIVEKEEP_PORT} " && port_in_use=true
   elif command -v lsof &>/dev/null; then
-    lsof -i ":${KINBOT_PORT}" -sTCP:LISTEN &>/dev/null && port_in_use=true
+    lsof -i ":${HIVEKEEP_PORT}" -sTCP:LISTEN &>/dev/null && port_in_use=true
   fi
   if [ "$port_in_use" = true ]; then
-    warn "Port $KINBOT_PORT is currently in use"
+    warn "Port $HIVEKEEP_PORT is currently in use"
   else
-    success "Port $KINBOT_PORT is available"
+    success "Port $HIVEKEEP_PORT is available"
   fi
 
   # Config
   header "Configuration"
-  local env_file="$KINBOT_DATA_DIR/kinbot.env"
-  if [ -d "$KINBOT_DIR/.git" ] && [ -f "$env_file" ]; then
+  local env_file="$HIVEKEEP_DATA_DIR/hivekeep.env"
+  if [ -d "$HIVEKEEP_DIR/.git" ] && [ -f "$env_file" ]; then
     info "Existing config at $env_file — will be kept"
   else
     info "Will create config at $env_file"
@@ -3532,19 +3881,19 @@ dry_run() {
   # Service
   header "Service"
   if [ "$IS_ROOT" = true ]; then
-    info "Will create system user: ${KINBOT_USER:-kinbot}"
+    info "Will create system user: ${HIVEKEEP_USER:-hivekeep}"
   fi
   if [ "$INIT_SYSTEM" = "launchd" ]; then
-    info "Will create launchd service: ~/Library/LaunchAgents/io.kinbot.server.plist"
+    info "Will create launchd service: ~/Library/LaunchAgents/io.hivekeep.server.plist"
   elif [ "$INIT_SYSTEM" = "script" ]; then
-    info "Will create start/stop script: $KINBOT_DIR/kinbot"
+    info "Will create start/stop script: $HIVEKEEP_DIR/hivekeep"
     if [ "$IS_WSL" = true ]; then
       warn "WSL detected — service won't auto-start on boot"
     fi
   elif [ "$IS_ROOT" = true ]; then
-    info "Will create systemd system service: /etc/systemd/system/kinbot.service"
+    info "Will create systemd system service: /etc/systemd/system/hivekeep.service"
   else
-    info "Will create systemd user service: ~/.config/systemd/user/kinbot.service"
+    info "Will create systemd user service: ~/.config/systemd/user/hivekeep.service"
   fi
 
   # Build
@@ -3562,8 +3911,8 @@ dry_run() {
 # ─── Docker Compose install ──────────────────────────────────────────────────
 docker_install() {
   echo ""
-  echo -e "${BOLD}KinBot Docker Setup${NC}"
-  echo -e "Generates a docker-compose.yml for running KinBot in Docker"
+  echo -e "${BOLD}Hivekeep Docker Setup${NC}"
+  echo -e "Generates a docker-compose.yml for running Hivekeep in Docker"
   echo ""
 
   OS="$(uname -s)"
@@ -3573,6 +3922,22 @@ docker_install() {
     error "Docker is not installed. Install it from https://docs.docker.com/get-docker/"
   fi
   success "Docker $(docker --version | awk '{print $3}' | tr -d ',')"
+
+  # Docker is installed, but the daemon may not be running (very common on
+  # desktop Linux/macOS). `docker info` talks to the daemon and fails fast if so.
+  if ! docker info &>/dev/null; then
+    local daemon_fix
+    if [ "$OS" = "Darwin" ]; then
+      daemon_fix="Start Docker Desktop and wait for the whale icon to settle, then re-run this command."
+    else
+      daemon_fix="Start the daemon: sudo systemctl start docker
+  (or launch Docker Desktop if you use it), then re-run this command."
+    fi
+    error "Docker is installed but the daemon isn't responding.
+  Hivekeep can't create the container until Docker is running.
+  ${BOLD}Fix:${NC} $daemon_fix"
+  fi
+  success "Docker daemon is running"
 
   # Check Docker Compose (v2 plugin or standalone)
   local compose_cmd=""
@@ -3587,27 +3952,27 @@ docker_install() {
   fi
 
   # Choose output directory
-  local output_dir="${KINBOT_DOCKER_DIR:-./kinbot}"
+  local output_dir="${HIVEKEEP_DOCKER_DIR:-./hivekeep}"
 
-  if [ "${KINBOT_NO_PROMPT:-}" != "true" ] && [ "${CI:-}" != "true" ]; then
+  if [ "${HIVEKEEP_NO_PROMPT:-}" != "true" ] && [ "${CI:-}" != "true" ]; then
     echo ""
     echo -e "${BOLD}Configuration${NC}"
     echo -e "${DIM}Press Enter to accept the default value shown in brackets.${NC}"
     echo ""
     prompt_value output_dir "Output directory" "$output_dir"
-    prompt_value KINBOT_PORT "Port" "$KINBOT_PORT"
+    prompt_value HIVEKEEP_PORT "Port" "$HIVEKEEP_PORT"
 
     local local_ip
     local_ip="$(detect_local_ip)"
-    local default_url="http://${local_ip}:${KINBOT_PORT}"
-    [ -n "$KINBOT_PUBLIC_URL" ] && default_url="$KINBOT_PUBLIC_URL"
-    prompt_value KINBOT_PUBLIC_URL "Public URL (for webhooks & invite links)" "$default_url"
+    local default_url="http://${local_ip}:${HIVEKEEP_PORT}"
+    [ -n "$HIVEKEEP_PUBLIC_URL" ] && default_url="$HIVEKEEP_PUBLIC_URL"
+    prompt_value HIVEKEEP_PUBLIC_URL "Public URL (for webhooks & invite links)" "$default_url"
   fi
 
-  if [ -z "$KINBOT_PUBLIC_URL" ]; then
+  if [ -z "$HIVEKEEP_PUBLIC_URL" ]; then
     local local_ip
     local_ip="$(detect_local_ip)"
-    KINBOT_PUBLIC_URL="http://${local_ip}:${KINBOT_PORT}"
+    HIVEKEEP_PUBLIC_URL="http://${local_ip}:${HIVEKEEP_PORT}"
   fi
 
   mkdir -p "$output_dir"
@@ -3618,14 +3983,14 @@ docker_install() {
 
   # Write .env
   cat > "$output_dir/.env" << ENV
-# KinBot Docker configuration
+# Hivekeep Docker configuration
 # Edit these values, then run: docker compose up -d
 #
-# For all options, see: https://github.com/MarlBurroW/kinbot
+# For all options, see: https://github.com/MarlBurroW/hivekeep
 
 # ── Core ─────────────────────────────────────────────────────────
-PORT=${KINBOT_PORT}
-PUBLIC_URL=${KINBOT_PUBLIC_URL}
+PORT=${HIVEKEEP_PORT}
+PUBLIC_URL=${HIVEKEEP_PUBLIC_URL}
 ENCRYPTION_KEY=${enc_key}
 LOG_LEVEL=info
 
@@ -3640,26 +4005,26 @@ ENV
 
   # Write docker-compose.yml
   cat > "$output_dir/docker-compose.yml" << 'COMPOSE'
-# KinBot — Self-hosted AI agent platform
-# Docs: https://github.com/MarlBurroW/kinbot
+# Hivekeep — Self-hosted AI agent platform
+# Docs: https://github.com/MarlBurroW/hivekeep
 #
 # Quick start:  docker compose up -d
 # Update:       docker compose pull && docker compose up -d
-# Logs:         docker compose logs -f kinbot
+# Logs:         docker compose logs -f hivekeep
 
 services:
-  kinbot:
-    image: ghcr.io/marlburrow/kinbot:latest
-    container_name: kinbot
+  hivekeep:
+    image: ghcr.io/marlburrow/hivekeep:latest
+    container_name: hivekeep
     ports:
       - "${PORT:-3000}:3000"
     volumes:
-      - kinbot-data:/app/data
+      - hivekeep-data:/app/data
     environment:
       - NODE_ENV=production
       - PORT=3000
       - HOST=0.0.0.0
-      - KINBOT_DATA_DIR=/app/data
+      - HIVEKEEP_DATA_DIR=/app/data
       - PUBLIC_URL=${PUBLIC_URL:-http://localhost:3000}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -3705,7 +4070,7 @@ services:
       retries: 3
 
 volumes:
-  kinbot-data:
+  hivekeep-data:
 COMPOSE
 
   success "Created $output_dir/docker-compose.yml"
@@ -3713,26 +4078,26 @@ COMPOSE
 
   # Ask if user wants to start now
   local start_now="y"
-  if [ "${KINBOT_NO_PROMPT:-}" != "true" ] && [ "${CI:-}" != "true" ]; then
+  if [ "${HIVEKEEP_NO_PROMPT:-}" != "true" ] && [ "${CI:-}" != "true" ]; then
     echo ""
-    echo -en "  ${CYAN}?${NC} ${BOLD}Start KinBot now?${NC} ${DIM}[Y/n]${NC}: " >/dev/tty
+    echo -en "  ${CYAN}?${NC} ${BOLD}Start Hivekeep now?${NC} ${DIM}[Y/n]${NC}: " >/dev/tty
     read -r start_now </dev/tty || start_now="y"
     [ -z "$start_now" ] && start_now="y"
   fi
 
   if [[ "$start_now" =~ ^[Yy]$ ]]; then
-    header "Starting KinBot..."
+    header "Starting Hivekeep..."
     cd "$output_dir"
     # shellcheck disable=SC2086
     run_with_spinner "Building and starting container..." $compose_cmd up -d --build
-    success "KinBot is starting!"
+    success "Hivekeep is starting!"
 
     # Wait a moment for health check
-    info "Waiting for KinBot to be ready..."
+    info "Waiting for Hivekeep to be ready..."
     local attempts=0
     while [ $attempts -lt 30 ]; do
-      if curl -sf "http://localhost:${KINBOT_PORT}/api/health" --max-time 2 &>/dev/null; then
-        success "KinBot is ready!"
+      if curl -sf "http://localhost:${HIVEKEEP_PORT}/api/health" --max-time 2 &>/dev/null; then
+        success "Hivekeep is ready!"
         break
       fi
       sleep 2
@@ -3740,7 +4105,7 @@ COMPOSE
     done
 
     if [ $attempts -ge 30 ]; then
-      warn "KinBot hasn't responded yet. It may still be building."
+      warn "Hivekeep hasn't responded yet. It may still be building."
       info "Check status with: cd $output_dir && $compose_cmd logs -f"
     fi
   fi
@@ -3748,10 +4113,10 @@ COMPOSE
   # Summary
   echo ""
   echo -e "${BOLD}╔════════════════════════════════════════════╗${NC}"
-  echo -e "${BOLD}║  KinBot Docker setup complete!             ║${NC}"
+  echo -e "${BOLD}║  Hivekeep Docker setup complete!             ║${NC}"
   echo -e "${BOLD}╚════════════════════════════════════════════╝${NC}"
   echo ""
-  echo -e "  ${CYAN}Access URL:${NC}   $KINBOT_PUBLIC_URL"
+  echo -e "  ${CYAN}Access URL:${NC}   $HIVEKEEP_PUBLIC_URL"
   echo -e "  ${CYAN}Directory:${NC}    $(cd "$output_dir" && pwd)"
   echo -e "  ${CYAN}Config:${NC}       $output_dir/.env"
   echo ""
@@ -3785,11 +4150,11 @@ show_logs() {
   IS_ROOT=false
   [ "$(id -u)" -eq 0 ] && IS_ROOT=true
   if [ "$IS_ROOT" = true ]; then
-    KINBOT_DIR="${KINBOT_DIR:-/opt/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-/var/lib/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-/opt/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-/var/lib/hivekeep}"
   else
-    KINBOT_DIR="${KINBOT_DIR:-$HOME/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-$HOME/.local/share/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-$HOME/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-$HOME/.local/share/hivekeep}"
   fi
 
   # Detect init system
@@ -3850,9 +4215,9 @@ show_logs() {
   _show_journal_logs() {
     local base_cmd=("journalctl")
     if [ "$IS_ROOT" = true ]; then
-      base_cmd+=("-u" "kinbot")
+      base_cmd+=("-u" "hivekeep")
     else
-      base_cmd+=("--user" "-u" "kinbot")
+      base_cmd+=("--user" "-u" "hivekeep")
     fi
 
     if [ -n "$log_since" ]; then
@@ -3873,9 +4238,9 @@ show_logs() {
   }
 
   if [ "$INIT_SYSTEM" = "launchd" ]; then
-    _show_file_logs "$HOME/Library/Logs/kinbot/kinbot.log"
+    _show_file_logs "$HOME/Library/Logs/hivekeep/hivekeep.log"
   elif [ "$INIT_SYSTEM" = "script" ]; then
-    _show_file_logs "$KINBOT_DATA_DIR/kinbot.log"
+    _show_file_logs "$HIVEKEEP_DATA_DIR/hivekeep.log"
   else
     _show_journal_logs
   fi
@@ -3884,7 +4249,7 @@ show_logs() {
 # ─── Backup (standalone) ─────────────────────────────────────────────────────
 do_backup() {
   echo ""
-  echo -e "${BOLD}KinBot Backup${NC}"
+  echo -e "${BOLD}Hivekeep Backup${NC}"
   echo ""
 
   # Minimal env setup
@@ -3892,15 +4257,15 @@ do_backup() {
   IS_ROOT=false
   [ "$(id -u)" -eq 0 ] && IS_ROOT=true
   if [ "$IS_ROOT" = true ]; then
-    KINBOT_DIR="${KINBOT_DIR:-/opt/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-/var/lib/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-/opt/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-/var/lib/hivekeep}"
   else
-    KINBOT_DIR="${KINBOT_DIR:-$HOME/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-$HOME/.local/share/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-$HOME/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-$HOME/.local/share/hivekeep}"
   fi
 
-  local db_file="$KINBOT_DATA_DIR/kinbot.db"
-  local env_file="$KINBOT_DATA_DIR/kinbot.env"
+  local db_file="$HIVEKEEP_DATA_DIR/hivekeep.db"
+  local env_file="$HIVEKEEP_DATA_DIR/hivekeep.env"
 
   if [ ! -f "$db_file" ]; then
     error "No database found at $db_file — nothing to back up"
@@ -3910,16 +4275,16 @@ do_backup() {
   local timestamp
   timestamp="$(date +%Y%m%d-%H%M%S)"
   local version_tag="manual"
-  if [ -d "$KINBOT_DIR/.git" ]; then
-    version_tag="$(git -C "$KINBOT_DIR" describe --tags 2>/dev/null || git -C "$KINBOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "manual")"
+  if [ -d "$HIVEKEEP_DIR/.git" ]; then
+    version_tag="$(git -C "$HIVEKEEP_DIR" describe --tags 2>/dev/null || git -C "$HIVEKEEP_DIR" rev-parse --short HEAD 2>/dev/null || echo "manual")"
     version_tag="$(echo "$version_tag" | tr '/' '-')"
   fi
 
   local output="${1:-}"
   if [ -z "$output" ]; then
-    local backup_dir="$KINBOT_DATA_DIR/backups"
+    local backup_dir="$HIVEKEEP_DATA_DIR/backups"
     mkdir -p "$backup_dir"
-    output="$backup_dir/kinbot-${version_tag}-${timestamp}.db"
+    output="$backup_dir/hivekeep-${version_tag}-${timestamp}.db"
   fi
 
   # Create parent directory if needed
@@ -3970,10 +4335,10 @@ do_backup() {
   fi
 
   # List existing backups
-  local backup_dir="$KINBOT_DATA_DIR/backups"
+  local backup_dir="$HIVEKEEP_DATA_DIR/backups"
   if [ -d "$backup_dir" ]; then
     local count
-    count="$(find "$backup_dir" -maxdepth 1 -name 'kinbot-*.db' -type f 2>/dev/null | wc -l)"
+    count="$(find "$backup_dir" -maxdepth 1 -name 'hivekeep-*.db' -type f 2>/dev/null | wc -l)"
     if [ "$count" -gt 0 ] 2>/dev/null; then
       echo ""
       info "$count backup(s) in $backup_dir"
@@ -3985,7 +4350,7 @@ do_backup() {
 # ─── Restore ─────────────────────────────────────────────────────────────────
 do_restore() {
   echo ""
-  echo -e "${BOLD}KinBot Restore${NC}"
+  echo -e "${BOLD}Hivekeep Restore${NC}"
   echo ""
 
   # Minimal env setup
@@ -3993,11 +4358,11 @@ do_restore() {
   IS_ROOT=false
   [ "$(id -u)" -eq 0 ] && IS_ROOT=true
   if [ "$IS_ROOT" = true ]; then
-    KINBOT_DIR="${KINBOT_DIR:-/opt/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-/var/lib/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-/opt/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-/var/lib/hivekeep}"
   else
-    KINBOT_DIR="${KINBOT_DIR:-$HOME/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-$HOME/.local/share/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-$HOME/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-$HOME/.local/share/hivekeep}"
   fi
 
   # Detect init system for service control
@@ -4013,8 +4378,8 @@ do_restore() {
 
   # If no file given, list available backups and let user pick
   if [ -z "$backup_file" ]; then
-    local backup_dir="$KINBOT_DATA_DIR/backups"
-    if [ ! -d "$backup_dir" ] || [ -z "$(find "$backup_dir" -maxdepth 1 -name 'kinbot-*.db' -type f 2>/dev/null)" ]; then
+    local backup_dir="$HIVEKEEP_DATA_DIR/backups"
+    if [ ! -d "$backup_dir" ] || [ -z "$(find "$backup_dir" -maxdepth 1 -name 'hivekeep-*.db' -type f 2>/dev/null)" ]; then
       error "No backup file specified and no backups found in $backup_dir"
     fi
 
@@ -4031,7 +4396,7 @@ do_restore() {
       mtime="$(date -r "$f" '+%Y-%m-%d %H:%M' 2>/dev/null || stat -c '%y' "$f" 2>/dev/null | cut -d. -f1 || echo "unknown")"
       echo -e "  ${CYAN}$i)${NC} $fname ($size, $mtime)"
       i=$((i + 1))
-    done < <(find "$backup_dir" -maxdepth 1 -name 'kinbot-*.db' -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn | awk '{print $2}')
+    done < <(find "$backup_dir" -maxdepth 1 -name 'hivekeep-*.db' -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn | awk '{print $2}')
 
     if [ ${#backup_list[@]} -eq 0 ]; then
       error "No backups found in $backup_dir"
@@ -4067,7 +4432,7 @@ do_restore() {
     fi
   fi
 
-  local db_file="$KINBOT_DATA_DIR/kinbot.db"
+  local db_file="$HIVEKEEP_DATA_DIR/hivekeep.db"
   local backup_size
   backup_size="$(du -h "$backup_file" 2>/dev/null | awk '{print $1}')"
 
@@ -4076,7 +4441,7 @@ do_restore() {
   echo -e "  ${CYAN}$(basename "$backup_file")${NC} ($backup_size)"
   echo ""
 
-  if [ "$KINBOT_YES" != true ] && [ "${KINBOT_NO_PROMPT:-}" != "true" ] && [ "${CI:-}" != "true" ]; then
+  if [ "$HIVEKEEP_YES" != true ] && [ "${HIVEKEEP_NO_PROMPT:-}" != "true" ] && [ "${CI:-}" != "true" ]; then
     echo -en "  ${YELLOW}?${NC} ${BOLD}Continue?${NC} ${DIM}[y/N]${NC}: " >/dev/tty
     local confirm
     read -r confirm </dev/tty || confirm="n"
@@ -4086,7 +4451,7 @@ do_restore() {
   # Back up current database first
   if [ -f "$db_file" ]; then
     local safety_backup
-    safety_backup="$KINBOT_DATA_DIR/backups/kinbot-pre-restore-$(date +%Y%m%d-%H%M%S).db"
+    safety_backup="$HIVEKEEP_DATA_DIR/backups/hivekeep-pre-restore-$(date +%Y%m%d-%H%M%S).db"
     mkdir -p "$(dirname "$safety_backup")"
     cp "$db_file" "$safety_backup"
     [ -f "${db_file}-wal" ] && cp "${db_file}-wal" "${safety_backup}-wal"
@@ -4095,33 +4460,33 @@ do_restore() {
   fi
 
   # Stop service before replacing database
-  header "Stopping KinBot..."
+  header "Stopping Hivekeep..."
   local was_running=false
   if [ "$INIT_SYSTEM" = "launchd" ]; then
-    local plist="$HOME/Library/LaunchAgents/io.kinbot.server.plist"
-    if [ -f "$plist" ] && launchctl list 2>/dev/null | grep -q io.kinbot.server; then
+    local plist="$HOME/Library/LaunchAgents/io.hivekeep.server.plist"
+    if [ -f "$plist" ] && launchctl list 2>/dev/null | grep -q io.hivekeep.server; then
       was_running=true
       launchctl unload "$plist" 2>/dev/null || true
       success "Service stopped"
     fi
   elif [ "$INIT_SYSTEM" = "script" ]; then
-    local script_path="$KINBOT_DIR/kinbot"
-    local pid_file="$KINBOT_DATA_DIR/kinbot.pid"
+    local script_path="$HIVEKEEP_DIR/hivekeep"
+    local pid_file="$HIVEKEEP_DATA_DIR/hivekeep.pid"
     if [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
       was_running=true
       "$script_path" stop 2>/dev/null || kill "$(cat "$pid_file")" 2>/dev/null || true
       success "Service stopped"
     fi
   elif [ "$IS_ROOT" = true ]; then
-    if systemctl is-active --quiet kinbot 2>/dev/null; then
+    if systemctl is-active --quiet hivekeep 2>/dev/null; then
       was_running=true
-      systemctl stop kinbot
+      systemctl stop hivekeep
       success "Service stopped"
     fi
   else
-    if systemctl --user is-active --quiet kinbot 2>/dev/null; then
+    if systemctl --user is-active --quiet hivekeep 2>/dev/null; then
       was_running=true
-      systemctl --user stop kinbot
+      systemctl --user stop hivekeep
       success "Service stopped"
     fi
   fi
@@ -4135,8 +4500,8 @@ do_restore() {
   [ -f "${backup_file}-shm" ] && cp "${backup_file}-shm" "${db_file}-shm"
 
   # Fix ownership if running as root
-  if [ "$IS_ROOT" = true ] && id "${KINBOT_USER:-kinbot}" &>/dev/null; then
-    chown "${KINBOT_USER}:${KINBOT_USER}" "$db_file" "${db_file}-wal" "${db_file}-shm" 2>/dev/null || true
+  if [ "$IS_ROOT" = true ] && id "${HIVEKEEP_USER:-hivekeep}" &>/dev/null; then
+    chown "${HIVEKEEP_USER}:${HIVEKEEP_USER}" "$db_file" "${db_file}-wal" "${db_file}-shm" 2>/dev/null || true
   fi
 
   success "Database restored from $(basename "$backup_file")"
@@ -4149,23 +4514,23 @@ do_restore() {
     local restore_env
     read -r restore_env </dev/tty || restore_env="n"
     if [[ "$restore_env" =~ ^[Yy]$ ]]; then
-      cp "$env_backup" "$KINBOT_DATA_DIR/kinbot.env"
-      chmod 600 "$KINBOT_DATA_DIR/kinbot.env"
+      cp "$env_backup" "$HIVEKEEP_DATA_DIR/hivekeep.env"
+      chmod 600 "$HIVEKEEP_DATA_DIR/hivekeep.env"
       success "Config restored"
     fi
   fi
 
   # Restart service if it was running
   if [ "$was_running" = true ]; then
-    header "Restarting KinBot..."
+    header "Restarting Hivekeep..."
     if [ "$INIT_SYSTEM" = "launchd" ]; then
-      launchctl load "$HOME/Library/LaunchAgents/io.kinbot.server.plist" 2>/dev/null
+      launchctl load "$HOME/Library/LaunchAgents/io.hivekeep.server.plist" 2>/dev/null
     elif [ "$INIT_SYSTEM" = "script" ]; then
-      "$KINBOT_DIR/kinbot" start 2>/dev/null || true
+      "$HIVEKEEP_DIR/hivekeep" start 2>/dev/null || true
     elif [ "$IS_ROOT" = true ]; then
-      systemctl start kinbot
+      systemctl start hivekeep
     else
-      systemctl --user start kinbot
+      systemctl --user start hivekeep
     fi
     success "Service restarted"
   fi
@@ -4173,7 +4538,7 @@ do_restore() {
   echo ""
   echo -e "${GREEN}${BOLD}Restore complete!${NC}"
   if [ "$was_running" != true ]; then
-    echo -e "  ${DIM}Start KinBot to use the restored database.${NC}"
+    echo -e "  ${DIM}Start Hivekeep to use the restored database.${NC}"
   fi
   echo ""
 }
@@ -4187,12 +4552,12 @@ do_env() {
   IS_ROOT=false
   [ "$(id -u)" -eq 0 ] && IS_ROOT=true
   if [ "$IS_ROOT" = true ]; then
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-/var/lib/kinbot}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-/var/lib/hivekeep}"
   else
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-$HOME/.local/share/kinbot}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-$HOME/.local/share/hivekeep}"
   fi
 
-  local env_file="$KINBOT_DATA_DIR/kinbot.env"
+  local env_file="$HIVEKEEP_DATA_DIR/hivekeep.env"
 
   # ── No argument: list all variables ──
   if [ -z "$assignment" ]; then
@@ -4201,7 +4566,7 @@ do_env() {
     fi
 
     echo ""
-    echo -e "${BOLD}KinBot Configuration${NC}"
+    echo -e "${BOLD}Hivekeep Configuration${NC}"
     echo -e "${DIM}$env_file${NC}"
     echo ""
 
@@ -4311,9 +4676,9 @@ do_env() {
 
   if [ ! -f "$env_file" ]; then
     # Create the file if it doesn't exist yet (pre-install config)
-    mkdir -p "$KINBOT_DATA_DIR"
+    mkdir -p "$HIVEKEEP_DATA_DIR"
     cat > "$env_file" << ENV
-# KinBot configuration
+# Hivekeep configuration
 NODE_ENV=production
 ENV
     chmod 600 "$env_file"
@@ -4358,7 +4723,7 @@ ENV
 # ─── Reconfigure ─────────────────────────────────────────────────────────────
 do_config() {
   echo ""
-  echo -e "${BOLD}KinBot Configuration${NC}"
+  echo -e "${BOLD}Hivekeep Configuration${NC}"
   echo ""
 
   # Minimal env setup
@@ -4366,14 +4731,14 @@ do_config() {
   IS_ROOT=false
   [ "$(id -u)" -eq 0 ] && IS_ROOT=true
   if [ "$IS_ROOT" = true ]; then
-    KINBOT_DIR="${KINBOT_DIR:-/opt/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-/var/lib/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-/opt/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-/var/lib/hivekeep}"
   else
-    KINBOT_DIR="${KINBOT_DIR:-$HOME/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-$HOME/.local/share/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-$HOME/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-$HOME/.local/share/hivekeep}"
   fi
 
-  local env_file="$KINBOT_DATA_DIR/kinbot.env"
+  local env_file="$HIVEKEEP_DATA_DIR/hivekeep.env"
 
   if [ ! -f "$env_file" ]; then
     error "No config file found at $env_file. Run the installer first: bash install.sh"
@@ -4421,9 +4786,11 @@ do_config() {
     echo -e "  ${DIM}Encryption key is set ($masked_key). Leave blank to keep it.${NC}"
     prompt_value new_encryption_key "Encryption key" "$current_encryption_key"
   else
-    echo -e "  ${DIM}No encryption key set. API keys are stored in plain text.${NC}"
+    echo -e "  ${DIM}No key is pinned here. Hivekeep auto-generates one at${NC}"
+    echo -e "  ${DIM}$HIVEKEEP_DATA_DIR/.encryption-key on first run (secrets are encrypted at rest).${NC}"
+    echo -e "  ${DIM}Pin it here only if you want it portable across machines.${NC}"
     local gen_key="y"
-    if [ "$KINBOT_YES" != true ] && [ "${KINBOT_NO_PROMPT:-}" != "true" ] && [ "${CI:-}" != "true" ]; then
+    if [ "$HIVEKEEP_YES" != true ] && [ "${HIVEKEEP_NO_PROMPT:-}" != "true" ] && [ "${CI:-}" != "true" ]; then
       echo -en "  ${CYAN}?${NC} ${BOLD}Generate an encryption key?${NC} ${DIM}[Y/n]${NC}: " >/dev/tty
       read -r gen_key </dev/tty || gen_key="y"
       [ -z "$gen_key" ] && gen_key="y"
@@ -4526,55 +4893,55 @@ do_config() {
 
   local is_running=false
   if [ "$INIT_SYSTEM" = "launchd" ]; then
-    launchctl list 2>/dev/null | grep -q io.kinbot.server && is_running=true
+    launchctl list 2>/dev/null | grep -q io.hivekeep.server && is_running=true
   elif [ "$INIT_SYSTEM" = "script" ]; then
-    local pid_file="$KINBOT_DATA_DIR/kinbot.pid"
+    local pid_file="$HIVEKEEP_DATA_DIR/hivekeep.pid"
     [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null && is_running=true
   elif [ "$IS_ROOT" = true ]; then
-    systemctl is-active --quiet kinbot 2>/dev/null && is_running=true
+    systemctl is-active --quiet hivekeep 2>/dev/null && is_running=true
   else
-    systemctl --user is-active --quiet kinbot 2>/dev/null && is_running=true
+    systemctl --user is-active --quiet hivekeep 2>/dev/null && is_running=true
   fi
 
   if [ "$is_running" = true ]; then
     echo ""
     local do_restart="y"
-    if [ "$KINBOT_YES" != true ]; then
-      echo -en "  ${CYAN}?${NC} ${BOLD}Restart KinBot now to apply changes?${NC} ${DIM}[Y/n]${NC}: " >/dev/tty
+    if [ "$HIVEKEEP_YES" != true ]; then
+      echo -en "  ${CYAN}?${NC} ${BOLD}Restart Hivekeep now to apply changes?${NC} ${DIM}[Y/n]${NC}: " >/dev/tty
       read -r do_restart </dev/tty || do_restart="y"
       [ -z "$do_restart" ] && do_restart="y"
     fi
 
     if [[ "$do_restart" =~ ^[Yy]$ ]]; then
       if [ "$INIT_SYSTEM" = "launchd" ]; then
-        local plist="$HOME/Library/LaunchAgents/io.kinbot.server.plist"
+        local plist="$HOME/Library/LaunchAgents/io.hivekeep.server.plist"
         launchctl unload "$plist" 2>/dev/null || true
         launchctl load "$plist" 2>/dev/null
       elif [ "$INIT_SYSTEM" = "script" ]; then
-        "$KINBOT_DIR/kinbot" restart 2>/dev/null || true
+        "$HIVEKEEP_DIR/hivekeep" restart 2>/dev/null || true
       elif [ "$IS_ROOT" = true ]; then
-        systemctl restart kinbot
+        systemctl restart hivekeep
       else
-        systemctl --user restart kinbot
+        systemctl --user restart hivekeep
       fi
-      success "KinBot restarted"
+      success "Hivekeep restarted"
 
       # Quick health check
       sleep 3
       local http_code
       http_code="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${new_port}/" --max-time 5 2>/dev/null || echo "000")"
       if [ "$http_code" != "000" ]; then
-        success "KinBot is responding on port $new_port"
+        success "Hivekeep is responding on port $new_port"
       else
-        warn "KinBot hasn't responded yet on port $new_port. Give it a moment."
+        warn "Hivekeep hasn't responded yet on port $new_port. Give it a moment."
       fi
     else
       echo ""
-      info "Remember to restart KinBot for changes to take effect."
+      info "Remember to restart Hivekeep for changes to take effect."
     fi
   else
     echo ""
-    info "KinBot is not currently running. Changes will apply on next start."
+    info "Hivekeep is not currently running. Changes will apply on next start."
   fi
 
   echo ""
@@ -4583,7 +4950,7 @@ do_config() {
 # ─── Update (check + apply) ──────────────────────────────────────────────────
 do_update() {
   echo ""
-  echo -e "${BOLD}KinBot Updater${NC}"
+  echo -e "${BOLD}Hivekeep Updater${NC}"
   echo ""
 
   # Minimal env setup
@@ -4591,61 +4958,78 @@ do_update() {
   IS_ROOT=false
   [ "$(id -u)" -eq 0 ] && IS_ROOT=true
   if [ "$IS_ROOT" = true ]; then
-    KINBOT_DIR="${KINBOT_DIR:-/opt/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-/var/lib/kinbot}"
-    KINBOT_USER="${KINBOT_USER:-kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-/opt/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-/var/lib/hivekeep}"
+    HIVEKEEP_USER="${HIVEKEEP_USER:-hivekeep}"
   else
-    KINBOT_DIR="${KINBOT_DIR:-$HOME/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-$HOME/.local/share/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-$HOME/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-$HOME/.local/share/hivekeep}"
   fi
 
-  if [ ! -d "$KINBOT_DIR/.git" ]; then
-    error "KinBot is not installed at $KINBOT_DIR. Run the installer first: bash install.sh"
+  if [ ! -d "$HIVEKEEP_DIR/.git" ]; then
+    error "Hivekeep is not installed at $HIVEKEEP_DIR. Run the installer first: bash install.sh"
   fi
 
-  local branch
-  branch="$(git -C "$KINBOT_DIR" branch --show-current 2>/dev/null || echo "main")"
+  local channel target_ref
+  channel="$(resolve_channel)"
 
-  # Fetch latest from remote
-  info "Checking for updates on branch ${BOLD}${branch}${NC}..."
-  git -C "$KINBOT_DIR" fetch origin "$branch" --quiet 2>/dev/null || \
-    error "Could not reach GitHub. Check your internet connection."
+  if [ "$channel" = "stable" ]; then
+    info "Checking for updates on the ${BOLD}stable${NC} channel (release tags)..."
+    git -C "$HIVEKEEP_DIR" fetch --tags origin --quiet 2>/dev/null || \
+      error "Could not reach GitHub. Check your internet connection."
+    local latest_tag
+    latest_tag="$(get_latest_stable_tag)"
+    [ -z "$latest_tag" ] && error "Could not resolve the latest release tag."
+    target_ref="$latest_tag"
+  else
+    local branch
+    branch="$(git -C "$HIVEKEEP_DIR" branch --show-current 2>/dev/null || echo "main")"
+    info "Checking for updates on the ${BOLD}edge${NC} channel (branch ${branch})..."
+    git -C "$HIVEKEEP_DIR" fetch origin "$branch" --quiet 2>/dev/null || \
+      error "Could not reach GitHub. Check your internet connection."
+    target_ref="origin/$branch"
+  fi
 
   local local_head remote_head
-  local_head="$(git -C "$KINBOT_DIR" rev-parse HEAD)"
-  remote_head="$(git -C "$KINBOT_DIR" rev-parse "origin/$branch" 2>/dev/null || echo "")"
+  local_head="$(git -C "$HIVEKEEP_DIR" rev-parse HEAD)"
+  remote_head="$(git -C "$HIVEKEEP_DIR" rev-parse "${target_ref}^{commit}" 2>/dev/null || echo "")"
 
   if [ -z "$remote_head" ]; then
-    error "Could not resolve remote branch origin/$branch"
+    error "Could not resolve update target $target_ref"
   fi
 
   if [ "$local_head" = "$remote_head" ]; then
     local version
-    version="$(git -C "$KINBOT_DIR" describe --tags 2>/dev/null || git -C "$KINBOT_DIR" rev-parse --short HEAD)"
+    version="$(git -C "$HIVEKEEP_DIR" describe --tags 2>/dev/null || git -C "$HIVEKEEP_DIR" rev-parse --short HEAD)"
     echo ""
-    echo -e "  ${GREEN}✓ Already up to date${NC} ($version)"
+    echo -e "  ${GREEN}✓ Already up to date${NC} ($version, $channel channel)"
     echo ""
     exit 0
   fi
 
   # Show what's new
   local behind
-  behind="$(git -C "$KINBOT_DIR" rev-list HEAD.."origin/$branch" --count 2>/dev/null || echo "?")"
+  behind="$(git -C "$HIVEKEEP_DIR" rev-list "HEAD..$remote_head" --count 2>/dev/null || echo "?")"
   local current_version new_version
-  current_version="$(git -C "$KINBOT_DIR" describe --tags 2>/dev/null || git -C "$KINBOT_DIR" rev-parse --short HEAD)"
-  new_version="$(git -C "$KINBOT_DIR" describe --tags "origin/$branch" 2>/dev/null || git -C "$KINBOT_DIR" rev-parse --short "origin/$branch")"
+  current_version="$(git -C "$HIVEKEEP_DIR" describe --tags 2>/dev/null || git -C "$HIVEKEEP_DIR" rev-parse --short HEAD)"
+  if [ "$channel" = "stable" ]; then
+    new_version="$target_ref"
+  else
+    new_version="$(git -C "$HIVEKEEP_DIR" describe --tags "$target_ref" 2>/dev/null || git -C "$HIVEKEEP_DIR" rev-parse --short "$target_ref")"
+  fi
 
   echo ""
+  echo -e "  ${CYAN}Channel:${NC}  $channel"
   echo -e "  ${CYAN}Current:${NC}  $current_version"
   echo -e "  ${CYAN}Latest:${NC}   $new_version"
   echo -e "  ${CYAN}Changes:${NC}  $behind commit(s)"
   echo ""
 
   # Show categorized changelog
-  show_categorized_commits "HEAD..origin/$branch" 5 || true
+  show_categorized_commits "HEAD..$remote_head" 5 || true
 
   # Confirm
-  if [ "$KINBOT_YES" != true ] && [ "${KINBOT_NO_PROMPT:-}" != "true" ] && [ "${CI:-}" != "true" ]; then
+  if [ "$HIVEKEEP_YES" != true ] && [ "${HIVEKEEP_NO_PROMPT:-}" != "true" ] && [ "${CI:-}" != "true" ]; then
     local confirm="y"
     echo -en "  ${CYAN}?${NC} ${BOLD}Apply update?${NC} ${DIM}[Y/n]${NC}: " >/dev/tty
     read -r confirm </dev/tty || confirm="y"
@@ -4673,7 +5057,7 @@ do_update() {
   install_or_update
   step "Configuring"
   configure
-  build_kinbot
+  build_hivekeep
   setup_database
   setup_system_user
   resolve_bun_path
@@ -4689,7 +5073,7 @@ do_update() {
 # ─── Reset (fix broken install, keep data) ────────────────────────────────────
 do_reset() {
   echo ""
-  echo -e "${BOLD}KinBot Reset${NC}"
+  echo -e "${BOLD}Hivekeep Reset${NC}"
   echo -e "${DIM}Fixes broken installations by re-cloning and rebuilding.${NC}"
   echo -e "${DIM}Your database, config, and backups are preserved.${NC}"
   echo ""
@@ -4699,46 +5083,52 @@ do_reset() {
   IS_ROOT=false
   [ "$(id -u)" -eq 0 ] && IS_ROOT=true
   if [ "$IS_ROOT" = true ]; then
-    KINBOT_DIR="${KINBOT_DIR:-/opt/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-/var/lib/kinbot}"
-    KINBOT_USER="${KINBOT_USER:-kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-/opt/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-/var/lib/hivekeep}"
+    HIVEKEEP_USER="${HIVEKEEP_USER:-hivekeep}"
   else
-    KINBOT_DIR="${KINBOT_DIR:-$HOME/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-$HOME/.local/share/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-$HOME/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-$HOME/.local/share/hivekeep}"
   fi
 
-  if [ ! -d "$KINBOT_DIR" ] && [ ! -d "$KINBOT_DATA_DIR" ]; then
-    error "No KinBot installation found. Run the installer first: bash install.sh"
+  if [ ! -d "$HIVEKEEP_DIR" ] && [ ! -d "$HIVEKEEP_DATA_DIR" ]; then
+    error "No Hivekeep installation found. Run the installer first: bash install.sh"
   fi
 
   detect_os
 
   # Show what we'll do
   header "Plan"
-  if [ -d "$KINBOT_DIR" ]; then
+  if [ -d "$HIVEKEEP_DIR" ]; then
     local current_version="unknown"
-    if [ -d "$KINBOT_DIR/.git" ]; then
-      current_version="$(git -C "$KINBOT_DIR" describe --tags 2>/dev/null || git -C "$KINBOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+    if [ -d "$HIVEKEEP_DIR/.git" ]; then
+      current_version="$(git -C "$HIVEKEEP_DIR" describe --tags 2>/dev/null || git -C "$HIVEKEEP_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
     fi
-    info "Will remove: $KINBOT_DIR (currently $current_version)"
+    info "Will remove: $HIVEKEEP_DIR (currently $current_version)"
   fi
-  info "Will re-clone from: https://github.com/$KINBOT_REPO ($KINBOT_BRANCH)"
+  # Resolve the channel BEFORE removing the checkout (detection reads it)
+  RESET_CHANNEL="$(resolve_channel)"
+  if [ "$RESET_CHANNEL" = "stable" ]; then
+    info "Will re-clone from: https://github.com/$HIVEKEEP_REPO (latest release)"
+  else
+    info "Will re-clone from: https://github.com/$HIVEKEEP_REPO ($HIVEKEEP_BRANCH branch)"
+  fi
   info "Will rebuild: dependencies + build + migrations"
-  if [ -d "$KINBOT_DATA_DIR" ]; then
-    success "Will keep: $KINBOT_DATA_DIR (database, config, backups)"
+  if [ -d "$HIVEKEEP_DATA_DIR" ]; then
+    success "Will keep: $HIVEKEEP_DATA_DIR (database, config, backups)"
   fi
 
   # Diagnose what might be wrong (informational)
-  if [ -d "$KINBOT_DIR" ]; then
+  if [ -d "$HIVEKEEP_DIR" ]; then
     header "Diagnosis"
     local issues=0
 
     # Check git state
-    if [ -d "$KINBOT_DIR/.git" ]; then
-      if ! git -C "$KINBOT_DIR" status &>/dev/null; then
+    if [ -d "$HIVEKEEP_DIR/.git" ]; then
+      if ! git -C "$HIVEKEEP_DIR" status &>/dev/null; then
         warn "Git repository is corrupted"
         issues=$((issues + 1))
-      elif [ -n "$(git -C "$KINBOT_DIR" diff --stat HEAD 2>/dev/null)" ]; then
+      elif [ -n "$(git -C "$HIVEKEEP_DIR" diff --stat HEAD 2>/dev/null)" ]; then
         warn "Working tree has uncommitted changes"
         issues=$((issues + 1))
       fi
@@ -4748,16 +5138,16 @@ do_reset() {
     fi
 
     # Check node_modules
-    if [ ! -d "$KINBOT_DIR/node_modules" ]; then
+    if [ ! -d "$HIVEKEEP_DIR/node_modules" ]; then
       warn "node_modules is missing"
       issues=$((issues + 1))
-    elif [ ! -f "$KINBOT_DIR/node_modules/.package-lock.json" ] && [ ! -f "$KINBOT_DIR/bun.lockb" ]; then
+    elif [ ! -f "$HIVEKEEP_DIR/node_modules/.package-lock.json" ] && [ ! -f "$HIVEKEEP_DIR/bun.lockb" ]; then
       warn "node_modules may be incomplete"
       issues=$((issues + 1))
     fi
 
     # Check build output
-    if [ ! -d "$KINBOT_DIR/.output" ] && [ ! -d "$KINBOT_DIR/dist" ]; then
+    if [ ! -d "$HIVEKEEP_DIR/.output" ] && [ ! -d "$HIVEKEEP_DIR/dist" ]; then
       warn "No build output found"
       issues=$((issues + 1))
     fi
@@ -4771,7 +5161,7 @@ do_reset() {
 
   # Confirm
   echo ""
-  if [ "$KINBOT_YES" != true ] && [ "${KINBOT_NO_PROMPT:-}" != "true" ] && [ "${CI:-}" != "true" ]; then
+  if [ "$HIVEKEEP_YES" != true ] && [ "${HIVEKEEP_NO_PROMPT:-}" != "true" ] && [ "${CI:-}" != "true" ]; then
     echo -en "  ${YELLOW}?${NC} ${BOLD}Proceed with reset?${NC} ${DIM}[y/N]${NC}: " >/dev/tty
     local confirm
     read -r confirm </dev/tty || confirm="n"
@@ -4794,16 +5184,16 @@ do_reset() {
   # 2. Stop the service
   step "Stopping service"
   if [ "$INIT_SYSTEM" = "launchd" ]; then
-    local plist="$HOME/Library/LaunchAgents/io.kinbot.server.plist"
-    if [ -f "$plist" ] && launchctl list 2>/dev/null | grep -q io.kinbot.server; then
+    local plist="$HOME/Library/LaunchAgents/io.hivekeep.server.plist"
+    if [ -f "$plist" ] && launchctl list 2>/dev/null | grep -q io.hivekeep.server; then
       launchctl unload "$plist" 2>/dev/null || true
       success "Service stopped"
     else
       info "Service was not running"
     fi
   elif [ "$INIT_SYSTEM" = "script" ]; then
-    local script_path="$KINBOT_DIR/kinbot"
-    local pid_file="$KINBOT_DATA_DIR/kinbot.pid"
+    local script_path="$HIVEKEEP_DIR/hivekeep"
+    local pid_file="$HIVEKEEP_DATA_DIR/hivekeep.pid"
     if [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
       if [ -x "$script_path" ]; then
         "$script_path" stop 2>/dev/null || kill "$(cat "$pid_file")" 2>/dev/null || true
@@ -4817,15 +5207,15 @@ do_reset() {
       info "Service was not running"
     fi
   elif [ "$IS_ROOT" = true ]; then
-    if systemctl is-active --quiet kinbot 2>/dev/null; then
-      systemctl stop kinbot
+    if systemctl is-active --quiet hivekeep 2>/dev/null; then
+      systemctl stop hivekeep
       success "Service stopped"
     else
       info "Service was not running"
     fi
   else
-    if systemctl --user is-active --quiet kinbot 2>/dev/null; then
-      systemctl --user stop kinbot
+    if systemctl --user is-active --quiet hivekeep 2>/dev/null; then
+      systemctl --user stop hivekeep
       success "Service stopped"
     else
       info "Service was not running"
@@ -4834,23 +5224,30 @@ do_reset() {
 
   # 3. Remove app directory
   step "Removing old installation"
-  if [ -d "$KINBOT_DIR" ]; then
-    rm -rf "$KINBOT_DIR"
-    success "Removed $KINBOT_DIR"
+  if [ -d "$HIVEKEEP_DIR" ]; then
+    rm -rf "$HIVEKEEP_DIR"
+    success "Removed $HIVEKEEP_DIR"
   fi
 
   # 4. Fresh clone
-  step "Cloning KinBot"
-  mkdir -p "$(dirname "$KINBOT_DIR")"
-  run_with_spinner "Cloning from GitHub..." retry 3 "git clone" git clone "https://github.com/$KINBOT_REPO.git" "$KINBOT_DIR" --branch "$KINBOT_BRANCH" --depth 1
+  step "Cloning Hivekeep"
+  mkdir -p "$(dirname "$HIVEKEEP_DIR")"
+  if [ "${RESET_CHANNEL:-stable}" = "stable" ]; then
+    HIVEKEEP_TARGET_TAG="$(get_latest_stable_tag)"
+  fi
+  if [ -n "$HIVEKEEP_TARGET_TAG" ]; then
+    run_with_spinner "Cloning from GitHub ($HIVEKEEP_TARGET_TAG)..." retry 3 "git clone" git clone "https://github.com/$HIVEKEEP_REPO.git" "$HIVEKEEP_DIR" --branch "$HIVEKEEP_TARGET_TAG" --depth 1
+  else
+    run_with_spinner "Cloning from GitHub..." retry 3 "git clone" git clone "https://github.com/$HIVEKEEP_REPO.git" "$HIVEKEEP_DIR" --branch "$HIVEKEEP_BRANCH" --depth 1
+  fi
   local new_version
-  new_version="$(git -C "$KINBOT_DIR" describe --tags 2>/dev/null || git -C "$KINBOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+  new_version="$(git -C "$HIVEKEEP_DIR" describe --tags 2>/dev/null || git -C "$HIVEKEEP_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
   success "Cloned $new_version"
 
   # 5. Rebuild
   ensure_bun
   IS_UPDATE=true
-  build_kinbot
+  build_hivekeep
   setup_database
 
   # 6. Fix permissions + service
@@ -4869,12 +5266,12 @@ do_reset() {
   echo -e "${GREEN}${BOLD}Reset complete!${NC}"
   echo ""
   echo -e "  ${CYAN}Version:${NC}    $new_version"
-  echo -e "  ${CYAN}Install:${NC}    $KINBOT_DIR"
-  echo -e "  ${CYAN}Data:${NC}       $KINBOT_DATA_DIR (preserved)"
+  echo -e "  ${CYAN}Install:${NC}    $HIVEKEEP_DIR"
+  echo -e "  ${CYAN}Data:${NC}       $HIVEKEEP_DATA_DIR (preserved)"
   if [ -n "${BACKUP_DB_PATH:-}" ] && [ -f "${BACKUP_DB_PATH:-}" ]; then
     echo -e "  ${CYAN}DB backup:${NC}  $(basename "$BACKUP_DB_PATH")"
   fi
-  if [ "$KINBOT_HEALTHY" = true ]; then
+  if [ "$HIVEKEEP_HEALTHY" = true ]; then
     echo -e "  ${GREEN}●${NC} ${BOLD}Status:${NC}     Running"
   else
     echo -e "  ${YELLOW}●${NC} ${BOLD}Status:${NC}     Starting (check logs)"
@@ -4899,16 +5296,16 @@ do_health() {
   # Minimal env setup (no banners, no detect_os overhead)
   local is_root=false
   [ "$(id -u)" -eq 0 ] && is_root=true
-  local kinbot_data_dir
+  local hivekeep_data_dir
   if [ "$is_root" = true ]; then
-    kinbot_data_dir="${KINBOT_DATA_DIR:-/var/lib/kinbot}"
+    hivekeep_data_dir="${HIVEKEEP_DATA_DIR:-/var/lib/hivekeep}"
   else
-    kinbot_data_dir="${KINBOT_DATA_DIR:-$HOME/.local/share/kinbot}"
+    hivekeep_data_dir="${HIVEKEEP_DATA_DIR:-$HOME/.local/share/hivekeep}"
   fi
 
-  local env_file="$kinbot_data_dir/kinbot.env"
-  local pid_file="$kinbot_data_dir/kinbot.pid"
-  local db_file="$kinbot_data_dir/kinbot.db"
+  local env_file="$hivekeep_data_dir/hivekeep.env"
+  local pid_file="$hivekeep_data_dir/hivekeep.pid"
+  local db_file="$hivekeep_data_dir/hivekeep.db"
 
   # Parse --json flag
   local json_output=false
@@ -4942,7 +5339,7 @@ do_health() {
   fi
 
   if [ "$init_sys" = "launchd" ]; then
-    if ! launchctl list 2>/dev/null | grep -q io.kinbot.server; then
+    if ! launchctl list 2>/dev/null | grep -q io.hivekeep.server; then
       healthy=false
       reason="service not loaded"
     fi
@@ -4959,19 +5356,19 @@ do_health() {
       reason="no pid file"
     fi
   elif [ "$is_root" = true ]; then
-    if ! systemctl is-active --quiet kinbot 2>/dev/null; then
+    if ! systemctl is-active --quiet hivekeep 2>/dev/null; then
       healthy=false
       reason="service not active"
     else
-      pid="$(systemctl show kinbot -p MainPID --value 2>/dev/null || echo "")"
+      pid="$(systemctl show hivekeep -p MainPID --value 2>/dev/null || echo "")"
       [ "$pid" = "0" ] && pid=""
     fi
   else
-    if ! systemctl --user is-active --quiet kinbot 2>/dev/null; then
+    if ! systemctl --user is-active --quiet hivekeep 2>/dev/null; then
       healthy=false
       reason="service not active"
     else
-      pid="$(systemctl --user show kinbot -p MainPID --value 2>/dev/null || echo "")"
+      pid="$(systemctl --user show hivekeep -p MainPID --value 2>/dev/null || echo "")"
       [ "$pid" = "0" ] && pid=""
     fi
   fi
@@ -4989,7 +5386,7 @@ do_health() {
   local disk_mb=""
   local disk_low=false
   local avail_kb
-  avail_kb="$(df -k "$kinbot_data_dir" 2>/dev/null | awk 'NR==2 {print $4}')" || avail_kb=""
+  avail_kb="$(df -k "$hivekeep_data_dir" 2>/dev/null | awk 'NR==2 {print $4}')" || avail_kb=""
   if [ -n "$avail_kb" ] && [ "$avail_kb" -gt 0 ] 2>/dev/null; then
     disk_mb=$((avail_kb / 1024))
     [ "$disk_mb" -lt 200 ] 2>/dev/null && disk_low=true
@@ -5024,7 +5421,7 @@ do_health() {
 # ─── Self-test ────────────────────────────────────────────────────────────────
 do_test() {
   echo ""
-  echo -e "${BOLD}KinBot Self-Test${NC}"
+  echo -e "${BOLD}Hivekeep Self-Test${NC}"
   echo -e "${DIM}Validates that the installation is functional, not just present.${NC}"
   echo ""
 
@@ -5033,11 +5430,11 @@ do_test() {
   IS_ROOT=false
   [ "$(id -u)" -eq 0 ] && IS_ROOT=true
   if [ "$IS_ROOT" = true ]; then
-    KINBOT_DIR="${KINBOT_DIR:-/opt/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-/var/lib/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-/opt/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-/var/lib/hivekeep}"
   else
-    KINBOT_DIR="${KINBOT_DIR:-$HOME/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-$HOME/.local/share/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-$HOME/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-$HOME/.local/share/hivekeep}"
   fi
 
   local passed=0
@@ -5050,10 +5447,10 @@ do_test() {
 
   # ── 1. Installation directory ──
   header "Source code"
-  if [ -d "$KINBOT_DIR/.git" ]; then
-    test_pass "Git repository exists at $KINBOT_DIR"
+  if [ -d "$HIVEKEEP_DIR/.git" ]; then
+    test_pass "Git repository exists at $HIVEKEEP_DIR"
   else
-    test_fail "No git repository at $KINBOT_DIR"
+    test_fail "No git repository at $HIVEKEEP_DIR"
     echo ""
     echo -e "${RED}${BOLD}Cannot continue tests without an installation.${NC}"
     echo -e "${DIM}Run: bash install.sh${NC}"
@@ -5062,14 +5459,14 @@ do_test() {
   fi
 
   # Check for uncommitted changes / dirty state
-  if git -C "$KINBOT_DIR" diff --quiet HEAD 2>/dev/null; then
+  if git -C "$HIVEKEEP_DIR" diff --quiet HEAD 2>/dev/null; then
     test_pass "Working tree is clean"
   else
     test_warn "Working tree has uncommitted changes"
   fi
 
   # Check package.json exists
-  if [ -f "$KINBOT_DIR/package.json" ]; then
+  if [ -f "$HIVEKEEP_DIR/package.json" ]; then
     test_pass "package.json exists"
   else
     test_fail "package.json missing"
@@ -5077,9 +5474,9 @@ do_test() {
 
   # ── 2. Build artifacts ──
   header "Build artifacts"
-  local build_dir="$KINBOT_DIR/.output"
+  local build_dir="$HIVEKEEP_DIR/.output"
   if [ ! -d "$build_dir" ]; then
-    build_dir="$KINBOT_DIR/dist"
+    build_dir="$HIVEKEEP_DIR/dist"
   fi
 
   if [ -d "$build_dir" ]; then
@@ -5092,7 +5489,7 @@ do_test() {
     fi
   else
     # Check for server entry point directly (some setups run from source)
-    if [ -f "$KINBOT_DIR/src/server/index.ts" ]; then
+    if [ -f "$HIVEKEEP_DIR/src/server/index.ts" ]; then
       test_pass "Server entry point exists (src/server/index.ts)"
     else
       test_fail "No build output and no server entry point found"
@@ -5100,16 +5497,16 @@ do_test() {
   fi
 
   # Check node_modules
-  if [ -d "$KINBOT_DIR/node_modules" ]; then
+  if [ -d "$HIVEKEEP_DIR/node_modules" ]; then
     local mod_count
-    mod_count="$(find "$KINBOT_DIR/node_modules" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l)"
+    mod_count="$(find "$HIVEKEEP_DIR/node_modules" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l)"
     if [ "$mod_count" -gt 10 ] 2>/dev/null; then
       test_pass "Dependencies installed ($mod_count packages)"
     else
       test_warn "node_modules exists but looks sparse ($mod_count packages)"
     fi
   else
-    test_fail "node_modules missing (run: cd $KINBOT_DIR && bun install)"
+    test_fail "node_modules missing (run: cd $HIVEKEEP_DIR && bun install)"
   fi
 
   # ── 3. Runtime ──
@@ -5138,7 +5535,7 @@ do_test() {
 
   # ── 4. Configuration ──
   header "Configuration"
-  local env_file="$KINBOT_DATA_DIR/kinbot.env"
+  local env_file="$HIVEKEEP_DATA_DIR/hivekeep.env"
   if [ -f "$env_file" ]; then
     test_pass "Config file exists: $env_file"
 
@@ -5179,7 +5576,7 @@ do_test() {
 
   # ── 5. Database ──
   header "Database"
-  local db_file="$KINBOT_DATA_DIR/kinbot.db"
+  local db_file="$HIVEKEEP_DATA_DIR/hivekeep.db"
   if [ -f "$db_file" ]; then
     local db_size
     db_size="$(du -h "$db_file" 2>/dev/null | awk '{print $1}')"
@@ -5231,10 +5628,10 @@ do_test() {
   fi
 
   # Check backups
-  local backup_dir="$KINBOT_DATA_DIR/backups"
+  local backup_dir="$HIVEKEEP_DATA_DIR/backups"
   if [ -d "$backup_dir" ]; then
     local backup_count
-    backup_count="$(find "$backup_dir" -maxdepth 1 -name 'kinbot-*.db' -type f 2>/dev/null | wc -l)"
+    backup_count="$(find "$backup_dir" -maxdepth 1 -name 'hivekeep-*.db' -type f 2>/dev/null | wc -l)"
     if [ "$backup_count" -gt 0 ] 2>/dev/null; then
       test_pass "Backups available: $backup_count"
     else
@@ -5248,7 +5645,7 @@ do_test() {
   header "Service & HTTP"
 
   # Read port from config
-  local port="${KINBOT_PORT:-3000}"
+  local port="${HIVEKEEP_PORT:-3000}"
   if [ -f "$env_file" ]; then
     # shellcheck disable=SC1090
     . "$env_file" 2>/dev/null || true
@@ -5385,7 +5782,7 @@ do_test() {
   echo ""
 
   if [ "$failed" -eq 0 ] && [ "$warned" -eq 0 ]; then
-    echo -e "  ${GREEN}${BOLD}All tests passed! Your KinBot installation is healthy.${NC}"
+    echo -e "  ${GREEN}${BOLD}All tests passed! Your Hivekeep installation is healthy.${NC}"
   elif [ "$failed" -eq 0 ]; then
     echo -e "  ${GREEN}${BOLD}All critical tests passed.${NC} Check warnings above for potential improvements."
   else
@@ -5402,8 +5799,8 @@ do_test() {
 # Sets up a system cron job (or launchd timer on macOS) that runs
 # `install.sh --update -y -q` periodically. Defaults to weekly (Sunday 3AM).
 
-KINBOT_CRON_SCHEDULE="${KINBOT_CRON_SCHEDULE:-0 3 * * 0}"  # Default: Sunday 3:00 AM
-KINBOT_CRON_TAG="# kinbot-auto-update"
+HIVEKEEP_CRON_SCHEDULE="${HIVEKEEP_CRON_SCHEDULE:-0 3 * * 0}"  # Default: Sunday 3:00 AM
+HIVEKEEP_CRON_TAG="# hivekeep-auto-update"
 
 do_cron() {
   local subcmd="${1:-status}"
@@ -5413,24 +5810,24 @@ do_cron() {
   IS_ROOT=false
   [ "$(id -u)" -eq 0 ] && IS_ROOT=true
   if [ "$IS_ROOT" = true ]; then
-    KINBOT_DIR="${KINBOT_DIR:-/opt/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-/var/lib/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-/opt/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-/var/lib/hivekeep}"
   else
-    KINBOT_DIR="${KINBOT_DIR:-$HOME/kinbot}"
-    KINBOT_DATA_DIR="${KINBOT_DATA_DIR:-$HOME/.local/share/kinbot}"
+    HIVEKEEP_DIR="${HIVEKEEP_DIR:-$HOME/hivekeep}"
+    HIVEKEEP_DATA_DIR="${HIVEKEEP_DATA_DIR:-$HOME/.local/share/hivekeep}"
   fi
 
-  local install_sh="$KINBOT_DIR/install.sh"
+  local install_sh="$HIVEKEEP_DIR/install.sh"
 
   if [ ! -f "$install_sh" ] && [ "$subcmd" != "status" ]; then
-    error "KinBot not installed at $KINBOT_DIR. Run the installer first: bash install.sh"
+    error "Hivekeep not installed at $HIVEKEEP_DIR. Run the installer first: bash install.sh"
   fi
 
   # ── macOS: use launchd ──
   if [ "$OS" = "Darwin" ]; then
     local plist_dir="$HOME/Library/LaunchAgents"
-    local plist_path="$plist_dir/io.kinbot.auto-update.plist"
-    local log_dir="$HOME/Library/Logs/kinbot"
+    local plist_path="$plist_dir/io.hivekeep.auto-update.plist"
+    local log_dir="$HOME/Library/Logs/hivekeep"
 
     case "$subcmd" in
       enable)
@@ -5439,15 +5836,15 @@ do_cron() {
         # Parse schedule for launchd (cron → Calendar dict is complex;
         # use StartInterval for simplicity: weekly = 604800 seconds)
         local interval=604800
-        if [ "${KINBOT_CRON_SCHEDULE}" != "0 3 * * 0" ]; then
+        if [ "${HIVEKEEP_CRON_SCHEDULE}" != "0 3 * * 0" ]; then
           # If user customized the schedule, try to convert common patterns
-          case "$KINBOT_CRON_SCHEDULE" in
+          case "$HIVEKEEP_CRON_SCHEDULE" in
             *"* * *") # daily patterns
               interval=86400
               info "Detected daily schedule, using 24h interval"
               ;;
             *)
-              info "Using default weekly interval (customize KINBOT_CRON_SCHEDULE for crontab-based systems)"
+              info "Using default weekly interval (customize HIVEKEEP_CRON_SCHEDULE for crontab-based systems)"
               ;;
           esac
         fi
@@ -5461,7 +5858,7 @@ do_cron() {
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>io.kinbot.auto-update</string>
+  <string>io.hivekeep.auto-update</string>
 
   <key>ProgramArguments</key>
   <array>
@@ -5507,7 +5904,7 @@ PLIST
         echo -e "${BOLD}Auto-Update Status${NC}"
         echo ""
         if [ -f "$plist_path" ]; then
-          if launchctl list 2>/dev/null | grep -q io.kinbot.auto-update; then
+          if launchctl list 2>/dev/null | grep -q io.hivekeep.auto-update; then
             echo -e "  ${GREEN}●${NC} Enabled (launchd timer loaded)"
           else
             echo -e "  ${YELLOW}●${NC} Plist exists but timer not loaded"
@@ -5538,19 +5935,19 @@ PLIST
     error "crontab command not found. Install cron (e.g., apt install cron) or set up the update job manually."
   fi
 
-  local cron_cmd="$KINBOT_CRON_SCHEDULE bash $install_sh --update -y -q >> $KINBOT_DATA_DIR/auto-update.log 2>&1 $KINBOT_CRON_TAG"
+  local cron_cmd="$HIVEKEEP_CRON_SCHEDULE bash $install_sh --update -y -q >> $HIVEKEEP_DATA_DIR/auto-update.log 2>&1 $HIVEKEEP_CRON_TAG"
 
   case "$subcmd" in
     enable)
-      mkdir -p "$KINBOT_DATA_DIR"
+      mkdir -p "$HIVEKEEP_DATA_DIR"
 
-      # Remove existing kinbot cron entry, then add new one
+      # Remove existing hivekeep cron entry, then add new one
       local existing_crontab
       existing_crontab="$(crontab -l 2>/dev/null || echo "")"
 
-      # Filter out old kinbot-auto-update lines
+      # Filter out old hivekeep-auto-update lines
       local new_crontab
-      new_crontab="$(echo "$existing_crontab" | grep -v "$KINBOT_CRON_TAG" || true)"
+      new_crontab="$(echo "$existing_crontab" | grep -v "$HIVEKEEP_CRON_TAG" || true)"
 
       # Append new entry
       if [ -n "$new_crontab" ]; then
@@ -5563,13 +5960,13 @@ $cron_cmd"
       echo "$new_crontab" | crontab -
       success "Automatic updates enabled"
       echo ""
-      echo -e "  ${CYAN}Schedule:${NC}  $KINBOT_CRON_SCHEDULE (default: weekly, Sunday 3 AM)"
+      echo -e "  ${CYAN}Schedule:${NC}  $HIVEKEEP_CRON_SCHEDULE (default: weekly, Sunday 3 AM)"
       echo -e "  ${CYAN}Command:${NC}   bash $install_sh --update -y -q"
-      echo -e "  ${CYAN}Log:${NC}       $KINBOT_DATA_DIR/auto-update.log"
+      echo -e "  ${CYAN}Log:${NC}       $HIVEKEEP_DATA_DIR/auto-update.log"
       echo ""
-      echo -e "  ${DIM}Customize schedule: KINBOT_CRON_SCHEDULE='0 3 * * *' bash install.sh --cron enable${NC}"
-      echo -e "  ${DIM}Daily at 3 AM:      KINBOT_CRON_SCHEDULE='0 3 * * *'${NC}"
-      echo -e "  ${DIM}Every 6 hours:      KINBOT_CRON_SCHEDULE='0 */6 * * *'${NC}"
+      echo -e "  ${DIM}Customize schedule: HIVEKEEP_CRON_SCHEDULE='0 3 * * *' bash install.sh --cron enable${NC}"
+      echo -e "  ${DIM}Daily at 3 AM:      HIVEKEEP_CRON_SCHEDULE='0 3 * * *'${NC}"
+      echo -e "  ${DIM}Every 6 hours:      HIVEKEEP_CRON_SCHEDULE='0 */6 * * *'${NC}"
       echo -e "  ${DIM}Disable:            bash install.sh --cron disable${NC}"
       ;;
 
@@ -5577,9 +5974,9 @@ $cron_cmd"
       local existing_crontab
       existing_crontab="$(crontab -l 2>/dev/null || echo "")"
 
-      if echo "$existing_crontab" | grep -q "$KINBOT_CRON_TAG"; then
+      if echo "$existing_crontab" | grep -q "$HIVEKEEP_CRON_TAG"; then
         local new_crontab
-        new_crontab="$(echo "$existing_crontab" | grep -v "$KINBOT_CRON_TAG")"
+        new_crontab="$(echo "$existing_crontab" | grep -v "$HIVEKEEP_CRON_TAG")"
         if [ -n "$new_crontab" ]; then
           echo "$new_crontab" | crontab -
         else
@@ -5599,9 +5996,9 @@ $cron_cmd"
       local existing_crontab
       existing_crontab="$(crontab -l 2>/dev/null || echo "")"
 
-      if echo "$existing_crontab" | grep -q "$KINBOT_CRON_TAG"; then
+      if echo "$existing_crontab" | grep -q "$HIVEKEEP_CRON_TAG"; then
         local cron_line
-        cron_line="$(echo "$existing_crontab" | grep "$KINBOT_CRON_TAG")"
+        cron_line="$(echo "$existing_crontab" | grep "$HIVEKEEP_CRON_TAG")"
         local schedule
         schedule="$(echo "$cron_line" | awk '{print $1, $2, $3, $4, $5}')"
 
@@ -5617,7 +6014,7 @@ $cron_cmd"
         esac
 
         # Show last update log
-        local log_file="$KINBOT_DATA_DIR/auto-update.log"
+        local log_file="$HIVEKEEP_DATA_DIR/auto-update.log"
         if [ -f "$log_file" ]; then
           local log_size
           log_size="$(du -h "$log_file" 2>/dev/null | awk '{print $1}')"
@@ -5656,15 +6053,15 @@ generate_completions() {
   case "$shell" in
     bash)
       cat << 'BASH_COMP'
-# KinBot bash completions
+# Hivekeep bash completions
 # Add to ~/.bashrc:  eval "$(bash install.sh --completions bash)"
-# Or:                bash install.sh --completions bash > /etc/bash_completion.d/kinbot
+# Or:                bash install.sh --completions bash > /etc/bash_completion.d/hivekeep
 
-_kinbot_completions() {
+_hivekeep_completions() {
   local cur="${COMP_WORDS[COMP_CWORD]}"
   local prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-  local commands="--help --update --docker --dry-run --reset --uninstall
+  local commands="--help --update --channel --docker --dry-run --reset --uninstall
     --start --stop --restart --logs --status --health --test --doctor
     --config --env --backup --restore --version --changelog
     --cron --completions --yes --quiet --no-color"
@@ -5699,26 +6096,27 @@ _kinbot_completions() {
   COMPREPLY=( $(compgen -W "$commands" -- "$cur") )
 }
 
-# Support both "kinbot" (the generated script) and "install.sh"
-complete -F _kinbot_completions kinbot
-complete -F _kinbot_completions install.sh
+# Support both "hivekeep" (the generated script) and "install.sh"
+complete -F _hivekeep_completions hivekeep
+complete -F _hivekeep_completions install.sh
 BASH_COMP
       ;;
 
     zsh)
       cat << 'ZSH_COMP'
-# KinBot zsh completions
+# Hivekeep zsh completions
 # Add to ~/.zshrc:  eval "$(bash install.sh --completions zsh)"
 # Or save to a file in your $fpath
 
-_kinbot() {
+_hivekeep() {
   local -a commands=(
     '--help:Show help message'
     '--update:Check for updates and apply'
+    '--channel:Update channel (stable or edge)'
     '--docker:Docker Compose setup'
     '--dry-run:Preview without making changes'
     '--reset:Fix broken install, keep data'
-    '--uninstall:Remove KinBot'
+    '--uninstall:Remove Hivekeep'
     '--start:Start the service'
     '--stop:Stop the service'
     '--restart:Restart the service'
@@ -5743,44 +6141,44 @@ _kinbot() {
   _describe 'command' commands
 }
 
-compdef _kinbot kinbot
-compdef _kinbot install.sh
+compdef _hivekeep hivekeep
+compdef _hivekeep install.sh
 ZSH_COMP
       ;;
 
     fish)
       cat << 'FISH_COMP'
-# KinBot fish completions
-# Save to: ~/.config/fish/completions/kinbot.fish
+# Hivekeep fish completions
+# Save to: ~/.config/fish/completions/hivekeep.fish
 
 # Clear existing
-complete -c kinbot -e
+complete -c hivekeep -e
 
-complete -c kinbot -l help -d 'Show help message'
-complete -c kinbot -l update -d 'Check for updates and apply'
-complete -c kinbot -l docker -d 'Docker Compose setup'
-complete -c kinbot -l dry-run -d 'Preview without making changes'
-complete -c kinbot -l reset -d 'Fix broken install, keep data'
-complete -c kinbot -l uninstall -d 'Remove KinBot'
-complete -c kinbot -l start -d 'Start the service'
-complete -c kinbot -l stop -d 'Stop the service'
-complete -c kinbot -l restart -d 'Restart the service'
-complete -c kinbot -l logs -d 'Show logs'
-complete -c kinbot -l status -d 'Check installation health'
-complete -c kinbot -l health -d 'Quick health check for monitoring'
-complete -c kinbot -l test -d 'Run self-tests'
-complete -c kinbot -l doctor -d 'Generate diagnostic report'
-complete -c kinbot -l config -d 'Re-run configuration wizard'
-complete -c kinbot -l env -d 'Show or set env variables'
-complete -c kinbot -l backup -d 'Back up database and config'
-complete -c kinbot -l restore -d 'Restore from a backup'
-complete -c kinbot -l version -d 'Show installed version'
-complete -c kinbot -l changelog -d 'Show changes'
-complete -c kinbot -l cron -d 'Manage automatic update scheduling'
-complete -c kinbot -l completions -d 'Generate shell completions'
-complete -c kinbot -l yes -d 'Auto-confirm all prompts'
-complete -c kinbot -l quiet -d 'Suppress non-essential output'
-complete -c kinbot -l no-color -d 'Disable colored output'
+complete -c hivekeep -l help -d 'Show help message'
+complete -c hivekeep -l update -d 'Check for updates and apply'
+complete -c hivekeep -l docker -d 'Docker Compose setup'
+complete -c hivekeep -l dry-run -d 'Preview without making changes'
+complete -c hivekeep -l reset -d 'Fix broken install, keep data'
+complete -c hivekeep -l uninstall -d 'Remove Hivekeep'
+complete -c hivekeep -l start -d 'Start the service'
+complete -c hivekeep -l stop -d 'Stop the service'
+complete -c hivekeep -l restart -d 'Restart the service'
+complete -c hivekeep -l logs -d 'Show logs'
+complete -c hivekeep -l status -d 'Check installation health'
+complete -c hivekeep -l health -d 'Quick health check for monitoring'
+complete -c hivekeep -l test -d 'Run self-tests'
+complete -c hivekeep -l doctor -d 'Generate diagnostic report'
+complete -c hivekeep -l config -d 'Re-run configuration wizard'
+complete -c hivekeep -l env -d 'Show or set env variables'
+complete -c hivekeep -l backup -d 'Back up database and config'
+complete -c hivekeep -l restore -d 'Restore from a backup'
+complete -c hivekeep -l version -d 'Show installed version'
+complete -c hivekeep -l changelog -d 'Show changes'
+complete -c hivekeep -l cron -d 'Manage automatic update scheduling'
+complete -c hivekeep -l completions -d 'Generate shell completions'
+complete -c hivekeep -l yes -d 'Auto-confirm all prompts'
+complete -c hivekeep -l quiet -d 'Suppress non-essential output'
+complete -c hivekeep -l no-color -d 'Disable colored output'
 FISH_COMP
       ;;
 
@@ -5794,6 +6192,39 @@ FISH_COMP
 
 # ─── Main ────────────────────────────────────────────────────────────────────
 main() {
+  # Pre-pass: modifier flags must apply regardless of their position on the
+  # command line (commands like --update exit from inside the main loop, so
+  # `install.sh --update -y` would otherwise never see -y).
+  local _prev_arg=""
+  for arg in "$@"; do
+    case "$arg" in
+      --quiet|-q)
+        HIVEKEEP_QUIET=true
+        HIVEKEEP_NO_PROMPT=true
+        ;;
+      --yes|-y)
+        HIVEKEEP_YES=true
+        HIVEKEEP_NO_PROMPT=true
+        ;;
+      --no-color)
+        NO_COLOR=1
+        setup_colors
+        ;;
+      --channel=*)
+        HIVEKEEP_CHANNEL="${arg#--channel=}"
+        ;;
+      *)
+        if [ "$_prev_arg" = "--channel" ]; then
+          HIVEKEEP_CHANNEL="$arg"
+        fi
+        ;;
+    esac
+    _prev_arg="$arg"
+  done
+  if [ -n "$HIVEKEEP_CHANNEL" ] && [ "$HIVEKEEP_CHANNEL" != "stable" ] && [ "$HIVEKEEP_CHANNEL" != "edge" ]; then
+    error "Invalid --channel '$HIVEKEEP_CHANNEL' (expected: stable or edge)"
+  fi
+
   # Handle flags
   for arg in "$@"; do
     case "$arg" in
@@ -5974,7 +6405,7 @@ main() {
         exit 0
         ;;
       --dry-run|dry-run)
-        KINBOT_DRY_RUN=true
+        HIVEKEEP_DRY_RUN=true
         ;;
       --docker|docker)
         trap - INT TERM
@@ -5984,12 +6415,12 @@ main() {
         exit 0
         ;;
       --quiet|-q)
-        KINBOT_QUIET=true
-        KINBOT_NO_PROMPT=true
+        HIVEKEEP_QUIET=true
+        HIVEKEEP_NO_PROMPT=true
         ;;
       --yes|-y)
-        KINBOT_YES=true
-        KINBOT_NO_PROMPT=true
+        HIVEKEEP_YES=true
+        HIVEKEEP_NO_PROMPT=true
         ;;
       --no-color)
         NO_COLOR=1
@@ -5998,7 +6429,7 @@ main() {
     esac
   done
 
-  if [ "$KINBOT_DRY_RUN" = true ]; then
+  if [ "$HIVEKEEP_DRY_RUN" = true ]; then
     trap - INT TERM
     dry_run
     exit 0
@@ -6010,11 +6441,11 @@ main() {
   # Enable rollback trap for actual install/update
   trap rollback EXIT
 
-  if [ "$KINBOT_QUIET" != true ]; then
+  if [ "$HIVEKEEP_QUIET" != true ]; then
     echo ""
-    echo -e "${BOLD}KinBot Installer${NC}"
+    echo -e "${BOLD}Hivekeep Installer${NC}"
     echo -e "Self-hosted AI agent platform"
-    echo -e "https://github.com/MarlBurroW/kinbot"
+    echo -e "https://github.com/MarlBurroW/hivekeep"
     echo ""
   fi
 
@@ -6033,7 +6464,7 @@ main() {
   install_or_update
   step "Configuring"
   configure
-  build_kinbot
+  build_hivekeep
   setup_database
   setup_system_user
   resolve_bun_path

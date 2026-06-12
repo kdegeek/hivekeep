@@ -16,7 +16,7 @@
  *      task message. The same path handles a FAILED child (error note injected).
  *
  * We mock the heavy leaf services `resolveTask` touches (tracker, todos,
- * browser, queue, sse) and force `executeSubKin`'s LLM resolution to throw, so
+ * browser, queue, sse) and force `executeSubAgent`'s LLM resolution to throw, so
  * the fire-and-forget resume re-entry fails fast without an LLM. We assert on
  * the synchronous DB mutations (status + injected message) that complete BEFORE
  * that fire-and-forget call.
@@ -36,19 +36,19 @@ mock.module('@/server/logger', () => ({
 }))
 
 mock.module('@/server/sse/index', () => ({
-  sseManager: { sendToKin: () => {}, broadcast: () => {} },
+  sseManager: { sendToAgent: () => {}, broadcast: () => {} },
 }))
 
 // Queue: capture enqueued messages so we can assert the suspended-parent path
-// does NOT enqueue a task_result into the main Kin queue. We stub every symbol
-// imported by kin-engine / tasks (the real queue module is otherwise pulled in
+// does NOT enqueue a task_result into the main Agent queue. We stub every symbol
+// imported by agent-engine / tasks (the real queue module is otherwise pulled in
 // transitively and would need a real queue_items table).
 const enqueued: Array<Record<string, unknown>> = []
 mock.module('@/server/services/queue', () => ({
   enqueueMessage: async (m: Record<string, unknown>) => { enqueued.push(m) },
   dequeueMessage: async () => null,
   markQueueItemDone: async () => {},
-  isKinProcessing: async () => false,
+  isAgentProcessing: async () => false,
   getQueueSize: async () => 0,
   recoverStaleProcessingItems: () => {},
   popQueueMessageMetadata: () => undefined,
@@ -62,7 +62,7 @@ mock.module('@/server/services/queue', () => ({
 // our throwaway ids (forget* no-op on unknown ids, getTaskStats returns null,
 // closeSessionsForTask is fire-and-forget), so we let them run for real.
 
-// Force the resume re-entry (executeSubKin → resolveLLM) to throw immediately so
+// Force the resume re-entry (executeSubAgent → resolveLLM) to throw immediately so
 // it can't reach a real provider. It will then call resolveTask(child,'failed')
 // on the CHILD task id only — never on the parent — so our parent assertions,
 // read synchronously right after the awaited resume, stay stable.
@@ -90,7 +90,7 @@ const itReal = schemaIsReal ? it : it.skip
 beforeAll(() => {
   if (!schemaIsReal) return
   sqlite.run(`
-    CREATE TABLE kins (
+    CREATE TABLE agents (
       id TEXT PRIMARY KEY,
       slug TEXT UNIQUE,
       name TEXT NOT NULL,
@@ -115,8 +115,8 @@ beforeAll(() => {
   sqlite.run(`
     CREATE TABLE tasks (
       id TEXT PRIMARY KEY,
-      parent_kin_id TEXT NOT NULL,
-      source_kin_id TEXT,
+      parent_agent_id TEXT NOT NULL,
+      source_agent_id TEXT,
       spawn_type TEXT NOT NULL,
       kind TEXT NOT NULL DEFAULT 'execute',
       mode TEXT NOT NULL DEFAULT 'await',
@@ -131,7 +131,7 @@ beforeAll(() => {
       parent_task_id TEXT,
       cron_id TEXT,
       request_input_count INTEGER NOT NULL DEFAULT 0,
-      inter_kin_request_count INTEGER NOT NULL DEFAULT 0,
+      inter_agent_request_count INTEGER NOT NULL DEFAULT 0,
       pending_request_id TEXT,
       pending_child_task_id TEXT,
       channel_origin_id TEXT,
@@ -157,7 +157,7 @@ beforeAll(() => {
   sqlite.run(`
     CREATE TABLE messages (
       id TEXT PRIMARY KEY,
-      kin_id TEXT NOT NULL,
+      agent_id TEXT NOT NULL,
       task_id TEXT,
       session_id TEXT,
       role TEXT NOT NULL,
@@ -189,8 +189,8 @@ beforeAll(() => {
   `)
 
   sqlite.run(
-    `INSERT INTO kins (id, name, role, character, expertise, model, workspace_path, created_at, updated_at)
-     VALUES ('kin-a', 'Kin A', 'helper', 'c', 'e', 'm', '/w', 0, 0)`,
+    `INSERT INTO agents (id, name, role, character, expertise, model, workspace_path, created_at, updated_at)
+     VALUES ('agent-a', 'Agent A', 'helper', 'c', 'e', 'm', '/w', 0, 0)`,
   )
 })
 
@@ -205,16 +205,16 @@ beforeEach(() => {
   parentId = 'parent-' + uuid().slice(0, 8)
   childId = 'child-' + uuid().slice(0, 8)
   const now = Date.now()
-  // Parent: a TASK (sub-Kin) currently executing.
+  // Parent: a TASK (sub-Agent) currently executing.
   sqlite.run(
-    `INSERT INTO tasks (id, parent_kin_id, spawn_type, mode, description, status, depth, created_at, updated_at)
-     VALUES (?, 'kin-a', 'self', 'await', 'parent task', 'in_progress', 1, ?, ?)`,
+    `INSERT INTO tasks (id, parent_agent_id, spawn_type, mode, description, status, depth, created_at, updated_at)
+     VALUES (?, 'agent-a', 'self', 'await', 'parent task', 'in_progress', 1, ?, ?)`,
     [parentId, now, now],
   )
   // Child scout: an await child of the parent, in_progress until resolved.
   sqlite.run(
-    `INSERT INTO tasks (id, parent_kin_id, spawn_type, mode, description, status, depth, parent_task_id, created_at, updated_at)
-     VALUES (?, 'kin-a', 'self', 'await', 'scout', 'in_progress', 2, ?, ?, ?)`,
+    `INSERT INTO tasks (id, parent_agent_id, spawn_type, mode, description, status, depth, parent_task_id, created_at, updated_at)
+     VALUES (?, 'agent-a', 'self', 'await', 'scout', 'in_progress', 2, ?, ?, ?)`,
     [childId, parentId, now, now],
   )
 })
@@ -320,12 +320,12 @@ describe('resolveTask → parent resume integration', () => {
     // The child reports completion. resolveTask must:
     //  - mark the child completed,
     //  - detect the waiting parent and resume it (status in_progress, digest msg),
-    //  - SKIP the normal await→task_result enqueue into the Kin's main queue.
+    //  - SKIP the normal await→task_result enqueue into the Agent's main queue.
     await resolveTask(childId, 'completed', 'FOUND: the bug is in foo.ts')
 
     // Read parent state synchronously right after the awaited resolveTask. The
     // resume's DB writes (status flip + message insert) are all awaited before
-    // the fire-and-forget executeSubKin re-entry, so the parent is observably
+    // the fire-and-forget executeSubAgent re-entry, so the parent is observably
     // 'in_progress' with the digest injected at this point.
     const parent = getTask(parentId)
     expect(parent.status).toBe('in_progress')
@@ -336,7 +336,7 @@ describe('resolveTask → parent resume integration', () => {
     expect(msgs[0].content).toContain('FOUND: the bug is in foo.ts')
 
     // Crucially, the CHILD's resolution did NOT enqueue a task_result for the
-    // child into the main Kin queue — the suspended-parent resume replaced the
+    // child into the main Agent queue — the suspended-parent resume replaced the
     // normal await delivery. (A separate enqueue for the PARENT may appear here
     // because the fire-and-forget resume re-entry hits the throwing test LLM and
     // self-fails — that is a test artifact, not the behaviour under test.)

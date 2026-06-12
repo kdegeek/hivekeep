@@ -2,7 +2,7 @@ import { describe, it, expect } from 'bun:test'
 import { CORE_TOOLS } from '@/shared/constants'
 
 describe('CORE_TOOLS', () => {
-  it('includes the protocol minimum that the sub-Kin runner assumes', () => {
+  it('includes the protocol minimum that the sub-Agent runner assumes', () => {
     for (const required of [
       'read_file',
       'edit_file',
@@ -13,6 +13,7 @@ describe('CORE_TOOLS', () => {
       'update_task_status',
       'request_input',
       'prompt_human',
+      'prompt_secret',
     ]) {
       expect(CORE_TOOLS).toContain(required)
     }

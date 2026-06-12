@@ -14,7 +14,7 @@ function buildSystemPrompt(params: Parameters<typeof buildSystemPromptSegmented>
 // Minimal valid params factory
 function makeParams(overrides: Record<string, unknown> = {}) {
   return {
-    kin: {
+    agent: {
       name: 'TestBot',
       slug: 'test-bot',
       role: 'a helpful assistant',
@@ -23,8 +23,8 @@ function makeParams(overrides: Record<string, unknown> = {}) {
     },
     contacts: [],
     relevantMemories: [],
-    kinDirectory: [],
-    isSubKin: false,
+    agentDirectory: [],
+    isSubAgent: false,
     userLanguage: 'en' as const,
     ...overrides,
   }
@@ -36,20 +36,20 @@ describe('buildSystemPrompt', () => {
   it('includes platform context block for main agent', () => {
     const result = buildSystemPrompt(makeParams())
     expect(result).toContain('## Platform context')
-    expect(result).toContain('specialized AI agent (Kin) on KinBot')
+    expect(result).toContain('specialized AI agent (Agent) on Hivekeep')
     expect(result).toContain('session is continuous and permanent')
     expect(result).toContain('Multiple users may talk to you')
   })
 
-  it('omits platform context block for sub-kins', () => {
+  it('omits platform context block for sub-agents', () => {
     const result = buildSystemPrompt(makeParams({
-      isSubKin: true,
+      isSubAgent: true,
       taskDescription: 'Do something',
     }))
     expect(result).not.toContain('## Platform context')
   })
 
-  it('includes kin identity with slug', () => {
+  it('includes agent identity with slug', () => {
     const result = buildSystemPrompt(makeParams())
     expect(result).toContain('You are TestBot (slug: test-bot)')
     expect(result).toContain('a helpful assistant')
@@ -65,7 +65,7 @@ describe('buildSystemPrompt', () => {
 
   it('omits personality block when empty', () => {
     const result = buildSystemPrompt(makeParams({
-      kin: { name: 'Bot', slug: 'bot', role: 'assistant', character: '', expertise: '' },
+      agent: { name: 'Bot', slug: 'bot', role: 'assistant', character: '', expertise: '' },
     }))
     expect(result).not.toContain('## Personality')
     expect(result).not.toContain('## Expertise')
@@ -73,7 +73,7 @@ describe('buildSystemPrompt', () => {
 
   it('omits slug suffix when slug is null', () => {
     const result = buildSystemPrompt(makeParams({
-      kin: { name: 'Bot', slug: null, role: 'assistant', character: '', expertise: '' },
+      agent: { name: 'Bot', slug: null, role: 'assistant', character: '', expertise: '' },
     }))
     expect(result).toContain('You are Bot,')
     expect(result).not.toContain('slug:')
@@ -110,29 +110,29 @@ describe('buildSystemPrompt', () => {
     expect(result).not.toContain('Dark mode (subject:')
   })
 
-  it('includes kin directory with collaboration instructions for main agent', () => {
+  it('includes agent directory with collaboration instructions for main agent', () => {
     const result = buildSystemPrompt(makeParams({
-      kinDirectory: [
+      agentDirectory: [
         { slug: 'helper', name: 'Helper', role: 'research assistant' },
       ],
     }))
-    expect(result).toContain('## Kin directory')
+    expect(result).toContain('## Agent directory')
     expect(result).toContain('Helper (slug: helper)')
     expect(result).toContain('### Collaboration and delegation')
-    expect(result).toContain('delegate to the most appropriate Kin')
+    expect(result).toContain('delegate to the most appropriate Agent')
     expect(result).toContain('spawn sub-tasks')
   })
 
-  it('includes compact kin directory for sub-kins with inter-kin instructions', () => {
+  it('includes compact agent directory for sub-agents with inter-agent instructions', () => {
     const result = buildSystemPrompt(makeParams({
-      isSubKin: true,
+      isSubAgent: true,
       taskDescription: 'Do something',
-      kinDirectory: [
+      agentDirectory: [
         { slug: 'helper', name: 'Helper', role: 'research assistant' },
       ],
     }))
-    expect(result).toContain('## Kin directory')
-    expect(result).toContain('Inter-Kin communication')
+    expect(result).toContain('## Agent directory')
+    expect(result).toContain('Inter-Agent communication')
     expect(result).toContain('Helper (slug: helper)')
   })
 
@@ -149,7 +149,7 @@ describe('buildSystemPrompt', () => {
   it('includes date context', () => {
     const result = buildSystemPrompt(makeParams())
     expect(result).toContain('Current date:')
-    expect(result).toContain('Platform: KinBot')
+    expect(result).toContain('Platform: Hivekeep')
   })
 
   // --- Initiative ---
@@ -159,17 +159,17 @@ describe('buildSystemPrompt', () => {
     expect(result).toContain('### Initiative and proactivity')
     expect(result).toContain('not a passive Q&A bot')
     expect(result).toContain('suggest creating a cron job')
-    expect(result).toContain('spawn_self/spawn_kin')
+    expect(result).toContain('spawn_self/spawn_agent')
   })
 
-  // --- Sub-Kin prompts ---
+  // --- Sub-Agent prompts ---
 
-  it('builds sub-kin prompt with task description and platform awareness', () => {
+  it('builds sub-agent prompt with task description and platform awareness', () => {
     const result = buildSystemPrompt(makeParams({
-      isSubKin: true,
+      isSubAgent: true,
       taskDescription: 'Analyze the data and report findings.',
     }))
-    expect(result).toContain('specialized AI agent on KinBot')
+    expect(result).toContain('specialized AI agent on Hivekeep')
     expect(result).toContain('executing a delegated task')
     expect(result).toContain('## Your mission')
     expect(result).toContain('Analyze the data and report findings.')
@@ -177,9 +177,9 @@ describe('buildSystemPrompt', () => {
     expect(result).toContain('update_task_status()')
   })
 
-  it('sub-kin prompt does not include internal instructions', () => {
+  it('sub-agent prompt does not include internal instructions', () => {
     const result = buildSystemPrompt(makeParams({
-      isSubKin: true,
+      isSubAgent: true,
       taskDescription: 'Do stuff',
     }))
     expect(result).not.toContain('## Internal instructions')
@@ -187,7 +187,7 @@ describe('buildSystemPrompt', () => {
 
   it('includes previous cron runs for recurring tasks', () => {
     const result = buildSystemPrompt(makeParams({
-      isSubKin: true,
+      isSubAgent: true,
       taskDescription: 'Check metrics',
       previousCronRuns: [
         {
@@ -246,9 +246,9 @@ describe('buildSystemPrompt', () => {
     expect(result).toContain('Always be polite. Never use profanity.')
   })
 
-  it('includes global prompt for sub-kins too', () => {
+  it('includes global prompt for sub-agents too', () => {
     const result = buildSystemPrompt(makeParams({
-      isSubKin: true,
+      isSubAgent: true,
       taskDescription: 'Do task',
       globalPrompt: 'Be concise.',
     }))
@@ -258,15 +258,15 @@ describe('buildSystemPrompt', () => {
 
   // --- Quick session ---
 
-  it('quick session skips contacts, kin directory, and internal instructions', () => {
+  it('quick session skips contacts, agent directory, and internal instructions', () => {
     const result = buildSystemPrompt(makeParams({
       isQuickSession: true,
       contacts: [{ id: 'c1', displayName: 'Alice', firstName: 'Alice', lastName: null, nicknames: [] }],
-      kinDirectory: [{ slug: 'helper', name: 'Helper', role: 'assistant' }],
+      agentDirectory: [{ slug: 'helper', name: 'Helper', role: 'assistant' }],
     }))
     expect(result).toContain('## Quick session')
     expect(result).not.toContain('## Known contacts')
-    expect(result).not.toContain('## Kin directory')
+    expect(result).not.toContain('## Agent directory')
     expect(result).not.toContain('## Internal instructions')
   })
 
@@ -544,7 +544,7 @@ describe('buildSystemPrompt', () => {
   it('includes full cron run results without truncation', () => {
     const longResult = 'x'.repeat(600)
     const result = buildSystemPrompt(makeParams({
-      isSubKin: true,
+      isSubAgent: true,
       taskDescription: 'Recurring task',
       previousCronRuns: [
         {
@@ -563,7 +563,7 @@ describe('buildSystemPrompt', () => {
   it('includes short cron run results', () => {
     const shortResult = 'All good'
     const result = buildSystemPrompt(makeParams({
-      isSubKin: true,
+      isSubAgent: true,
       taskDescription: 'Check stuff',
       previousCronRuns: [
         {
@@ -579,7 +579,7 @@ describe('buildSystemPrompt', () => {
 
   it('shows execution time in seconds for cron runs', () => {
     const result = buildSystemPrompt(makeParams({
-      isSubKin: true,
+      isSubAgent: true,
       taskDescription: 'Task',
       previousCronRuns: [
         {
@@ -593,7 +593,7 @@ describe('buildSystemPrompt', () => {
     expect(result).toContain('(45s)')
   })
 
-  // --- Ticket assignment block (ticket sub-Kin tasks) ---
+  // --- Ticket assignment block (ticket sub-Agent tasks) ---
 
   describe('ticket assignment block', () => {
     const baseAssignment = {
@@ -604,8 +604,8 @@ describe('buildSystemPrompt', () => {
       ticketStatus: 'todo',
       ticketTags: ['feature', 'core'],
       projectId: 'p-1',
-      projectSlug: 'kinbot',
-      projectTitle: 'KinBot',
+      projectSlug: 'hivekeep',
+      projectTitle: 'Hivekeep',
       projectDescription: 'Multi-agent platform.',
       projectGithubUrl: null,
       comments: [],
@@ -613,7 +613,7 @@ describe('buildSystemPrompt', () => {
 
     it('injects linked task history with summaries and inspection hints', () => {
       const result = buildSystemPrompt(makeParams({
-        isSubKin: true,
+        isSubAgent: true,
         taskDescription: 'Work on ticket: foo',
         ticketAssignment: {
           ...baseAssignment,
@@ -624,7 +624,7 @@ describe('buildSystemPrompt', () => {
               description: 'Work on ticket: current',
               status: 'in_progress',
               kind: 'execute',
-              parentKinName: 'KinBot Master',
+              parentAgentName: 'Hivekeep Master',
               createdAt: Date.parse('2026-05-17T12:00:00Z'),
               updatedAt: Date.parse('2026-05-17T12:05:00Z'),
               result: null,
@@ -637,7 +637,7 @@ describe('buildSystemPrompt', () => {
               description: 'Work on ticket: previous',
               status: 'completed',
               kind: 'execute',
-              parentKinName: 'KinBot Master',
+              parentAgentName: 'Hivekeep Master',
               createdAt: Date.parse('2026-05-16T12:00:00Z'),
               updatedAt: Date.parse('2026-05-16T12:10:00Z'),
               result: 'Implemented the backend service.',
@@ -650,7 +650,7 @@ describe('buildSystemPrompt', () => {
               description: 'Work on ticket: failed',
               status: 'failed',
               kind: 'execute',
-              parentKinName: 'KinBot Master',
+              parentAgentName: 'Hivekeep Master',
               createdAt: Date.parse('2026-05-15T12:00:00Z'),
               updatedAt: Date.parse('2026-05-15T12:10:00Z'),
               result: null,
@@ -669,7 +669,7 @@ describe('buildSystemPrompt', () => {
 
     it('omits the run-specific block when no runPrompt is provided', () => {
       const result = buildSystemPrompt(makeParams({
-        isSubKin: true,
+        isSubAgent: true,
         taskDescription: 'Work on ticket: foo',
         ticketAssignment: { ...baseAssignment },
       }))
@@ -680,15 +680,15 @@ describe('buildSystemPrompt', () => {
 
     it('injects the runPrompt in its own labelled block when present', () => {
       const result = buildSystemPrompt(makeParams({
-        isSubKin: true,
+        isSubAgent: true,
         taskDescription: 'Work on ticket: foo',
         ticketAssignment: {
           ...baseAssignment,
-          runPrompt: 'Focus only on the backend; leave the UI for the next Kin.',
+          runPrompt: 'Focus only on the backend; leave the UI for the next Agent.',
         },
       }))
       expect(result).toContain('### Run-specific instructions for this task')
-      expect(result).toContain('Focus only on the backend; leave the UI for the next Kin.')
+      expect(result).toContain('Focus only on the backend; leave the UI for the next Agent.')
       // Sanity: the block sits between the ticket section and the standard
       // sub-task footer (Use update_ticket() ...) so the agent reads it after
       // the ticket context and before the trailing instructions.
@@ -702,7 +702,7 @@ describe('buildSystemPrompt', () => {
 
     it('treats whitespace-only runPrompt as absent', () => {
       const result = buildSystemPrompt(makeParams({
-        isSubKin: true,
+        isSubAgent: true,
         taskDescription: 'Work on ticket: foo',
         ticketAssignment: { ...baseAssignment, runPrompt: '   \n  ' },
       }))
@@ -711,7 +711,7 @@ describe('buildSystemPrompt', () => {
 
     it('renders multi-line runPrompt as a blockquote so it stands out from the ticket description', () => {
       const result = buildSystemPrompt(makeParams({
-        isSubKin: true,
+        isSubAgent: true,
         taskDescription: 'Work on ticket: foo',
         ticketAssignment: {
           ...baseAssignment,
@@ -750,7 +750,7 @@ describe('buildSystemPrompt', () => {
     it('places identity, character, expertise and hidden instructions in the stable segment', () => {
       const { stable, volatile } = buildSystemPromptSegmented(makeParams())
       // Identity / character / expertise / hidden instructions live in `stable`
-      // because they only change when the Kin is edited.
+      // because they only change when the Agent is edited.
       expect(stable).toContain('You are TestBot')
       expect(stable).toContain('## Personality')
       expect(stable).toContain('Friendly and concise.')
@@ -784,12 +784,12 @@ describe('buildSystemPrompt', () => {
       expect(stable).not.toContain('Current date:')
     })
 
-    it('places kin directory in the stable segment', () => {
+    it('places agent directory in the stable segment', () => {
       const { stable, volatile } = buildSystemPromptSegmented(makeParams({
-        kinDirectory: [{ slug: 'helper', name: 'Helper', role: 'assistant' }],
+        agentDirectory: [{ slug: 'helper', name: 'Helper', role: 'assistant' }],
       }))
-      expect(stable).toContain('## Kin directory')
-      expect(volatile).not.toContain('## Kin directory')
+      expect(stable).toContain('## Agent directory')
+      expect(volatile).not.toContain('## Agent directory')
     })
 
     it('places workspace tree in the volatile segment', () => {
@@ -807,9 +807,9 @@ describe('buildSystemPrompt', () => {
       expect(joined).toBe(`${segmented.stable}\n\n${segmented.volatile}`)
     })
 
-    it('sub-Kin task: mission and constraints are stable, date is volatile', () => {
+    it('sub-Agent task: mission and constraints are stable, date is volatile', () => {
       const { stable, volatile } = buildSystemPromptSegmented(makeParams({
-        isSubKin: true,
+        isSubAgent: true,
         taskDescription: 'Compute the answer.',
       }))
       expect(stable).toContain('## Your mission')
@@ -820,7 +820,7 @@ describe('buildSystemPrompt', () => {
 
     it('renders task_todos in the volatile segment when present', () => {
       const { stable, volatile } = buildSystemPromptSegmented(makeParams({
-        isSubKin: true,
+        isSubAgent: true,
         taskDescription: 'Ship the feature.',
         taskTodos: [
           { id: 'a', subject: 'Read the spec', status: 'completed' },
@@ -839,7 +839,7 @@ describe('buildSystemPrompt', () => {
 
     it('omits the task_todos block when the list is empty', () => {
       const { volatile } = buildSystemPromptSegmented(makeParams({
-        isSubKin: true,
+        isSubAgent: true,
         taskDescription: 'Anything.',
         taskTodos: [],
       }))

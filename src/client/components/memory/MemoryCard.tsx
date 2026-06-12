@@ -2,21 +2,21 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/client/components/ui/button'
 import { Badge } from '@/client/components/ui/badge'
 import { Card, CardContent } from '@/client/components/ui/card'
-import { KinBadge } from '@/client/components/common/KinBadge'
+import { AgentBadge } from '@/client/components/common/AgentBadge'
 import { Brain, Pencil, Trash2, Layers, Star, ArrowUpFromLine, Share2 } from 'lucide-react'
 import { TOOL_DOMAIN_META } from '@/shared/constants'
 import type { MemorySummary } from '@/shared/types'
 
 export interface MemoryCardProps {
   memory: MemorySummary
-  kinName?: string
-  kinAvatarUrl?: string | null
-  showKinName?: boolean
+  agentName?: string
+  agentAvatarUrl?: string | null
+  showAgentName?: boolean
   onEdit?: () => void
   onDelete?: () => void
 }
 
-export function MemoryCard({ memory, kinName, kinAvatarUrl, showKinName, onEdit, onDelete }: MemoryCardProps) {
+export function MemoryCard({ memory, agentName, agentAvatarUrl, showAgentName, onEdit, onDelete }: MemoryCardProps) {
   const { t } = useTranslation()
   const meta = TOOL_DOMAIN_META.memory
 
@@ -37,8 +37,8 @@ export function MemoryCard({ memory, kinName, kinAvatarUrl, showKinName, onEdit,
                   {memory.subject}
                 </Badge>
               )}
-              {showKinName && kinName && (
-                <KinBadge name={kinName} avatarUrl={kinAvatarUrl} />
+              {showAgentName && agentName && (
+                <AgentBadge name={agentName} avatarUrl={agentAvatarUrl} />
               )}
  <Badge variant="outline" size="xs" className="shrink-0 font-normal opacity-60">
                 {memory.sourceChannel === 'automatic'
@@ -48,8 +48,8 @@ export function MemoryCard({ memory, kinName, kinAvatarUrl, showKinName, onEdit,
               {memory.scope === 'shared' && (
  <Badge variant="outline" size="xs" className="shrink-0 font-normal text-violet-500 border-violet-500/30">
                   <Share2 className="size-3 mr-0.5" />
-                  {memory.authorKinName
-                    ? t('settings.memories.sharedBy', { name: memory.authorKinName })
+                  {memory.authorAgentName
+                    ? t('settings.memories.sharedBy', { name: memory.authorAgentName })
                     : t('settings.memories.shared')}
                 </Badge>
               )}

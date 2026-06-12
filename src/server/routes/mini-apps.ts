@@ -26,9 +26,12 @@ import {
   listSnapshots,
   rollbackToSnapshot,
   generateMiniAppIcon,
+  getMiniAppPermissions,
+  grantMiniAppPermissions,
 } from '@/server/services/mini-apps'
 import { ImageGenerationError } from '@/server/services/image-generation'
-import { handleBackendRequest, invalidateBackend, getAppEmitter } from '@/server/services/mini-app-backend'
+import { handleBackendRequest, handleClientEvent, getAppEmitter } from '@/server/services/mini-app-backend'
+import { isBlockedHost } from '@/server/services/mini-app-capabilities'
 import { pushConsoleEntry, getConsoleEntries, clearConsoleEntries, markServed } from '@/server/services/mini-app-console'
 import {
   buildDefaultManifest,
@@ -38,7 +41,7 @@ import {
 } from '@/server/services/mini-app-deps'
 import { searchMemories, createMemory } from '@/server/services/memory'
 import { sseManager } from '@/server/sse/index'
-import { resolveKinId } from '@/server/services/kin-resolver'
+import { resolveAgentId } from '@/server/services/agent-resolver'
 import { enqueueMessage } from '@/server/services/queue'
 import { formatMiniAppImproveRequest } from '@/server/services/mini-app-improve'
 import { MAX_MESSAGE_LENGTH } from '@/shared/constants'
@@ -47,9 +50,9 @@ export const miniAppRoutes = new Hono<{ Variables: AppVariables }>()
 
 // ─── Lookup by slug ─────────────────────────────────────────────────────────
 
-miniAppRoutes.get('/by-slug/:kinId/:slug', async (c) => {
-  const { kinId, slug } = c.req.param()
-  const found = await getMiniAppBySlug(kinId, slug)
+miniAppRoutes.get('/by-slug/:agentId/:slug', async (c) => {
+  const { agentId, slug } = c.req.param()
+  const found = await getMiniAppBySlug(agentId, slug)
   if (!found) {
     return c.json({ error: { code: 'NOT_FOUND', message: 'App not found' } }, 404)
   }
@@ -64,7 +67,7 @@ miniAppRoutes.post('/:id/generate-icon', async (c) => {
       providerId: body.providerId,
       modelId: body.modelId,
     })
-    sseManager.broadcast({ type: 'miniapp:updated', kinId: app.maintainerKinId, data: { app } })
+    sseManager.broadcast({ type: 'miniapp:updated', agentId: app.maintainerAgentId, data: { app } })
     return c.json({ app })
   } catch (err) {
     if (err instanceof ImageGenerationError) {
@@ -83,14 +86,14 @@ miniAppRoutes.post('/:id/generate-icon', async (c) => {
 
 // ─── CRUD ────────────────────────────────────────────────────────────────────
 
-// List apps for a kin
+// List apps for an agent
 miniAppRoutes.get('/', async (c) => {
-  const kinId = c.req.query('kinId')
-  if (kinId) {
-    const apps = await listMiniApps(kinId)
+  const agentId = c.req.query('agentId')
+  if (agentId) {
+    const apps = await listMiniApps(agentId)
     return c.json({ apps })
   }
-  // No kinId → return all apps across all Kins
+  // No agentId → return all apps across all Agents
   const { listAllMiniApps } = await import('@/server/services/mini-apps')
   const apps = await listAllMiniApps()
   return c.json({ apps })
@@ -108,7 +111,7 @@ miniAppRoutes.get('/:id', async (c) => {
 // Create app
 miniAppRoutes.post('/', async (c) => {
   const body = await c.req.json<{
-    kinId: string
+    agentId: string
     name: string
     slug: string
     description?: string
@@ -118,8 +121,8 @@ miniAppRoutes.post('/', async (c) => {
     dependencies?: Record<string, string>
   }>()
 
-  if (!body.kinId || !body.name || !body.slug) {
-    return c.json({ error: { code: 'INVALID_INPUT', message: 'kinId, name, and slug are required' } }, 400)
+  if (!body.agentId || !body.name || !body.slug) {
+    return c.json({ error: { code: 'INVALID_INPUT', message: 'agentId, name, and slug are required' } }, 400)
   }
 
   try {
@@ -142,11 +145,11 @@ miniAppRoutes.post('/', async (c) => {
       fileset['app.json'] = buildDefaultManifest()
       warning =
         'No app.json or import map was provided, but your HTML imports bare ES modules. ' +
-        'A default app.json (react, react-dom/client, @kinbot/react, @kinbot/components) was created automatically.'
+        'A default app.json (react, react-dom/client, @hivekeep/react, @hivekeep/components) was created automatically.'
     }
 
     const app = await createMiniApp({
-      kinId: body.kinId,
+      agentId: body.agentId,
       name: body.name,
       slug: body.slug,
       description: body.description,
@@ -157,7 +160,7 @@ miniAppRoutes.post('/', async (c) => {
       await writeAppFile(app.id, filePath, content)
     }
 
-    sseManager.broadcast({ type: 'miniapp:created', kinId: body.kinId, data: { app } })
+    sseManager.broadcast({ type: 'miniapp:created', agentId: body.agentId, data: { app } })
     return c.json({ app, warning }, 201)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create app'
@@ -165,7 +168,7 @@ miniAppRoutes.post('/', async (c) => {
   }
 })
 
-// Update app metadata (and optionally reassign the maintainer Kin)
+// Update app metadata (and optionally reassign the maintainer Agent)
 miniAppRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id')
   const body = await c.req.json<{
@@ -174,19 +177,19 @@ miniAppRoutes.patch('/:id', async (c) => {
     icon?: string | null
     entryFile?: string
     isActive?: boolean
-    maintainerKinId?: string
+    maintainerAgentId?: string
   }>()
 
   // Reassign maintainer first (this also moves the app's on-disk directory).
-  if (body.maintainerKinId !== undefined) {
-    const targetKinId = resolveKinId(body.maintainerKinId)
-    if (!targetKinId) {
-      return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Target Kin not found' } }, 400)
+  if (body.maintainerAgentId !== undefined) {
+    const targetAgentId = resolveAgentId(body.maintainerAgentId)
+    if (!targetAgentId) {
+      return c.json({ error: { code: 'KIN_NOT_FOUND', message: 'Target Agent not found' } }, 400)
     }
     try {
-      const moved = await setMiniAppMaintainer(id, targetKinId)
+      const moved = await setMiniAppMaintainer(id, targetAgentId)
       if (!moved) return c.json({ error: { code: 'NOT_FOUND', message: 'App not found' } }, 404)
-      sseManager.broadcast({ type: 'miniapp:updated', kinId: moved.maintainerKinId, data: { app: moved } })
+      sseManager.broadcast({ type: 'miniapp:updated', agentId: moved.maintainerAgentId, data: { app: moved } })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to reassign maintainer'
       return c.json({ error: { code: 'REASSIGN_FAILED', message } }, 400)
@@ -198,25 +201,24 @@ miniAppRoutes.patch('/:id', async (c) => {
     return c.json({ error: { code: 'NOT_FOUND', message: 'App not found' } }, 404)
   }
 
-  sseManager.broadcast({ type: 'miniapp:updated', kinId: app.maintainerKinId, data: { app } })
+  sseManager.broadcast({ type: 'miniapp:updated', agentId: app.maintainerAgentId, data: { app } })
   return c.json({ app })
 })
 
-// Delete app — any Kin / the user can delete any app (decoupled)
+// Delete app — any Agent / the user can delete any app (decoupled)
 miniAppRoutes.delete('/:id', async (c) => {
   const existing = await getMiniApp(c.req.param('id'))
   if (!existing) {
     return c.json({ error: { code: 'NOT_FOUND', message: 'App not found' } }, 404)
   }
 
-  invalidateBackend(c.req.param('id'))
   await deleteMiniApp(c.req.param('id'))
-  sseManager.broadcast({ type: 'miniapp:deleted', kinId: existing.maintainerKinId, data: { appId: existing.id } })
+  sseManager.broadcast({ type: 'miniapp:deleted', agentId: existing.maintainerAgentId, data: { appId: existing.id } })
   return c.body(null, 204)
 })
 
 // Improve this app — send the user's improvement request into the maintainer
-// Kin's MAIN conversation so it does the work.
+// Agent's MAIN conversation so it does the work.
 miniAppRoutes.post('/:id/improve', async (c) => {
   const user = c.get('user') as { id: string; name: string }
   const app = await getMiniApp(c.req.param('id'))
@@ -242,14 +244,14 @@ miniAppRoutes.post('/:id/improve', async (c) => {
   })
 
   await enqueueMessage({
-    kinId: app.maintainerKinId,
+    agentId: app.maintainerAgentId,
     messageType: 'user',
     content,
     sourceType: 'user',
     sourceId: user.id,
   })
 
-  return c.json({ maintainerKinId: app.maintainerKinId, maintainerKinName: app.maintainerKinName })
+  return c.json({ maintainerAgentId: app.maintainerAgentId, maintainerAgentName: app.maintainerAgentName })
 })
 
 // ─── File management ────────────────────────────────────────────────────────
@@ -302,17 +304,12 @@ miniAppRoutes.put('/:id/files/*', async (c) => {
 
     const result = await writeAppFile(c.req.param('id'), filePath, content)
 
-    // Invalidate backend cache if _server.js was updated
-    if (filePath === '_server.js' || filePath === '_server.ts') {
-      invalidateBackend(c.req.param('id'))
-    }
-
     // Get updated app for version
     const app = await getMiniAppRow(c.req.param('id'))
     if (app) {
       sseManager.broadcast({
         type: 'miniapp:file-updated',
-        kinId: app.kinId,
+        agentId: app.agentId,
         data: { appId: app.id, path: filePath, version: app.version },
       })
     }
@@ -337,16 +334,11 @@ miniAppRoutes.delete('/:id/files/*', async (c) => {
       return c.json({ error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
     }
 
-    // Invalidate backend cache if _server.js was deleted
-    if (filePath === '_server.js' || filePath === '_server.ts') {
-      invalidateBackend(c.req.param('id'))
-    }
-
     const app = await getMiniAppRow(c.req.param('id'))
     if (app) {
       sseManager.broadcast({
         type: 'miniapp:file-updated',
-        kinId: app.kinId,
+        agentId: app.agentId,
         data: { appId: app.id, path: filePath, version: app.version },
       })
     }
@@ -478,7 +470,7 @@ miniAppRoutes.post('/:id/snapshots/:version/rollback', async (c) => {
 
     const updated = await getMiniApp(app.id)
     if (updated) {
-      sseManager.broadcast({ type: 'miniapp:updated', kinId: app.kinId, data: { app: updated } })
+      sseManager.broadcast({ type: 'miniapp:updated', agentId: app.agentId, data: { app: updated } })
     }
 
     return c.json({ message: result.message })
@@ -494,34 +486,6 @@ const httpProxyLimits = new Map<string, { count: number; resetAt: number }>()
 const HTTP_PROXY_MAX_PER_MINUTE = 60
 const HTTP_PROXY_MAX_RESPONSE_BYTES = 5 * 1024 * 1024 // 5 MB
 const HTTP_PROXY_TIMEOUT_MS = 15_000
-
-/** Check if a hostname resolves to a private/internal IP */
-function isBlockedHost(hostname: string): boolean {
-  // Block obvious private/internal hostnames
-  if (
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname === '::1' ||
-    hostname === '0.0.0.0' ||
-    hostname.endsWith('.local') ||
-    hostname.endsWith('.internal')
-  ) return true
-
-  // Block private IP ranges
-  const parts = hostname.split('.')
-  if (parts.length === 4 && parts.every((p) => /^\d+$/.test(p))) {
-    const a = parseInt(parts[0]!, 10)
-    const b = parseInt(parts[1]!, 10)
-    if (a === 10) return true                          // 10.0.0.0/8
-    if (a === 172 && b >= 16 && b <= 31) return true   // 172.16.0.0/12
-    if (a === 192 && b === 168) return true            // 192.168.0.0/16
-    if (a === 127) return true                         // 127.0.0.0/8
-    if (a === 169 && b === 254) return true            // link-local
-    if (a === 0) return true                           // 0.0.0.0/8
-  }
-
-  return false
-}
 
 /**
  * HTTP proxy for mini-apps — lets them fetch external APIs without CORS issues.
@@ -675,7 +639,7 @@ miniAppRoutes.get('/:id/memories/search', async (c) => {
 
   const limit = Math.min(Math.max(1, Number(c.req.query('limit') ?? 20)), 50)
 
-  const results = await searchMemories(app.kinId, query, limit)
+  const results = await searchMemories(app.agentId, query, limit)
   return c.json({
     memories: results.map((m) => ({
       id: m.id,
@@ -704,7 +668,7 @@ miniAppRoutes.post('/:id/memories', async (c) => {
   const validCategories = ['fact', 'preference', 'decision', 'knowledge'] as const
   const category = validCategories.includes(body.category as any) ? (body.category as typeof validCategories[number]) : 'knowledge'
 
-  const memory = await createMemory(app.kinId, {
+  const memory = await createMemory(app.agentId, {
     content: body.content,
     category,
     subject: body.subject || null,
@@ -726,6 +690,7 @@ miniAppRoutes.get('/:id/events', async (c) => {
     return c.json({ error: { code: 'NOT_FOUND', message: 'App not found' } }, 404)
   }
 
+  const user = c.get('user') as { id: string } | undefined
   const emitter = getAppEmitter(appId)
 
   // Create a readable stream that pushes SSE events
@@ -745,7 +710,8 @@ miniAppRoutes.get('/:id/events', async (c) => {
         }
       }, 30_000)
 
-      // Subscribe to app events
+      // Subscribe to app events, tagged with the session user so the backend
+      // can target a single user via ctx.events.emit(event, data, { userId })
       const unsubscribe = emitter._subscribe((event: string, data: unknown) => {
         try {
           const payload = JSON.stringify({ event, data, timestamp: Date.now() })
@@ -755,7 +721,7 @@ miniAppRoutes.get('/:id/events', async (c) => {
           clearInterval(pingInterval)
           unsubscribe()
         }
-      })
+      }, user?.id)
 
       // Clean up when the client disconnects
       c.req.raw.signal.addEventListener('abort', () => {
@@ -774,6 +740,61 @@ miniAppRoutes.get('/:id/events', async (c) => {
       'X-Accel-Buffering': 'no',
     },
   })
+})
+
+// ─── Capability permissions ──────────────────────────────────────────────────
+
+// Permission state: requested in app.json vs granted by the user
+miniAppRoutes.get('/:id/permissions', async (c) => {
+  const state = await getMiniAppPermissions(c.req.param('id'))
+  if (!state) return c.json({ error: { code: 'NOT_FOUND', message: 'App not found' } }, 404)
+  return c.json(state)
+})
+
+// Grant requested permissions (additive). Body: { grant: string[] }
+miniAppRoutes.post('/:id/permissions', async (c) => {
+  const body = await c.req.json<{ grant?: string[] }>().catch(() => null)
+  if (!body || !Array.isArray(body.grant) || body.grant.length === 0) {
+    return c.json({ error: { code: 'INVALID_BODY', message: 'grant (non-empty string[]) is required' } }, 400)
+  }
+
+  const result = await grantMiniAppPermissions(c.req.param('id'), body.grant)
+  if (!result) return c.json({ error: { code: 'NOT_FOUND', message: 'App not found' } }, 404)
+
+  const app = await getMiniApp(c.req.param('id'))
+  if (app) {
+    sseManager.broadcast({ type: 'miniapp:updated', agentId: app.maintainerAgentId, data: { app } })
+  }
+
+  return c.json(result)
+})
+
+// Upstream client events: frontend Hivekeep.events.send() → backend onClientEvent()
+miniAppRoutes.post('/:id/client-event', async (c) => {
+  const appId = c.req.param('id')
+  const app = await getMiniAppRow(appId)
+  if (!app) {
+    return c.json({ error: { code: 'NOT_FOUND', message: 'App not found' } }, 404)
+  }
+  if (!app.hasBackend) {
+    return c.json({ error: { code: 'NO_BACKEND', message: 'This app has no backend. Write a _server.js file to add one.' } }, 404)
+  }
+
+  const body = await c.req.json<{ event?: string; data?: unknown }>().catch(() => null)
+  if (!body || typeof body.event !== 'string' || !body.event.trim()) {
+    return c.json({ error: { code: 'INVALID_BODY', message: 'event (string) is required' } }, 400)
+  }
+
+  const user = c.get('user') as { id: string; name?: string }
+  const result = await handleClientEvent(appId, body.event, body.data, {
+    userId: user.id,
+    userName: user.name ?? null,
+  })
+
+  if (result.error) {
+    return c.json({ error: { code: 'CLIENT_EVENT_ERROR', message: result.error } }, 500)
+  }
+  return c.json({ handled: result.handled, result: result.result ?? null })
 })
 
 // ─── Backend API proxy ──────────────────────────────────────────────────────
@@ -825,8 +846,8 @@ const THEME_SYNC_SCRIPT = `<script>
 })();
 </script>`
 
-const SDK_LINK = '<link rel="stylesheet" href="/api/mini-apps/sdk/kinbot-sdk.css">'
-const SDK_SCRIPT = '<script src="/api/mini-apps/sdk/kinbot-sdk.js"></script>'
+const SDK_LINK = '<link rel="stylesheet" href="/api/mini-apps/sdk/hivekeep-sdk.css">'
+const SDK_SCRIPT = '<script src="/api/mini-apps/sdk/hivekeep-sdk.js"></script>'
 
 /** Base tag so relative paths (src="app.js", import "./utils.js") resolve to the static directory */
 function baseTag(appId: string): string {
@@ -909,7 +930,7 @@ function transpileInlineJsx(html: string): string {
         return `<script type="module">${transpiled}</script>`
       } catch (err) {
         console.error('[mini-app] JSX transpilation failed:', err)
-        return `<script type="module">console.error('[KinBot] JSX transpilation failed — check your JSX syntax');</script>`
+        return `<script type="module">console.error('[Hivekeep] JSX transpilation failed — check your JSX syntax');</script>`
       }
     },
   )
@@ -922,7 +943,7 @@ miniAppRoutes.get('/:id/serve', async (c) => {
     return c.json({ error: { code: 'NOT_FOUND', message: 'App not found' } }, 404)
   }
 
-  const dir = getAppDir(app.kinId, app.id)
+  const dir = getAppDir(app.agentId, app.id)
   const entryPath = join(dir, app.entryFile)
 
   if (!existsSync(entryPath)) {
@@ -943,11 +964,11 @@ miniAppRoutes.get('/:id/serve', async (c) => {
 
   // If the app uses bare ES imports but no import map could be built, surface a clear,
   // actionable error in the console (the cryptic "Failed to resolve module specifier" would
-  // otherwise be all the Kin sees). This message flows into the console buffer.
+  // otherwise be all the Agent sees). This message flows into the console buffer.
   let moduleHelpTag = ''
   if (!importMapTag && !htmlHasInlineImportMap(html) && findBareModuleImports(html).length > 0) {
     const help =
-      "[KinBot] This mini-app imports ES modules (e.g. 'react') but no import map was found. " +
+      "[Hivekeep] This mini-app imports ES modules (e.g. 'react') but no import map was found. " +
       'Add an app.json with a "dependencies" map (or pass `dependencies` to create_mini_app). ' +
       "See get_mini_app_docs('getting-started')."
     moduleHelpTag = `<script>console.error(${JSON.stringify(help)})</script>`
@@ -993,7 +1014,7 @@ miniAppRoutes.get('/:id/static/*', async (c) => {
     return c.json({ error: { code: 'MISSING_PATH', message: 'Asset path is required' } }, 400)
   }
 
-  const dir = getAppDir(app.kinId, app.id)
+  const dir = getAppDir(app.agentId, app.id)
   const absoluteDir = join(process.cwd(), dir)
   const fullPath = join(absoluteDir, assetPath)
 
@@ -1021,7 +1042,7 @@ miniAppRoutes.get('/:id/static/*', async (c) => {
       })
     } catch (err) {
       console.error('[mini-app] JSX/TSX transpilation failed for', assetPath, err)
-      return new Response(`console.error('[KinBot] Failed to transpile ${assetPath}');`, {
+      return new Response(`console.error('[Hivekeep] Failed to transpile ${assetPath}');`, {
         headers: { 'Content-Type': 'application/javascript' },
         status: 500,
       })
@@ -1042,74 +1063,38 @@ miniAppRoutes.get('/:id/static/*', async (c) => {
 
 export const miniAppSdkRoutes = new Hono()
 
-miniAppSdkRoutes.get('/kinbot-sdk.js', async (c) => {
-  const jsPath = join(import.meta.dir, '../mini-app-sdk/kinbot-sdk.js')
-  if (!existsSync(jsPath)) {
-    return new Response('/* KinBot SDK JS not found */', {
-      headers: { 'Content-Type': 'application/javascript', 'Cache-Control': 'public, max-age=3600' },
+// SDK assets, each served under its canonical `hivekeep-*` name AND a legacy
+// `kinbot-*` alias. Mini-apps authored before the Hivekeep rebrand carry an
+// app.json import map pointing at `/api/mini-apps/sdk/kinbot-react.js` &
+// `kinbot-components.js`; without the alias those URLs miss this router, fall
+// through to the SPA catch-all (which returns index.html as `text/html`), and
+// the browser refuses the module — leaving every legacy mini-app blank.
+const SDK_ASSETS: { file: string; type: string; missing: string }[] = [
+  { file: 'hivekeep-sdk.js', type: 'application/javascript', missing: '/* Hivekeep SDK JS not found */' },
+  { file: 'hivekeep-react.js', type: 'application/javascript', missing: '/* Hivekeep React SDK not found */' },
+  { file: 'hivekeep-components.js', type: 'application/javascript', missing: '/* Hivekeep Components not found */' },
+  { file: 'hivekeep-sdk.css', type: 'text/css', missing: '/* Hivekeep SDK CSS not found */' },
+  { file: 'hivekeep-sdk.d.ts', type: 'application/typescript', missing: '// Type definitions not found' },
+  { file: 'hivekeep-react.d.ts', type: 'application/typescript', missing: '// Type definitions not found' },
+  { file: 'hivekeep-components.d.ts', type: 'application/typescript', missing: '// Type definitions not found' },
+]
+
+function serveSdkAsset(file: string, type: string, missing: string) {
+  return async () => {
+    const p = join(import.meta.dir, '../mini-app-sdk', file)
+    const body = existsSync(p) ? await Bun.file(p).text() : missing
+    return new Response(body, {
+      headers: { 'Content-Type': type, 'Cache-Control': 'public, max-age=3600' },
     })
   }
-  const js = await Bun.file(jsPath).text()
-  return new Response(js, {
-    headers: { 'Content-Type': 'application/javascript', 'Cache-Control': 'public, max-age=3600' },
-  })
-})
-
-miniAppSdkRoutes.get('/kinbot-react.js', async (c) => {
-  const jsPath = join(import.meta.dir, '../mini-app-sdk/kinbot-react.js')
-  if (!existsSync(jsPath)) {
-    return new Response('/* KinBot React SDK not found */', {
-      headers: { 'Content-Type': 'application/javascript', 'Cache-Control': 'public, max-age=3600' },
-    })
-  }
-  const js = await Bun.file(jsPath).text()
-  return new Response(js, {
-    headers: { 'Content-Type': 'application/javascript', 'Cache-Control': 'public, max-age=3600' },
-  })
-})
-
-miniAppSdkRoutes.get('/kinbot-components.js', async (c) => {
-  const jsPath = join(import.meta.dir, '../mini-app-sdk/kinbot-components.js')
-  if (!existsSync(jsPath)) {
-    return new Response('/* KinBot Components not found */', {
-      headers: { 'Content-Type': 'application/javascript', 'Cache-Control': 'public, max-age=3600' },
-    })
-  }
-  const js = await Bun.file(jsPath).text()
-  return new Response(js, {
-    headers: { 'Content-Type': 'application/javascript', 'Cache-Control': 'public, max-age=3600' },
-  })
-})
-
-// Serve TypeScript type definitions for SDK autocomplete / documentation
-for (const dtsFile of ['kinbot-sdk.d.ts', 'kinbot-react.d.ts', 'kinbot-components.d.ts']) {
-  miniAppSdkRoutes.get(`/${dtsFile}`, async (c) => {
-    const dtsPath = join(import.meta.dir, `../mini-app-sdk/${dtsFile}`)
-    if (!existsSync(dtsPath)) {
-      return new Response('// Type definitions not found', {
-        headers: { 'Content-Type': 'application/typescript', 'Cache-Control': 'public, max-age=3600' },
-      })
-    }
-    const content = await Bun.file(dtsPath).text()
-    return new Response(content, {
-      headers: { 'Content-Type': 'application/typescript', 'Cache-Control': 'public, max-age=3600' },
-    })
-  })
 }
 
-miniAppSdkRoutes.get('/kinbot-sdk.css', async (c) => {
-  // Serve the SDK CSS file
-  const cssPath = join(import.meta.dir, '../mini-app-sdk/kinbot-sdk.css')
-  if (!existsSync(cssPath)) {
-    return new Response('/* KinBot SDK CSS not found */', {
-      headers: { 'Content-Type': 'text/css', 'Cache-Control': 'public, max-age=3600' },
-    })
-  }
-  const css = await Bun.file(cssPath).text()
-  return new Response(css, {
-    headers: { 'Content-Type': 'text/css', 'Cache-Control': 'public, max-age=3600' },
-  })
-})
+for (const asset of SDK_ASSETS) {
+  const handler = serveSdkAsset(asset.file, asset.type, asset.missing)
+  miniAppSdkRoutes.get(`/${asset.file}`, handler)
+  // Legacy alias: hivekeep-react.js → also served at kinbot-react.js, etc.
+  miniAppSdkRoutes.get(`/${asset.file.replace(/^hivekeep-/, 'kinbot-')}`, handler)
+}
 
 // ─── Console entries ────────────────────────────────────────────────────────
 

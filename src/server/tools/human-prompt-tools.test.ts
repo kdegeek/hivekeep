@@ -29,7 +29,7 @@ const { promptHumanTool } = await import('@/server/tools/human-prompt-tools')
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const baseCtx: ToolExecutionContext = { kinId: 'kin-test', isSubKin: false }
+const baseCtx: ToolExecutionContext = { agentId: 'agent-test', isSubAgent: false }
 
 function execute(ctx: ToolExecutionContext, args: any) {
   const t = (promptHumanTool as any).create(ctx)
@@ -65,8 +65,8 @@ describe('promptHumanTool', () => {
   beforeEach(resetMocks)
 
   describe('registration', () => {
-    it('is available to main and sub-kin', () => {
-      expect(promptHumanTool.availability).toEqual(['main', 'sub-kin'])
+    it('is available to main and sub-agent', () => {
+      expect(promptHumanTool.availability).toEqual(['main', 'sub-agent'])
     })
 
     it('create() returns a tool with description and execute', () => {
@@ -87,7 +87,7 @@ describe('promptHumanTool', () => {
       })
       expect(mockHumanPrompts.createHumanPrompt).toHaveBeenCalledTimes(1)
       const call = (mockHumanPrompts.createHumanPrompt as any).mock.calls[0][0]
-      expect(call.kinId).toBe('kin-test')
+      expect(call.agentId).toBe('agent-test')
       expect(call.promptType).toBe('confirm')
       expect(call.question).toBe('Do you want to proceed?')
       expect(call.options).toHaveLength(2)
@@ -178,8 +178,8 @@ describe('promptHumanTool', () => {
     })
   })
 
-  describe('sub-kin context (with taskId)', () => {
-    const subCtx: ToolExecutionContext = { kinId: 'kin-sub', isSubKin: true, taskId: 'task-1' }
+  describe('sub-agent context (with taskId)', () => {
+    const subCtx: ToolExecutionContext = { agentId: 'agent-sub', isSubAgent: true, taskId: 'task-1' }
 
     it('returns error when task is not found', async () => {
       mockDb.get.mockReturnValue(null)
@@ -215,7 +215,7 @@ describe('promptHumanTool', () => {
       expect(call.taskId).toBe('task-1')
     })
 
-    it('succeeds when task has no cronId (user-spawned sub-kin)', async () => {
+    it('succeeds when task has no cronId (user-spawned sub-agent)', async () => {
       mockDb.get.mockReturnValue({ id: 'task-1', cronId: null, allowHumanPrompt: true })
       const result = await execute(subCtx, validArgs)
       expect(result.promptId).toBe('prompt-1')

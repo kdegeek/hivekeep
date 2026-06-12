@@ -37,16 +37,17 @@ import {
   InvalidRequestError,
   NetworkError,
   ProviderServerError,
-  KinbotProviderError,
+  HivekeepProviderError,
 } from '@/server/llm/core/types'
 import type {
   LLMProvider,
   LLMModel,
   ChatRequest,
   ChatChunk,
-  KinbotMessage,
+  HivekeepMessage,
   ThinkingEffort,
 } from '@/server/llm/llm/types'
+import { downgradeEffort } from '@/server/llm/llm/types'
 
 // ─── Config schema ───────────────────────────────────────────────────────────
 
@@ -137,21 +138,10 @@ function mapCodexModel(entry: CodexModelCacheEntry): LLMModel {
 
 // ─── Effort downgrade ────────────────────────────────────────────────────────
 
-function downgradeEffort(
-  requested: ThinkingEffort,
-  supported: readonly ThinkingEffort[],
-): ThinkingEffort | undefined {
-  const order: ThinkingEffort[] = ['low', 'medium', 'high', 'max']
-  const idx = order.indexOf(requested)
-  for (let i = idx; i >= 0; i--) {
-    if (supported.includes(order[i]!)) return order[i]
-  }
-  return supported[0]
-}
 
 // ─── Error mapping ───────────────────────────────────────────────────────────
 
-function errorFromResponse(status: number, body: string): KinbotProviderError {
+function errorFromResponse(status: number, body: string): HivekeepProviderError {
   if (status === 401 || status === 403) return new AuthError(`Codex auth failed: ${body.slice(0, 200)}`)
   if (status === 429) {
     return new RateLimitError(`Codex rate limit: ${body.slice(0, 200)}`)
@@ -172,13 +162,13 @@ function errorFromResponse(status: number, body: string): KinbotProviderError {
   return new ProviderServerError(`Codex server error (${status}): ${body.slice(0, 200)}`, status)
 }
 
-function wrapError(err: unknown): KinbotProviderError {
-  if (err instanceof KinbotProviderError) return err
+function wrapError(err: unknown): HivekeepProviderError {
+  if (err instanceof HivekeepProviderError) return err
   if (err instanceof Error) return new NetworkError(err.message, err)
   return new NetworkError(String(err))
 }
 
-// ─── Message conversion (kinbot → Codex Responses format) ────────────────────
+// ─── Message conversion (hivekeep → Codex Responses format) ────────────────────
 
 function uint8ToBase64(bytes: Uint8Array): string {
   let binary = ''
@@ -192,7 +182,7 @@ interface ResponseInputItem {
 }
 
 /**
- * Convert kinbot messages to the Codex `input` array.
+ * Convert hivekeep messages to the Codex `input` array.
  *
  * The Codex Responses API expects a flat array where:
  *   - User text/image content → `{ type: 'message', role: 'user', content: [...] }`
@@ -202,7 +192,7 @@ interface ResponseInputItem {
  *   - Thinking blocks → dropped (the backend round-trips its own reasoning
  *     via opaque encrypted blocks; we don't replay them).
  */
-function messagesToCodexInput(messages: KinbotMessage[]): ResponseInputItem[] {
+function messagesToCodexInput(messages: HivekeepMessage[]): ResponseInputItem[] {
   const items: ResponseInputItem[] = []
   for (const m of messages) {
     if (m.role === 'assistant') {

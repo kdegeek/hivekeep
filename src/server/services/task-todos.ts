@@ -1,7 +1,7 @@
 /**
- * Per-task structured todo list for sub-Kins.
+ * Per-task structured todo list for sub-Agents.
  *
- * Ported from opencode's TodoWrite. The sub-Kin issues a single bulk-set
+ * Ported from opencode's TodoWrite. The sub-Agent issues a single bulk-set
  * call each time the plan changes (creating items, marking one as
  * in_progress, completing one, cancelling a stale one). The list lives in
  * memory for the duration of the task and is broadcast over SSE so the
@@ -38,7 +38,7 @@ const byTask = new Map<string, TodoItem[]>()
 export function setTodosForTask(
   taskId: string,
   todos: TodoItem[],
-  meta: { parentKinId: string; ticketId: string | null },
+  meta: { parentAgentId: string; ticketId: string | null },
 ): TodoItem[] {
   if (todos.length > 30) {
     throw new Error('A task may have at most 30 todos. Break large work into a sub-task with its own list.')
@@ -63,9 +63,9 @@ export function setTodosForTask(
   const stored = todos.map((t) => ({ ...t, subject: t.subject.trim() }))
   byTask.set(taskId, stored)
 
-  sseManager.sendToKin(meta.parentKinId, {
+  sseManager.sendToAgent(meta.parentAgentId, {
     type: 'task:todos',
-    kinId: meta.parentKinId,
+    agentId: meta.parentAgentId,
     data: {
       taskId,
       ticketId: meta.ticketId,

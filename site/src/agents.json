@@ -1,0 +1,22 @@
+[
+  { "name": "Queenie",   "domain": "Setup & onboarding",   "avatar": "/avatars/queenie.jpg",   "status": "online" },
+  { "name": "Atlas",     "domain": "DevOps & infra",       "avatar": "/avatars/atlas.jpg",     "status": "working" },
+  { "name": "Forge",     "domain": "Dev & code",           "avatar": "/avatars/forge.jpg",     "status": "online" },
+  { "name": "Inbox",     "domain": "Email & calendar",     "avatar": "/avatars/inbox.jpg",     "status": "working" },
+  { "name": "Sentinel",  "domain": "Security & pentest",   "avatar": "/avatars/sentinel.jpg",  "status": "online" },
+  { "name": "Prism",     "domain": "Data & BI",            "avatar": "/avatars/prism.jpg" },
+  { "name": "Ledger",    "domain": "Finance & budgeting",  "avatar": "/avatars/ledger.jpg" },
+  { "name": "Quill",     "domain": "Writing & copy",       "avatar": "/avatars/quill.jpg" },
+  { "name": "Sage",      "domain": "Research & synthesis", "avatar": "/avatars/sage.jpg" },
+  { "name": "Pixel",     "domain": "UI/UX design",         "avatar": "/avatars/pixel.jpg" },
+  { "name": "Beacon",    "domain": "News & tech watch",    "avatar": "/avatars/beacon.jpg" },
+  { "name": "Nest",      "domain": "Home automation",      "avatar": "/avatars/nest.jpg" },
+  { "name": "Compass",   "domain": "Travel planning",      "avatar": "/avatars/compass.jpg" },
+  { "name": "Vitals",    "domain": "Health & fitness",     "avatar": "/avatars/vitals.jpg" },
+  { "name": "Cuisine",   "domain": "Recipes & meals",      "avatar": "/avatars/cuisine.jpg" },
+  { "name": "Tutor",     "domain": "Learning & tutoring",  "avatar": "/avatars/tutor.jpg" },
+  { "name": "Sprout",    "domain": "Gardening & plants",   "avatar": "/avatars/sprout.jpg" },
+  { "name": "Lexicon",   "domain": "Translation & l10n",   "avatar": "/avatars/lexicon.jpg" },
+  { "name": "Archive",   "domain": "Docs & organization",  "avatar": "/avatars/archive.jpg" },
+  { "name": "Pulse",     "domain": "Social & community",   "avatar": "/avatars/pulse.jpg" }
+]

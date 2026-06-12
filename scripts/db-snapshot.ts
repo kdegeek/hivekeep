@@ -5,13 +5,13 @@
  *   bun scripts/db-snapshot.ts list
  *   bun scripts/db-snapshot.ts restore <name>
  *
- * Snapshots live under `data/snapshots/<timestamp>[__label]/kinbot.db`.
+ * Snapshots live under `data/snapshots/<timestamp>[__label]/hivekeep.db`.
  * Created with `VACUUM INTO` so the file is atomic and safe to copy
  * while the dev server is running. Restore stops at a confirmation
  * prompt because it overwrites the live DB.
  *
  * Intended for the onboarding flow loop: snapshot the real DB, point
- * the server at a fresh one (`rm data/kinbot.db && bun run db:migrate`),
+ * the server at a fresh one (`rm data/hivekeep.db && bun run db:migrate`),
  * exercise the wizard, then restore.
  */
 import { Database } from 'bun:sqlite'
@@ -25,7 +25,7 @@ import {
 } from 'fs'
 import { dirname, join, resolve } from 'path'
 
-const dbPath = resolve(process.env.DB_PATH ?? './data/kinbot.db')
+const dbPath = resolve(process.env.DB_PATH ?? './data/hivekeep.db')
 const dataDir = dirname(dbPath)
 const snapshotsDir = join(dataDir, 'snapshots')
 
@@ -74,7 +74,7 @@ function create(label?: string) {
   const folderPath = join(snapshotsDir, folderName)
   mkdirSync(folderPath, { recursive: true })
 
-  const targetPath = join(folderPath, 'kinbot.db')
+  const targetPath = join(folderPath, 'hivekeep.db')
   const targetForSql = targetPath.replace(/'/g, "''")
 
   // VACUUM INTO is the SQLite-blessed way to take an atomic snapshot
@@ -98,7 +98,7 @@ function list() {
   }
   const entries = readdirSync(snapshotsDir)
     .filter((name) => {
-      const p = join(snapshotsDir, name, 'kinbot.db')
+      const p = join(snapshotsDir, name, 'hivekeep.db')
       return existsSync(p) && statSync(p).isFile()
     })
     .sort()
@@ -111,7 +111,7 @@ function list() {
 
   console.log(`Snapshots in ${snapshotsDir}:`)
   for (const name of entries) {
-    const p = join(snapshotsDir, name, 'kinbot.db')
+    const p = join(snapshotsDir, name, 'hivekeep.db')
     const size = statSync(p).size
     console.log(`  ${name}  (${humanSize(size)})`)
   }
@@ -123,7 +123,7 @@ function restore(name: string) {
     console.error('Run "bun scripts/db-snapshot.ts list" to see available snapshots.')
     process.exit(1)
   }
-  const sourcePath = join(snapshotsDir, name, 'kinbot.db')
+  const sourcePath = join(snapshotsDir, name, 'hivekeep.db')
   if (!existsSync(sourcePath)) {
     console.error(`Snapshot not found: ${sourcePath}`)
     process.exit(1)

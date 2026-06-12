@@ -4,15 +4,15 @@ import { loginAs, TEST_USER } from './helpers/auth'
 const BASE = 'http://localhost:3334'
 
 /**
- * Helper: ensure at least one Kin exists (needed for file storage — files belong to a Kin).
+ * Helper: ensure at least one Agent exists (needed for file storage — files belong to an Agent).
  */
-async function ensureKinExists(page: import('@playwright/test').Page) {
+async function ensureAgentExists(page: import('@playwright/test').Page) {
   await page.goto(BASE)
   await page.waitForSelector('[data-slot="sidebar"]', { timeout: 10000 })
-  const kinItems = page.locator('[data-slot="sidebar"] >> text=E2E Kin')
-  if ((await kinItems.count()) > 0) return
+  const agentItems = page.locator('[data-slot="sidebar"] >> text=E2E Agent')
+  if ((await agentItems.count()) > 0) return
 
-  // Create one via onboarding Kin or sidebar
+  // Create one via onboarding Agent or sidebar
   const createBtn = page.locator('[data-slot="sidebar"]').getByRole('button').filter({ hasText: /add|create|\+/i }).first()
   if (await createBtn.isVisible()) {
     await createBtn.click()
@@ -20,7 +20,7 @@ async function ensureKinExists(page: import('@playwright/test').Page) {
     // Fill wizard if it opened
     const nameInput = page.locator('input[name="name"], input[placeholder*="name" i]').first()
     if (await nameInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await nameInput.fill('E2E Kin')
+      await nameInput.fill('E2E Agent')
       const saveBtn = page.getByRole('button', { name: /create|save|next/i }).first()
       await saveBtn.click()
       await page.waitForTimeout(1000)
@@ -53,8 +53,8 @@ test.describe.serial('File Storage settings', () => {
     await page.waitForSelector('[data-slot="sidebar"]', { timeout: 10000 })
   })
 
-  test('should ensure a Kin exists for file storage tests', async ({ page }) => {
-    await ensureKinExists(page)
+  test('should ensure an Agent exists for file storage tests', async ({ page }) => {
+    await ensureAgentExists(page)
   })
 
   test('should navigate to Files settings and see empty state', async ({ page }) => {
@@ -81,10 +81,10 @@ test.describe.serial('File Storage settings', () => {
     const fileInput = page.locator('input[type="file"]')
     await expect(fileInput).toBeVisible()
 
-    // Kin selector — the upload dialog is the last [role="dialog"] (nested inside settings dialog)
+    // Agent selector — the upload dialog is the last [role="dialog"] (nested inside settings dialog)
     const uploadDialog = page.locator('[role="dialog"]').last()
-    const kinSelector = uploadDialog.locator('[data-slot="select-trigger"]').first()
-    await expect(kinSelector).toBeVisible({ timeout: 5000 })
+    const agentSelector = uploadDialog.locator('[data-slot="select-trigger"]').first()
+    await expect(agentSelector).toBeVisible({ timeout: 5000 })
 
     // Name field
     const nameInput = page.locator('input').filter({ hasText: '' }).nth(1)
@@ -122,7 +122,7 @@ test.describe.serial('File Storage settings', () => {
           body: JSON.stringify({
             file: {
               id: 'test-file-1',
-              kinId: 'test-kin',
+              agentId: 'test-agent',
               name: 'Test Document.txt',
               description: 'A test file for E2E',
               originalName: 'test.txt',
@@ -134,7 +134,7 @@ test.describe.serial('File Storage settings', () => {
               expiresAt: null,
               downloadCount: 0,
               url: '/files/test-file-1',
-              createdByKinId: null,
+              createdByAgentId: null,
               createdAt: Date.now(),
               updatedAt: Date.now(),
             },
@@ -149,7 +149,7 @@ test.describe.serial('File Storage settings', () => {
             files: [
               {
                 id: 'test-file-1',
-                kinId: 'test-kin',
+                agentId: 'test-agent',
                 name: 'Test Document.txt',
                 description: 'A test file for E2E',
                 originalName: 'test.txt',
@@ -161,7 +161,7 @@ test.describe.serial('File Storage settings', () => {
                 expiresAt: null,
                 downloadCount: 0,
                 url: '/files/test-file-1',
-                createdByKinId: null,
+                createdByAgentId: null,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
               },
@@ -218,7 +218,7 @@ test.describe.serial('File Storage settings', () => {
             files: [
               {
                 id: 'test-file-1',
-                kinId: 'test-kin',
+                agentId: 'test-agent',
                 name: 'Test Document.txt',
                 description: 'A test file for E2E',
                 originalName: 'test.txt',
@@ -230,7 +230,7 @@ test.describe.serial('File Storage settings', () => {
                 expiresAt: null,
                 downloadCount: 0,
                 url: '/files/test-file-1',
-                createdByKinId: null,
+                createdByAgentId: null,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
               },
@@ -258,7 +258,7 @@ test.describe.serial('File Storage settings', () => {
             files: [
               {
                 id: 'test-file-pub',
-                kinId: 'test-kin',
+                agentId: 'test-agent',
                 name: 'Public File.txt',
                 description: null,
                 originalName: 'pub.txt',
@@ -270,7 +270,7 @@ test.describe.serial('File Storage settings', () => {
                 expiresAt: null,
                 downloadCount: 3,
                 url: '/files/test-file-pub',
-                createdByKinId: null,
+                createdByAgentId: null,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
               },
@@ -301,7 +301,7 @@ test.describe.serial('File Storage settings', () => {
             files: [
               {
                 id: 'test-file-secure',
-                kinId: 'test-kin',
+                agentId: 'test-agent',
                 name: 'Secure File.pdf',
                 description: 'Top secret',
                 originalName: 'secret.pdf',
@@ -313,7 +313,7 @@ test.describe.serial('File Storage settings', () => {
                 expiresAt: Date.now() + 3600000,
                 downloadCount: 0,
                 url: '/files/test-file-secure',
-                createdByKinId: null,
+                createdByAgentId: null,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
               },
@@ -353,7 +353,7 @@ test.describe.serial('File Storage settings', () => {
             files: [
               {
                 id: 'test-file-edit',
-                kinId: 'test-kin',
+                agentId: 'test-agent',
                 name: patchCalled ? 'Renamed File.txt' : 'Original File.txt',
                 description: 'Edit me',
                 originalName: 'orig.txt',
@@ -365,7 +365,7 @@ test.describe.serial('File Storage settings', () => {
                 expiresAt: null,
                 downloadCount: 0,
                 url: '/files/test-file-edit',
-                createdByKinId: null,
+                createdByAgentId: null,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
               },
@@ -430,7 +430,7 @@ test.describe.serial('File Storage settings', () => {
               : [
                   {
                     id: 'test-file-del',
-                    kinId: 'test-kin',
+                    agentId: 'test-agent',
                     name: 'Delete Me.txt',
                     description: null,
                     originalName: 'del.txt',
@@ -442,7 +442,7 @@ test.describe.serial('File Storage settings', () => {
                     expiresAt: null,
                     downloadCount: 0,
                     url: '/files/test-file-del',
-                    createdByKinId: null,
+                    createdByAgentId: null,
                     createdAt: Date.now(),
                     updatedAt: Date.now(),
                   },
@@ -497,7 +497,7 @@ test.describe.serial('File Storage settings', () => {
             files: [
               {
                 id: 'test-file-copy',
-                kinId: 'test-kin',
+                agentId: 'test-agent',
                 name: 'Copy URL File.txt',
                 description: null,
                 originalName: 'copy.txt',
@@ -509,7 +509,7 @@ test.describe.serial('File Storage settings', () => {
                 expiresAt: null,
                 downloadCount: 1,
                 url: '/files/test-file-copy',
-                createdByKinId: null,
+                createdByAgentId: null,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
               },
@@ -550,7 +550,7 @@ test.describe.serial('File Storage settings', () => {
             files: [
               {
                 id: 'test-file-dl',
-                kinId: 'test-kin',
+                agentId: 'test-agent',
                 name: 'Popular File.zip',
                 description: null,
                 originalName: 'pop.zip',
@@ -562,7 +562,7 @@ test.describe.serial('File Storage settings', () => {
                 expiresAt: null,
                 downloadCount: 42,
                 url: '/files/test-file-dl',
-                createdByKinId: null,
+                createdByAgentId: null,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
               },

@@ -12,8 +12,8 @@ import type { TaskSummary } from '@/shared/types'
 /**
  * Global navbar queue health indicator.
  *
- * Renders one compact row of status squares that reflects the WHOLE KinBot task
- * queue (any Kin, any origin), SSE-live. It is purely a different *projection*
+ * Renders one compact row of status squares that reflects the WHOLE Hivekeep task
+ * queue (any Agent, any origin), SSE-live. It is purely a different *projection*
  * of the same task-status single source of truth (`lib/task-status.ts`) used by
  * the lists and the timeline — it re-derives nothing: every square is a
  * <TaskStatusDot> (SoT colors/pulse) and every tooltip label comes from
@@ -57,8 +57,8 @@ export function QueueIndicator() {
   const handleOpen = (task: TaskSummary) => {
     openTask({
       taskId: task.id,
-      kinName: task.sourceKinName ?? task.parentKinName,
-      kinAvatarUrl: task.sourceKinAvatarUrl ?? task.parentKinAvatarUrl,
+      agentName: task.sourceAgentName ?? task.parentAgentName,
+      agentAvatarUrl: task.sourceAgentAvatarUrl ?? task.parentAgentAvatarUrl,
     })
   }
 
@@ -136,7 +136,7 @@ function TaskSquare({
 }) {
   const { t } = useTranslation()
   const meta = taskStatusMeta(task.status)
-  const kinName = task.sourceKinName ?? task.parentKinName
+  const agentName = task.sourceAgentName ?? task.parentAgentName
   const title = task.title?.trim() || t('sidebar.tasks.title')
 
   return (
@@ -156,7 +156,7 @@ function TaskSquare({
           <span className="font-medium truncate">{title}</span>
           <span className="text-muted-foreground">
             {t(meta.labelKey)}
-            {kinName ? ` · ${kinName}` : ''}
+            {agentName ? ` · ${agentName}` : ''}
           </span>
         </div>
       </TooltipContent>

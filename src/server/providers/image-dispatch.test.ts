@@ -30,7 +30,7 @@ import type {
   ImageProvider,
   ImageModel,
   ImageModelParamsSchema,
-} from '@kinbot-developer/sdk'
+} from '@hivekeep/sdk'
 
 const FAKE_TYPE = '__test-image-provider__'
 

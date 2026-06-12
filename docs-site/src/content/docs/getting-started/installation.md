@@ -1,68 +1,64 @@
 ---
 title: Installation
-description: Get KinBot running in under a minute.
+description: Get Hivekeep running in under a minute.
 ---
 
-KinBot runs as a single process with an embedded SQLite database. No Postgres, no Redis, no external dependencies.
+Hivekeep runs as a single process with an embedded SQLite database. No Postgres, no Redis, no external dependencies.
 
 ## Docker (recommended)
 
 ```bash
-docker run -d --name kinbot \
+docker run -d --name hivekeep \
   -p 3000:3000 \
-  -v kinbot-data:/app/data \
-  ghcr.io/marlburrow/kinbot:latest
+  -v hivekeep-data:/app/data \
+  ghcr.io/marlburrow/hivekeep:latest
 ```
 
-Open `http://localhost:3000` — the onboarding wizard handles the rest.
+Open `http://localhost:3000` and Queenie, your setup guide, handles the rest.
 
 ## One-liner script (Linux / macOS)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MarlBurroW/kinbot/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/MarlBurroW/hivekeep/main/install.sh | bash
 ```
 
 This will:
 1. Install [Bun](https://bun.sh) if not present
-2. Clone the repository to `/opt/kinbot`
+2. Clone the repository to `/opt/hivekeep`
 3. Install dependencies and build the frontend
 4. Run database migrations
 5. Create a system service (systemd on Linux, launchd on macOS)
-6. Start KinBot on port **3000**
+6. Start Hivekeep on port **3000**
 
 ### Customizing the install
 
 ```bash
-KINBOT_DIR=/home/me/kinbot \
-KINBOT_DATA_DIR=/home/me/kinbot-data \
-KINBOT_PORT=8080 \
-  bash <(curl -fsSL https://raw.githubusercontent.com/MarlBurroW/kinbot/main/install.sh)
+HIVEKEEP_DIR=/home/me/hivekeep \
+HIVEKEEP_DATA_DIR=/home/me/hivekeep-data \
+HIVEKEEP_PORT=8080 \
+  bash <(curl -fsSL https://raw.githubusercontent.com/MarlBurroW/hivekeep/main/install.sh)
 ```
 
 ## Docker Compose
 
 ```bash
-git clone https://github.com/MarlBurroW/kinbot.git
-cd kinbot/docker
+git clone https://github.com/MarlBurroW/hivekeep.git
+cd hivekeep/docker
 ENCRYPTION_KEY=$(openssl rand -hex 32) docker compose up -d
 ```
 
-See [`docker/docker-compose.yml`](https://github.com/MarlBurroW/kinbot/blob/main/docker/docker-compose.yml) for all options.
+See [`docker/docker-compose.yml`](https://github.com/MarlBurroW/hivekeep/blob/main/docker/docker-compose.yml) for all options.
 
 ## Manual install
 
 ```bash
-git clone https://github.com/MarlBurroW/kinbot.git
-cd kinbot
+git clone https://github.com/MarlBurroW/hivekeep.git
+cd hivekeep
 bun install
 bun run build
 bun run db:migrate
 NODE_ENV=production bun run start
 ```
-
-:::note
-When running manually without Docker, the default port is **3333** (set by `.env.example`). The Docker image and install script default to **3000**.
-:::
 
 ### Prerequisites
 
@@ -71,4 +67,6 @@ When running manually without Docker, the default port is **3333** (set by `.env
 
 ## What's next?
 
-Head to [First Kin](/kinbot/docs/getting-started/first-kin/) to create your first AI agent.
+Head to [First Agent](/docs/getting-started/first-agent/) to create your first AI agent.
+
+Already installed? See [Updating Hivekeep](/docs/getting-started/updating/) for the in-app updater, update channels, and automatic rollback.

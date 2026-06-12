@@ -16,6 +16,7 @@ import {
   readStoredFile,
 } from '@/server/services/file-storage'
 import { resolveToolWorkspace } from '@/server/tools/workspace'
+import { emitWorkspaceChangedForTool } from '@/server/services/workspace-files'
 import { resolveAndValidate } from '@/server/tools/filesystem-tools'
 import type { ToolRegistration } from '@/server/tools/types'
 
@@ -46,7 +47,7 @@ export const storeFileTool: ToolRegistration = {
         readAndBurn: z.boolean().optional().describe('Delete after first download. Default: false'),
       }),
       execute: async (args) => {
-        log.debug({ kinId: ctx.kinId, name: args.name, source: args.source }, 'store_file invoked')
+        log.debug({ agentId: ctx.agentId, name: args.name, source: args.source }, 'store_file invoked')
 
         try {
           const options = {
@@ -55,7 +56,7 @@ export const storeFileTool: ToolRegistration = {
             password: args.password,
             expiresIn: args.expiresIn,
             readAndBurn: args.readAndBurn,
-            createdByKinId: ctx.kinId,
+            createdByAgentId: ctx.agentId,
           }
 
           let result
@@ -63,7 +64,7 @@ export const storeFileTool: ToolRegistration = {
             case 'content': {
               if (!args.content) return { error: 'content is required when source is "content"' }
               result = await createFileFromContent(
-                ctx.kinId,
+                ctx.agentId,
                 args.name,
                 args.content,
                 args.mimeType || 'text/plain',
@@ -74,7 +75,7 @@ export const storeFileTool: ToolRegistration = {
             case 'workspace': {
               if (!args.filePath) return { error: 'filePath is required when source is "workspace"' }
               result = await createFileFromWorkspace(
-                ctx.kinId,
+                ctx.agentId,
                 args.filePath,
                 args.name,
                 options,
@@ -84,7 +85,7 @@ export const storeFileTool: ToolRegistration = {
             case 'url': {
               if (!args.url) return { error: 'url is required when source is "url"' }
               result = await createFileFromUrl(
-                ctx.kinId,
+                ctx.agentId,
                 args.url,
                 args.name,
                 options,
@@ -96,7 +97,7 @@ export const storeFileTool: ToolRegistration = {
           return result
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Failed to store file'
-          log.error({ error: err, kinId: ctx.kinId }, 'store_file failed')
+          log.error({ error: err, agentId: ctx.agentId }, 'store_file failed')
           return { error: message }
         }
       },
@@ -117,7 +118,7 @@ export const getStoredFileTool: ToolRegistration = {
         name: z.string().optional().describe('Provide either id or name'),
       }),
       execute: async ({ id, name }) => {
-        log.debug({ kinId: ctx.kinId, id, name }, 'get_stored_file invoked')
+        log.debug({ agentId: ctx.agentId, id, name }, 'get_stored_file invoked')
 
         if (!id && !name) return { error: 'Provide either id or name' }
 
@@ -126,7 +127,7 @@ export const getStoredFileTool: ToolRegistration = {
           return file ?? { error: 'File not found' }
         }
 
-        const file = await getFileByName(ctx.kinId, name!)
+        const file = await getFileByName(ctx.agentId, name!)
         return file ?? { error: 'File not found' }
       },
     }),
@@ -135,7 +136,7 @@ export const getStoredFileTool: ToolRegistration = {
 // ─── download_stored_file ─────────────────────────────────────────────────────
 
 export const downloadStoredFileTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: (ctx) =>
     tool({
       description:
@@ -152,14 +153,15 @@ export const downloadStoredFileTool: ToolRegistration = {
       }),
       execute: async ({ id, name, save_as }) => {
         if (!id && !name) return { error: 'Provide either id or name' }
-        const file = await readStoredFile({ id, name, kinId: ctx.kinId })
+        const file = await readStoredFile({ id, name, agentId: ctx.agentId })
         if (!file) return { error: 'File not found' }
         const workspace = resolveToolWorkspace(ctx)
         const rel = save_as?.trim() || file.originalName
         const abs = resolveAndValidate(rel, workspace)
         await mkdir(dirname(abs), { recursive: true })
         await writeFile(abs, file.buffer)
-        log.debug({ kinId: ctx.kinId, name: file.name, path: rel, bytes: file.buffer.length }, 'download_stored_file')
+        emitWorkspaceChangedForTool(ctx, abs, 'created')
+        log.debug({ agentId: ctx.agentId, name: file.name, path: rel, bytes: file.buffer.length }, 'download_stored_file')
         return { savedPath: rel, bytes: file.buffer.length, mimeType: file.mimeType }
       },
     }),
@@ -179,8 +181,8 @@ export const listStoredFilesTool: ToolRegistration = {
         offset: z.number().optional().describe('Default: 0'),
       }),
       execute: async ({ limit = 50, offset = 0 }) => {
-        log.debug({ kinId: ctx.kinId }, 'list_stored_files invoked')
-        const allFiles = await listFiles(ctx.kinId)
+        log.debug({ agentId: ctx.agentId }, 'list_stored_files invoked')
+        const allFiles = await listFiles(ctx.agentId)
         const paginated = allFiles.slice(offset, offset + limit)
         return { files: paginated, total: allFiles.length }
       },
@@ -200,8 +202,8 @@ export const searchStoredFilesTool: ToolRegistration = {
         query: z.string(),
       }),
       execute: async ({ query }) => {
-        log.debug({ kinId: ctx.kinId, query }, 'search_stored_files invoked')
-        const results = await searchFiles(query, ctx.kinId)
+        log.debug({ agentId: ctx.agentId, query }, 'search_stored_files invoked')
+        const results = await searchFiles(query, ctx.agentId)
         return { files: results, total: results.length }
       },
     }),
@@ -224,7 +226,7 @@ export const updateStoredFileTool: ToolRegistration = {
         readAndBurn: z.boolean().optional(),
       }),
       execute: async (args) => {
-        log.debug({ kinId: ctx.kinId, fileId: args.id }, 'update_stored_file invoked')
+        log.debug({ agentId: ctx.agentId, fileId: args.id }, 'update_stored_file invoked')
 
         const updated = await updateFile(args.id, {
           name: args.name,
@@ -252,7 +254,7 @@ export const deleteStoredFileTool: ToolRegistration = {
         id: z.string(),
       }),
       execute: async ({ id }) => {
-        log.debug({ kinId: ctx.kinId, fileId: id }, 'delete_stored_file invoked')
+        log.debug({ agentId: ctx.agentId, fileId: id }, 'delete_stored_file invoked')
         const deleted = await deleteFile(id)
         return deleted ? { success: true } : { error: 'File not found' }
       },

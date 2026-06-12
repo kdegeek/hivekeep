@@ -1,0 +1,123 @@
+---
+import { Icon } from 'astro-icon/components';
+import { getDict, localePath, type Locale } from '../i18n';
+// Colored brand marks from @lobehub/icons (same set the Hivekeep app uses, see ProviderIcon.tsx).
+// Rendered server-side → static HTML, no client JS.
+import Claude from '@lobehub/icons/es/Claude';
+import OpenAI from '@lobehub/icons/es/OpenAI';
+import Gemini from '@lobehub/icons/es/Gemini';
+import OpenRouter from '@lobehub/icons/es/OpenRouter';
+import XAI from '@lobehub/icons/es/XAI';
+import DeepSeek from '@lobehub/icons/es/DeepSeek';
+import Minimax from '@lobehub/icons/es/Minimax';
+import Kimi from '@lobehub/icons/es/Kimi';
+import Perplexity from '@lobehub/icons/es/Perplexity';
+// Mistral & Replicate are plugin-only providers, shown in the plugin cards below (not the built-in chips).
+import Mistral from '@lobehub/icons/es/Mistral';
+import Replicate from '@lobehub/icons/es/Replicate';
+
+const S = 18;
+
+interface Props {
+  lang: Locale;
+}
+const { lang } = Astro.props;
+const t = getDict(lang).components.providers;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const pluginsHref = `${base}${localePath(lang, '/plugins')}`;
+---
+<div class="wrap" id="providers"><section class="section" style="grid-template-columns:1fr;">
+  <div class="body">
+    <span class="kicker">{t.kicker}</span>
+    <h2 class="display" style="margin-top:12px">{t.heading}</h2>
+    <p>{t.intro}</p>
+
+    <div class="prov-sub">
+      <span class="prov-sub-marks"><Claude.Color size={20} /><OpenAI size={20} /></span>
+      <span set:html={t.subCallout}></span>
+    </div>
+
+    <div class="prov-groups">
+      <div class="pgroup">
+        <div class="ptitle"><Icon name="lucide:brain-circuit" /> {t.groupLlm}</div>
+        <div class="picons">
+          <span class="pchip"><Claude.Color size={S} /> Anthropic</span>
+          <span class="pchip"><OpenAI size={S} /> OpenAI</span>
+          <span class="pchip"><Gemini.Color size={S} /> Gemini</span>
+          <span class="pchip"><XAI size={S} /> xAI</span>
+          <span class="pchip"><DeepSeek.Color size={S} /> DeepSeek</span>
+          <span class="pchip"><Minimax.Color size={S} /> MiniMax</span>
+          <span class="pchip"><Kimi.Color size={S} /> Kimi</span>
+          <span class="pchip"><OpenRouter size={S} /> OpenRouter</span>
+        </div>
+      </div>
+
+      <div class="pgroup">
+        <div class="ptitle"><Icon name="lucide:image" /> {t.groupImage}</div>
+        <div class="picons">
+          <span class="pchip"><OpenAI size={S} /> OpenAI</span>
+          <span class="pchip"><Gemini.Color size={S} /> Gemini</span>
+        </div>
+      </div>
+
+      <div class="pgroup">
+        <div class="ptitle"><Icon name="lucide:search" /> {t.groupSearch}</div>
+        <div class="picons">
+          <span class="pchip"><Perplexity size={S} /> Perplexity</span>
+          <span class="pchip"><Icon name="simple-icons:brave" /> Brave</span>
+          <span class="pchip more">Tavily</span>
+          <span class="pchip more">SerpAPI</span>
+        </div>
+      </div>
+
+      <div class="pgroup">
+        <div class="ptitle"><Icon name="lucide:mic" /> {t.groupSpeech}</div>
+        <div class="picons">
+          <span class="pchip"><Icon name="simple-icons:elevenlabs" /> ElevenLabs</span>
+          <span class="pchip"><OpenAI size={S} /> OpenAI</span>
+        </div>
+      </div>
+
+      <div class="pgroup">
+        <div class="ptitle"><Icon name="lucide:vector-square" /> {t.groupEmbeddings}</div>
+        <div class="picons">
+          <span class="pchip"><OpenAI size={S} /> OpenAI</span>
+        </div>
+      </div>
+
+      <div class="pgroup">
+        <div class="ptitle"><Icon name="lucide:mail" /> {t.groupAccounts}</div>
+        <div class="picons">
+          <span class="pchip"><Icon name="simple-icons:gmail" /> Gmail</span>
+          <span class="pchip"><Icon name="simple-icons:googlecalendar" /> Calendar</span>
+          <span class="pchip"><Icon name="simple-icons:google" /> Contacts</span>
+          <span class="pchip more">IMAP · CalDAV</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="plug-note" set:html={t.plugNote}></p>
+
+    <div class="plug-grid">
+      <a class="plug" href="https://github.com/MarlBurroW/hivekeep-plugin-twilio-sms" target="_blank" rel="noopener">
+        <span class="ptag">{t.tagChannel}</span>
+        <h4><Icon name="simple-icons:twilio" /> Twilio SMS</h4>
+        <p set:html={t.twilioDesc}></p>
+        <span class="gh"><Icon name="simple-icons:github" /> {t.viewGithub}</span>
+      </a>
+      <a class="plug" href="https://github.com/MarlBurroW/hivekeep-plugin-mistral" target="_blank" rel="noopener">
+        <span class="ptag">{t.tagLlm}</span>
+        <h4><Mistral.Color size={19} /> Mistral</h4>
+        <p set:html={t.mistralDesc}></p>
+        <span class="gh"><Icon name="simple-icons:github" /> {t.viewGithub}</span>
+      </a>
+      <a class="plug" href="https://github.com/MarlBurroW/hivekeep-plugin-replicate" target="_blank" rel="noopener">
+        <span class="ptag">{t.tagImageLlm}</span>
+        <h4><Replicate size={19} /> Replicate</h4>
+        <p set:html={t.replicateDesc}></p>
+        <span class="gh"><Icon name="simple-icons:github" /> {t.viewGithub}</span>
+      </a>
+    </div>
+    <p class="plug-more"><a class="link-mono" href={pluginsHref}>{t.browseAll} <Icon name="lucide:arrow-right" /></a></p>
+  </div>
+</section></div>

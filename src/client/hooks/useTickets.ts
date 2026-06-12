@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api } from '@/client/lib/api'
 import { useSSE, useSSEResync } from '@/client/hooks/useSSE'
-import type { TicketSummary, TicketStatus, Ticket, KinThinkingConfig } from '@/shared/types'
+import type { TicketSummary, TicketStatus, Ticket, AgentThinkingConfig } from '@/shared/types'
 
 interface CreateTicketInput {
   title: string
@@ -21,7 +21,7 @@ interface UpdateTicketInput {
 interface StartTicketTaskResult {
   task: {
     id: string
-    parentKinId: string
+    parentAgentId: string
     ticketId: string
     status: string
     mode: 'await'
@@ -32,7 +32,7 @@ interface StartTicketTaskResult {
 interface EnrichTicketResult {
   task: {
     id: string
-    parentKinId: string
+    parentAgentId: string
     ticketId: string
     status: string
     mode: 'await'
@@ -126,25 +126,25 @@ export function useTickets(projectId: string | null) {
   const startTicketTask = useCallback(
     async (
       ticketId: string,
-      kinId: string,
+      agentId: string,
       runPrompt?: string,
       toolboxIds?: string[],
       /** Per-run model override. Coupled with `providerId` (both or neither).
-       *  When unset, the server falls back to project default → Kin model. */
+       *  When unset, the server falls back to project default → Agent model. */
       model?: string,
       providerId?: string,
-      /** Per-run thinking/effort override. When unset, inherits project → Kin. */
-      thinkingConfig?: KinThinkingConfig,
+      /** Per-run thinking/effort override. When unset, inherits project → Agent. */
+      thinkingConfig?: AgentThinkingConfig,
     ): Promise<StartTicketTaskResult['task']> => {
       const trimmed = runPrompt?.trim() ?? ''
       const body: {
-        kinId: string
+        agentId: string
         runPrompt?: string
         toolboxIds?: string[]
         model?: string
         providerId?: string
-        thinkingConfig?: KinThinkingConfig
-      } = { kinId }
+        thinkingConfig?: AgentThinkingConfig
+      } = { agentId }
       if (trimmed.length > 0) body.runPrompt = trimmed
       if (toolboxIds && toolboxIds.length > 0) body.toolboxIds = toolboxIds
       if (model && providerId) {
@@ -164,10 +164,10 @@ export function useTickets(projectId: string | null) {
   const enrichTicket = useCallback(
     async (
       ticketId: string,
-      kinId: string,
+      agentId: string,
       focus?: string,
     ): Promise<EnrichTicketResult['task']> => {
-      const data = await api.post<EnrichTicketResult>(`/tickets/${ticketId}/enrich`, { kinId, focus })
+      const data = await api.post<EnrichTicketResult>(`/tickets/${ticketId}/enrich`, { agentId, focus })
       return data.task
     },
     [],

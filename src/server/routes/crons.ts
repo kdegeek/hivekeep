@@ -1,7 +1,8 @@
+import type { AgentThinkingEffort } from '@/shared/types'
 import { Hono } from 'hono'
 import { eq, inArray, sql } from 'drizzle-orm'
 import { db } from '@/server/db/index'
-import { kins, tasks } from '@/server/db/schema'
+import { agents, tasks } from '@/server/db/schema'
 import {
   createCron,
   updateCron,
@@ -18,13 +19,13 @@ const log = createLogger('routes:crons')
 
 export const cronRoutes = new Hono<{ Variables: AppVariables }>()
 
-function kinAvatarUrl(kinId: string, avatarPath: string | null): string | null {
+function agentAvatarUrl(agentId: string, avatarPath: string | null): string | null {
   if (!avatarPath) return null
   const ext = avatarPath.split('.').pop() ?? 'png'
-  return `/api/uploads/kins/${kinId}/avatar.${ext}`
+  return `/api/uploads/agents/${agentId}/avatar.${ext}`
 }
 
-interface KinInfo { name: string; avatarPath: string | null }
+interface AgentInfo { name: string; avatarPath: string | null }
 
 /** Count how many tasks each cron has spawned (one task per execution). Returns
  *  a cronId → count map; missing crons mean zero. Uses the idx_tasks_cron index. */
@@ -66,19 +67,19 @@ function parseToolboxIds(raw: string | null | undefined): string[] {
   }
 }
 
-function serializeCron(cron: any, kinInfo?: KinInfo, targetKinInfo?: KinInfo, executionCount = 0) {
+function serializeCron(cron: any, agentInfo?: AgentInfo, targetAgentInfo?: AgentInfo, executionCount = 0) {
   return {
     executionCount,
     id: cron.id,
-    kinId: cron.kinId,
-    kinName: kinInfo?.name ?? 'Unknown',
-    kinAvatarUrl: kinInfo ? kinAvatarUrl(cron.kinId, kinInfo.avatarPath) : null,
+    agentId: cron.agentId,
+    agentName: agentInfo?.name ?? 'Unknown',
+    agentAvatarUrl: agentInfo ? agentAvatarUrl(cron.agentId, agentInfo.avatarPath) : null,
     name: cron.name,
     schedule: cron.schedule,
     taskDescription: cron.taskDescription,
-    targetKinId: cron.targetKinId,
-    targetKinName: targetKinInfo?.name ?? null,
-    targetKinAvatarUrl: cron.targetKinId && targetKinInfo ? kinAvatarUrl(cron.targetKinId, targetKinInfo.avatarPath) : null,
+    targetAgentId: cron.targetAgentId,
+    targetAgentName: targetAgentInfo?.name ?? null,
+    targetAgentAvatarUrl: cron.targetAgentId && targetAgentInfo ? agentAvatarUrl(cron.targetAgentId, targetAgentInfo.avatarPath) : null,
     model: cron.model,
     providerId: cron.providerId ?? null,
     thinkingEnabled: parseThinkingConfig(cron.thinkingConfig).enabled,
@@ -94,20 +95,20 @@ function serializeCron(cron: any, kinInfo?: KinInfo, targetKinInfo?: KinInfo, ex
   }
 }
 
-// GET /api/crons — list crons with optional kinId filter
+// GET /api/crons — list crons with optional agentId filter
 cronRoutes.get('/', async (c) => {
-  const kinId = c.req.query('kinId')
-  const allCrons = await listCrons(kinId ?? undefined)
+  const agentId = c.req.query('agentId')
+  const allCrons = await listCrons(agentId ?? undefined)
 
-  // Fetch kin info (name + avatar) for owners and targets
-  const kinIds = [...new Set([
-    ...allCrons.map((cr) => cr.kinId),
-    ...allCrons.map((cr) => cr.targetKinId).filter(Boolean) as string[],
+  // Fetch agent info (name + avatar) for owners and targets
+  const agentIds = [...new Set([
+    ...allCrons.map((cr) => cr.agentId),
+    ...allCrons.map((cr) => cr.targetAgentId).filter(Boolean) as string[],
   ])]
-  const kinMap = new Map<string, KinInfo>()
-  for (const id of kinIds) {
-    const kin = await db.select({ name: kins.name, avatarPath: kins.avatarPath }).from(kins).where(eq(kins.id, id)).get()
-    if (kin) kinMap.set(id, kin)
+  const agentMap = new Map<string, AgentInfo>()
+  for (const id of agentIds) {
+    const agent = await db.select({ name: agents.name, avatarPath: agents.avatarPath }).from(agents).where(eq(agents.id, id)).get()
+    if (agent) agentMap.set(id, agent)
   }
 
   const execCounts = await countTasksByCron(allCrons.map((cr) => cr.id))
@@ -115,8 +116,8 @@ cronRoutes.get('/', async (c) => {
   return c.json({
     crons: allCrons.map((cr) => serializeCron(
       cr,
-      kinMap.get(cr.kinId),
-      cr.targetKinId ? kinMap.get(cr.targetKinId) : undefined,
+      agentMap.get(cr.agentId),
+      cr.targetAgentId ? agentMap.get(cr.targetAgentId) : undefined,
       execCounts.get(cr.id) ?? 0,
     )),
   })
@@ -125,29 +126,29 @@ cronRoutes.get('/', async (c) => {
 // POST /api/crons — create a cron (user-created, no approval needed)
 cronRoutes.post('/', async (c) => {
   const body = await c.req.json<{
-    kinId: string
+    agentId: string
     name: string
     schedule: string
     taskDescription: string
-    targetKinId?: string
+    targetAgentId?: string
     model?: string
     providerId?: string
     runOnce?: boolean
     triggerParentTurn?: boolean
     thinkingEnabled?: boolean
-    thinkingEffort?: 'low' | 'medium' | 'high' | 'max' | null
+    thinkingEffort?: AgentThinkingEffort | null
     toolboxIds?: string[]
   }>()
 
-  if (!body.kinId || !body.name || !body.schedule || !body.taskDescription) {
+  if (!body.agentId || !body.name || !body.schedule || !body.taskDescription) {
     return c.json(
-      { error: { code: 'VALIDATION_ERROR', message: 'kinId, name, schedule, and taskDescription are required' } },
+      { error: { code: 'VALIDATION_ERROR', message: 'agentId, name, schedule, and taskDescription are required' } },
       400,
     )
   }
 
   try {
-    let thinkingConfig: { enabled: boolean; effort: 'low' | 'medium' | 'high' | 'max' | null } | undefined
+    let thinkingConfig: { enabled: boolean; effort: AgentThinkingEffort | null } | undefined
     if (body.thinkingEffort !== undefined) {
       thinkingConfig = body.thinkingEffort === null
         ? { enabled: false, effort: null }
@@ -159,11 +160,11 @@ cronRoutes.post('/', async (c) => {
     }
 
     const cron = await createCron({
-      kinId: body.kinId,
+      agentId: body.agentId,
       name: body.name,
       schedule: body.schedule,
       taskDescription: body.taskDescription,
-      targetKinId: body.targetKinId,
+      targetAgentId: body.targetAgentId,
       model: body.model,
       providerId: body.providerId,
       runOnce: body.runOnce,
@@ -173,11 +174,11 @@ cronRoutes.post('/', async (c) => {
       createdBy: 'user',
     })
 
-    log.info({ cronId: cron.id, kinId: cron.kinId, name: cron.name, schedule: cron.schedule }, 'Cron created')
+    log.info({ cronId: cron.id, agentId: cron.agentId, name: cron.name, schedule: cron.schedule }, 'Cron created')
 
-    const kin = await db.select({ name: kins.name, avatarPath: kins.avatarPath }).from(kins).where(eq(kins.id, cron.kinId)).get()
-    const targetKin = cron.targetKinId ? await db.select({ name: kins.name, avatarPath: kins.avatarPath }).from(kins).where(eq(kins.id, cron.targetKinId)).get() : undefined
-    return c.json({ cron: serializeCron(cron, kin ?? undefined, targetKin ?? undefined) }, 201)
+    const agent = await db.select({ name: agents.name, avatarPath: agents.avatarPath }).from(agents).where(eq(agents.id, cron.agentId)).get()
+    const targetAgent = cron.targetAgentId ? await db.select({ name: agents.name, avatarPath: agents.avatarPath }).from(agents).where(eq(agents.id, cron.targetAgentId)).get() : undefined
+    return c.json({ cron: serializeCron(cron, agent ?? undefined, targetAgent ?? undefined) }, 201)
   } catch (err) {
     return c.json(
       { error: { code: 'CRON_CREATE_ERROR', message: err instanceof Error ? err.message : 'Unknown error' } },
@@ -198,14 +199,14 @@ cronRoutes.patch('/:id', async (c) => {
     name?: string
     schedule?: string
     taskDescription?: string
-    targetKinId?: string | null
+    targetAgentId?: string | null
     model?: string | null
     providerId?: string | null
     isActive?: boolean
     runOnce?: boolean
     triggerParentTurn?: boolean
     thinkingEnabled?: boolean
-    thinkingEffort?: 'low' | 'medium' | 'high' | 'max' | null
+    thinkingEffort?: AgentThinkingEffort | null
     toolboxIds?: string[] | null
   }>()
 
@@ -235,10 +236,10 @@ cronRoutes.patch('/:id', async (c) => {
       return c.json({ error: { code: 'NOT_FOUND', message: 'Cron not found' } }, 404)
     }
 
-    const kin = await db.select({ name: kins.name, avatarPath: kins.avatarPath }).from(kins).where(eq(kins.id, updated.kinId)).get()
-    const targetKin = updated.targetKinId ? await db.select({ name: kins.name, avatarPath: kins.avatarPath }).from(kins).where(eq(kins.id, updated.targetKinId)).get() : undefined
+    const agent = await db.select({ name: agents.name, avatarPath: agents.avatarPath }).from(agents).where(eq(agents.id, updated.agentId)).get()
+    const targetAgent = updated.targetAgentId ? await db.select({ name: agents.name, avatarPath: agents.avatarPath }).from(agents).where(eq(agents.id, updated.targetAgentId)).get() : undefined
     const execCount = (await countTasksByCron([updated.id])).get(updated.id) ?? 0
-    return c.json({ cron: serializeCron(updated, kin ?? undefined, targetKin ?? undefined, execCount) })
+    return c.json({ cron: serializeCron(updated, agent ?? undefined, targetAgent ?? undefined, execCount) })
   } catch (err) {
     return c.json(
       { error: { code: 'CRON_UPDATE_ERROR', message: err instanceof Error ? err.message : 'Unknown error' } },
@@ -277,7 +278,7 @@ cronRoutes.delete('/:id', async (c) => {
 
   try {
     await deleteCron(cronId)
-    log.info({ cronId, kinId: existing.kinId, name: existing.name }, 'Cron deleted')
+    log.info({ cronId, agentId: existing.agentId, name: existing.name }, 'Cron deleted')
     return c.json({ success: true })
   } catch (err) {
     return c.json(
@@ -287,7 +288,7 @@ cronRoutes.delete('/:id', async (c) => {
   }
 })
 
-// POST /api/crons/:id/approve — approve a Kin-created cron
+// POST /api/crons/:id/approve — approve an Agent-created cron
 cronRoutes.post('/:id/approve', async (c) => {
   const cronId = c.req.param('id')
   const existing = await getCron(cronId)
@@ -307,10 +308,10 @@ cronRoutes.post('/:id/approve', async (c) => {
     return c.json({ error: { code: 'NOT_FOUND', message: 'Cron not found' } }, 404)
   }
 
-  log.info({ cronId, kinId: approved.kinId, name: approved.name }, 'Cron approved')
+  log.info({ cronId, agentId: approved.agentId, name: approved.name }, 'Cron approved')
 
-  const kin = await db.select({ name: kins.name, avatarPath: kins.avatarPath }).from(kins).where(eq(kins.id, approved.kinId)).get()
-  const targetKin = approved.targetKinId ? await db.select({ name: kins.name, avatarPath: kins.avatarPath }).from(kins).where(eq(kins.id, approved.targetKinId)).get() : undefined
+  const agent = await db.select({ name: agents.name, avatarPath: agents.avatarPath }).from(agents).where(eq(agents.id, approved.agentId)).get()
+  const targetAgent = approved.targetAgentId ? await db.select({ name: agents.name, avatarPath: agents.avatarPath }).from(agents).where(eq(agents.id, approved.targetAgentId)).get() : undefined
   const approvedExecCount = (await countTasksByCron([approved.id])).get(approved.id) ?? 0
-  return c.json({ cron: serializeCron(approved, kin ?? undefined, targetKin ?? undefined, approvedExecCount) })
+  return c.json({ cron: serializeCron(approved, agent ?? undefined, targetAgent ?? undefined, approvedExecCount) })
 })

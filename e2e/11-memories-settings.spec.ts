@@ -8,29 +8,29 @@ async function openMemoriesSettings(page: Page) {
   await page.locator('button:has(.lucide-settings-2)').click()
   await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 })
   await page.getByRole('dialog').getByText('Memories', { exact: true }).click()
-  await expect(page.getByText('View and manage all Kin memories.')).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByText('View and manage all Agent memories.')).toBeVisible({ timeout: 5_000 })
 }
 
 /**
- * Ensure a Kin exists (needed for creating memories).
+ * Ensure an Agent exists (needed for creating memories).
  */
-async function ensureKinExists(page: Page) {
-  // Navigate to home, check if a Kin already exists in sidebar
-  const kinCard = page.locator('[data-slot="sidebar"] .surface-card').first()
-  if (await kinCard.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    return // Kin already exists
+async function ensureAgentExists(page: Page) {
+  // Navigate to home, check if an Agent already exists in sidebar
+  const agentCard = page.locator('[data-slot="sidebar"] .surface-card').first()
+  if (await agentCard.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    return // Agent already exists
   }
 
-  // Create a Kin via the wizard
+  // Create an Agent via the wizard
   const createButton = page.getByRole('button', { name: /create/i }).first()
   if (await createButton.isVisible({ timeout: 2_000 }).catch(() => false)) {
     await createButton.click()
   }
 
   // Fill wizard form
-  const nameInput = page.locator('#kin-name')
+  const nameInput = page.locator('#agent-name')
   if (await nameInput.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await nameInput.fill('Memory Test Kin')
+    await nameInput.fill('Memory Test Agent')
     // Click through wizard to create
     const nextBtn = page.getByRole('button', { name: /create|next|save/i }).last()
     await nextBtn.click()
@@ -130,10 +130,10 @@ test.describe.serial('Settings — Memories', () => {
     await page.getByRole('button', { name: 'Add memory' }).first().click()
     await expect(page.getByPlaceholder('Enter the memory content...')).toBeVisible({ timeout: 5_000 })
 
-    // Select a Kin if the Kin picker is visible
-    const kinPicker = page.locator('[data-slot="select-trigger"]').filter({ hasText: /select a kin/i })
-    if (await kinPicker.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await kinPicker.click()
+    // Select an Agent if the Agent picker is visible
+    const agentPicker = page.locator('[data-slot="select-trigger"]').filter({ hasText: /select an agent/i })
+    if (await agentPicker.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await agentPicker.click()
       await page.locator('[data-slot="select-item"]').first().click()
     }
 
@@ -174,10 +174,10 @@ test.describe.serial('Settings — Memories', () => {
     await page.getByRole('button', { name: 'Add memory' }).click()
     await expect(page.getByPlaceholder('Enter the memory content...')).toBeVisible({ timeout: 5_000 })
 
-    // Select Kin if picker visible
-    const kinPicker = page.locator('[data-slot="select-trigger"]').filter({ hasText: /select a kin/i })
-    if (await kinPicker.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await kinPicker.click()
+    // Select Agent if picker visible
+    const agentPicker = page.locator('[data-slot="select-trigger"]').filter({ hasText: /select an agent/i })
+    if (await agentPicker.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await agentPicker.click()
       await page.locator('[data-slot="select-item"]').first().click()
     }
 

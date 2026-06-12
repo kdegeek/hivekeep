@@ -1,7 +1,9 @@
+import { THINKING_EFFORTS } from '@/shared/constants'
+import type { AgentThinkingEffort } from '@/shared/types'
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { db } from '@/server/db/index'
-import { userProfiles, kins } from '@/server/db/schema'
+import { userProfiles, agents } from '@/server/db/schema'
 import {
   getGlobalPrompt,
   setGlobalPrompt,
@@ -36,6 +38,8 @@ import {
   setDefaultScoutModel,
   getDefaultScoutProviderId,
   setDefaultScoutProviderId,
+  getDefaultScoutThinking,
+  setDefaultScoutThinking,
   getDefaultSearchProviderId,
   setDefaultSearchProviderId,
   getDefaultTtsProviderId,
@@ -54,7 +58,9 @@ import {
   generateNeutralAvatarBase,
   setCustomBaseAvatar,
   clearCustomBaseAvatar,
+  ImageGenerationError,
 } from '@/server/services/image-generation'
+import { startBulkAvatarRegen, getBulkAvatarJob } from '@/server/services/avatar-regeneration'
 import { sseManager } from '@/server/sse/index'
 import type { AppVariables } from '@/server/app'
 import { createLogger } from '@/server/logger'
@@ -65,7 +71,7 @@ const settingsRoutes = new Hono<{ Variables: AppVariables }>()
 /**
  * Notify clients that a default-model setting changed.
  *
- * The setup checklist + KinFormModal pre-fill rely on
+ * The setup checklist + AgentFormModal pre-fill rely on
  * `/settings/default-models`, but there was no event to invalidate
  * them — adding a default LLM updated the navbar popover (popovers
  * remount fresh on open) but left the inline checklist stale. One
@@ -193,7 +199,7 @@ settingsRoutes.post('/avatar-base/generate', async (c) => {
     })
     const ext = result.mediaType.includes('webp') ? 'webp' : 'png'
     log.info('Neutral avatar base generated')
-    return c.json({ baseImageUrl: `/api/kins/avatar-base/image?v=${Date.now()}`, ext })
+    return c.json({ baseImageUrl: `/api/agents/avatar-base/image?v=${Date.now()}`, ext })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Base avatar generation failed'
     log.error({ err }, 'Failed to generate neutral avatar base')
@@ -217,14 +223,73 @@ settingsRoutes.post('/avatar-base/upload', async (c) => {
   const bytes = Buffer.from(await file.arrayBuffer())
   await setCustomBaseAvatar(bytes, ext)
   log.info({ ext }, 'Custom avatar base uploaded')
-  return c.json({ baseImageUrl: `/api/kins/avatar-base/image?v=${Date.now()}`, hasCustomBase: true })
+  return c.json({ baseImageUrl: `/api/agents/avatar-base/image?v=${Date.now()}`, hasCustomBase: true })
 })
 
 // DELETE /api/settings/avatar-base — drop the custom base, fall back to bundled.
 settingsRoutes.delete('/avatar-base', async (c) => {
   clearCustomBaseAvatar()
   log.info('Custom avatar base cleared')
-  return c.json({ baseImageUrl: `/api/kins/avatar-base/image?v=${Date.now()}`, hasCustomBase: false })
+  return c.json({ baseImageUrl: `/api/agents/avatar-base/image?v=${Date.now()}`, hasCustomBase: false })
+})
+
+// GET /api/settings/avatars/bulk-regenerate — current/last bulk job snapshot,
+// so the modal can hydrate live progress when reopened mid-run.
+settingsRoutes.get('/avatars/bulk-regenerate', async (c) => {
+  return c.json({ job: getBulkAvatarJob() })
+})
+
+// POST /api/settings/avatars/bulk-regenerate — kick off a background bulk
+// regeneration of the selected agents' avatars through the normal "auto" flow.
+// Returns immediately; progress streams over SSE (avatar-bulk:progress/done).
+settingsRoutes.post('/avatars/bulk-regenerate', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const { agentIds, imageProviderId, imageModel } = body as {
+    agentIds?: unknown
+    imageProviderId?: string
+    imageModel?: string
+  }
+
+  if (!Array.isArray(agentIds) || agentIds.length === 0 || !agentIds.every((id) => typeof id === 'string')) {
+    return c.json(
+      { error: { code: 'INVALID_BODY', message: 'agentIds must be a non-empty array of agent ids' } },
+      400,
+    )
+  }
+
+  // Keep only ids that actually exist, preserving the caller's order.
+  const existing = db.select({ id: agents.id }).from(agents).all()
+  const existingIds = new Set(existing.map((a) => a.id))
+  const validIds = (agentIds as string[]).filter((id) => existingIds.has(id))
+  if (validIds.length === 0) {
+    return c.json(
+      { error: { code: 'NO_VALID_AGENTS', message: 'None of the given agents exist' } },
+      400,
+    )
+  }
+
+  if (getBulkAvatarJob()?.status === 'running') {
+    return c.json(
+      { error: { code: 'JOB_RUNNING', message: 'A bulk avatar regeneration is already running' } },
+      409,
+    )
+  }
+
+  try {
+    const job = await startBulkAvatarRegen(validIds, {
+      ...(imageProviderId ? { providerId: imageProviderId } : {}),
+      ...(imageModel ? { modelId: imageModel } : {}),
+    })
+    log.info({ jobId: job.id, total: job.total }, 'Bulk avatar regeneration started')
+    return c.json({ jobId: job.id, total: job.total })
+  } catch (err) {
+    if (err instanceof ImageGenerationError && err.code === 'NO_IMAGE_PROVIDER') {
+      return c.json({ error: { code: 'NO_IMAGE_PROVIDER', message: err.message } }, 422)
+    }
+    const message = err instanceof Error ? err.message : 'Bulk avatar regeneration failed'
+    log.error({ err }, 'Failed to start bulk avatar regeneration')
+    return c.json({ error: { code: 'BULK_REGEN_FAILED', message } }, 502)
+  }
 })
 
 // GET /api/settings/models — legacy endpoint (extraction + embedding only)
@@ -245,6 +310,7 @@ settingsRoutes.get('/default-models', async (c) => {
     defaultImageModel, defaultImageProviderId,
     defaultCompactingModel, defaultCompactingProviderId,
     defaultScoutModel, defaultScoutProviderId,
+    defaultScoutThinking,
     extractionModel, extractionProviderId,
     embeddingModel, embeddingProviderId,
     defaultSearchProviderId,
@@ -255,6 +321,7 @@ settingsRoutes.get('/default-models', async (c) => {
     getDefaultImageModel(), getDefaultImageProviderId(),
     getDefaultCompactingModel(), getDefaultCompactingProviderId(),
     getDefaultScoutModel(), getDefaultScoutProviderId(),
+    getDefaultScoutThinking(),
     getExtractionModel(), getExtractionProviderId(),
     getEmbeddingModel(), getEmbeddingProviderId(),
     getDefaultSearchProviderId(),
@@ -266,6 +333,7 @@ settingsRoutes.get('/default-models', async (c) => {
     defaultImageModel, defaultImageProviderId,
     defaultCompactingModel, defaultCompactingProviderId,
     defaultScoutModel, defaultScoutProviderId,
+    defaultScoutThinking,
     extractionModel, extractionProviderId,
     embeddingModel, embeddingProviderId,
     defaultSearchProviderId,
@@ -383,6 +451,39 @@ settingsRoutes.put('/default-scout', async (c) => {
   log.info({ model: model.trim(), providerId }, 'Default scout model updated')
   broadcastDefaultsUpdated()
   return c.json({ defaultScoutModel: model.trim(), defaultScoutProviderId: providerId ?? null })
+})
+
+// PUT /api/settings/default-scout-thinking
+//
+// Global default reasoning config for scouts (one tier of
+// resolveScoutThinking()'s chain). Body: { thinking: AgentThinkingConfig | null }
+// — null clears (scouts then fall back to the calling Agent's own config).
+settingsRoutes.put('/default-scout-thinking', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const thinking = (body as { thinking?: unknown }).thinking
+
+  if (thinking === null || thinking === undefined) {
+    await setDefaultScoutThinking(null)
+    log.info('Default scout thinking cleared')
+    broadcastDefaultsUpdated()
+    return c.json({ defaultScoutThinking: null })
+  }
+  if (typeof thinking !== 'object') {
+    return c.json(
+      { error: { code: 'INVALID_BODY', message: 'thinking must be an object or null' } },
+      400,
+    )
+  }
+  const cfg = thinking as Record<string, unknown>
+  const enabled = cfg.enabled === true
+  const effort = typeof cfg.effort === 'string' && (THINKING_EFFORTS as readonly string[]).includes(cfg.effort)
+    ? (cfg.effort as AgentThinkingEffort)
+    : null
+  const sanitized = { enabled, ...(effort !== null ? { effort } : {}) }
+  await setDefaultScoutThinking(sanitized)
+  log.info({ thinking: sanitized }, 'Default scout thinking updated')
+  broadcastDefaultsUpdated()
+  return c.json({ defaultScoutThinking: sanitized })
 })
 
 // PUT /api/settings/default-search
@@ -615,7 +716,7 @@ settingsRoutes.put('/task-limits', async (c) => {
 // The dashboard checklist tracks which items the user has dismissed
 // ('Skip' button) so the UI doesn't keep nagging about features the
 // instance owner has consciously opted out of. Storage is global
-// app_settings (single shared state across all admins — KinBot is a
+// app_settings (single shared state across all admins — Hivekeep is a
 // small-group product, not multi-tenant per-user).
 
 // GET /api/settings/dismissed-setup-items

@@ -11,7 +11,7 @@ import {
   TaskNotFoundError,
   type ListTasksFilters,
 } from '@/server/services/tasks'
-import { resolveKinId } from '@/server/services/kin-resolver'
+import { resolveAgentId } from '@/server/services/agent-resolver'
 import { db } from '@/server/db/index'
 import { messages, tasks } from '@/server/db/schema'
 import { sql } from 'drizzle-orm'
@@ -51,15 +51,15 @@ async function resolveToolboxNamesToIds(
 }
 
 /**
- * spawn_self — clone the current Kin with a specific mission.
- * Available to main agents and sub-kin tasks (enables router → worker pattern).
+ * spawn_self — clone the current Agent with a specific mission.
+ * Available to main agents and sub-agent tasks (enables router → worker pattern).
  */
 export const spawnSelfTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: (ctx) =>
     tool({
       description:
-        'Spawn a sub-Kin copy of yourself with a specific task. Your current turn ends immediately after spawning.',
+        'Spawn a sub-Agent copy of yourself with a specific task. Your current turn ends immediately after spawning.',
       inputSchema: z.object({
         title: z.string().describe('Short label, max ~60 chars'),
         task_description: z.string(),
@@ -68,7 +68,7 @@ export const spawnSelfTool: ToolRegistration = {
           .describe(
             '"await" = result triggers a new turn; "async" = informational, no new turn',
           ),
-        model: z.string().optional().describe('Model ID (e.g. "claude-sonnet-4-6", "gpt-5.5"). Omit to use the parent Kin\'s default model.'),
+        model: z.string().optional().describe('Model ID (e.g. "claude-sonnet-4-6", "gpt-5.5"). Omit to use the parent Agent\'s default model.'),
         provider_id: z.string().optional()
           .describe('Provider slug (e.g. "openai-codex", "claude-max") or UUID — get it from list_providers or list_models (the `slug`/`providerSlug` field). Slug is preferred (stable, human-readable). Required whenever `model` is set, since the same model name can be served by several providers.'),
         allow_human_prompt: z.boolean().optional().describe('Default: true'),
@@ -79,24 +79,24 @@ export const spawnSelfTool: ToolRegistration = {
         concurrency_max: z.number().int().min(1).optional()
           .describe('Max concurrent tasks in this group. Required if concurrency_group is set. Default: 1'),
         thinking: z.boolean().optional()
-          .describe('Enable extended thinking/reasoning for this task. Omit to inherit from parent Kin config.'),
+          .describe('Enable extended thinking/reasoning for this task. Omit to inherit from parent Agent config.'),
         toolboxes: z.array(z.string()).optional()
-          .describe('Names of the toolboxes whose tools the sub-Kin may use. The sub-Kin\'s native toolset is the mandatory core floor unioned with every chosen toolbox\'s tools. Built-ins: "code", "research", "ops", "scout" (read-only), "all" (full surface). Use list_toolboxes to discover available toolboxes. Omit to default (ticket → "code", else "all").'),
+          .describe('Names of the toolboxes whose tools the sub-Agent may use. The sub-Agent\'s native toolset is the mandatory core floor unioned with every chosen toolbox\'s tools. Built-ins: "code", "research", "ops", "scout" (read-only), "all" (full surface). Use list_toolboxes to discover available toolboxes. Omit to default (ticket → "code", else "all").'),
         tool_preset: z.enum(['code', 'research', 'ops', 'all']).optional()
           .describe('DEPRECATED — use `toolboxes` instead. When set and `toolboxes` is absent, it maps to the built-in toolbox of the same name.'),
       }),
       execute: async ({ title, task_description, mode, model, provider_id, allow_human_prompt, concurrency_group, concurrency_max, thinking, toolboxes, tool_preset }) => {
-        log.debug({ kinId: ctx.kinId, mode, spawnType: 'self', toolboxes, preset: tool_preset }, 'Task spawn requested (spawn_self)')
+        log.debug({ agentId: ctx.agentId, mode, spawnType: 'self', toolboxes, preset: tool_preset }, 'Task spawn requested (spawn_self)')
         if (model && !provider_id) {
           throw new Error(
-            'When overriding the parent Kin\'s model, you must pass provider_id too. ' +
+            'When overriding the parent Agent\'s model, you must pass provider_id too. ' +
               'Use list_models to find the right (model, providerId) pair — the same model name can be served by several providers ' +
-              '(e.g. an OpenAI API key and a Codex CLI subscription), and kinbot cannot guess which one you mean.',
+              '(e.g. an OpenAI API key and a Codex CLI subscription), and hivekeep cannot guess which one you mean.',
           )
         }
         const toolboxIds = await resolveToolboxNamesToIds(toolboxes, tool_preset)
         const { taskId, queued } = await spawnTask({
-          parentKinId: ctx.kinId,
+          parentAgentId: ctx.agentId,
           title,
           description: task_description,
           mode,
@@ -119,17 +119,17 @@ export const spawnSelfTool: ToolRegistration = {
 }
 
 /**
- * spawn_kin — instantiate another Kin from the platform with a specific mission.
- * Available to main agents and sub-kin tasks (enables router → worker pattern).
+ * spawn_agent — instantiate another Agent from the platform with a specific mission.
+ * Available to main agents and sub-agent tasks (enables router → worker pattern).
  */
-export const spawnKinTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+export const spawnAgentTool: ToolRegistration = {
+  availability: ['main', 'sub-agent'],
   create: (ctx) =>
     tool({
       description:
-        'Spawn another Kin as a sub-Kin for a specific task. Your current turn ends immediately after spawning.',
+        'Spawn another Agent as a sub-Agent for a specific task. Your current turn ends immediately after spawning.',
       inputSchema: z.object({
-        kin_slug: z.string(),
+        agent_slug: z.string(),
         title: z.string().describe('Short label, max ~60 chars'),
         task_description: z.string(),
         mode: z
@@ -137,7 +137,7 @@ export const spawnKinTool: ToolRegistration = {
           .describe(
             '"await" = result triggers a new turn; "async" = informational, no new turn',
           ),
-        model: z.string().optional().describe('Model ID (e.g. "claude-sonnet-4-6", "gpt-5.5"). Omit to use the spawned Kin\'s default model.'),
+        model: z.string().optional().describe('Model ID (e.g. "claude-sonnet-4-6", "gpt-5.5"). Omit to use the spawned Agent\'s default model.'),
         provider_id: z.string().optional()
           .describe('Provider slug (e.g. "openai-codex", "claude-max") or UUID — get it from list_providers or list_models (the `slug`/`providerSlug` field). Slug is preferred (stable, human-readable). Required whenever `model` is set, since the same model name can be served by several providers.'),
         allow_human_prompt: z.boolean().optional().describe('Default: true'),
@@ -148,34 +148,34 @@ export const spawnKinTool: ToolRegistration = {
         concurrency_max: z.number().int().min(1).optional()
           .describe('Max concurrent tasks in this group. Required if concurrency_group is set. Default: 1'),
         thinking: z.boolean().optional()
-          .describe('Enable extended thinking/reasoning for this task. Omit to inherit from parent Kin config.'),
+          .describe('Enable extended thinking/reasoning for this task. Omit to inherit from parent Agent config.'),
         toolboxes: z.array(z.string()).optional()
-          .describe('Names of the toolboxes whose tools the sub-Kin may use. The sub-Kin\'s native toolset is the mandatory core floor unioned with every chosen toolbox\'s tools. Use list_toolboxes to discover available toolboxes. Omit to default (ticket → "code", else "all"). See spawn_self for built-in descriptions.'),
+          .describe('Names of the toolboxes whose tools the sub-Agent may use. The sub-Agent\'s native toolset is the mandatory core floor unioned with every chosen toolbox\'s tools. Use list_toolboxes to discover available toolboxes. Omit to default (ticket → "code", else "all"). See spawn_self for built-in descriptions.'),
         tool_preset: z.enum(['code', 'research', 'ops', 'all']).optional()
           .describe('DEPRECATED — use `toolboxes` instead. When set and `toolboxes` is absent, it maps to the built-in toolbox of the same name.'),
       }),
-      execute: async ({ kin_slug, title, task_description, mode, model, provider_id, allow_human_prompt, concurrency_group, concurrency_max, thinking, toolboxes, tool_preset }) => {
+      execute: async ({ agent_slug, title, task_description, mode, model, provider_id, allow_human_prompt, concurrency_group, concurrency_max, thinking, toolboxes, tool_preset }) => {
         if (model && !provider_id) {
           return {
             error:
-              'When overriding the spawned Kin\'s model, you must pass provider_id too. ' +
+              'When overriding the spawned Agent\'s model, you must pass provider_id too. ' +
               'Use list_models to find the right (model, providerId) pair — the same model name can be served by several providers ' +
-              '(e.g. an OpenAI API key and a Codex CLI subscription), and kinbot cannot guess which one you mean.',
+              '(e.g. an OpenAI API key and a Codex CLI subscription), and hivekeep cannot guess which one you mean.',
           }
         }
-        const kinId = resolveKinId(kin_slug)
-        if (!kinId) {
-          return { error: `Kin not found for slug "${kin_slug}"` }
+        const agentId = resolveAgentId(agent_slug)
+        if (!agentId) {
+          return { error: `Agent not found for slug "${agent_slug}"` }
         }
-        log.debug({ kinId: ctx.kinId, targetKinId: kinId, mode, spawnType: 'other', toolboxes, preset: tool_preset }, 'Task spawn requested (spawn_kin)')
+        log.debug({ agentId: ctx.agentId, targetAgentId: agentId, mode, spawnType: 'other', toolboxes, preset: tool_preset }, 'Task spawn requested (spawn_agent)')
         const toolboxIds = await resolveToolboxNamesToIds(toolboxes, tool_preset)
         const { taskId, queued } = await spawnTask({
-          parentKinId: ctx.kinId,
+          parentAgentId: ctx.agentId,
           title,
           description: task_description,
           mode,
           spawnType: 'other',
-          sourceKinId: kinId,
+          sourceAgentId: agentId,
           model,
           providerId: provider_id,
           allowHumanPrompt: allow_human_prompt,
@@ -194,7 +194,7 @@ export const spawnKinTool: ToolRegistration = {
 }
 
 /**
- * respond_to_task — answer a clarification request from a sub-Kin.
+ * respond_to_task — answer a clarification request from a sub-Agent.
  * Available to main agents only.
  */
 export const respondToTaskTool: ToolRegistration = {
@@ -202,7 +202,7 @@ export const respondToTaskTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Answer a clarification request from a sub-Kin. Triggers a new LLM turn on the sub-Kin.',
+        'Answer a clarification request from a sub-Agent. Triggers a new LLM turn on the sub-Agent.',
       inputSchema: z.object({
         task_id: z.string(),
         answer: z.string(),
@@ -225,12 +225,12 @@ export const cancelTaskTool: ToolRegistration = {
   availability: ['main'],
   create: (ctx) =>
     tool({
-      description: 'Cancel a sub-Kin task that is pending or in progress.',
+      description: 'Cancel a sub-Agent task that is pending or in progress.',
       inputSchema: z.object({
         task_id: z.string(),
       }),
       execute: async ({ task_id }) => {
-        const success = await cancelTask(task_id, ctx.kinId)
+        const success = await cancelTask(task_id, ctx.agentId)
         if (!success) {
           return { error: 'Task not found, not owned by you, or already finished' }
         }
@@ -249,35 +249,35 @@ function parseTimestampInput(value: string | number | undefined): number | undef
 }
 
 /**
- * list_tasks — list tasks related to this Kin with filters and pagination.
- * Available to main agents and sub-kin tasks.
+ * list_tasks — list tasks related to this Agent with filters and pagination.
+ * Available to main agents and sub-agent tasks.
  */
 export const listTasksTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (ctx) =>
     tool({
       description:
         'List tasks you spawned or were assigned, with filters and pagination. ' +
-        'Returns lightweight summaries (id, title, status, kind, kin slugs, timing, duration_ms). ' +
+        'Returns lightweight summaries (id, title, status, kind, agent slugs, timing, duration_ms). ' +
         'Use get_task_detail(id) for full task details, or get_task_messages(id, limit, offset) ' +
         'for paginated message history. Default limit is 20, max 100.',
       inputSchema: z.object({
         status: z
-          .enum(['queued', 'pending', 'in_progress', 'paused', 'awaiting_human_input', 'awaiting_kin_response', 'awaiting_subtask', 'completed', 'failed', 'cancelled', 'all'])
+          .enum(['queued', 'pending', 'in_progress', 'paused', 'awaiting_human_input', 'awaiting_agent_response', 'awaiting_subtask', 'completed', 'failed', 'cancelled', 'all'])
           .optional()
           .describe('Filter by task status. Defaults to no filter (all statuses).'),
-        parent_kin_slug: z
+        parent_agent_slug: z
           .string()
           .optional()
-          .describe('Filter to tasks spawned by this Kin (parent).'),
-        child_kin_slug: z
+          .describe('Filter to tasks spawned by this Agent (parent).'),
+        child_agent_slug: z
           .string()
           .optional()
-          .describe('Filter to tasks executed by this Kin (child / source). Useful with spawn_kin.'),
+          .describe('Filter to tasks executed by this Agent (child / source). Useful with spawn_agent.'),
         kind: z
-          .enum(['spawn_self', 'spawn_kin', 'webhook', 'cron', 'all'])
+          .enum(['spawn_self', 'spawn_agent', 'webhook', 'cron', 'all'])
           .optional()
           .describe('Filter by how the task was created.'),
         since: z
@@ -294,16 +294,16 @@ export const listTasksTool: ToolRegistration = {
       execute: async (args) => {
         const filters: ListTasksFilters = {
           status: args.status,
-          parentKinSlug: args.parent_kin_slug,
-          childKinSlug: args.child_kin_slug,
+          parentAgentSlug: args.parent_agent_slug,
+          childAgentSlug: args.child_agent_slug,
           kind: args.kind,
           since: parseTimestampInput(args.since),
           until: parseTimestampInput(args.until),
           limit: args.limit,
           offset: args.offset,
-          // Scope to tasks where this Kin is either the parent (spawner) or
-          // the source (executor) unless the caller explicitly targets a Kin slug.
-          relatedToKinId: args.parent_kin_slug || args.child_kin_slug ? undefined : ctx.kinId,
+          // Scope to tasks where this Agent is either the parent (spawner) or
+          // the source (executor) unless the caller explicitly targets an Agent slug.
+          relatedToAgentId: args.parent_agent_slug || args.child_agent_slug ? undefined : ctx.agentId,
         }
 
         const { tasks: rows, total } = await listTasksFiltered(filters)
@@ -315,8 +315,8 @@ export const listTasksTool: ToolRegistration = {
             title: t.title,
             status: t.status,
             kind: t.kind,
-            parent_kin_slug: t.parentKinSlug,
-            child_kin_slug: t.childKinSlug,
+            parent_agent_slug: t.parentAgentSlug,
+            child_agent_slug: t.childAgentSlug,
             depth: t.depth,
             created_at: t.createdAt,
             updated_at: t.updatedAt,
@@ -335,10 +335,10 @@ export const listTasksTool: ToolRegistration = {
 
 /**
  * list_active_queues — list all active concurrency groups with status.
- * Available to main agents and sub-kin tasks.
+ * Available to main agents and sub-agent tasks.
  */
 export const listActiveQueuesTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (_ctx) =>
@@ -351,14 +351,14 @@ export const listActiveQueuesTool: ToolRegistration = {
           .select({
             group: tasks.concurrencyGroup,
             concurrencyMax: tasks.concurrencyMax,
-            activeCount: sql<number>`count(case when ${tasks.status} in ('pending', 'in_progress', 'awaiting_human_input', 'awaiting_kin_response', 'awaiting_subtask') then 1 end)`,
+            activeCount: sql<number>`count(case when ${tasks.status} in ('pending', 'in_progress', 'awaiting_human_input', 'awaiting_agent_response', 'awaiting_subtask') then 1 end)`,
             queuedCount: sql<number>`count(case when ${tasks.status} = 'queued' then 1 end)`,
           })
           .from(tasks)
           .where(
             and(
               sql`${tasks.concurrencyGroup} is not null`,
-              inArray(tasks.status, ['queued', 'pending', 'in_progress', 'awaiting_human_input', 'awaiting_kin_response', 'awaiting_subtask']),
+              inArray(tasks.status, ['queued', 'pending', 'in_progress', 'awaiting_human_input', 'awaiting_agent_response', 'awaiting_subtask']),
             ),
           )
           .groupBy(tasks.concurrencyGroup)
@@ -378,10 +378,10 @@ export const listActiveQueuesTool: ToolRegistration = {
 
 /**
  * get_task_detail — fetch full details and message history of a task.
- * Works for tasks you spawned OR tasks where you were the executing Kin.
+ * Works for tasks you spawned OR tasks where you were the executing Agent.
  */
 export const getTaskDetailTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (ctx) =>
@@ -395,8 +395,8 @@ export const getTaskDetailTool: ToolRegistration = {
         const task = await getTask(task_id)
         if (!task) return { error: 'Task not found' }
 
-        // Verify the Kin has access (either parent or source)
-        if (task.parentKinId !== ctx.kinId && task.sourceKinId !== ctx.kinId) {
+        // Verify the Agent has access (either parent or source)
+        if (task.parentAgentId !== ctx.agentId && task.sourceAgentId !== ctx.agentId) {
           return { error: 'Access denied — you are not related to this task' }
         }
 
@@ -409,7 +409,7 @@ export const getTaskDetailTool: ToolRegistration = {
             createdAt: messages.createdAt,
           })
           .from(messages)
-          .where(and(eq(messages.kinId, task.parentKinId), eq(messages.taskId, task_id)))
+          .where(and(eq(messages.agentId, task.parentAgentId), eq(messages.taskId, task_id)))
           .orderBy(asc(messages.createdAt))
           .all()
 
@@ -441,10 +441,10 @@ export const getTaskDetailTool: ToolRegistration = {
 /**
  * get_task_messages — paginated view of a task's message history with previews.
  * Use this to inspect long-running tasks without loading every message body
- * into the calling Kin's context.
+ * into the calling Agent's context.
  */
 export const getTaskMessagesTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (ctx) =>
@@ -473,10 +473,10 @@ export const getTaskMessagesTool: ToolRegistration = {
           .describe('asc = oldest first, desc = newest first.'),
       }),
       execute: async ({ task_id, limit, offset, order }) => {
-        // Verify the calling Kin is related to the task (parent or source).
+        // Verify the calling Agent is related to the task (parent or source).
         const task = await getTask(task_id)
         if (!task) return { error: 'Task not found' }
-        if (task.parentKinId !== ctx.kinId && task.sourceKinId !== ctx.kinId) {
+        if (task.parentAgentId !== ctx.agentId && task.sourceAgentId !== ctx.agentId) {
           return { error: 'Access denied — you are not related to this task' }
         }
 

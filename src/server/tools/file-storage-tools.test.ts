@@ -33,7 +33,7 @@ const {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const ctx: ToolExecutionContext = { kinId: 'kin-test-123' } as any
+const ctx: ToolExecutionContext = { agentId: 'agent-test-123' } as any
 
 function createTool(reg: any) {
   return reg.create(ctx)
@@ -61,7 +61,7 @@ describe('storeFileTool', () => {
 
     expect(mockFileStorage.createFileFromContent).toHaveBeenCalledTimes(1)
     const call = (mockFileStorage.createFileFromContent.mock.calls as any[])[0]!
-    expect(call[0]).toBe('kin-test-123')
+    expect(call[0]).toBe('agent-test-123')
     expect(call[1]).toBe('hello.txt')
     expect(call[2]).toBe('Hello world')
     expect(call[3]).toBe('text/plain')
@@ -87,7 +87,7 @@ describe('storeFileTool', () => {
 
     expect(mockFileStorage.createFileFromWorkspace).toHaveBeenCalledTimes(1)
     const call = (mockFileStorage.createFileFromWorkspace.mock.calls as any[])[0]!
-    expect(call[0]).toBe('kin-test-123')
+    expect(call[0]).toBe('agent-test-123')
     expect(call[1]).toBe('data/file.txt')
     expect(call[2]).toBe('ws.txt')
   })
@@ -111,7 +111,7 @@ describe('storeFileTool', () => {
 
     expect(mockFileStorage.createFileFromUrl).toHaveBeenCalledTimes(1)
     const call = (mockFileStorage.createFileFromUrl.mock.calls as any[])[0]!
-    expect(call[0]).toBe('kin-test-123')
+    expect(call[0]).toBe('agent-test-123')
     expect(call[1]).toBe('https://example.com/doc.pdf')
     expect(call[2]).toBe('remote.pdf')
   })
@@ -153,7 +153,7 @@ describe('storeFileTool', () => {
     expect(opts.password).toBe('hunter2')
     expect(opts.expiresIn).toBe(60)
     expect(opts.readAndBurn).toBe(true)
-    expect(opts.createdByKinId).toBe('kin-test-123')
+    expect(opts.createdByAgentId).toBe('agent-test-123')
   })
 
   it('defaults mimeType to text/plain for content source', async () => {
@@ -243,7 +243,7 @@ describe('getStoredFileTool', () => {
       { toolCallId: 'tc-1', messages: [], abortSignal: undefined as any },
     )
     expect(result).toEqual(file)
-    expect(mockFileStorage.getFileByName).toHaveBeenCalledWith('kin-test-123', 'readme.md')
+    expect(mockFileStorage.getFileByName).toHaveBeenCalledWith('agent-test-123', 'readme.md')
   })
 
   it('returns error when file not found by name', async () => {
@@ -290,7 +290,7 @@ describe('listStoredFilesTool', () => {
       { toolCallId: 'tc-1', messages: [], abortSignal: undefined as any },
     )
     expect(result).toEqual({ files, total: 3 })
-    expect(mockFileStorage.listFiles).toHaveBeenCalledWith('kin-test-123')
+    expect(mockFileStorage.listFiles).toHaveBeenCalledWith('agent-test-123')
   })
 
   it('respects limit and offset', async () => {
@@ -338,7 +338,7 @@ describe('listStoredFilesTool', () => {
 describe('searchStoredFilesTool', () => {
   beforeEach(resetMocks)
 
-  it('searches files with query and kinId', async () => {
+  it('searches files with query and agentId', async () => {
     const files = [{ id: 'f-1', name: 'report.pdf' }]
     mockFileStorage.searchFiles.mockImplementationOnce(() => Promise.resolve(files))
 
@@ -348,7 +348,7 @@ describe('searchStoredFilesTool', () => {
       { toolCallId: 'tc-1', messages: [], abortSignal: undefined as any },
     )
     expect(result).toEqual({ files, total: 1 })
-    expect(mockFileStorage.searchFiles).toHaveBeenCalledWith('report', 'kin-test-123')
+    expect(mockFileStorage.searchFiles).toHaveBeenCalledWith('report', 'agent-test-123')
   })
 
   it('returns empty results for no matches', async () => {

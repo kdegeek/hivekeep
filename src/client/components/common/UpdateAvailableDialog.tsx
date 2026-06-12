@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Dialog,
@@ -11,46 +10,42 @@ import {
 } from '@/client/components/ui/dialog'
 import { Button } from '@/client/components/ui/button'
 import { Badge } from '@/client/components/ui/badge'
-import { ArrowUpCircle, Copy, ExternalLink, Download, Loader2 } from 'lucide-react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { ArrowUpCircle, Copy, Download, ExternalLink } from 'lucide-react'
 import { useCopyToClipboard } from '@/client/hooks/useCopyToClipboard'
-import { api, getErrorMessage } from '@/client/lib/api'
-import { toast } from 'sonner'
+import { useAuth } from '@/client/hooks/useAuth'
+import { UpdateChangelog } from '@/client/components/common/UpdateChangelog'
+import { DOCKER_UPDATE_COMMAND } from '@/client/components/common/UpdateResultBanner'
+import { useUpdate } from '@/client/contexts/UpdateContext'
 import type { VersionInfo } from '@/shared/types'
 
 interface UpdateAvailableDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   versionInfo: VersionInfo
-  isDocker: boolean
 }
-
-const DOCKER_UPDATE_COMMAND = 'docker compose pull && docker compose up -d'
 
 export function UpdateAvailableDialog({
   open,
   onOpenChange,
   versionInfo,
-  isDocker,
 }: UpdateAvailableDialogProps) {
   const { t } = useTranslation()
   const { copy, copied } = useCopyToClipboard()
-  const [isUpdating, setIsUpdating] = useState(false)
+  const { user } = useAuth()
+  const { startUpdate } = useUpdate()
+  const isAdmin = user?.role === 'admin'
 
-  const handleUpdate = async () => {
-    setIsUpdating(true)
-    try {
-      await api.post('/version-check/update')
-      toast.success(t('updateAvailable.updateSuccess'))
-      // Server will restart in ~2s, reload after a delay
-      setTimeout(() => window.location.reload(), 5000)
-    } catch (err) {
-      toast.error(t('updateAvailable.updateFailed'), {
-        description: getErrorMessage(err),
-      })
-      setIsUpdating(false)
-    }
+  const isDocker = versionInfo.installationType === 'docker'
+  const current =
+    versionInfo.channel === 'edge'
+      ? `${versionInfo.currentVersion} (${versionInfo.currentSha ?? '?'})`
+      : versionInfo.currentVersion
+  const latest = versionInfo.latestVersion ?? ''
+
+  // Hand off to the global full-screen overlay, then get out of the way.
+  const handleUpdate = () => {
+    onOpenChange(false)
+    startUpdate({ channel: versionInfo.channel, toVersion: latest })
   }
 
   return (
@@ -64,47 +59,41 @@ export function UpdateAvailableDialog({
             <div>
               <DialogTitle>{t('updateAvailable.title')}</DialogTitle>
               <DialogDescription>
-                {t('updateAvailable.description', {
-                  current: versionInfo.currentVersion,
-                  latest: versionInfo.latestVersion,
-                })}
+                {t('updateAvailable.description', { current, latest })}
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
         <DialogBody className="space-y-4">
-          {/* Version badges */}
+          {/* Version + channel badges */}
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="outline" className="text-xs">
-              {t('updateAvailable.current')}: v{versionInfo.currentVersion}
+              {t('updateAvailable.current')}: {versionInfo.channel === 'edge' ? current : `v${current}`}
             </Badge>
             <span className="text-muted-foreground">→</span>
             <Badge variant="default" className="text-xs">
-              {t('updateAvailable.latest')}: v{versionInfo.latestVersion}
+              {t('updateAvailable.latest')}: {versionInfo.channel === 'edge' ? latest : `v${latest}`}
+            </Badge>
+            <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+              {t(`updateChannel.${versionInfo.channel}`)}
             </Badge>
           </div>
 
-          {/* Release notes */}
-          {versionInfo.releaseNotes && (
+          {versionInfo.changelog.length > 0 && (
             <div className="flex flex-col">
-              <h4 className="text-sm font-semibold mb-2">
-                {t('updateAvailable.releaseNotes')}
+              <h4 className="mb-2 text-sm font-semibold">
+                {versionInfo.channel === 'edge'
+                  ? t('updateAvailable.newCommits', { count: versionInfo.changelog.length })
+                  : t('updateAvailable.releaseNotes')}
               </h4>
-              <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground prose prose-xs prose-neutral dark:prose-invert max-w-none prose-headings:text-sm prose-headings:font-semibold prose-p:my-1 prose-ul:my-1 prose-li:my-0 prose-pre:bg-muted prose-pre:text-xs prose-pre:overflow-x-auto prose-code:text-xs prose-code:break-all">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {versionInfo.releaseNotes}
-                </ReactMarkdown>
-              </div>
+              <UpdateChangelog changelog={versionInfo.changelog} channel={versionInfo.channel} />
             </div>
           )}
         </DialogBody>
 
-        {/* Update instructions — fixed footer, always visible outside scroll */}
         <DialogFooter className="flex-col items-stretch gap-3 sm:flex-col sm:items-stretch">
-          <h4 className="text-sm font-semibold">
-            {t('updateAvailable.howToUpdate')}
-          </h4>
+          <h4 className="text-sm font-semibold">{t('updateAvailable.howToUpdate')}</h4>
 
           {isDocker ? (
             <div className="space-y-2">
@@ -125,33 +114,33 @@ export function UpdateAvailableDialog({
                   {copied ? t('common.copied') : t('common.copy')}
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                {t('updateAvailable.dockerTagNote', { version: latest })}
+              </p>
             </div>
-          ) : (
+          ) : versionInfo.canSelfUpdate ? (
             <div className="space-y-3">
               <p className="text-xs text-muted-foreground">
-                {t('updateAvailable.nonDockerInstructions')}
+                {t('updateAvailable.selfUpdateInstructions')}
               </p>
-              <Button
-                onClick={handleUpdate}
-                disabled={isUpdating}
-                className="w-full"
-              >
-                {isUpdating ? (
-                  <>
-                    <Loader2 className="size-4 mr-2 animate-spin" />
-                    {t('updateAvailable.updating')}
-                  </>
-                ) : (
-                  <>
-                    <Download className="size-4 mr-2" />
-                    {t('updateAvailable.updateButton')}
-                  </>
-                )}
+              <Button onClick={handleUpdate} disabled={!isAdmin} className="w-full">
+                <Download className="size-4 mr-2" />
+                {t('updateAvailable.updateButton')}
               </Button>
+              {!isAdmin && (
+                <p className="text-center text-xs text-muted-foreground">
+                  {t('updateAvailable.adminOnly')}
+                </p>
+              )}
             </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {versionInfo.selfUpdateBlockedReason === 'dev-mode'
+                ? t('updateAvailable.devModeNote')
+                : t('updateAvailable.manualInstallNote')}
+            </p>
           )}
 
-          {/* Link to GitHub release */}
           {versionInfo.releaseUrl && (
             <a
               href={versionInfo.releaseUrl}

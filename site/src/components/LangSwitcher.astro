@@ -1,0 +1,81 @@
+---
+// Language dropdown for the topbar. Pure CSS/JS (details/summary), styled to
+// match the mono nav links. Each entry links to the same page in that locale
+// and records the choice so the auto-detect script stops second-guessing it.
+import { Icon } from 'astro-icon/components';
+import { LOCALES, LOCALE_LABELS, localePath, type Locale } from '../i18n';
+
+interface Props {
+  /** Current page locale. */
+  lang: Locale;
+  /** Locale-free path of the current page ('/', '/install'). */
+  path: string;
+}
+
+const { lang, path } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+<details class="lang-switcher">
+  <summary aria-label="Language">
+    <Icon name="lucide:globe" />
+    <span class="ls-code">{lang.toUpperCase()}</span>
+    <Icon name="lucide:chevron-down" class="ls-chev" />
+  </summary>
+  <ul>
+    {LOCALES.map((l) => (
+      <li>
+        <a
+          href={`${base}${localePath(l, path)}`}
+          class={l === lang ? 'active' : ''}
+          data-set-lang={l}
+          hreflang={l}
+        >
+          {LOCALE_LABELS[l]}
+        </a>
+      </li>
+    ))}
+  </ul>
+</details>
+
+<style>
+  .lang-switcher{position:relative;}
+  .lang-switcher summary{
+    display:inline-flex;align-items:center;gap:6px;cursor:pointer;list-style:none;
+    font-family:"JetBrains Mono",monospace;font-size:.72rem;font-weight:600;
+    letter-spacing:.08em;color:var(--ink-soft);padding:.42rem .6rem;
+    border:1px solid var(--line-strong);border-radius:var(--r-pill);
+    transition:color .15s ease,border-color .15s ease;
+  }
+  .lang-switcher summary::-webkit-details-marker{display:none;}
+  .lang-switcher summary:hover{color:var(--ink);border-color:var(--primary);}
+  .lang-switcher summary svg{width:13px;height:13px;}
+  .lang-switcher .ls-chev{width:11px;height:11px;transition:transform .15s ease;}
+  .lang-switcher[open] .ls-chev{transform:rotate(180deg);}
+  .lang-switcher ul{
+    position:absolute;right:0;top:calc(100% + 8px);z-index:60;margin:0;padding:6px;
+    list-style:none;min-width:180px;max-height:min(420px,70vh);overflow:auto;
+    background:oklch(0.145 0.028 312);border:1px solid var(--line-strong);
+    border-radius:14px;box-shadow:0 18px 40px oklch(0 0 0/.45);
+  }
+  .lang-switcher ul a{
+    display:block;padding:.45rem .7rem;border-radius:9px;text-decoration:none;
+    font-size:.84rem;color:var(--ink-soft);
+  }
+  .lang-switcher ul a:hover{background:oklch(1 0 0/.06);color:var(--ink);}
+  .lang-switcher ul a.active{color:var(--primary);font-weight:600;}
+</style>
+
+<script>
+  // Persist the explicit choice (the auto-detect in Base.astro respects it),
+  // and close any open switcher when clicking elsewhere.
+  document.querySelectorAll<HTMLElement>('[data-set-lang]').forEach((a) => {
+    a.addEventListener('click', () => {
+      try { localStorage.setItem('hk-lang', a.dataset.setLang || '') } catch { /* private mode */ }
+    })
+  })
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll<HTMLDetailsElement>('.lang-switcher[open]').forEach((d) => {
+      if (!d.contains(e.target as Node)) d.open = false
+    })
+  })
+</script>

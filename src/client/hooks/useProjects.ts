@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api } from '@/client/lib/api'
 import { useSSE, useSSEResync } from '@/client/hooks/useSSE'
-import type { Project, ProjectSummary, ProjectTag, KinThinkingConfig } from '@/shared/types'
+import type { Project, ProjectSummary, ProjectTag, AgentThinkingConfig } from '@/shared/types'
 
 interface CreateProjectInput {
   title: string
@@ -14,7 +14,7 @@ interface CreateProjectInput {
   providerId?: string | null
   scoutModel?: string | null
   scoutProviderId?: string | null
-  thinkingConfig?: KinThinkingConfig | null
+  thinkingConfig?: AgentThinkingConfig | null
   defaultToolboxIds?: string[] | null
 }
 
@@ -29,7 +29,7 @@ interface UpdateProjectInput {
   providerId?: string | null
   scoutModel?: string | null
   scoutProviderId?: string | null
-  thinkingConfig?: KinThinkingConfig | null
+  thinkingConfig?: AgentThinkingConfig | null
   defaultToolboxIds?: string[] | null
 }
 

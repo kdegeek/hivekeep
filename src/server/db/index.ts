@@ -260,7 +260,7 @@ export function initVirtualTables() {
     log.warn('sqlite-vec: project_knowledge_vec creation failed — vector search disabled for project knowledge')
   }
 
-  // Backfill slugs for existing kins that don't have one
+  // Backfill slugs for existing agents that don't have one
   backfillSlugs()
   // Backfill project slugs + ticket numbers for the project/ticket tables
   // introduced before migration 0060 (both columns are nullable for legacy
@@ -270,30 +270,30 @@ export function initVirtualTables() {
 }
 
 /**
- * Generate slugs for any kins that have a NULL slug.
+ * Generate slugs for any agents that have a NULL slug.
  * Called once at startup after schema is applied.
  */
 function backfillSlugs() {
-  const kinsWithoutSlug = sqlite.query<{ id: string; name: string }, []>(
-    'SELECT id, name FROM kins WHERE slug IS NULL'
+  const agentsWithoutSlug = sqlite.query<{ id: string; name: string }, []>(
+    'SELECT id, name FROM agents WHERE slug IS NULL'
   ).all()
 
-  if (kinsWithoutSlug.length === 0) return
+  if (agentsWithoutSlug.length === 0) return
 
   const existingSlugs = new Set(
     sqlite.query<{ slug: string }, []>(
-      'SELECT slug FROM kins WHERE slug IS NOT NULL'
+      'SELECT slug FROM agents WHERE slug IS NOT NULL'
     ).all().map((r) => r.slug)
   )
 
-  for (const kin of kinsWithoutSlug) {
-    const baseSlug = generateSlug(kin.name)
-    const slug = ensureUniqueSlug(baseSlug || 'kin', existingSlugs)
+  for (const agent of agentsWithoutSlug) {
+    const baseSlug = generateSlug(agent.name)
+    const slug = ensureUniqueSlug(baseSlug || 'agent', existingSlugs)
     existingSlugs.add(slug)
-    sqlite.run('UPDATE kins SET slug = ? WHERE id = ?', [slug, kin.id])
+    sqlite.run('UPDATE agents SET slug = ? WHERE id = ?', [slug, agent.id])
   }
 
-  log.info({ count: kinsWithoutSlug.length }, 'Backfilled slugs for existing kins')
+  log.info({ count: agentsWithoutSlug.length }, 'Backfilled slugs for existing agents')
 }
 
 /**
@@ -314,7 +314,7 @@ function backfillProjectSlugs() {
     ).all().map((r) => r.slug),
   )
 
-  // Project slugs are tighter than the kin slug rule (must start with a letter,
+  // Project slugs are tighter than the agent slug rule (must start with a letter,
   // 2-32 chars). Normalize defensively: strip leading digits/hyphens, cap length.
   function normalize(raw: string): string {
     let s = (raw || '').replace(/^[^a-z]+/, '').replace(/-+$/, '')

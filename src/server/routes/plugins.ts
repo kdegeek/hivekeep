@@ -39,7 +39,7 @@ const requireAdmin = async (c: any, next: any) => {
 // GET /api/plugins/registry/npm-search — discover plugins via npm
 //
 // Queries the public npm registry for packages tagged with the
-// `kinbot-plugin` keyword. The user's free-form `q` is combined with
+// `hivekeep-plugin` keyword. The user's free-form `q` is combined with
 // that keyword filter so authors can search by package name /
 // description / their own tags from the Browse tab.
 //
@@ -84,7 +84,7 @@ pluginRoutes.get('/registry/npm-search', async (c) => {
   }
 })
 
-// GET /api/plugins/version — get KinBot version for compatibility checks
+// GET /api/plugins/version — get Hivekeep version for compatibility checks
 pluginRoutes.get('/version', async (c) => {
   try {
     const pkgPath = resolve(process.cwd(), 'package.json')

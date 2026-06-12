@@ -1,21 +1,143 @@
 ---
-import Default from '@astrojs/starlight/components/Header.astro';
+import config from 'virtual:starlight/user-config';
+
+import LanguageSelect from 'virtual:starlight/components/LanguageSelect';
+import Search from 'virtual:starlight/components/Search';
+import SiteTitle from 'virtual:starlight/components/SiteTitle';
+import SocialIcons from 'virtual:starlight/components/SocialIcons';
+import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
+
+/**
+ * Mirror of Starlight's default Header so we can add a persistent
+ * "Back to site" link alongside the social icons. The upstream Header
+ * renders no slot, so overriding by composition is not possible here.
+ */
+const shouldRenderSearch =
+	config.pagefind || config.components.Search !== '@astrojs/starlight/components/Search.astro';
 ---
 
 <div class="kb-announcement-bar" id="kb-announcement" aria-label="Announcement">
-	<a href="/kinbot/">
+	<a href="/hivekeep/">
 		<span class="kb-announcement-dot" aria-hidden="true"></span>
-		KinBot is in early development
+		Hivekeep is in early development
 		<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
 	</a>
 	<button class="kb-announcement-dismiss" id="kb-dismiss" aria-label="Dismiss announcement" title="Dismiss">
 		<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
 	</button>
 </div>
-<Default><slot /></Default>
+<div class="header sl-flex">
+	<div class="title-wrapper sl-flex">
+		<SiteTitle />
+	</div>
+	<div class="sl-flex print:hidden">
+		{shouldRenderSearch && <Search />}
+	</div>
+	<div class="sl-hidden md:sl-flex print:hidden right-group">
+		<a class="kb-back-to-site" href="/hivekeep/">
+			<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+			<span>Back to site</span>
+		</a>
+		<div class="sl-flex social-icons">
+			<SocialIcons />
+		</div>
+		<ThemeSelect />
+		<LanguageSelect />
+	</div>
+</div>
 <div class="kb-scroll-progress" aria-hidden="true"></div>
 
 <style>
+	/* ─── Header layout (mirrors Starlight default) ─── */
+	.header {
+		display: flex;
+		gap: var(--sl-nav-gap);
+		justify-content: space-between;
+		align-items: center;
+		height: 100%;
+	}
+
+	.title-wrapper {
+		overflow: clip;
+		padding: 0.25rem;
+		margin: -0.25rem;
+		min-width: 0;
+	}
+
+	.right-group,
+	.social-icons {
+		gap: 1rem;
+		align-items: center;
+	}
+
+	.social-icons::after {
+		content: '';
+		height: 2rem;
+		border-inline-end: 1px solid var(--sl-color-gray-5);
+	}
+
+	@media (min-width: 50rem) {
+		:global(:root[data-has-sidebar]) {
+			--__sidebar-pad: calc(2 * var(--sl-nav-pad-x));
+		}
+		:global(:root:not([data-has-toc])) {
+			--__toc-width: 0rem;
+		}
+		.header {
+			--__sidebar-width: max(0rem, var(--sl-content-inline-start, 0rem) - var(--sl-nav-pad-x));
+			--__main-column-fr: calc(
+				(
+						100% + var(--__sidebar-pad, 0rem) - var(--__toc-width, var(--sl-sidebar-width)) -
+							(2 * var(--__toc-width, var(--sl-nav-pad-x))) - var(--sl-content-inline-start, 0rem) -
+							var(--sl-content-width)
+					) / 2
+			);
+			display: grid;
+			grid-template-columns:
+				minmax(
+					calc(var(--__sidebar-width) + max(0rem, var(--__main-column-fr) - var(--sl-nav-gap))),
+					auto
+				)
+				1fr
+				auto;
+			align-content: center;
+		}
+	}
+
+	/* ─── Back-to-site pill (aurora-bordered, matches landing CTA feel) ─── */
+	.kb-back-to-site {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: 0.8125rem;
+		font-weight: 600;
+		white-space: nowrap;
+		color: var(--sl-color-gray-2);
+		text-decoration: none;
+		padding: 0.375rem 0.75rem;
+		border: 1px solid var(--kb-glass-border);
+		background: var(--kb-glass-bg);
+		backdrop-filter: blur(8px) saturate(160%);
+		-webkit-backdrop-filter: blur(8px) saturate(160%);
+		border-radius: 9999px;
+		transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+	}
+
+	.kb-back-to-site svg {
+		transition: transform 0.2s ease;
+	}
+
+	.kb-back-to-site:hover {
+		color: var(--sl-color-white);
+		border-color: oklch(0.72 0.19 305 / 0.40);
+		background: var(--kb-glass-strong-bg);
+		transform: translateY(-1px);
+	}
+
+	.kb-back-to-site:hover svg {
+		transform: translateX(-2px);
+	}
+
 	/* Announcement bar */
 	.kb-announcement-bar {
 		display: flex;
@@ -23,11 +145,11 @@ import Default from '@astrojs/starlight/components/Header.astro';
 		justify-content: center;
 		background: linear-gradient(
 			90deg,
-			oklch(0.60 0.22 300 / 0.08) 0%,
-			oklch(0.66 0.24 340 / 0.06) 50%,
-			oklch(0.76 0.16 15 / 0.04) 100%
+			oklch(0.72 0.19 305 / 0.08) 0%,
+			oklch(0.72 0.22 342 / 0.06) 50%,
+			oklch(0.84 0.13 60 / 0.04) 100%
 		);
-		border-bottom: 1px solid oklch(0.60 0.22 300 / 0.08);
+		border-bottom: 1px solid oklch(0.72 0.19 305 / 0.08);
 		text-align: center;
 		padding: 0.375rem 1rem;
 		font-size: 0.8125rem;
@@ -75,7 +197,7 @@ import Default from '@astrojs/starlight/components/Header.astro';
 
 	.kb-announcement-dismiss:hover {
 		color: var(--sl-color-gray-1);
-		background: oklch(0.60 0.22 300 / 0.08);
+		background: oklch(0.72 0.19 305 / 0.08);
 	}
 
 	.kb-announcement-dot {
@@ -83,18 +205,45 @@ import Default from '@astrojs/starlight/components/Header.astro';
 		width: 6px;
 		height: 6px;
 		border-radius: 50%;
-		background: oklch(0.66 0.24 340);
+		background: oklch(0.72 0.22 342);
 		animation: kb-pulse 2s ease-in-out infinite;
 	}
 
 	@keyframes kb-pulse {
 		0%, 100% { opacity: 0.6; }
-		50% { opacity: 1; box-shadow: 0 0 6px oklch(0.66 0.24 340 / 0.4); }
+		50% { opacity: 1; box-shadow: 0 0 6px oklch(0.72 0.22 342 / 0.4); }
 	}
 
-	/* Gradient accent line at the very top of the page */
+	/* Sticky header: pin it to the top on scroll like the sidebar.
+	 * Starlight's default is `position: fixed`, but this component injects an
+	 * announcement bar above the nav row, so the content is taller than the
+	 * fixed --sl-nav-height window and would clip. We make the header
+	 * `sticky` and let it size to its content (announcement + nav row), then
+	 * cancel the layout offset the default fixed header relied on (below).
+	 * `sticky` is also the positioning context for the ::before accent line. */
 	:global(header.header) {
-		position: relative;
+		position: sticky;
+		top: 0;
+		height: auto !important;
+		z-index: var(--sl-z-index-navbar, 10);
+		background: var(--sl-color-bg-nav);
+	}
+
+	/* The default theme adds `padding-top: var(--sl-nav-height)` to the main
+	 * frame to clear the *fixed* header. A sticky header is in normal flow and
+	 * occupies its own space, so that padding becomes a dead gap. Remove it. */
+	:global(.main-frame) {
+		padding-top: var(--sl-mobile-toc-height, 0rem) !important;
+	}
+
+	/* The fixed sidebar offsets its top by --sl-nav-height. Our header also
+	 * carries the announcement bar, so it is taller. Track the real header
+	 * height (published as --kb-header-height by the script below) so the
+	 * sidebar starts exactly below the pinned header instead of under it. */
+	@media (min-width: 50rem) {
+		:global(.sidebar-pane) {
+			inset-block-start: var(--kb-header-height, var(--sl-nav-height)) !important;
+		}
 	}
 
 	:global(header.header::before) {
@@ -106,24 +255,24 @@ import Default from '@astrojs/starlight/components/Header.astro';
 		height: 2px;
 		background: linear-gradient(
 			90deg,
-			oklch(0.60 0.22 300) 0%,
-			oklch(0.66 0.24 340) 50%,
-			oklch(0.76 0.16 15) 100%
+			oklch(0.72 0.19 305) 0%,
+			oklch(0.72 0.22 342) 50%,
+			oklch(0.84 0.13 60) 100%
 		);
 		z-index: 10;
 	}
 
-	/* Scroll progress bar — sits at the bottom of the header */
+	/* Scroll progress bar · sits at the bottom of the (sticky) header */
 	.kb-scroll-progress {
 		position: fixed;
-		top: var(--sl-nav-height);
+		top: var(--kb-header-height, var(--sl-nav-height));
 		left: 0;
 		height: 2px;
 		width: 0%;
 		background: linear-gradient(
 			90deg,
-			oklch(0.60 0.22 300),
-			oklch(0.66 0.24 340)
+			oklch(0.72 0.19 305),
+			oklch(0.72 0.22 342)
 		);
 		z-index: 50;
 		pointer-events: none;
@@ -133,6 +282,24 @@ import Default from '@astrojs/starlight/components/Header.astro';
 </style>
 
 <script>
+	// Publish the real (sticky) header height so the fixed sidebar, scroll
+	// progress bar and anchor scroll-padding can sit flush below it. The header
+	// carries an announcement bar that can be dismissed, so the height changes.
+	const headerEl = document.querySelector('header.header') as HTMLElement | null;
+	if (headerEl) {
+		const publishHeight = () => {
+			const h = headerEl.offsetHeight;
+			const root = document.documentElement;
+			root.style.setProperty('--kb-header-height', `${h}px`);
+			root.style.scrollPaddingTop = `calc(${h}px + 1rem)`;
+		};
+		publishHeight();
+		if ('ResizeObserver' in window) {
+			new ResizeObserver(publishHeight).observe(headerEl);
+		}
+		window.addEventListener('resize', publishHeight, { passive: true });
+	}
+
 	// Scroll progress bar
 	const bar = document.querySelector('.kb-scroll-progress') as HTMLElement;
 	if (bar) {

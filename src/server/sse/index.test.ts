@@ -4,12 +4,12 @@ import { describe, it, expect, beforeEach, mock } from 'bun:test'
 
 interface SSEEvent {
   type: string
-  kinId?: string
+  agentId?: string
   data?: Record<string, unknown>
 }
 
 function formatSSE(event: SSEEvent): string {
-  return JSON.stringify({ type: event.type, kinId: event.kinId, ...event.data })
+  return JSON.stringify({ type: event.type, agentId: event.agentId, ...event.data })
 }
 
 describe('formatSSE', () => {
@@ -18,40 +18,40 @@ describe('formatSSE', () => {
     expect(result.type).toBe('message:new')
   })
 
-  it('includes kinId when present', () => {
-    const result = JSON.parse(formatSSE({ type: 'test', kinId: 'kin-123' }))
-    expect(result.kinId).toBe('kin-123')
+  it('includes agentId when present', () => {
+    const result = JSON.parse(formatSSE({ type: 'test', agentId: 'agent-123' }))
+    expect(result.agentId).toBe('agent-123')
   })
 
-  it('omits kinId when undefined', () => {
+  it('omits agentId when undefined', () => {
     const result = JSON.parse(formatSSE({ type: 'test' }))
-    expect(result.kinId).toBeUndefined()
+    expect(result.agentId).toBeUndefined()
   })
 
   it('spreads data fields into the top-level object', () => {
     const result = JSON.parse(formatSSE({
       type: 'queue:update',
-      kinId: 'k1',
+      agentId: 'k1',
       data: { queueSize: 3, isProcessing: true },
     }))
     expect(result.type).toBe('queue:update')
-    expect(result.kinId).toBe('k1')
+    expect(result.agentId).toBe('k1')
     expect(result.queueSize).toBe(3)
     expect(result.isProcessing).toBe(true)
   })
 
-  it('data fields do not override type or kinId', () => {
-    // When data contains type/kinId, the spread order means data overwrites.
+  it('data fields do not override type or agentId', () => {
+    // When data contains type/agentId, the spread order means data overwrites.
     // This documents the actual behavior (data wins).
     const result = JSON.parse(formatSSE({
       type: 'original',
-      kinId: 'k1',
-      data: { type: 'overridden', kinId: 'k2' },
+      agentId: 'k1',
+      data: { type: 'overridden', agentId: 'k2' },
     }))
-    // { type: 'original', kinId: 'k1', ...{ type: 'overridden', kinId: 'k2' } }
-    // Spread order: type, kinId first, then data spreads — data WINS
+    // { type: 'original', agentId: 'k1', ...{ type: 'overridden', agentId: 'k2' } }
+    // Spread order: type, agentId first, then data spreads — data WINS
     expect(result.type).toBe('overridden')
-    expect(result.kinId).toBe('k2')
+    expect(result.agentId).toBe('k2')
   })
 
   it('handles empty data object', () => {
@@ -117,8 +117,8 @@ class SSEManager {
     }
   }
 
-  sendToKin(kinId: string, event: SSEEvent): void {
-    const payload = formatSSE({ ...event, kinId })
+  sendToAgent(agentId: string, event: SSEEvent): void {
+    const payload = formatSSE({ ...event, agentId })
     for (const [, writer] of this.connections) {
       try {
         writer.write(payload)
@@ -260,33 +260,33 @@ describe('SSEManager', () => {
     })
   })
 
-  describe('sendToKin', () => {
-    it('broadcasts to all connections with kinId injected', () => {
+  describe('sendToAgent', () => {
+    it('broadcasts to all connections with agentId injected', () => {
       const w1 = createWriter('u1')
       const w2 = createWriter('u2')
       manager.addConnection('c1', w1)
       manager.addConnection('c2', w2)
 
-      manager.sendToKin('kin-42', { type: 'queue:update', data: { size: 5 } })
+      manager.sendToAgent('agent-42', { type: 'queue:update', data: { size: 5 } })
 
       expect(w1.messages).toHaveLength(1)
       expect(w2.messages).toHaveLength(1)
 
       const parsed = JSON.parse(w1.messages[0]!)
-      expect(parsed.kinId).toBe('kin-42')
+      expect(parsed.agentId).toBe('agent-42')
       expect(parsed.type).toBe('queue:update')
       expect(parsed.size).toBe(5)
     })
 
-    it('overrides event kinId with the provided kinId', () => {
+    it('overrides event agentId with the provided agentId', () => {
       const w1 = createWriter('u1')
       manager.addConnection('c1', w1)
 
-      manager.sendToKin('kin-new', { type: 'test', kinId: 'kin-old' })
+      manager.sendToAgent('agent-new', { type: 'test', agentId: 'agent-old' })
 
       const parsed = JSON.parse(w1.messages[0]!)
-      // sendToKin does { ...event, kinId } — kinId param wins
-      expect(parsed.kinId).toBe('kin-new')
+      // sendToAgent does { ...event, agentId } — agentId param wins
+      expect(parsed.agentId).toBe('agent-new')
     })
   })
 })
@@ -297,7 +297,7 @@ describe('SSE payload format', () => {
   it('payloads are single-line JSON (no newlines)', () => {
     const payload = formatSSE({
       type: 'message:new',
-      kinId: 'k1',
+      agentId: 'k1',
       data: { content: 'Hello\nWorld', multiline: true },
     })
     // JSON.stringify escapes newlines as \n, so the raw string should not contain literal newlines

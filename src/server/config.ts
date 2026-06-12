@@ -3,13 +3,13 @@ import { join, resolve } from 'path'
 import os from 'os'
 import { parseModelEnv } from '@/shared/model-ref'
 
-const dataDir = process.env.KINBOT_DATA_DIR ?? './data'
+const dataDir = process.env.HIVEKEEP_DATA_DIR ?? './data'
 
 /** Read version from package.json (works whether started via `bun run start` or `bun src/server/index.ts`). */
 const appVersion: string = (() => {
   // Highest priority: explicit env var (set by Dockerfile or user)
-  if (process.env.KINBOT_VERSION && process.env.KINBOT_VERSION !== '0.0.0') {
-    return process.env.KINBOT_VERSION.replace(/^v/, '')
+  if (process.env.HIVEKEEP_VERSION && process.env.HIVEKEEP_VERSION !== '0.0.0') {
+    return process.env.HIVEKEEP_VERSION.replace(/^v/, '')
   }
 
   // Try multiple resolution strategies for Docker + dev compatibility
@@ -65,12 +65,16 @@ function resolveEncryptionKey(): string {
 }
 
 /** Detect the installation type based on environment heuristics. */
-type InstallationType = 'docker' | 'systemd-user' | 'systemd-system' | 'manual'
+import type { InstallationType } from '@/shared/types'
 
 function detectInstallationType(): InstallationType {
   // Docker: /.dockerenv file or known Docker data dir
-  if (existsSync('/.dockerenv') || process.env.KINBOT_DATA_DIR === '/app/data') {
+  if (existsSync('/.dockerenv') || process.env.HIVEKEEP_DATA_DIR === '/app/data') {
     return 'docker'
+  }
+  // launchd (macOS service): XPC_SERVICE_NAME is set for launchd-managed jobs
+  if (process.env.XPC_SERVICE_NAME && process.env.XPC_SERVICE_NAME.includes('hivekeep')) {
+    return 'launchd'
   }
   // systemd: INVOCATION_ID is set by systemd for all service processes
   if (process.env.INVOCATION_ID) {
@@ -89,8 +93,8 @@ function detectInstallationType(): InstallationType {
 /** Try to find the env file path for the current installation. */
 function findEnvFilePath(): string | null {
   // 1. Explicit env var
-  if (process.env.KINBOT_ENV_FILE && existsSync(process.env.KINBOT_ENV_FILE)) {
-    return resolve(process.env.KINBOT_ENV_FILE)
+  if (process.env.HIVEKEEP_ENV_FILE && existsSync(process.env.HIVEKEEP_ENV_FILE)) {
+    return resolve(process.env.HIVEKEEP_ENV_FILE)
   }
 
   // 2. .env in CWD
@@ -115,11 +119,11 @@ function findEnvFilePath(): string | null {
   }
 
   // 4. Common locations relative to data dir
-  const dataDirEnv = resolve(dataDir, 'kinbot.env')
+  const dataDirEnv = resolve(dataDir, 'hivekeep.env')
   if (existsSync(dataDirEnv)) return dataDirEnv
 
   // 5. XDG data dir (common for systemd-user installs)
-  const xdgEnv = resolve(os.homedir(), '.local', 'share', 'kinbot', 'kinbot.env')
+  const xdgEnv = resolve(os.homedir(), '.local', 'share', 'hivekeep', 'hivekeep.env')
   if (existsSync(xdgEnv)) return xdgEnv
 
   return null
@@ -131,10 +135,10 @@ function findServiceFilePath(): string | null {
 
   const candidates = [
     // User service
-    resolve(os.homedir(), '.config', 'systemd', 'user', 'kinbot.service'),
+    resolve(os.homedir(), '.config', 'systemd', 'user', 'hivekeep.service'),
     // System service
-    '/etc/systemd/system/kinbot.service',
-    '/usr/lib/systemd/system/kinbot.service',
+    '/etc/systemd/system/hivekeep.service',
+    '/usr/lib/systemd/system/hivekeep.service',
   ]
 
   for (const path of candidates) {
@@ -144,10 +148,10 @@ function findServiceFilePath(): string | null {
 }
 
 /** Resolve the server-wide IANA timezone for all schedule interpretation.
- *  Priority: KINBOT_TIMEZONE > TZ > system-resolved IANA > 'UTC'.
+ *  Priority: HIVEKEEP_TIMEZONE > TZ > system-resolved IANA > 'UTC'.
  *  Used by croner (recurring crons) and for parsing bare wall-clock datetimes. */
 function resolveServerTimezone(): string {
-  const explicit = process.env.KINBOT_TIMEZONE || process.env.TZ
+  const explicit = process.env.HIVEKEEP_TIMEZONE || process.env.TZ
   if (explicit) return explicit
   try {
     const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -160,7 +164,7 @@ function resolveServerTimezone(): string {
 
 export const config = {
   version: appVersion,
-  port: Number(process.env.PORT ?? 3333),
+  port: Number(process.env.PORT ?? 3000),
   /** Max HTTP request body size (bytes) accepted by Bun.serve. Bun's own
    *  default is ~128 MB, which silently caps large file-storage uploads.
    *  Set MAX_REQUEST_BODY_MB to a positive value to enforce a cap; 0 (default)
@@ -172,13 +176,22 @@ export const config = {
   dataDir,
   encryptionKey: resolveEncryptionKey(),
   logLevel: (process.env.LOG_LEVEL ?? 'info') as 'debug' | 'info' | 'warn' | 'error',
-  isDocker: existsSync('/.dockerenv') || process.env.KINBOT_DATA_DIR === '/app/data',
+  isDocker: existsSync('/.dockerenv') || process.env.HIVEKEEP_DATA_DIR === '/app/data',
   /** Server-wide IANA timezone (e.g. "Europe/Paris"). Applied to recurring cron
    *  expressions and to bare wall-clock datetimes received from clients. */
   timezone: resolveServerTimezone(),
 
   db: {
-    path: process.env.DB_PATH ?? `${dataDir}/kinbot.db`,
+    path: process.env.DB_PATH ?? `${dataDir}/hivekeep.db`,
+  },
+
+  /** Model registry (models.dev-backed metadata source of truth). ON by default;
+   *  set HIVEKEEP_MODEL_REGISTRY=false to fall back to the legacy path where
+   *  provider `listModels()` metadata is used as-is. The registry enriches model
+   *  metadata (context, modalities, reasoning, pricing) from the bundled
+   *  models.dev snapshot + admin overrides. See `model-metadata.md`. */
+  modelRegistry: {
+    enabled: process.env.HIVEKEEP_MODEL_REGISTRY !== 'false',
   },
 
   compacting: {
@@ -187,7 +200,7 @@ export const config = {
     thresholdPercent: Number(process.env.COMPACTING_THRESHOLD_PERCENT ?? 75),
     /** Keep the most recent messages fitting within this % of the context window as raw context. */
     // Lowered from 40 → 25: with 40% on a 1M context, the keep-window was
-    // 400k tokens — and on tool-heavy Kins (kubectl/browser/file ops), that
+    // 400k tokens — and on tool-heavy Agents (kubectl/browser/file ops), that
     // budget was easily filled by 2-4 huge tool-result messages, leaving
     // compacting unable to reduce the post-summary total below ~600-900k
     // even after force-compacting. 25% gives a 250k keep-window which fits
@@ -199,7 +212,7 @@ export const config = {
     /** Max number of active summaries in context before forcing merge. */
     maxSummaries: Number(process.env.COMPACTING_MAX_SUMMARIES ?? 10),
     /** Max summaries to retain in DB (old archived summaries beyond this are deleted). */
-    maxSummariesPerKin: Number(process.env.COMPACTING_MAX_SUMMARIES_PER_KIN ?? 50),
+    maxSummariesPerAgent: Number(process.env.COMPACTING_MAX_SUMMARIES_PER_KIN ?? 50),
     // ── Absolute token ceilings (model-agnostic) ──────────────────────────────
     // The percentage knobs above scale with the context window, so on a 1M-token
     // model even a "small" 25% keep-window is 250k tokens. These absolute caps
@@ -364,8 +377,8 @@ export const config = {
 
   contacts: {
     /** Bounds for the per-turn "Current speaker" profile block (contact notes
-     *  injected into EVERY Kin's prompt). Without these, a long-lived contact —
-     *  one global note per authoring Kin, plus each note growing as the model
+     *  injected into EVERY Agent's prompt). Without these, a long-lived contact —
+     *  one global note per authoring Agent, plus each note growing as the model
      *  rewrites it — would inflate every prompt unbounded. We keep the most
      *  recently-updated notes per scope and truncate each one. */
     speakerMaxNotesPerScope: Number(process.env.CONTACTS_SPEAKER_MAX_NOTES_PER_SCOPE ?? 12), // 0 = unlimited
@@ -380,17 +393,17 @@ export const config = {
      *  and get_project_knowledge(id). */
     pinCap: Number(process.env.PROJECT_KNOWLEDGE_PIN_CAP ?? 10),
     /** Max titles shipped in the prompt's project-knowledge index. Above
-     *  this, the index renders an "... and N more" footer and the Kin must
+     *  this, the index renders an "... and N more" footer and the Agent must
      *  use search_project_knowledge to surface the rest. */
     maxIndexEntries: Number(process.env.PROJECT_KNOWLEDGE_MAX_INDEX_ENTRIES ?? 100),
     /** Max results returned by search_project_knowledge (used both for the
-     *  Kin tool and the REST endpoint). */
+     *  Agent tool and the REST endpoint). */
     maxSearchResults: Number(process.env.PROJECT_KNOWLEDGE_MAX_SEARCH_RESULTS ?? 10),
   },
 
   queue: {
     userPriority: 100,
-    kinPriority: 50,
+    agentPriority: 50,
     taskPriority: 50,
     pollIntervalMs: Number(process.env.QUEUE_POLL_INTERVAL ?? 500),
   },
@@ -398,8 +411,8 @@ export const config = {
   tasks: {
     maxDepth: Number(process.env.TASKS_MAX_DEPTH ?? 3),
     maxRequestInput: Number(process.env.TASKS_MAX_REQUEST_INPUT ?? 3),
-    maxInterKinRequests: Number(process.env.TASKS_MAX_INTER_KIN_REQUESTS ?? 3),
-    interKinResponseTimeoutMs: Number(process.env.TASKS_INTER_KIN_RESPONSE_TIMEOUT_MS ?? 300000), // 5min
+    maxInterAgentRequests: Number(process.env.TASKS_MAX_INTER_KIN_REQUESTS ?? 3),
+    interAgentResponseTimeoutMs: Number(process.env.TASKS_INTER_KIN_RESPONSE_TIMEOUT_MS ?? 300000), // 5min
     maxConcurrent: Number(process.env.TASKS_MAX_CONCURRENT ?? 10),
   },
 
@@ -426,31 +439,31 @@ export const config = {
     // call) — it matches Claude Code and removes the fat thinking block the
     // legacy API forced before EVERY step (the main task-latency cause; see
     // task-latency-analysis.md). The SDK itself deprecates `type:'enabled'` in
-    // favor of `adaptive`. Default on; set KINBOT_ADAPTIVE_THINKING=false to
+    // favor of `adaptive`. Default on; set HIVEKEEP_ADAPTIVE_THINKING=false to
     // revert to fixed budgets.
-    adaptiveThinking: process.env.KINBOT_ADAPTIVE_THINKING !== 'false',
+    adaptiveThinking: process.env.HIVEKEEP_ADAPTIVE_THINKING !== 'false',
   },
 
   tools: {
     maxSteps: Number(process.env.TOOLS_MAX_STEPS ?? 0), // 0 (default) = truly unlimited (no cap); > 0 = hard cap at this value
     // Max parallel concurrency-safe tool calls within a single batch.
-    // KINBOT_MAX_TOOL_USE_CONCURRENCY is the canonical name (aligned with
+    // HIVEKEEP_MAX_TOOL_USE_CONCURRENCY is the canonical name (aligned with
     // Claude Code's CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY). TOOLS_CONCURRENCY_CAP
     // is kept as a fallback for existing deployments.
     concurrencyCap: Number(
-      process.env.KINBOT_MAX_TOOL_USE_CONCURRENCY
+      process.env.HIVEKEEP_MAX_TOOL_USE_CONCURRENCY
         ?? process.env.TOOLS_CONCURRENCY_CAP
         ?? 10,
     ),
   },
 
-  // Native run_shell tool. The per-call `timeout` arg lets a Kin extend a slow
+  // Native run_shell tool. The per-call `timeout` arg lets an Agent extend a slow
   // command (long test suites, builds, migrations) up to maxTimeoutMs; omitted
   // → defaultTimeoutMs. Raise maxTimeoutMs via env when tasks legitimately need
   // commands longer than the 10-minute default ceiling.
   shell: {
-    defaultTimeoutMs: Number(process.env.KINBOT_SHELL_TIMEOUT ?? 30_000),
-    maxTimeoutMs: Number(process.env.KINBOT_SHELL_MAX_TIMEOUT ?? 600_000),
+    defaultTimeoutMs: Number(process.env.HIVEKEEP_SHELL_TIMEOUT ?? 30_000),
+    maxTimeoutMs: Number(process.env.HIVEKEEP_SHELL_MAX_TIMEOUT ?? 600_000),
   },
 
   toolOutputs: {
@@ -460,10 +473,10 @@ export const config = {
   },
 
   humanPrompts: {
-    maxPendingPerKin: Number(process.env.HUMAN_PROMPTS_MAX_PENDING ?? 5),
+    maxPendingPerAgent: Number(process.env.HUMAN_PROMPTS_MAX_PENDING ?? 5),
   },
 
-  interKin: {
+  interAgent: {
     maxChainDepth: Number(process.env.INTER_KIN_MAX_CHAIN_DEPTH ?? 5),
     rateLimitPerMinute: Number(process.env.INTER_KIN_RATE_LIMIT ?? 20),
   },
@@ -487,18 +500,18 @@ export const config = {
     /** Local git clones used by sub-task worktrees, one subdir per project
      *  slug (`<baseDir>/<slug>/`) and a shared `<baseDir>/worktrees/` tree
      *  for ephemeral sub-task worktrees. */
-    baseDir: process.env.KINBOT_REPOS_DIR ?? `${dataDir}/repos`,
+    baseDir: process.env.HIVEKEEP_REPOS_DIR ?? `${dataDir}/repos`,
     /** Max time we let `git clone` run before aborting (seconds). Default
      *  10min covers most repos; large monorepos may need to bump this. */
-    cloneTimeoutSec: Number(process.env.KINBOT_CLONE_TIMEOUT_SEC ?? 600),
+    cloneTimeoutSec: Number(process.env.HIVEKEEP_CLONE_TIMEOUT_SEC ?? 600),
     /** How long worktrees from failed/conflicted sub-tasks are kept on
      *  disk before the cleanup sweep removes them (seconds). Default 1h.
      *  Sub-tasks that succeed and merge cleanly are removed immediately
      *  — this TTL only protects "needs human review" cases. */
-    worktreeKeepFailedSec: Number(process.env.KINBOT_WORKTREE_KEEP_FAILED_SEC ?? 3600),
+    worktreeKeepFailedSec: Number(process.env.HIVEKEEP_WORKTREE_KEEP_FAILED_SEC ?? 3600),
     /** How often the stale-worktree sweeper runs (minutes). Default 5.
      *  Lower bound: 1min (anything faster is wasted IO). */
-    worktreeSweepIntervalMin: Number(process.env.KINBOT_WORKTREE_SWEEP_INTERVAL_MIN ?? 5),
+    worktreeSweepIntervalMin: Number(process.env.HIVEKEEP_WORKTREE_SWEEP_INTERVAL_MIN ?? 5),
   },
 
   upload: {
@@ -517,23 +530,69 @@ export const config = {
     cleanupIntervalMin: Number(process.env.FILE_STORAGE_CLEANUP_INTERVAL ?? 60),
   },
 
+  /** Files section — user-facing workspace browser/editor (see files.md). */
+  workspaceFiles: {
+    /** Above this size a text file is served as `too-large` (download only). */
+    maxEditableSizeMb: Number(process.env.WORKSPACE_FILES_MAX_EDITABLE_SIZE ?? 5),
+    /** Max size of a file uploaded to a workspace. 0 = unlimited (still capped by MAX_REQUEST_BODY_MB). */
+    maxUploadSizeMb: Number(process.env.WORKSPACE_FILES_MAX_UPLOAD_SIZE ?? 100),
+    /** Byte budget of a recursive folder copy (aborts mid-copy when exceeded). */
+    maxCopySizeMb: Number(process.env.WORKSPACE_FILES_MAX_COPY_SIZE ?? 500),
+    /** Entry-count budget of a recursive folder copy. */
+    maxCopyEntries: Number(process.env.WORKSPACE_FILES_COPY_MAX_ENTRIES ?? 5000),
+    /** Hard cap of the `limit` param of /workspace/search. */
+    searchMaxResults: Number(process.env.WORKSPACE_FILES_SEARCH_MAX_RESULTS ?? 50),
+    /** Budget of files walked per search request (giant workspaces). */
+    searchMaxEntries: Number(process.env.WORKSPACE_FILES_SEARCH_MAX_ENTRIES ?? 20000),
+  },
+
+  /** Terminal section — admin-only web terminal on the host (see api.md). */
+  terminal: {
+    /** Kill-switch: set HIVEKEEP_TERMINAL_ENABLED=false to disable the feature entirely. */
+    enabled: process.env.HIVEKEEP_TERMINAL_ENABLED !== 'false',
+    /** Shell binary spawned for each session. Defaults to $SHELL, then /bin/bash. */
+    shell: process.env.HIVEKEEP_TERMINAL_SHELL ?? process.env.SHELL ?? '/bin/bash',
+    /** Scrollback kept server-side per session, replayed on reattach (KB). */
+    scrollbackKb: Number(process.env.HIVEKEEP_TERMINAL_SCROLLBACK_KB ?? 256),
+    /** How long a detached session (no client connected) survives before the
+     *  shell is killed (seconds). 0 (default) = sessions persist until closed
+     *  from the sidebar or the shell exits (tmux-like; they still die with the
+     *  server process). Set > 0 to auto-reap idle detached sessions. */
+    detachedTtlSec: Number(process.env.HIVEKEEP_TERMINAL_DETACHED_TTL_SEC ?? 0),
+    /** Hard cap of concurrently running PTY sessions across all users. */
+    maxSessions: Number(process.env.HIVEKEEP_TERMINAL_MAX_SESSIONS ?? 10),
+  },
+
   webhooks: {
-    maxPerKin: Number(process.env.WEBHOOKS_MAX_PER_KIN ?? 20),
+    maxPerAgent: Number(process.env.WEBHOOKS_MAX_PER_KIN ?? 20),
     maxPayloadBytes: Number(process.env.WEBHOOKS_MAX_PAYLOAD_BYTES ?? 1_048_576), // 1MB
     logRetentionDays: Number(process.env.WEBHOOKS_LOG_RETENTION_DAYS ?? 30),
     maxLogsPerWebhook: Number(process.env.WEBHOOKS_MAX_LOGS_PER_WEBHOOK ?? 500),
     rateLimitPerMinute: Number(process.env.WEBHOOKS_RATE_LIMIT_PER_MINUTE ?? 60),
   },
 
+  // Email account triggers: condition-matched email → conversation/task dispatch.
+  emailTriggers: {
+    maxPerAccount: Number(process.env.EMAIL_TRIGGERS_MAX_PER_ACCOUNT ?? 20),
+    pollIntervalMs: Number(process.env.EMAIL_TRIGGER_POLL_INTERVAL ?? 120_000),
+    // Anti-flood: cap messages processed per (account, folder) per poll cycle.
+    maxPerCycle: Number(process.env.EMAIL_TRIGGER_MAX_PER_CYCLE ?? 50),
+    logRetentionDays: Number(process.env.EMAIL_TRIGGER_LOG_RETENTION_DAYS ?? 30),
+    maxLogsPerTrigger: Number(process.env.EMAIL_TRIGGER_MAX_LOGS_PER_TRIGGER ?? 500),
+    // Ring buffer of recently-seen message ids per (account, folder), to drop
+    // boundary duplicates (provider `after` filters are second-granular/inclusive).
+    seenIdsRing: Number(process.env.EMAIL_TRIGGER_SEEN_IDS_RING ?? 200),
+  },
+
   channels: {
-    maxPerKin: Number(process.env.CHANNELS_MAX_PER_KIN ?? 5),
+    maxPerAgent: Number(process.env.CHANNELS_MAX_PER_KIN ?? 5),
     telegramWebhookPath: '/api/channels/telegram',
     pendingOriginTtlMs: Number(process.env.CHANNEL_PENDING_ORIGIN_TTL ?? 300_000),
   },
 
   quickSessions: {
     defaultExpirationHours: Number(process.env.QUICK_SESSION_EXPIRATION_HOURS ?? 24),
-    maxActivePerUserPerKin: Number(process.env.QUICK_SESSION_MAX_PER_USER_KIN ?? 1),
+    maxActivePerUserPerAgent: Number(process.env.QUICK_SESSION_MAX_PER_USER_KIN ?? 1),
     retentionDays: Number(process.env.QUICK_SESSION_RETENTION_DAYS ?? 7),
     cleanupIntervalMinutes: Number(process.env.QUICK_SESSION_CLEANUP_INTERVAL ?? 60),
   },
@@ -562,7 +621,7 @@ export const config = {
 
   // Tier 3: stateful, multi-turn browser sessions (browser_open_session etc.)
   // Default: enabled. The browser_* tools are defaultDisabled, so they only
-  // reach a Kin when a granted toolbox lists them by name — sessions cannot be
+  // reach an Agent when a granted toolbox lists them by name — sessions cannot be
   // used by accident. Set BROWSER_SESSIONS_ENABLED=false to disable globally.
   browserSessions: {
     enabled: process.env.BROWSER_SESSIONS_ENABLED !== 'false',
@@ -570,21 +629,21 @@ export const config = {
     ttlMs: Number(process.env.BROWSER_SESSION_TTL_MS ?? 3_600_000),
     /** Auto-close after N ms without any tool call on the session. */
     idleTimeoutMs: Number(process.env.BROWSER_SESSION_IDLE_TIMEOUT_MS ?? 600_000),
-    /** Global cap on concurrent sessions across all Kins. */
+    /** Global cap on concurrent sessions across all Agents. */
     maxTotal: Number(process.env.BROWSER_MAX_TOTAL_SESSIONS ?? 5),
-    /** Cap on concurrent sessions per Kin. */
-    maxPerKin: Number(process.env.BROWSER_MAX_SESSIONS_PER_KIN ?? 1),
+    /** Cap on concurrent sessions per Agent. */
+    maxPerAgent: Number(process.env.BROWSER_MAX_SESSIONS_PER_KIN ?? 1),
     defaultViewport: {
       width: Number(process.env.BROWSER_DEFAULT_VIEWPORT_WIDTH ?? 1280),
       height: Number(process.env.BROWSER_DEFAULT_VIEWPORT_HEIGHT ?? 720),
     },
     /** Directory where saved browser states live (cookies + localStorage). One
-     *  subdir per Kin, one JSON file per named state. Stored OUTSIDE the
-     *  workspace so the Kin's filesystem tools can't accidentally read or leak
+     *  subdir per Agent, one JSON file per named state. Stored OUTSIDE the
+     *  workspace so the Agent's filesystem tools can't accidentally read or leak
      *  auth tokens — access goes exclusively through browser_*_state tools. */
     statesDir: process.env.BROWSER_STATES_DIR ?? `${dataDir}/browser-states`,
-    /** Cap on number of saved states per Kin. */
-    maxStatesPerKin: Number(process.env.BROWSER_MAX_STATES_PER_KIN ?? 20),
+    /** Cap on number of saved states per Agent. */
+    maxStatesPerAgent: Number(process.env.BROWSER_MAX_STATES_PER_KIN ?? 20),
     /** Max size (bytes) of a single saved state file. localStorage from heavy
      *  SPAs can balloon — this prevents disk fills. */
     maxStateSizeBytes: Number(process.env.BROWSER_MAX_STATE_SIZE_BYTES ?? 5 * 1024 * 1024),
@@ -606,40 +665,42 @@ export const config = {
   },
 
   wakeups: {
-    maxPendingPerKin: Number(process.env.WAKEUPS_MAX_PENDING_PER_KIN ?? 20),
+    maxPendingPerAgent: Number(process.env.WAKEUPS_MAX_PENDING_PER_KIN ?? 20),
     minDelaySeconds: 10,
     maxDelaySeconds: 2_592_000, // 30 days
   },
 
   miniApps: {
     dir: process.env.MINI_APPS_DIR ?? `${dataDir}/mini-apps`,
-    maxAppsPerKin: Number(process.env.MINI_APPS_MAX_PER_KIN ?? 20),
+    maxAppsPerAgent: Number(process.env.MINI_APPS_MAX_PER_KIN ?? 20),
     maxFileSizeMb: Number(process.env.MINI_APPS_MAX_FILE_SIZE ?? 5),
     maxTotalSizeMbPerApp: Number(process.env.MINI_APPS_MAX_TOTAL_SIZE ?? 50),
     backendEnabled: process.env.MINI_APPS_BACKEND_ENABLED !== 'false', // default: true
   },
 
-  // Global custom tools: user/Kin-authored scripts (any language + own deps)
+  // Global custom tools: user/Agent-authored scripts (any language + own deps)
   // executed by the host. Each tool is a managed directory under `baseDir/<slug>/`
   // holding its entrypoint + deps; the DB holds metadata only. The legacy
-  // KINBOT_CUSTOM_TOOL_TIMEOUT / _MAX_TIMEOUT env vars are kept for back-compat.
+  // HIVEKEEP_CUSTOM_TOOL_TIMEOUT / _MAX_TIMEOUT env vars are kept for back-compat.
   customTools: {
-    baseDir: process.env.KINBOT_CUSTOM_TOOLS_DIR ?? `${dataDir}/custom-tools`,
-    defaultTimeoutMs: Number(process.env.KINBOT_CUSTOM_TOOL_TIMEOUT ?? 30_000),
-    maxTimeoutMs: Number(process.env.KINBOT_CUSTOM_TOOL_MAX_TIMEOUT ?? 300_000),
+    baseDir: process.env.HIVEKEEP_CUSTOM_TOOLS_DIR ?? `${dataDir}/custom-tools`,
+    defaultTimeoutMs: Number(process.env.HIVEKEEP_CUSTOM_TOOL_TIMEOUT ?? 30_000),
+    maxTimeoutMs: Number(process.env.HIVEKEEP_CUSTOM_TOOL_MAX_TIMEOUT ?? 300_000),
     // Cap captured stdout+stderr to protect the context window / server memory.
-    maxOutputBytes: Number(process.env.KINBOT_CUSTOM_TOOL_MAX_OUTPUT_BYTES ?? 256 * 1024),
+    maxOutputBytes: Number(process.env.HIVEKEEP_CUSTOM_TOOL_MAX_OUTPUT_BYTES ?? 256 * 1024),
     // Longer budget for dependency installs (pip/npm/bun install).
-    setupTimeoutMs: Number(process.env.KINBOT_CUSTOM_TOOL_SETUP_TIMEOUT ?? 600_000),
+    setupTimeoutMs: Number(process.env.HIVEKEEP_CUSTOM_TOOL_SETUP_TIMEOUT ?? 600_000),
   },
 
   versionCheck: {
     enabled: process.env.VERSION_CHECK_ENABLED !== 'false',
-    repo: process.env.VERSION_CHECK_REPO ?? 'MarlBurroW/kinbot',
+    repo: process.env.VERSION_CHECK_REPO ?? 'MarlBurroW/hivekeep',
+    /** Branch tracked by the edge update channel */
+    branch: process.env.VERSION_CHECK_BRANCH ?? 'main',
     intervalHours: Number(process.env.VERSION_CHECK_INTERVAL_HOURS ?? 1),
   },
 
-  publicUrl: process.env.PUBLIC_URL ?? `http://localhost:${process.env.PORT ?? 3333}`,
+  publicUrl: process.env.PUBLIC_URL ?? `http://localhost:${process.env.PORT ?? 3000}`,
 
   environment: {
     installationType: detectInstallationType(),

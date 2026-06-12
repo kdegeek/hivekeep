@@ -1,12 +1,12 @@
 /**
- * One-time migration: backfill missing providerId on kins, tasks, and crons.
+ * One-time migration: backfill missing providerId on agents, tasks, and crons.
  *
  * Uses the model-ID heuristic (guessProviderType) to find a matching provider,
  * then writes the provider's DB id. Runs once, guarded by an app-settings key.
  */
 import { eq, and, isNull, isNotNull, notInArray } from 'drizzle-orm'
 import { db } from '@/server/db/index'
-import { kins, tasks, crons, providers } from '@/server/db/schema'
+import { agents, tasks, crons, providers } from '@/server/db/schema'
 import { getSetting, setSetting } from '@/server/services/app-settings'
 import { guessProviderType } from '@/shared/model-ref'
 import { createLogger } from '@/server/logger'
@@ -38,42 +38,42 @@ export async function migrateModelProviders(): Promise<void> {
 
   let totalFixed = 0
 
-  // 1. Kins with model but no providerId
-  const orphanedKins = db
-    .select({ id: kins.id, model: kins.model, compactingConfig: kins.compactingConfig })
-    .from(kins)
-    .where(and(isNotNull(kins.model), isNull(kins.providerId)))
+  // 1. Agents with model but no providerId
+  const orphanedAgents = db
+    .select({ id: agents.id, model: agents.model, compactingConfig: agents.compactingConfig })
+    .from(agents)
+    .where(and(isNotNull(agents.model), isNull(agents.providerId)))
     .all()
 
-  for (const kin of orphanedKins) {
-    if (!kin.model) continue
-    const provType = guessProviderType(kin.model)
+  for (const agent of orphanedAgents) {
+    if (!agent.model) continue
+    const provType = guessProviderType(agent.model)
     const pid = provType ? typeToProviderId.get(provType) : undefined
     if (pid) {
-      db.update(kins).set({ providerId: pid }).where(eq(kins.id, kin.id)).run()
+      db.update(agents).set({ providerId: pid }).where(eq(agents.id, agent.id)).run()
       totalFixed++
     }
   }
 
-  // 1b. Kins with compactingConfig.compactingModel but no compactingProviderId
-  const allKinsWithCompacting = db
-    .select({ id: kins.id, compactingConfig: kins.compactingConfig })
-    .from(kins)
-    .where(isNotNull(kins.compactingConfig))
+  // 1b. Agents with compactingConfig.compactingModel but no compactingProviderId
+  const allAgentsWithCompacting = db
+    .select({ id: agents.id, compactingConfig: agents.compactingConfig })
+    .from(agents)
+    .where(isNotNull(agents.compactingConfig))
     .all()
 
-  for (const kin of allKinsWithCompacting) {
-    if (!kin.compactingConfig) continue
+  for (const agent of allAgentsWithCompacting) {
+    if (!agent.compactingConfig) continue
     try {
-      const cfg = JSON.parse(kin.compactingConfig) as Record<string, unknown>
+      const cfg = JSON.parse(agent.compactingConfig) as Record<string, unknown>
       if (cfg.compactingModel && !cfg.compactingProviderId) {
         const provType = guessProviderType(cfg.compactingModel as string)
         const pid = provType ? typeToProviderId.get(provType) : undefined
         if (pid) {
           cfg.compactingProviderId = pid
-          db.update(kins)
+          db.update(agents)
             .set({ compactingConfig: JSON.stringify(cfg) })
-            .where(eq(kins.id, kin.id))
+            .where(eq(agents.id, agent.id))
             .run()
           totalFixed++
         }

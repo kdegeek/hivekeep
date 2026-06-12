@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Have an idea to make KinBot better? We'd love to hear it!
+        Have an idea to make Hivekeep better? We'd love to hear it!
 
   - type: textarea
     id: problem
@@ -35,7 +35,7 @@ body:
     attributes:
       label: Area
       options:
-        - Kins / Agents
+        - Agents / Agents
         - Memory system
         - Providers
         - Channels (Telegram, Discord, etc.)

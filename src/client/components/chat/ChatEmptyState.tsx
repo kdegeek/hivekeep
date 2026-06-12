@@ -4,18 +4,18 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/client/components/ui/avat
 import { Sparkles, MessageSquare, Lightbulb, Wrench } from 'lucide-react'
 
 interface ChatEmptyStateProps {
-  kinName: string
-  kinRole: string
-  kinAvatarUrl: string | null
+  agentName: string
+  agentRole: string
+  agentAvatarUrl: string | null
   onSendMessage: (content: string) => void
 }
 
 const SUGGESTION_ICONS = [Sparkles, MessageSquare, Lightbulb, Wrench] as const
 
-export const ChatEmptyState = memo(function ChatEmptyState({ kinName, kinRole, kinAvatarUrl, onSendMessage }: ChatEmptyStateProps) {
+export const ChatEmptyState = memo(function ChatEmptyState({ agentName, agentRole, agentAvatarUrl, onSendMessage }: ChatEmptyStateProps) {
   const { t } = useTranslation()
 
-  const initials = kinName.slice(0, 2).toUpperCase()
+  const initials = agentName.slice(0, 2).toUpperCase()
 
   // Get suggestion chips from i18n (returns array of strings)
   const suggestions = t('chat.emptyState.suggestions', { returnObjects: true, defaultValue: [] })
@@ -27,10 +27,10 @@ export const ChatEmptyState = memo(function ChatEmptyState({ kinName, kinRole, k
 
   return (
     <div className="flex flex-col items-center justify-center py-16 animate-fade-in">
-      {/* Kin avatar */}
+      {/* Agent avatar */}
       <Avatar className="size-16 mb-4 ring-2 ring-primary/20 ring-offset-2 ring-offset-background">
-        {kinAvatarUrl ? (
-          <AvatarImage src={kinAvatarUrl} alt={kinName} />
+        {agentAvatarUrl ? (
+          <AvatarImage src={agentAvatarUrl} alt={agentName} />
         ) : (
           <AvatarFallback className="text-lg bg-primary/10 text-primary">{initials}</AvatarFallback>
         )}
@@ -38,10 +38,10 @@ export const ChatEmptyState = memo(function ChatEmptyState({ kinName, kinRole, k
 
       {/* Greeting */}
       <h2 className="text-lg font-semibold">
-        {t('chat.emptyState.greeting', { name: kinName })}
+        {t('chat.emptyState.greeting', { name: agentName })}
       </h2>
       <p className="mt-1 max-w-md text-center text-sm text-muted-foreground">
-        {kinRole || t('chat.emptyState.defaultRole')}
+        {agentRole || t('chat.emptyState.defaultRole')}
       </p>
 
       {/* Suggestion chips */}

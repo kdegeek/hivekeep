@@ -75,13 +75,13 @@ export function chunkText(text: string, maxTokens = 512, overlap = 50): string[]
 
 // ─── CRUD ────────────────────────────────────────────────────────────────────
 
-export async function createSource(kinId: string, input: CreateSourceInput) {
+export async function createSource(agentId: string, input: CreateSourceInput) {
   const id = uuid()
   const now = new Date()
 
   await db.insert(knowledgeSources).values({
     id,
-    kinId,
+    agentId,
     name: input.name,
     type: input.type,
     status: 'pending',
@@ -97,12 +97,12 @@ export async function createSource(kinId: string, input: CreateSourceInput) {
 
   const created = db.select().from(knowledgeSources).where(eq(knowledgeSources.id, id)).get()!
 
-  log.debug({ kinId, sourceId: id, type: input.type }, 'Knowledge source created')
+  log.debug({ agentId, sourceId: id, type: input.type }, 'Knowledge source created')
   return created
 }
 
-export async function deleteSource(sourceId: string, kinId: string) {
-  const existing = await getSource(sourceId, kinId)
+export async function deleteSource(sourceId: string, agentId: string) {
+  const existing = await getSource(sourceId, agentId)
   if (!existing) return false
 
   // Remove chunks from vec index
@@ -114,22 +114,22 @@ export async function deleteSource(sourceId: string, kinId: string) {
     }
   } catch { /* ignore */ }
 
-  await db.delete(knowledgeSources).where(and(eq(knowledgeSources.id, sourceId), eq(knowledgeSources.kinId, kinId)))
+  await db.delete(knowledgeSources).where(and(eq(knowledgeSources.id, sourceId), eq(knowledgeSources.agentId, agentId)))
 
-  log.debug({ sourceId, kinId }, 'Knowledge source deleted')
+  log.debug({ sourceId, agentId }, 'Knowledge source deleted')
   return true
 }
 
-export async function listSources(kinId: string) {
+export async function listSources(agentId: string) {
   return db.select().from(knowledgeSources)
-    .where(eq(knowledgeSources.kinId, kinId))
+    .where(eq(knowledgeSources.agentId, agentId))
     .orderBy(desc(knowledgeSources.createdAt))
     .all()
 }
 
-export async function getSource(sourceId: string, kinId: string) {
+export async function getSource(sourceId: string, agentId: string) {
   return db.select().from(knowledgeSources)
-    .where(and(eq(knowledgeSources.id, sourceId), eq(knowledgeSources.kinId, kinId)))
+    .where(and(eq(knowledgeSources.id, sourceId), eq(knowledgeSources.agentId, agentId)))
     .get()
 }
 
@@ -143,11 +143,11 @@ export async function getSourceChunks(sourceId: string) {
 // ─── Processing Pipeline ────────────────────────────────────────────────────
 
 export async function processSource(sourceId: string) {
-  // Get source (without kinId filter since this is internal)
+  // Get source (without agentId filter since this is internal)
   const source = db.select().from(knowledgeSources).where(eq(knowledgeSources.id, sourceId)).get()
   if (!source) throw new Error(`Knowledge source ${sourceId} not found`)
 
-  const kinId = source.kinId
+  const agentId = source.agentId
 
   try {
     // Update status to processing
@@ -204,7 +204,7 @@ export async function processSource(sourceId: string) {
       await db.insert(knowledgeChunks).values({
         id: chunkId,
         sourceId,
-        kinId,
+        agentId,
         content: chunkContent,
         embedding: embeddingBuf,
         position: i,
@@ -229,7 +229,7 @@ export async function processSource(sourceId: string) {
       updatedAt: new Date(),
     }).where(eq(knowledgeSources.id, sourceId))
 
-    log.info({ sourceId, kinId, chunks: chunks.length, tokens: totalTokens }, 'Knowledge source processed')
+    log.info({ sourceId, agentId, chunks: chunks.length, tokens: totalTokens }, 'Knowledge source processed')
   } catch (err) {
     const errorMessage = (err as Error).message || 'Unknown processing error'
     await db.update(knowledgeSources).set({
@@ -238,7 +238,7 @@ export async function processSource(sourceId: string) {
       updatedAt: new Date(),
     }).where(eq(knowledgeSources.id, sourceId))
 
-    log.error({ sourceId, kinId, err }, 'Knowledge source processing failed')
+    log.error({ sourceId, agentId, err }, 'Knowledge source processing failed')
     throw err
   }
 }
@@ -246,7 +246,7 @@ export async function processSource(sourceId: string) {
 // ─── Hybrid Search ──────────────────────────────────────────────────────────
 
 export async function searchKnowledge(
-  kinId: string,
+  agentId: string,
   query: string,
   limit?: number,
 ): Promise<KnowledgeSearchResult[]> {
@@ -272,9 +272,9 @@ export async function searchKnowledge(
       const placeholders = matchingIds.map(() => '?').join(', ')
       const chunkRows = sqlite
         .query<{ id: string; content: string; source_id: string; position: number }, string[]>(
-          `SELECT id, content, source_id, position FROM knowledge_chunks WHERE id IN (${placeholders}) AND kin_id = ?`,
+          `SELECT id, content, source_id, position FROM knowledge_chunks WHERE id IN (${placeholders}) AND agent_id = ?`,
         )
-        .all(...matchingIds, kinId)
+        .all(...matchingIds, agentId)
 
       const chunkMap = new Map(chunkRows.map((c) => [c.id, c]))
       for (let i = 0; i < vecRows.length; i++) {
@@ -308,14 +308,14 @@ export async function searchKnowledge(
         `SELECT c.id, c.content, c.source_id, c.position, fts.rank
          FROM knowledge_chunks_fts fts
          JOIN knowledge_chunks c ON c.rowid = fts.rowid
-         WHERE knowledge_chunks_fts MATCH ? AND c.kin_id = ?
+         WHERE knowledge_chunks_fts MATCH ? AND c.agent_id = ?
          ORDER BY fts.rank
          LIMIT ?`,
       )
 
-      let ftsRows = stmt.all(ftsQuery, kinId, maxResults * 2)
+      let ftsRows = stmt.all(ftsQuery, agentId, maxResults * 2)
       if (ftsRows.length === 0 && terms.length > 1) {
-        ftsRows = stmt.all(ftsQueryOr, kinId, maxResults * 2)
+        ftsRows = stmt.all(ftsQueryOr, agentId, maxResults * 2)
       }
 
       const ftsBoost = config.memory.ftsBoost

@@ -30,7 +30,7 @@ import { registerEmailProvider, unregisterEmailProvider } from '@/server/email/r
 import { registerContactsProvider, unregisterContactsProvider } from '@/server/contacts/registry'
 import { registerCalendarProvider, unregisterCalendarProvider } from '@/server/calendar/registry'
 import { channelAdapters } from '@/server/channels/index'
-import type { LLMProvider, EmbeddingProvider, ImageProvider, SearchProvider, TTSProvider, STTProvider, EmailProvider, ContactsProvider, CalendarProvider, PluginProvider, ProviderCapability } from '@kinbot-developer/sdk'
+import type { LLMProvider, EmbeddingProvider, ImageProvider, SearchProvider, TTSProvider, STTProvider, EmailProvider, ContactsProvider, CalendarProvider, PluginProvider, ProviderCapability } from '@hivekeep/sdk'
 import { emitPluginCard, updatePluginCard } from '@/server/services/plugin-cards'
 import type {
   PluginContext,
@@ -42,7 +42,7 @@ import type {
   PluginStorageAPI,
   PluginHTTPClient,
   PluginVaultAPI,
-} from '@kinbot-developer/sdk'
+} from '@hivekeep/sdk'
 
 // Re-export the plugin-facing surface so other internal modules keep their
 // existing import paths. The SDK is the source of truth.
@@ -137,11 +137,11 @@ function detectProviderFamily(
  *
  * Read (`getSecret`) is permissive: plugins read any vault key, since the
  * key typically arrives via their config (e.g. `authTokenVaultKey` for a
- * channel password field stored by KinBot core).
+ * channel password field stored by Hivekeep core).
  *
  * Write (`setSecret`), delete, and list are strictly scoped to a
  * `plugin:<pluginName>:` namespace so plugins cannot overwrite each other's
- * secrets or those managed by KinBot core.
+ * secrets or those managed by Hivekeep core.
  *
  * Exported for unit testing. Production callers go through `createContext`.
  */
@@ -245,7 +245,7 @@ const NAME_PATTERN = /^[a-z0-9-]+$/
  * outside this set is rejected at manifest-validation time so plugin
  * authors get immediate feedback instead of a silent runtime gate.
  */
-const PERMISSION_PATTERN = /^(http:[^\s]+|storage|cards|vault|cron|kins)$/
+const PERMISSION_PATTERN = /^(http:[^\s]+|storage|cards|vault|cron|agents)$/
 
 /**
  * Allowed `type` enum on a channel adapter's config field. Matches
@@ -277,10 +277,10 @@ export function validateManifest(data: unknown): { valid: boolean; errors: strin
     errors.push('main entry point is required')
   }
 
-  // Validate kinbot version constraint syntax if present
-  if (m.kinbot !== undefined) {
-    if (typeof m.kinbot !== 'string') {
-      errors.push('kinbot must be a semver range string (e.g. ">=0.15.0")')
+  // Validate hivekeep version constraint syntax if present
+  if (m.hivekeep !== undefined) {
+    if (typeof m.hivekeep !== 'string') {
+      errors.push('hivekeep must be a semver range string (e.g. ">=0.15.0")')
     }
   }
 
@@ -351,7 +351,7 @@ export function validateManifest(data: unknown): { valid: boolean; errors: strin
         }
         if (!PERMISSION_PATTERN.test(p)) {
           errors.push(
-            `permission "${p}" is invalid — must be either an http permission ("http:<host>" or "http:*") or one of: storage, cards, vault, cron, kins`,
+            `permission "${p}" is invalid — must be either an http permission ("http:<host>" or "http:*") or one of: storage, cards, vault, cron, agents`,
           )
         }
       }
@@ -533,7 +533,7 @@ export function validatePluginExports(
         if (!Array.isArray(reg.availability)) {
           warnings.push(`tools.${toolName}: missing or invalid "availability" array`)
         } else {
-          const validAvail = ['main', 'sub-kin']
+          const validAvail = ['main', 'sub-agent']
           for (const a of reg.availability) {
             if (!validAvail.includes(a as string)) {
               warnings.push(`tools.${toolName}: unknown availability "${a}" (expected: ${validAvail.join(', ')})`)
@@ -676,34 +676,34 @@ class PluginManager {
   private watcher: FSWatcher | null = null
   private reloadTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
-  private kinbotVersion: string | null = null
+  private hivekeepVersion: string | null = null
 
   constructor() {
     this.pluginsDir = resolve(process.cwd(), 'plugins')
     this.installWorkspace = resolve(process.cwd(), 'data', '.plugin-install')
   }
 
-  /** Get the current KinBot version from package.json (cached) */
-  private async getKinBotVersion(): Promise<string> {
-    if (this.kinbotVersion) return this.kinbotVersion
+  /** Get the current Hivekeep version from package.json (cached) */
+  private async getHivekeepVersion(): Promise<string> {
+    if (this.hivekeepVersion) return this.hivekeepVersion
     try {
       const raw = await readFile(resolve(process.cwd(), 'package.json'), 'utf-8')
-      this.kinbotVersion = JSON.parse(raw).version ?? '0.0.0'
+      this.hivekeepVersion = JSON.parse(raw).version ?? '0.0.0'
     } catch {
-      this.kinbotVersion = '0.0.0'
+      this.hivekeepVersion = '0.0.0'
     }
-    return this.kinbotVersion!
+    return this.hivekeepVersion!
   }
 
-  /** Check if a plugin's kinbot version requirement is satisfied */
+  /** Check if a plugin's hivekeep version requirement is satisfied */
   private async checkCompatibility(manifest: PluginManifest): Promise<{ compatible: boolean; error?: string }> {
-    if (!manifest.kinbot) return { compatible: true }
-    const version = await this.getKinBotVersion()
-    const compatible = satisfiesSemver(version, manifest.kinbot)
+    if (!manifest.hivekeep) return { compatible: true }
+    const version = await this.getHivekeepVersion()
+    const compatible = satisfiesSemver(version, manifest.hivekeep)
     if (!compatible) {
       return {
         compatible: false,
-        error: `Requires KinBot ${manifest.kinbot} (current: ${version})`,
+        error: `Requires Hivekeep ${manifest.hivekeep} (current: ${version})`,
       }
     }
     return { compatible: true }
@@ -871,7 +871,7 @@ class PluginManager {
       if (!compat.compatible) {
         plugin.error = compat.error
         plugin.enabled = false
-        log.warn({ plugin: name, error: compat.error }, 'Plugin incompatible with current KinBot version')
+        log.warn({ plugin: name, error: compat.error }, 'Plugin incompatible with current Hivekeep version')
         return
       }
 
@@ -1004,7 +1004,7 @@ class PluginManager {
           }
           const prefixedType = `plugin:${name}:${rawProvider.type}`
           // Wrap the provider so its `type` reflects the prefixed name
-          // KinBot uses internally, without mutating the plugin's instance.
+          // Hivekeep uses internally, without mutating the plugin's instance.
           const wrapped = new Proxy(rawProvider, {
             get(target, prop) {
               if (prop === 'type') return prefixedType
@@ -1274,7 +1274,7 @@ class PluginManager {
 
     const cards: PluginCardsAPI = {
       emit: (params) => emitPluginCard({
-        kinId: params.kinId,
+        agentId: params.agentId,
         pluginId: manifest.name,
         cardType: params.cardType,
         layout: params.layout,
@@ -1485,7 +1485,7 @@ class PluginManager {
 
   /** List all discovered plugins as summaries */
   listPlugins(): PluginSummary[] {
-    const version = this.kinbotVersion ?? '0.0.0'
+    const version = this.hivekeepVersion ?? '0.0.0'
     return Array.from(this.plugins.values()).map(p => ({
       name: p.manifest.name,
       displayName: p.manifest.displayName,
@@ -1514,9 +1514,9 @@ class PluginManager {
       dependents: this.getDependents(p.manifest.name),
       installSource: p.installSource,
       installMeta: p.installMeta,
-      compatible: p.manifest.kinbot ? satisfiesSemver(version, p.manifest.kinbot) : true,
-      compatibilityError: p.manifest.kinbot && !satisfiesSemver(version, p.manifest.kinbot)
-        ? `Requires KinBot ${p.manifest.kinbot} (current: ${version})`
+      compatible: p.manifest.hivekeep ? satisfiesSemver(version, p.manifest.hivekeep) : true,
+      compatibilityError: p.manifest.hivekeep && !satisfiesSemver(version, p.manifest.hivekeep)
+        ? `Requires Hivekeep ${p.manifest.hivekeep} (current: ${version})`
         : undefined,
       health: { ...p.health },
     }))
@@ -1539,7 +1539,7 @@ class PluginManager {
   /**
    * Tools registered by each loaded plugin, grouped by plugin name. Returns
    * one entry per plugin that currently has at least one registered tool.
-   * Used by the Kin Tools route to render plugin tools as their own UI
+   * Used by the Agent Tools route to render plugin tools as their own UI
    * groups (the bucket builder splits plugin tools off from native ones
    * regardless of their registry domain).
    *
@@ -1851,7 +1851,7 @@ class PluginManager {
       await mkdir(tempDir, { recursive: true })
 
       // Initialize a minimal package.json and install the package
-      await Bun.write(join(tempDir, 'package.json'), JSON.stringify({ name: 'kinbot-plugin-install', private: true }))
+      await Bun.write(join(tempDir, 'package.json'), JSON.stringify({ name: 'hivekeep-plugin-install', private: true }))
 
       log.info({ package: packageName, tempDir }, 'npm install: running npm install (90s timeout)')
 
@@ -1900,7 +1900,7 @@ class PluginManager {
       log.info({ plugin: manifest.name, version: manifest.version }, 'npm install: manifest validated')
 
       // Sanity check: package.json.version is the version the npm registry
-      // resolves; plugin.json.version is what KinBot displays. If the
+      // resolves; plugin.json.version is what Hivekeep displays. If the
       // plugin author forgot to bump plugin.json alongside package.json,
       // checkUpdates() will keep offering an "update" that doesn't change
       // anything visible. Surface a clear log so the author can fix it.
@@ -1914,7 +1914,7 @@ class PluginManager {
           )
         }
       } catch {
-        // package.json missing or malformed — not fatal for KinBot
+        // package.json missing or malformed — not fatal for Hivekeep
       }
 
       // Check version compatibility
@@ -2127,7 +2127,7 @@ class PluginManager {
       // times out — without it the workspace accumulates `_update_*`
       // shells forever.
       try {
-        await Bun.write(join(tempDir, 'package.json'), JSON.stringify({ name: 'kinbot-plugin-update', private: true }))
+        await Bun.write(join(tempDir, 'package.json'), JSON.stringify({ name: 'hivekeep-plugin-update', private: true }))
 
         // Same `npm install` (rather than `bun add`) trick as installFromNpm —
         // see the comment there for why we can't spawn bun from a bun parent.

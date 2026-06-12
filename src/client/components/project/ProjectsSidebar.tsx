@@ -8,7 +8,7 @@ import {
   SidebarHeader,
 } from '@/client/components/ui/sidebar'
 import { EmptyState } from '@/client/components/common/EmptyState'
-import { ActiveKinsIndicator } from '@/client/components/project/ActiveKinsIndicator'
+import { ActiveAgentsIndicator } from '@/client/components/project/ActiveAgentsIndicator'
 import { cn } from '@/client/lib/utils'
 import type { ProjectSummary } from '@/shared/types'
 
@@ -23,10 +23,10 @@ interface ProjectsSidebarProps {
 /**
  * Projects navigation rail.
  *
- * Built on the shared shadcn <Sidebar> primitive (same as the Kins sidebar) so
+ * Built on the shared shadcn <Sidebar> primitive (same as the Agents sidebar) so
  * it inherits resize, collapse (Ctrl+B) and the mobile Sheet drawer for free —
  * the parent page just needs a <SidebarProvider>. The item rendering stays
- * bespoke (accent stripe + slug/ticket counts + active-Kin avatars + edit).
+ * bespoke (accent stripe + slug/ticket counts + active-Agent avatars + edit).
  */
 export function ProjectsSidebar({ projects, selectedId, onSelect, onCreate, onEdit }: ProjectsSidebarProps) {
   const { t } = useTranslation()
@@ -69,7 +69,7 @@ export function ProjectsSidebar({ projects, selectedId, onSelect, onCreate, onEd
                     />
                   )}
                   {/* role="button" instead of a real <button> so the nested
-                      Kin-avatar buttons in <ActiveKinsIndicator> are valid HTML.
+                      Agent-avatar buttons in <ActiveAgentsIndicator> are valid HTML.
                       HTML forbids button-in-button and React warns about it. */}
                   <div
                     role="button"
@@ -110,7 +110,7 @@ export function ProjectsSidebar({ projects, selectedId, onSelect, onCreate, onEd
                           {project.openTicketCount} / {project.ticketCount}
                         </span>
                       </div>
-                      <ActiveKinsIndicator projectId={project.id} size="size-4" maxVisible={3} />
+                      <ActiveAgentsIndicator projectId={project.id} size="size-4" maxVisible={3} />
                     </div>
                   </div>
                   <Button

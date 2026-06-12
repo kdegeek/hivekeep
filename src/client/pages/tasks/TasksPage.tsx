@@ -132,8 +132,8 @@ export function TasksPage() {
   const handleOpenTask = (task: TaskSummary) => {
     openTask({
       taskId: task.id,
-      kinName: task.sourceKinName ?? task.parentKinName,
-      kinAvatarUrl: task.sourceKinAvatarUrl ?? task.parentKinAvatarUrl,
+      agentName: task.sourceAgentName ?? task.parentAgentName,
+      agentAvatarUrl: task.sourceAgentAvatarUrl ?? task.parentAgentAvatarUrl,
     })
   }
 
@@ -318,7 +318,7 @@ export function TasksPage() {
         )}
       </main>
 
-      {/* Manual task creation — pick a Kin and launch a standalone task */}
+      {/* Manual task creation — pick an Agent and launch a standalone task */}
       {createOpen && (
         <Suspense fallback={null}>
           <OrphanTaskDialog open={createOpen} onOpenChange={setCreateOpen} />

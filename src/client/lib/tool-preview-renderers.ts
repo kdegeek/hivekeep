@@ -125,7 +125,7 @@ registerPreviewRenderer('spawn_self', ({ args }) => {
   return (args.title as string) || null
 })
 
-registerPreviewRenderer('spawn_kin', ({ args }) => {
+registerPreviewRenderer('spawn_agent', ({ args }) => {
   return (args.title as string) || null
 })
 
@@ -415,9 +415,9 @@ registerPreviewRenderer('update_webhook', ({ args }) => {
   return name ? truncate(name, 50) : id ? truncate(id, 50) : null
 })
 
-// --- Kin creation ---
+// --- Agent creation ---
 
-registerPreviewRenderer('create_kin', ({ args }) => {
+registerPreviewRenderer('create_agent', ({ args }) => {
   return (args.name as string) ? truncate(args.name as string, 50) : null
 })
 

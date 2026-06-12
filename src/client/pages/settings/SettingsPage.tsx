@@ -23,6 +23,7 @@ import {
 import { GeneralSettings } from '@/client/pages/settings/GeneralSettings'
 import { ProvidersSettings } from '@/client/pages/settings/ProvidersSettings'
 import { ModelsSettings } from '@/client/pages/settings/ModelsSettings'
+import { ModelRegistrySettings } from '@/client/pages/settings/ModelRegistrySettings'
 import { AvatarsSettings } from '@/client/pages/settings/AvatarsSettings'
 import { VaultSettings } from '@/client/pages/settings/VaultSettings'
 import { McpServersSettings } from '@/client/pages/settings/McpServersSettings'
@@ -41,11 +42,13 @@ import { CustomToolsSettings } from '@/client/pages/settings/CustomToolsSettings
 import { CustomDomainsSettings } from '@/client/pages/settings/CustomDomainsSettings'
 import { LogsSettings } from '@/client/pages/settings/LogsSettings'
 import { TokenUsageSettings } from '@/client/pages/settings/TokenUsageSettings'
+import { UpdatesSettings } from '@/client/pages/settings/UpdatesSettings'
 import {
   Bell,
   Brain,
   BrainCircuit,
   Layers,
+  Table2,
   Settings2,
   Puzzle,
   Lock,
@@ -67,6 +70,7 @@ import {
   Shapes,
   Mail,
   Image as ImageIcon,
+  ArrowUpCircle,
 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/client/components/ui/tooltip'
 import { api } from '@/client/lib/api'
@@ -89,6 +93,7 @@ const sectionGroups: SectionGroup[] = [
       { id: 'general', icon: Settings2, labelKey: 'settings.general.title' },
       { id: 'providers', icon: BrainCircuit, labelKey: 'settings.providers.title' },
       { id: 'models', icon: Layers, labelKey: 'settings.models.title' },
+      { id: 'modelRegistry', icon: Table2, labelKey: 'settings.modelRegistry.title' },
       { id: 'avatars', icon: ImageIcon, labelKey: 'settings.avatars.title' },
     ],
   },
@@ -127,6 +132,7 @@ const sectionGroups: SectionGroup[] = [
     items: [
       { id: 'logs', icon: ScrollText, labelKey: 'settings.logs.title' },
       { id: 'tokenUsage', icon: Coins, labelKey: 'settings.tokenUsage.title' },
+      { id: 'updates', icon: ArrowUpCircle, labelKey: 'settings.updates.title' },
     ],
   },
 ]
@@ -144,10 +150,20 @@ export function useSettingsNav(): (section: SectionId) => void {
   return ctx ?? (() => {})
 }
 
+/** Lets a settings sub-section close the whole modal — e.g. when deep-linking
+ *  out to a routed page (the model registry lives at `/models`). */
+const SettingsCloseContext = createContext<(() => void) | null>(null)
+
+export function useSettingsClose(): () => void {
+  const ctx = useContext(SettingsCloseContext)
+  return ctx ?? (() => {})
+}
+
 const sectionComponents: Record<string, React.FC> = {
   general: GeneralSettings,
   providers: ProvidersSettings,
   models: ModelsSettings,
+  modelRegistry: ModelRegistrySettings,
   avatars: AvatarsSettings,
   mcp: McpServersSettings,
   vault: VaultSettings,
@@ -166,10 +182,11 @@ const sectionComponents: Record<string, React.FC> = {
   notifications: NotificationPreferences,
   logs: LogsSettings,
   tokenUsage: TokenUsageSettings,
+  updates: UpdatesSettings,
 }
 
 export interface SettingsFilters {
-  kinId?: string
+  agentId?: string
 }
 
 interface SettingsModalProps {
@@ -183,7 +200,7 @@ interface SystemInfo {
   version: string
   uptimeMs: number
   stats: {
-    kins: number
+    agents: number
     providers: number
     channels: number
     crons: number
@@ -217,7 +234,7 @@ function SettingsFooter() {
   if (!info) return null
 
   const stats = [
-    { icon: Bot, label: t('settings.info.kins'), value: info.stats.kins },
+    { icon: Bot, label: t('settings.info.agents'), value: info.stats.agents },
     { icon: BrainCircuit, label: t('settings.info.providers'), value: info.stats.providers },
     { icon: Radio, label: t('settings.info.channels'), value: info.stats.channels },
     { icon: Timer, label: t('settings.info.crons'), value: info.stats.crons },
@@ -230,7 +247,7 @@ function SettingsFooter() {
   return (
     <div className="shrink-0 border-t px-4 py-2.5 flex items-center justify-between gap-3 text-[11px] text-muted-foreground/60 sm:px-6">
       <div className="flex items-center gap-3">
-        <span className="font-medium">KinBot v{info.version}</span>
+        <span className="font-medium">Hivekeep v{info.version}</span>
         <span className="flex items-center gap-1">
           <Clock className="size-3" />
           {formatUptime(info.uptimeMs, t)}
@@ -353,13 +370,15 @@ export function SettingsModal({ open, onOpenChange, initialSection, initialFilte
           {/* Main content */}
           <div className="flex-1 overflow-y-auto p-4 md:p-6">
             <div className="mx-auto max-w-2xl">
-              <SettingsNavContext.Provider value={setActiveSection}>
-                {ActiveComponent && (
-                  activeSection === 'tokenUsage' && initialFilters
-                    ? <TokenUsageSettings initialKinFilter={initialFilters.kinId} />
-                    : <ActiveComponent />
-                )}
-              </SettingsNavContext.Provider>
+              <SettingsCloseContext.Provider value={() => onOpenChange(false)}>
+                <SettingsNavContext.Provider value={setActiveSection}>
+                  {ActiveComponent && (
+                    activeSection === 'tokenUsage' && initialFilters
+                      ? <TokenUsageSettings initialAgentFilter={initialFilters.agentId} />
+                      : <ActiveComponent />
+                  )}
+                </SettingsNavContext.Provider>
+              </SettingsCloseContext.Provider>
             </div>
           </div>
         </div>

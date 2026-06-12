@@ -26,7 +26,7 @@ interface TaskDetail {
 }
 
 /**
- * Rich renderer for task tools — spawn_self / spawn_kin (spawn confirmation) and
+ * Rich renderer for task tools — spawn_self / spawn_agent (spawn confirmation) and
  * get_task_detail (full task card with status, metadata, result/error). Falls
  * back to JsonViewer for unexpected shapes.
  */

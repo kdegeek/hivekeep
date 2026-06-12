@@ -15,10 +15,11 @@ import type {
   EmailAddress,
   EmailAttachment,
   EmailSearchQuery,
+  EmailFolder,
   SendEmailParams,
   SendEmailResult,
 } from '@/server/email/types'
-import type { ProviderConfig, AuthResult } from '@kinbot-developer/sdk'
+import type { ProviderConfig, AuthResult } from '@hivekeep/sdk'
 
 const GRAPH = 'https://graph.microsoft.com/v1.0'
 
@@ -248,6 +249,15 @@ export const microsoftProvider: EmailProvider = {
   async searchMessages(query: EmailSearchQuery, config: ProviderConfig): Promise<EmailSummary[]> {
     const res = await this.listMessages({ query, limit: 25 }, config)
     return res.messages
+  },
+
+  async listFolders(config: ProviderConfig): Promise<EmailFolder[]> {
+    const res = (await graphFetch(config, '/me/mailFolders?$top=100')) as {
+      value?: Array<{ id: string; displayName?: string }>
+    }
+    return (res.value ?? [])
+      .filter((f) => f.id)
+      .map((f) => ({ id: f.id, name: f.displayName || f.id, type: 'folder' as const }))
   },
 
   async sendMessage(params: SendEmailParams, config: ProviderConfig): Promise<SendEmailResult> {

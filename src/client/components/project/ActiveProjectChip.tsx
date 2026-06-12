@@ -8,7 +8,7 @@ interface ActiveProjectChipProps {
 }
 
 /**
- * A small clickable chip that shows the active project of a Kin and
+ * A small clickable chip that shows the active project of an Agent and
  * navigates to the Projects mode (kanban) when clicked.
  *
  * Renders nothing when projectId is null (no active project).

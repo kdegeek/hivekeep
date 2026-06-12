@@ -21,7 +21,7 @@ export async function listSecrets() {
       description: vaultSecrets.description,
       entryType: vaultSecrets.entryType,
       isFavorite: vaultSecrets.isFavorite,
-      createdByKinId: vaultSecrets.createdByKinId,
+      createdByAgentId: vaultSecrets.createdByAgentId,
       createdAt: vaultSecrets.createdAt,
       updatedAt: vaultSecrets.updatedAt,
     })
@@ -32,7 +32,7 @@ export async function listSecrets() {
 export async function createSecret(
   key: string,
   value: string,
-  createdByKinId?: string,
+  createdByAgentId?: string,
   description?: string,
 ) {
   const id = uuid()
@@ -44,12 +44,12 @@ export async function createSecret(
     key,
     encryptedValue,
     description: description ?? null,
-    createdByKinId: createdByKinId ?? null,
+    createdByAgentId: createdByAgentId ?? null,
     createdAt: now,
     updatedAt: now,
   })
 
-  log.info({ secretKey: key, createdByKinId }, 'Vault secret created')
+  log.info({ secretKey: key, createdByAgentId }, 'Vault secret created')
   return { id, key, createdAt: now }
 }
 
@@ -88,7 +88,7 @@ export async function getSecretByKey(key: string) {
       id: vaultSecrets.id,
       key: vaultSecrets.key,
       description: vaultSecrets.description,
-      createdByKinId: vaultSecrets.createdByKinId,
+      createdByAgentId: vaultSecrets.createdByAgentId,
       createdAt: vaultSecrets.createdAt,
       updatedAt: vaultSecrets.updatedAt,
     })
@@ -161,13 +161,13 @@ export async function getSecretValue(key: string): Promise<string | null> {
 
 export async function redactMessage(
   messageId: string,
-  kinId: string,
+  agentId: string,
   redactedText: string,
 ): Promise<boolean> {
   const msg = await db
     .select()
     .from(messages)
-    .where(and(eq(messages.id, messageId), eq(messages.kinId, kinId)))
+    .where(and(eq(messages.id, messageId), eq(messages.agentId, agentId)))
     .get()
 
   if (!msg) return false
@@ -188,7 +188,7 @@ export async function redactMessage(
  * Find the most recent non-redacted message containing a text snippet.
  */
 export async function findMessageByContent(
-  kinId: string,
+  agentId: string,
   contentMatch: string,
 ): Promise<string | null> {
   const row = await db
@@ -196,7 +196,7 @@ export async function findMessageByContent(
     .from(messages)
     .where(
       and(
-        eq(messages.kinId, kinId),
+        eq(messages.agentId, agentId),
         eq(messages.isRedacted, false),
         like(messages.content, `%${contentMatch}%`),
       ),
@@ -227,7 +227,7 @@ export async function listEntries(filter?: ListEntriesFilter) {
       description: vaultSecrets.description,
       entryType: vaultSecrets.entryType,
       isFavorite: vaultSecrets.isFavorite,
-      createdByKinId: vaultSecrets.createdByKinId,
+      createdByAgentId: vaultSecrets.createdByAgentId,
       createdAt: vaultSecrets.createdAt,
       updatedAt: vaultSecrets.updatedAt,
     })
@@ -264,7 +264,7 @@ export interface CreateEntryData {
   value: string | Record<string, unknown>
   description?: string
   isFavorite?: boolean
-  createdByKinId?: string
+  createdByAgentId?: string
 }
 
 export async function createEntry(data: CreateEntryData) {
@@ -282,12 +282,12 @@ export async function createEntry(data: CreateEntryData) {
     description: data.description ?? null,
     entryType: data.entryType,
     isFavorite: data.isFavorite ?? false,
-    createdByKinId: data.createdByKinId ?? null,
+    createdByAgentId: data.createdByAgentId ?? null,
     createdAt: now,
     updatedAt: now,
   })
 
-  log.info({ key: data.key, entryType: data.entryType, createdByKinId: data.createdByKinId }, 'Vault entry created')
+  log.info({ key: data.key, entryType: data.entryType, createdByAgentId: data.createdByAgentId }, 'Vault entry created')
   return { id, key: data.key, entryType: data.entryType, createdAt: now }
 }
 

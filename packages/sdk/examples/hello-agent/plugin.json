@@ -1,0 +1,30 @@
+{
+  "$schema": "https://unpkg.com/@hivekeep/sdk/schemas/plugin-manifest.schema.json",
+  "name": "hello-agent",
+  "version": "0.1.0",
+  "description": "Reference example demonstrating every plugin extension point Hivekeep supports: tools, channels, providers, hooks, cards, and the typed plugin context.",
+  "author": "Hivekeep Team",
+  "license": "MIT",
+  "main": "index.ts",
+  "hivekeep": ">=0.41.0",
+  "icon": "👋",
+  "permissions": [
+    "http:api.example.com"
+  ],
+  "config": {
+    "greeting": {
+      "type": "string",
+      "label": "Greeting",
+      "description": "Word used when saying hi.",
+      "default": "Hi",
+      "placeholder": "Hi"
+    },
+    "apiKey": {
+      "type": "password",
+      "label": "Fake API key",
+      "description": "Used to demonstrate ctx.vault read of a hivekeep-managed credential.",
+      "secret": true
+    }
+  },
+  "tags": ["example", "reference"]
+}

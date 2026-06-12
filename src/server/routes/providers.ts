@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/server/db/index'
-import { providers, kins } from '@/server/db/schema'
+import { providers, agents } from '@/server/db/schema'
 import { encrypt, decrypt } from '@/server/services/encryption'
 import {
   getCapabilitiesForType,
@@ -17,13 +17,16 @@ import {
   deleteProviderVaultSecrets,
 } from '@/server/services/provider-config'
 import { getLLMProvider } from '@/server/llm/llm/registry'
+import { enrichModel } from '@/server/llm/metadata/enrich'
+import { listRegistryByProvider, reconcileProvider } from '@/server/services/model-registry'
+import { config } from '@/server/config'
 import { getEmbeddingProvider } from '@/server/llm/embedding/registry'
 import { getImageProvider } from '@/server/llm/image/registry'
 import { getSearchProvider } from '@/server/llm/search/registry'
 import { getTTSProvider } from '@/server/llm/tts/registry'
 import { getSTTProvider } from '@/server/llm/stt/registry'
 import { PROVIDER_META } from '@/shared/provider-metadata'
-import type { ConfigField } from '@kinbot-developer/sdk'
+import type { ConfigField } from '@hivekeep/sdk'
 import { createLogger } from '@/server/logger'
 import { sseManager } from '@/server/sse/index'
 import { generateProviderSlug } from '@/server/services/provider-slug'
@@ -194,6 +197,11 @@ providerRoutes.post('/', async (c) => {
 
   log.info({ providerId: id, slug, name, type, capabilities, isValid: testResult.valid }, 'Provider created')
 
+  // Populate the model registry for the new provider before responding, so its
+  // models are already in the Models view when the user navigates there (no
+  // waiting for the 6h cron or a manual resync). reconcileProvider never throws.
+  if (testResult.valid) await reconcileProvider(id)
+
   sseManager.broadcast({
     type: 'provider:created',
     data: { providerId: id, slug, name, providerType: type, capabilities, isValid: testResult.valid },
@@ -268,6 +276,10 @@ providerRoutes.patch('/:id', async (c) => {
 
   const updated = await db.select().from(providers).where(eq(providers.id, id)).get()
 
+  // A re-keyed / re-validated provider may now expose models — refresh its
+  // registry rows (clears stale, picks up new ids).
+  if (updated?.isValid) void reconcileProvider(id).catch(() => {})
+
   sseManager.broadcast({
     type: 'provider:updated',
     data: {
@@ -306,7 +318,7 @@ providerRoutes.delete('/:id', async (c) => {
   // with capability X". The previous lock (PROVIDER_REQUIRED 409 on the
   // last llm/embedding row) made consolidating split rows into a single
   // multi-capability row impossible — the user had to delete the
-  // single-capability row first, which the lock refused. KinBot trusts
+  // single-capability row first, which the lock refused. Hivekeep trusts
   // the user to know whether memory/chat will still work after a
   // delete. We do emit a warning log so a future incident can be
   // reconstructed from the logs.
@@ -329,9 +341,9 @@ providerRoutes.delete('/:id', async (c) => {
     }
   }
 
-  // Find kins referencing this provider before deletion (DB will SET NULL via cascade)
-  const affectedKins = db.select({ id: kins.id, slug: kins.slug, name: kins.name, role: kins.role, avatarPath: kins.avatarPath, updatedAt: kins.updatedAt })
-    .from(kins).where(eq(kins.providerId, id)).all()
+  // Find agents referencing this provider before deletion (DB will SET NULL via cascade)
+  const affectedAgents = db.select({ id: agents.id, slug: agents.slug, name: agents.name, role: agents.role, avatarPath: agents.avatarPath, updatedAt: agents.updatedAt })
+    .from(agents).where(eq(agents.providerId, id)).all()
 
   // Remove the provider's vault-backed secrets so they don't dangle.
   await deleteProviderVaultSecrets(existing)
@@ -344,12 +356,12 @@ providerRoutes.delete('/:id', async (c) => {
     data: { providerId: id },
   })
 
-  // Notify clients that affected kins had their providerId nullified by DB cascade
-  for (const kin of affectedKins) {
+  // Notify clients that affected agents had their providerId nullified by DB cascade
+  for (const agent of affectedAgents) {
     sseManager.broadcast({
-      type: 'kin:updated',
-      kinId: kin.id,
-      data: { kinId: kin.id, slug: kin.slug, name: kin.name, role: kin.role, providerId: null },
+      type: 'agent:updated',
+      agentId: agent.id,
+      data: { agentId: agent.id, slug: agent.slug, name: agent.name, role: agent.role, providerId: null },
     })
   }
 
@@ -419,6 +431,9 @@ providerRoutes.post('/:id/test', async (c) => {
     .set(updates)
     .where(eq(providers.id, id))
 
+  // Now-valid provider → (re)populate its registry rows immediately.
+  if (result.valid) void reconcileProvider(id).catch(() => {})
+
   const updatedCapabilities = result.valid
     ? getCapabilitiesForType(existing.type)
     : JSON.parse(existing.capabilities)
@@ -455,14 +470,21 @@ providerRoutes.get('/models', async (c) => {
     providerName: string
     providerType: string
     capability: string
-    /** LLM-family only — true when the chat model accepts image attachments. */
+    /** LLM-family only — whether the chat model accepts image attachments.
+     *  Tri-state: true / false (explicitly not) / undefined (unknown). */
     supportsImageInput?: boolean
+    /** LLM-family only — whether the chat model accepts PDF attachments. */
+    supportsPdfInput?: boolean
     /** Image-family only — how many source images the model accepts. */
     maxImageInputs?: number
     /** Maximum input/context tokens. Populated when the provider's API exposes it. */
     contextWindow?: number
     /** Maximum output tokens. Populated when the provider's API exposes it. */
     maxOutput?: number
+    /** LLM-family only — reasoning support after registry enrichment.
+     *  Absent = not a reasoning model (or unknown); `efforts: []` = reasoning
+     *  toggle-only (no granularity). Drives the effort selectors client-side. */
+    thinking?: { efforts: string[]; note?: string }
   }
 
   const allProviders = await db.select().from(providers).all()
@@ -482,20 +504,37 @@ providerRoutes.get('/models', async (c) => {
         const familyResults = await Promise.all(
           families.map((family) => listModelsForProvider(p.type, providerConfig, family)),
         )
+        // Chat models the admin disabled in the registry are hidden from the
+        // picker (curation). Only applies when the registry is on; the chat
+        // path never blocks, so an Agent already on a disabled model still runs.
+        const disabledLlm = config.modelRegistry.enabled
+          ? new Set(listRegistryByProvider(p.id).filter((r) => !r.enabled).map((r) => r.modelId))
+          : null
         const entries: ModelEntry[] = []
         for (const providerModels of familyResults) {
           for (const model of providerModels) {
+            if (model.capability === 'llm' && disabledLlm?.has(model.id)) continue
+            // Chat models go through the same registry enrichment as the chat
+            // path, so the label (name), context and capabilities shown in the
+            // picker match what the Agent actually runs with.
+            const enriched = model.capability === 'llm' ? enrichModel(p.id, p.type, model) : null
+            const m = enriched ? { ...model, ...enriched } : model
             entries.push({
-              id: model.id,
-              name: model.name,
+              id: m.id,
+              name: m.name,
               providerId: p.id,
               providerName: p.name,
               providerType: p.type,
-              capability: model.capability,
-              ...(model.capability === 'llm' && model.supportsImageInput ? { supportsImageInput: true } : {}),
-              ...(model.capability === 'image' ? { maxImageInputs: model.maxImageInputs ?? 0 } : {}),
-              ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
-              ...(model.maxOutput != null ? { maxOutput: model.maxOutput } : {}),
+              capability: m.capability,
+              // Faithful tri-state (read off the enriched LLMModel, which carries
+              // both flags) so the client can gate uploads on an explicit `false`
+              // (text-only model) without blocking on `undefined` (unknown).
+              ...(enriched && enriched.supportsImageInput !== undefined ? { supportsImageInput: enriched.supportsImageInput } : {}),
+              ...(enriched && enriched.supportsPdfInput !== undefined ? { supportsPdfInput: enriched.supportsPdfInput } : {}),
+              ...(enriched?.thinking ? { thinking: enriched.thinking } : {}),
+              ...(m.capability === 'image' ? { maxImageInputs: m.maxImageInputs ?? 0 } : {}),
+              ...(m.contextWindow ? { contextWindow: m.contextWindow } : {}),
+              ...(m.maxOutput != null ? { maxOutput: m.maxOutput } : {}),
             })
           }
         }
@@ -512,79 +551,10 @@ providerRoutes.get('/models', async (c) => {
   return c.json({ models })
 })
 
-// GET /api/providers/:id/models — list every model the given provider
-// exposes, one entry per (family, model). Used by the "browse models"
-// modal on each provider card. Hits the provider's API live (same path
-// as the global /models endpoint) so the list reflects the current
-// catalogue, not a cache. A failed family is reported in `errors`
-// rather than failing the whole request — useful when one family's
-// catalogue endpoint is down but the others still work.
-providerRoutes.get('/:id/models', async (c) => {
-  const id = c.req.param('id')
-  const existing = await db.select().from(providers).where(eq(providers.id, id)).get()
-  if (!existing) {
-    return c.json({ error: { code: 'PROVIDER_NOT_FOUND', message: 'Provider not found' } }, 404)
-  }
-
-  // Families that expose a model catalogue. TTS is excluded — its
-  // user-facing unit is a Voice (served by the sibling /voices route).
-  // Search is excluded — one provider == one endpoint, no models.
-  const rowCaps = (JSON.parse(existing.capabilities) as string[]).filter(
-    (c): c is 'llm' | 'embedding' | 'image' | 'stt' =>
-      c === 'llm' || c === 'embedding' || c === 'image' || c === 'stt',
-  )
-
-  if (!existing.isValid) {
-    return c.json({
-      provider: { id: existing.id, name: existing.name, type: existing.type, slug: existing.slug },
-      capabilities: rowCaps,
-      models: [],
-      errors: [{ capability: '*', message: existing.lastError ?? 'Provider is marked invalid — re-test before browsing models.' }],
-    })
-  }
-
-  const providerConfig = await loadProviderConfig(existing)
-  const models: Array<{
-    id: string
-    name: string
-    capability: string
-    contextWindow?: number
-    maxOutput?: number
-    /** LLM-family only — chat accepts image attachments. */
-    supportsImageInput?: boolean
-    /** Image-family only — number of source images the model accepts. */
-    maxImageInputs?: number
-  }> = []
-  const errors: Array<{ capability: string; message: string }> = []
-
-  for (const family of rowCaps) {
-    try {
-      const list = await listModelsForProvider(existing.type, providerConfig, family)
-      for (const m of list) {
-        models.push({
-          id: m.id,
-          name: m.name,
-          capability: m.capability,
-          ...(m.contextWindow != null ? { contextWindow: m.contextWindow } : {}),
-          ...(m.maxOutput != null ? { maxOutput: m.maxOutput } : {}),
-          ...(m.capability === 'llm' && m.supportsImageInput != null ? { supportsImageInput: m.supportsImageInput } : {}),
-          ...(m.capability === 'image' && m.maxImageInputs != null ? { maxImageInputs: m.maxImageInputs } : {}),
-        })
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      log.warn({ providerId: id, family, err: message }, 'listModels failed while building provider model browser')
-      errors.push({ capability: family, message })
-    }
-  }
-
-  return c.json({
-    provider: { id: existing.id, name: existing.name, type: existing.type, slug: existing.slug },
-    capabilities: rowCaps,
-    models,
-    errors,
-  })
-})
+// (The per-provider /:id/models browser was removed — model metadata now lives
+// in the model registry; see the "Model registry" view in Réglages and the
+// /api/models routes. The sibling /:id/voices route stays: TTS voices are not
+// part of the registry.)
 
 // GET /api/providers/:id/voices — list every voice the given provider
 // exposes (TTS only). Sibling of /:id/models; lives on its own path

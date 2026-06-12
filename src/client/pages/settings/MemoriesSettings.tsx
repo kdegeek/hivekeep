@@ -28,7 +28,7 @@ export function MemoriesSettings() {
         storageKey="help.memories.open"
       />
 
-      <MemoryList kinId={null} />
+      <MemoryList agentId={null} />
     </div>
   )
 }

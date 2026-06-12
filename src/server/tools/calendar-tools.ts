@@ -1,5 +1,5 @@
 /**
- * Native calendar tools exposed to Kins (read + write).
+ * Native calendar tools exposed to Agents (read + write).
  *
  *  - list_calendar_accounts — discovery: connected calendar accounts.
  *  - list_calendars         — calendars within an account.
@@ -34,15 +34,15 @@ function toErr(err: unknown): { error: string } {
 // ─── list_calendar_accounts ──────────────────────────────────────────────────
 
 export const listCalendarAccountsTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (ctx) =>
     tool({
-      description: 'List the calendar accounts this Kin can use (slug, label, type).',
+      description: 'List the calendar accounts this Agent can use (slug, label, type).',
       inputSchema: z.object({}),
       execute: async () => {
-        const accounts = await listCalendarAccounts(ctx.kinId)
+        const accounts = await listCalendarAccounts(ctx.agentId)
         return { accounts: accounts.map((a) => ({ slug: a.slug, accountLabel: a.accountLabel, type: a.type, isValid: a.isValid })) }
       },
     }),
@@ -51,7 +51,7 @@ export const listCalendarAccountsTool: ToolRegistration = {
 // ─── list_calendars ──────────────────────────────────────────────────────────
 
 export const listCalendarsTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (ctx) =>
@@ -60,7 +60,7 @@ export const listCalendarsTool: ToolRegistration = {
       inputSchema: z.object({ account: accountField }),
       execute: async (args) => {
         try {
-          const { provider, config, account } = await resolveCalendarProvider({ slug: args.account, kinId: ctx.kinId })
+          const { provider, config, account } = await resolveCalendarProvider({ slug: args.account, agentId: ctx.agentId })
           return { account: account.slug, calendars: await provider.listCalendars(config) }
         } catch (err) {
           return toErr(err)
@@ -72,7 +72,7 @@ export const listCalendarsTool: ToolRegistration = {
 // ─── list_events ─────────────────────────────────────────────────────────────
 
 export const listEventsTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (ctx) =>
@@ -90,7 +90,7 @@ export const listEventsTool: ToolRegistration = {
       }),
       execute: async (args) => {
         try {
-          const { provider, config, account } = await resolveCalendarProvider({ slug: args.account, kinId: ctx.kinId })
+          const { provider, config, account } = await resolveCalendarProvider({ slug: args.account, agentId: ctx.agentId })
           const res = await provider.listEvents(
             { calendarId: args.calendar, timeMin: args.time_min, timeMax: args.time_max, limit: args.limit, query: args.query },
             config,
@@ -106,7 +106,7 @@ export const listEventsTool: ToolRegistration = {
 // ─── get_event ───────────────────────────────────────────────────────────────
 
 export const getEventTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (ctx) =>
@@ -119,7 +119,7 @@ export const getEventTool: ToolRegistration = {
       }),
       execute: async (args) => {
         try {
-          const { provider, config, account } = await resolveCalendarProvider({ slug: args.account, kinId: ctx.kinId })
+          const { provider, config, account } = await resolveCalendarProvider({ slug: args.account, agentId: ctx.agentId })
           return { account: account.slug, event: await provider.getEvent(args.calendar_id, args.event_id, config) }
         } catch (err) {
           return toErr(err)
@@ -142,7 +142,7 @@ const eventFields = {
 // ─── create_event ────────────────────────────────────────────────────────────
 
 export const createEventTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   destructive: true,
   create: (ctx) =>
     tool({
@@ -150,7 +150,7 @@ export const createEventTool: ToolRegistration = {
       inputSchema: z.object({ account: accountField, calendar: calendarField, ...eventFields }),
       execute: async (args) => {
         try {
-          const { provider, config, account } = await resolveCalendarProvider({ slug: args.account, kinId: ctx.kinId })
+          const { provider, config, account } = await resolveCalendarProvider({ slug: args.account, agentId: ctx.agentId })
           if (!provider.createEvent) return { error: `Account "${account.slug}" does not support creating events` }
           const event = await provider.createEvent(
             {
@@ -177,7 +177,7 @@ export const createEventTool: ToolRegistration = {
 // ─── update_event ────────────────────────────────────────────────────────────
 
 export const updateEventTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   destructive: true,
   create: (ctx) =>
     tool({
@@ -197,7 +197,7 @@ export const updateEventTool: ToolRegistration = {
       }),
       execute: async (args) => {
         try {
-          const { provider, config, account } = await resolveCalendarProvider({ slug: args.account, kinId: ctx.kinId })
+          const { provider, config, account } = await resolveCalendarProvider({ slug: args.account, agentId: ctx.agentId })
           if (!provider.updateEvent) return { error: `Account "${account.slug}" does not support updating events` }
           const event = await provider.updateEvent(
             {
@@ -225,7 +225,7 @@ export const updateEventTool: ToolRegistration = {
 // ─── delete_event ────────────────────────────────────────────────────────────
 
 export const deleteEventTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   destructive: true,
   create: (ctx) =>
     tool({
@@ -237,7 +237,7 @@ export const deleteEventTool: ToolRegistration = {
       }),
       execute: async (args) => {
         try {
-          const { provider, config, account } = await resolveCalendarProvider({ slug: args.account, kinId: ctx.kinId })
+          const { provider, config, account } = await resolveCalendarProvider({ slug: args.account, agentId: ctx.agentId })
           if (!provider.deleteEvent) return { error: `Account "${account.slug}" does not support deleting events` }
           await provider.deleteEvent(args.calendar_id, args.event_id, config)
           return { account: account.slug, deleted: true }

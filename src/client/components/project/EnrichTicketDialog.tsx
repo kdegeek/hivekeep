@@ -4,12 +4,12 @@ import { api, getErrorMessage } from '@/client/lib/api'
 import { FormDialog } from '@/client/components/common/FormDialog'
 import { FormField } from '@/client/components/common/FormField'
 import { Textarea } from '@/client/components/ui/textarea'
-import { KinSelector } from '@/client/components/common/KinSelector'
+import { AgentSelector } from '@/client/components/common/AgentSelector'
 import { useTickets } from '@/client/hooks/useTickets'
 import { toast } from 'sonner'
 import { Sparkles } from 'lucide-react'
 
-interface KinFromApi {
+interface AgentFromApi {
   id: string
   name: string
   role?: string
@@ -27,8 +27,8 @@ interface EnrichTicketDialogProps {
 export function EnrichTicketDialog({ open, onOpenChange, ticketId, projectId }: EnrichTicketDialogProps) {
   const { t } = useTranslation()
   const { enrichTicket } = useTickets(projectId)
-  const [kins, setKins] = useState<KinFromApi[]>([])
-  const [selectedKinId, setSelectedKinId] = useState<string>('')
+  const [agents, setAgents] = useState<AgentFromApi[]>([])
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('')
   const [focus, setFocus] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -36,12 +36,12 @@ export function EnrichTicketDialog({ open, onOpenChange, ticketId, projectId }: 
     if (!open) return
     let cancelled = false
     api
-      .get<{ kins: KinFromApi[] }>('/kins')
+      .get<{ agents: AgentFromApi[] }>('/agents')
       .then((data) => {
         if (cancelled) return
-        setKins(data.kins)
-        const match = data.kins.find((k) => k.activeProjectId === projectId)
-        setSelectedKinId(match?.id ?? data.kins[0]?.id ?? '')
+        setAgents(data.agents)
+        const match = data.agents.find((k) => k.activeProjectId === projectId)
+        setSelectedAgentId(match?.id ?? data.agents[0]?.id ?? '')
       })
       .catch(() => undefined)
     return () => {
@@ -54,10 +54,10 @@ export function EnrichTicketDialog({ open, onOpenChange, ticketId, projectId }: 
   }, [open])
 
   async function handleSubmit() {
-    if (!selectedKinId) return
+    if (!selectedAgentId) return
     setSubmitting(true)
     try {
-      await enrichTicket(ticketId, selectedKinId, focus.trim() || undefined)
+      await enrichTicket(ticketId, selectedAgentId, focus.trim() || undefined)
       toast.success(t('projects.enrich.started'))
       onOpenChange(false)
     } catch (err) {
@@ -67,13 +67,13 @@ export function EnrichTicketDialog({ open, onOpenChange, ticketId, projectId }: 
     }
   }
 
-  const sortedKins = [...kins].sort((a, b) => {
+  const sortedAgents = [...agents].sort((a, b) => {
     const aActive = a.activeProjectId === projectId ? 1 : 0
     const bActive = b.activeProjectId === projectId ? 1 : 0
     return bActive - aActive
   })
 
-  const kinOptions = sortedKins.map((k) => ({
+  const agentOptions = sortedAgents.map((k) => ({
     id: k.id,
     name: k.activeProjectId === projectId ? `${k.name} · ${t('projects.startTask.activeOnProject')}` : k.name,
     role: k.role,
@@ -94,15 +94,15 @@ export function EnrichTicketDialog({ open, onOpenChange, ticketId, projectId }: 
       size="md"
       onSubmit={handleSubmit}
       isSubmitting={submitting}
-      submitDisabled={!selectedKinId}
+      submitDisabled={!selectedAgentId}
       submitLabel={t('projects.enrich.start')}
     >
-      <FormField label={t('projects.startTask.kinField')}>
-        <KinSelector
-          value={selectedKinId}
-          onValueChange={setSelectedKinId}
-          kins={kinOptions}
-          placeholder={t('projects.startTask.kinPlaceholder')}
+      <FormField label={t('projects.startTask.agentField')}>
+        <AgentSelector
+          value={selectedAgentId}
+          onValueChange={setSelectedAgentId}
+          agents={agentOptions}
+          placeholder={t('projects.startTask.agentPlaceholder')}
         />
       </FormField>
       <FormField

@@ -14,7 +14,7 @@ const mockCreateWebhook = mock(() =>
     name: 'Test Webhook',
     description: 'A test webhook',
     token: 'secret-token-123',
-    kinId: 'kin-abc',
+    agentId: 'agent-abc',
     isActive: true,
     triggerCount: 0,
     lastTriggeredAt: null,
@@ -28,7 +28,7 @@ const mockUpdateWebhook = mock((): Promise<any> =>
     name: 'Updated Webhook',
     description: 'Updated desc',
     isActive: true,
-    kinId: 'kin-abc',
+    agentId: 'agent-abc',
     triggerCount: 0,
     lastTriggeredAt: null,
   }),
@@ -45,7 +45,7 @@ const mockListWebhooks = mock(() =>
       isActive: true,
       triggerCount: 5,
       lastTriggeredAt: 1700000000000,
-      kinId: 'kin-abc',
+      agentId: 'agent-abc',
     },
     {
       id: 'wh-2',
@@ -54,7 +54,7 @@ const mockListWebhooks = mock(() =>
       isActive: false,
       triggerCount: 0,
       lastTriggeredAt: null,
-      kinId: 'kin-abc',
+      agentId: 'agent-abc',
     },
   ]),
 )
@@ -63,7 +63,7 @@ const mockGetWebhook = mock((): Promise<any> =>
   Promise.resolve({
     id: 'wh-1',
     name: 'Test Webhook',
-    kinId: 'kin-abc',
+    agentId: 'agent-abc',
     isActive: true,
   }),
 )
@@ -116,7 +116,7 @@ const {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const ctx: ToolExecutionContext = { kinId: 'kin-abc', isSubKin: false }
+const ctx: ToolExecutionContext = { agentId: 'agent-abc', isSubAgent: false }
 
 function execute(registration: any, args: any) {
   const t = registration.create(ctx)
@@ -160,10 +160,10 @@ describe('webhook-tools', () => {
       expect(result.url).toContain('wh-1')
       expect(result.message).toContain('token')
       expect(mockCreateWebhook).toHaveBeenCalledWith({
-        kinId: 'kin-abc',
+        agentId: 'agent-abc',
         name: 'Grafana Alerts',
         description: 'Receive Grafana alerts',
-        createdBy: 'kin',
+        createdBy: 'agent',
         filterMode: null,
         filterField: null,
         filterAllowedValues: null,
@@ -182,10 +182,10 @@ describe('webhook-tools', () => {
 
       expect(result.webhookId).toBe('wh-1')
       expect(mockCreateWebhook).toHaveBeenCalledWith({
-        kinId: 'kin-abc',
+        agentId: 'agent-abc',
         name: 'Simple Webhook',
         description: undefined,
-        createdBy: 'kin',
+        createdBy: 'agent',
         filterMode: null,
         filterField: null,
         filterAllowedValues: null,
@@ -217,7 +217,7 @@ describe('webhook-tools', () => {
   // ── update_webhook ───────────────────────────────────────────────────────
 
   describe('update_webhook', () => {
-    it('updates a webhook owned by the kin', async () => {
+    it('updates a webhook owned by the agent', async () => {
       const result = await execute(updateWebhookTool, {
         webhook_id: 'wh-1',
         name: 'Updated Name',
@@ -239,9 +239,9 @@ describe('webhook-tools', () => {
       expect(result.error).toBe('Webhook not found')
     })
 
-    it('returns error when webhook belongs to another kin', async () => {
+    it('returns error when webhook belongs to another agent', async () => {
       mockGetWebhook.mockImplementationOnce(() =>
-        Promise.resolve({ id: 'wh-1', kinId: 'other-kin', isActive: true }),
+        Promise.resolve({ id: 'wh-1', agentId: 'other-agent', isActive: true }),
       )
 
       const result = await execute(updateWebhookTool, {
@@ -347,7 +347,7 @@ describe('webhook-tools', () => {
   // ── delete_webhook ───────────────────────────────────────────────────────
 
   describe('delete_webhook', () => {
-    it('deletes a webhook owned by the kin', async () => {
+    it('deletes a webhook owned by the agent', async () => {
       const result = await execute(deleteWebhookTool, { webhook_id: 'wh-1' })
       expect(result.success).toBe(true)
       expect(mockDeleteWebhook).toHaveBeenCalledWith('wh-1')
@@ -360,9 +360,9 @@ describe('webhook-tools', () => {
       expect(result.error).toBe('Webhook not found')
     })
 
-    it('returns error when webhook belongs to another kin', async () => {
+    it('returns error when webhook belongs to another agent', async () => {
       mockGetWebhook.mockImplementationOnce(() =>
-        Promise.resolve({ id: 'wh-1', kinId: 'other-kin' }),
+        Promise.resolve({ id: 'wh-1', agentId: 'other-agent' }),
       )
 
       const result = await execute(deleteWebhookTool, { webhook_id: 'wh-1' })
@@ -382,11 +382,11 @@ describe('webhook-tools', () => {
   // ── list_webhooks ────────────────────────────────────────────────────────
 
   describe('list_webhooks', () => {
-    it('returns all webhooks for the kin', async () => {
+    it('returns all webhooks for the agent', async () => {
       const result = await execute(listWebhooksTool, {})
 
       expect(result.webhooks).toHaveLength(2)
-      expect(mockListWebhooks).toHaveBeenCalledWith('kin-abc')
+      expect(mockListWebhooks).toHaveBeenCalledWith('agent-abc')
     })
 
     it('includes id, name, description, isActive, triggerCount, lastTriggeredAt, and url', async () => {

@@ -61,15 +61,13 @@ function LanguageIcon({ language, className }: { language: string; className?: s
   return <Icon className={className} aria-hidden />
 }
 
-/** Locales that have UI label files; es/de fall back to en at render time. */
-const TRANSLATION_LOCALES = ['en', 'fr', 'es', 'de'] as const
+/** Locales that have UI label files. */
+const TRANSLATION_LOCALES = ['en', 'fr'] as const
 
 /** Native-name labels for the translation-locale picker. */
 const LOCALE_LABELS: Record<string, string> = {
   en: 'English',
   fr: 'Français',
-  es: 'Español',
-  de: 'Deutsch',
 }
 
 /** Extract the property keys of a JSON-Schema object (for per-param labels). */

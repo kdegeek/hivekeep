@@ -7,7 +7,7 @@ import {
   messages,
   compactingSummaries,
   memories,
-  kins,
+  agents,
   userProfiles,
 } from '@/server/db/schema'
 import { config } from '@/server/config'
@@ -16,7 +16,7 @@ import { createMemory, updateMemory, isDuplicateMemory, pruneStaleMemories } fro
 import { sseManager } from '@/server/sse/index'
 import { getModelContextWindow } from '@/shared/model-context-windows'
 import { countTokens } from '@/shared/token-estimator'
-import type { KinCompactingConfig, MemoryCategory } from '@/shared/types'
+import type { AgentCompactingConfig, MemoryCategory } from '@/shared/types'
 
 const log = createLogger('compacting')
 
@@ -54,7 +54,7 @@ export function resolveSummaryBudget(summaryBudgetPercent: number, contextWindow
   return Math.min(Math.floor((summaryBudgetPercent / 100) * contextWindow), summaryMaxTokens)
 }
 
-// ─── Per-Kin Effective Config ─────────────────────────────────────────────────
+// ─── Per-Agent Effective Config ─────────────────────────────────────────────────
 
 interface EffectiveCompactingConfig {
   thresholdPercent: number
@@ -69,40 +69,40 @@ interface EffectiveCompactingConfig {
 }
 
 /**
- * Resolve effective compacting config for a Kin.
- * Per-Kin overrides > global env vars > defaults.
+ * Resolve effective compacting config for an Agent.
+ * Per-Agent overrides > global env vars > defaults.
  */
-async function getEffectiveCompactingConfig(kinId: string): Promise<EffectiveCompactingConfig> {
-  const kin = await db.select().from(kins).where(eq(kins.id, kinId)).get()
-  if (!kin) throw new Error(`Kin ${kinId} not found`)
+async function getEffectiveCompactingConfig(agentId: string): Promise<EffectiveCompactingConfig> {
+  const agent = await db.select().from(agents).where(eq(agents.id, agentId)).get()
+  if (!agent) throw new Error(`Agent ${agentId} not found`)
 
-  let perKin: KinCompactingConfig | null = null
-  if (kin.compactingConfig) {
-    try { perKin = JSON.parse(kin.compactingConfig) as KinCompactingConfig } catch { /* ignore */ }
+  let perAgent: AgentCompactingConfig | null = null
+  if (agent.compactingConfig) {
+    try { perAgent = JSON.parse(agent.compactingConfig) as AgentCompactingConfig } catch { /* ignore */ }
   }
 
-  const thresholdPercent = perKin?.thresholdPercent ?? config.compacting.thresholdPercent
-  const keepPercent = perKin?.keepPercent ?? config.compacting.keepPercent
-  const summaryBudgetPercent = perKin?.summaryBudgetPercent ?? config.compacting.summaryBudgetPercent
-  const maxSummaries = perKin?.maxSummaries ?? config.compacting.maxSummaries
-  const keepMaxTokens = perKin?.keepMaxTokens ?? config.compacting.keepMaxTokens
-  const triggerMaxTokens = perKin?.triggerMaxTokens ?? config.compacting.triggerMaxTokens
-  const summaryMaxTokens = perKin?.summaryMaxTokens ?? config.compacting.summaryMaxTokens
+  const thresholdPercent = perAgent?.thresholdPercent ?? config.compacting.thresholdPercent
+  const keepPercent = perAgent?.keepPercent ?? config.compacting.keepPercent
+  const summaryBudgetPercent = perAgent?.summaryBudgetPercent ?? config.compacting.summaryBudgetPercent
+  const maxSummaries = perAgent?.maxSummaries ?? config.compacting.maxSummaries
+  const keepMaxTokens = perAgent?.keepMaxTokens ?? config.compacting.keepMaxTokens
+  const triggerMaxTokens = perAgent?.triggerMaxTokens ?? config.compacting.triggerMaxTokens
+  const summaryMaxTokens = perAgent?.summaryMaxTokens ?? config.compacting.summaryMaxTokens
 
-  // Model: per-Kin override > app_setting default > env COMPACTING_MODEL > Kin's own model
-  // Sentinel '__kin_own__' means "use this kin's own model" (skips defaults)
+  // Model: per-Agent override > app_setting default > env COMPACTING_MODEL > Agent's own model
+  // Sentinel '__agent_own__' means "use this agent's own model" (skips defaults)
   let model: string
   let providerId: string | null
 
   const defaultCompactingModel = await getDefaultCompactingModel()
   const defaultCompactingProviderId = await getDefaultCompactingProviderId()
 
-  if (perKin?.compactingModel === '__kin_own__') {
-    model = kin.model
-    providerId = kin.providerId
-  } else if (perKin?.compactingModel) {
-    model = perKin.compactingModel
-    providerId = perKin.compactingProviderId ?? null
+  if (perAgent?.compactingModel === '__agent_own__') {
+    model = agent.model
+    providerId = agent.providerId
+  } else if (perAgent?.compactingModel) {
+    model = perAgent.compactingModel
+    providerId = perAgent.compactingProviderId ?? null
   } else if (defaultCompactingModel) {
     model = defaultCompactingModel
     providerId = defaultCompactingProviderId
@@ -110,8 +110,8 @@ async function getEffectiveCompactingConfig(kinId: string): Promise<EffectiveCom
     model = config.compacting.model
     providerId = null
   } else {
-    model = kin.model
-    providerId = kin.providerId
+    model = agent.model
+    providerId = agent.providerId
   }
 
   return { thresholdPercent, keepPercent, summaryBudgetPercent, maxSummaries, keepMaxTokens, triggerMaxTokens, summaryMaxTokens, model, providerId }
@@ -120,7 +120,7 @@ async function getEffectiveCompactingConfig(kinId: string): Promise<EffectiveCom
 // ─── Threshold Evaluation ────────────────────────────────────────────────────
 
 /**
- * Evaluate whether compacting should trigger for a Kin.
+ * Evaluate whether compacting should trigger for an Agent.
  * Uses token-based threshold: triggers when context tokens exceed thresholdPercent of context window.
  *
  * Prefers the provider-reported `apiContextTokens` from the cache (ground
@@ -128,15 +128,15 @@ async function getEffectiveCompactingConfig(kinId: string): Promise<EffectiveCom
  * estimate (gpt-tokenizer) is within ~5-15% of the real count, but the exact
  * provider number is better still when we have a fresh one.
  */
-export async function shouldCompact(kinId: string, contextTokens?: number, contextWindow?: number): Promise<boolean> {
-  const effectiveConfig = await getEffectiveCompactingConfig(kinId)
+export async function shouldCompact(agentId: string, contextTokens?: number, contextWindow?: number): Promise<boolean> {
+  const effectiveConfig = await getEffectiveCompactingConfig(agentId)
 
   if (contextTokens != null && contextWindow != null && contextWindow > 0) {
     // If the cache has a fresh provider-reported size from the most recent
     // turn and it exceeds the caller-supplied estimate, trust the ground
     // truth — the next call will be at least as large.
-    const { getLastContextUsage } = await import('@/server/services/kin-engine')
-    const cached = await getLastContextUsage(kinId)
+    const { getLastContextUsage } = await import('@/server/services/agent-engine')
+    const cached = await getLastContextUsage(agentId)
     const effectiveTokens = cached?.apiContextTokens != null && cached.apiContextTokens > contextTokens
       ? cached.apiContextTokens
       : contextTokens
@@ -149,20 +149,20 @@ export async function shouldCompact(kinId: string, contextTokens?: number, conte
   }
 
   // Fallback: estimate from DB
-  const kin = await db.select({ model: kins.model }).from(kins).where(eq(kins.id, kinId)).get()
-  if (!kin) return false
+  const agent = await db.select({ model: agents.model }).from(agents).where(eq(agents.id, agentId)).get()
+  if (!agent) return false
 
-  const ctxWindow = getModelContextWindow(kin.model)
+  const ctxWindow = getModelContextWindow(agent.model)
   if (ctxWindow <= 0) return false
 
   // Estimate non-compacted message tokens
-  const activeSummaries = await getActiveSummaries(kinId)
+  const activeSummaries = await getActiveSummaries(agentId)
   const latestSummary = activeSummaries.length > 0 ? activeSummaries[activeSummaries.length - 1]! : null
   const cutoffTimestamp = latestSummary ? (latestSummary.lastMessageAt as unknown as number) : null
 
-  const nonCompactedMessages = await getNonCompactedMessages(kinId, cutoffTimestamp)
+  const nonCompactedMessages = await getNonCompactedMessages(agentId, cutoffTimestamp)
   // Same reason as in runCompacting: counting only content under-counts
-  // tool-heavy Kins by 10-100× and lets shouldCompact silently miss its
+  // tool-heavy Agents by 10-100× and lets shouldCompact silently miss its
   // threshold when there's no fresh apiContextTokens in the cache yet.
   const messageTokens = nonCompactedMessages.reduce(
     (sum, m) => sum + estimateTokens(m.content ?? '') + estimateTokens((m.toolCalls as string | null) ?? ''),
@@ -193,26 +193,26 @@ export interface CompactingProximity {
 }
 
 /** Get compacting proximity data for display in the chat UI (percentage-based) */
-export async function getCompactingProximity(kinId: string): Promise<CompactingProximity> {
-  const effectiveConfig = await getEffectiveCompactingConfig(kinId)
+export async function getCompactingProximity(agentId: string): Promise<CompactingProximity> {
+  const effectiveConfig = await getEffectiveCompactingConfig(agentId)
 
-  // Try to get cached context usage from kin-engine
-  const { getLastContextUsage } = await import('@/server/services/kin-engine')
-  const cached = await getLastContextUsage(kinId)
+  // Try to get cached context usage from agent-engine
+  const { getLastContextUsage } = await import('@/server/services/agent-engine')
+  const cached = await getLastContextUsage(agentId)
 
   let currentPercent = 0
   const contextWindow = cached?.contextWindow ?? 0
   if (cached && contextWindow > 0) {
     // Prefer provider-reported ground truth over local estimate — same
     // reason as in shouldCompact: estimates routinely under-count, which
-    // makes the displayed proximity bar lie about how close the Kin is
+    // makes the displayed proximity bar lie about how close the Agent is
     // to compacting.
     const tokens = cached.apiContextTokens ?? cached.contextTokens
     currentPercent = Math.round((tokens / contextWindow) * 100)
   }
 
-  const activeSummaries = await getActiveSummaries(kinId)
-  // Calibrate to real tokens (same per-Kin factor as the keep-window / merge)
+  const activeSummaries = await getActiveSummaries(agentId)
+  // Calibrate to real tokens (same per-Agent factor as the keep-window / merge)
   // so the displayed summary figure matches the real-token summary budget.
   const calibration = cached?.calibrationFactor ?? 1
   const summaryTokens = activeSummaries.reduce((sum, s) => sum + Math.round(estimateTokens(s.summary) * calibration), 0)
@@ -242,24 +242,24 @@ export async function getCompactingProximity(kinId: string): Promise<CompactingP
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Get all active (in-context) summaries for a Kin, ordered oldest to newest */
-async function getActiveSummaries(kinId: string) {
+/** Get all active (in-context) summaries for an Agent, ordered oldest to newest */
+async function getActiveSummaries(agentId: string) {
   return db
     .select()
     .from(compactingSummaries)
-    .where(and(eq(compactingSummaries.kinId, kinId), eq(compactingSummaries.isInContext, true)))
+    .where(and(eq(compactingSummaries.agentId, agentId), eq(compactingSummaries.isInContext, true)))
     .orderBy(asc(compactingSummaries.lastMessageAt))
     .all()
 }
 
 /** Get non-compacted messages after a cutoff timestamp */
-async function getNonCompactedMessages(kinId: string, cutoffTimestamp: number | null) {
+async function getNonCompactedMessages(agentId: string, cutoffTimestamp: number | null) {
   const allMessages = await db
     .select()
     .from(messages)
     .where(
       and(
-        eq(messages.kinId, kinId),
+        eq(messages.agentId, agentId),
         isNull(messages.taskId),
         isNull(messages.sessionId),
         eq(messages.redactPending, false),
@@ -281,40 +281,40 @@ export interface CompactingResult {
 }
 
 /**
- * Run the compacting process for a Kin.
+ * Run the compacting process for an Agent.
  * 1. Find the keep-window boundary (keep recent messages fitting keepPercent of context)
  * 2. Summarize everything before the boundary into a NEW summary
  * 3. Run memory extraction on compacted messages
  * 4. Check if telescopic merge is needed
  */
 export async function runCompacting(
-  kinId: string,
+  agentId: string,
   contextWindow?: number,
   options?: { aggressive?: boolean },
 ): Promise<CompactingResult | null> {
-  const kin = await db.select().from(kins).where(eq(kins.id, kinId)).get()
-  if (!kin) return null
+  const agent = await db.select().from(agents).where(eq(agents.id, agentId)).get()
+  if (!agent) return null
 
-  const effectiveConfig = await getEffectiveCompactingConfig(kinId)
-  const ctxWindow = contextWindow ?? getModelContextWindow(kin.model)
+  const effectiveConfig = await getEffectiveCompactingConfig(agentId)
+  const ctxWindow = contextWindow ?? getModelContextWindow(agent.model)
   const keepPercent = effectiveConfig.keepPercent
 
   // Get the latest summary to determine the cutoff point
-  const activeSummaries = await getActiveSummaries(kinId)
+  const activeSummaries = await getActiveSummaries(agentId)
   const latestSummary = activeSummaries.length > 0 ? activeSummaries[activeSummaries.length - 1]! : null
   const cutoffTimestamp = latestSummary ? (latestSummary.lastMessageAt as unknown as number) : null
 
   // Get non-compacted messages
-  const nonCompacted = await getNonCompactedMessages(kinId, cutoffTimestamp)
+  const nonCompacted = await getNonCompactedMessages(agentId, cutoffTimestamp)
   if (nonCompacted.length === 0) return null
 
   // Compute keep-window: walk backward from newest, accumulating tokens until keepPercent budget.
   //
   // The per-message size MUST include the toolCalls JSON, not just the text
-  // content. For tool-heavy Kins (kubectl, browser, file reads) the JSON is
+  // content. For tool-heavy Agents (kubectl, browser, file reads) the JSON is
   // 10-100× the text — counting only content makes the budget budget look
   // empty, every message fits in the keep window, messagesToSummarize ends
-  // up empty, and runCompacting silently returns null every time. The Kin
+  // up empty, and runCompacting silently returns null every time. The Agent
   // then accumulates context unboundedly until the main turn itself crashes.
   // Two budget modes:
   //  - regular: keepPercent of ctxWindow (e.g. 25% of 1M = 250k)
@@ -322,15 +322,15 @@ export async function runCompacting(
   //    total). Halving relative to current-state guarantees the algo always
   //    finds something to summarize when the user explicitly asks, even when
   //    the recent tail already fits the regular budget. Without the relative
-  //    cap, a Kin sitting at 90k of messages with 250k budget got "nothing to
+  //    cap, an Agent sitting at 90k of messages with 250k budget got "nothing to
   //    compact" forever despite the user wanting more relief.
-  // Calibrate raw BPE up to the Kin's measured real-token count, using the same
-  // per-Kin EMA factor (api/raw, clamped [0.7,3.0]) the navbar/visualizer use.
-  // countTokens (o200k) under-counts Anthropic by ~1.7× on tool-heavy Kins, so
+  // Calibrate raw BPE up to the Agent's measured real-token count, using the same
+  // per-Agent EMA factor (api/raw, clamped [0.7,3.0]) the navbar/visualizer use.
+  // countTokens (o200k) under-counts Anthropic by ~1.7× on tool-heavy Agents, so
   // an un-calibrated 100k cap really kept ~170k. Anchoring on the measured factor
   // makes "keep 100k" mean 100k REAL tokens — the same unit as the context window.
-  const { getLastContextUsage } = await import('@/server/services/kin-engine')
-  const calibration = (await getLastContextUsage(kinId))?.calibrationFactor ?? 1
+  const { getLastContextUsage } = await import('@/server/services/agent-engine')
+  const calibration = (await getLastContextUsage(agentId))?.calibrationFactor ?? 1
   const msgTokensOf = (m: (typeof nonCompacted)[number]) =>
     Math.round((estimateTokens(m.content ?? '') + estimateTokens((m.toolCalls as string | null) ?? '')) * calibration)
 
@@ -390,7 +390,7 @@ export async function runCompacting(
         m.role === 'user' && m.sourceId
           ? pseudonymMap.get(m.sourceId) ?? 'User'
           : m.role === 'assistant'
-            ? kin.name
+            ? agent.name
             : m.role
       const ts = m.createdAt ? new Date(m.createdAt as unknown as number).toISOString() : ''
 
@@ -450,9 +450,9 @@ export async function runCompacting(
   // Resolve model for compacting. If the configured compacting model is
   // smaller than the prompt we're about to send (typical: a cheap Haiku at
   // 200k window summarizing 600k of tool-heavy history), fall back to the
-  // Kin's own model — which by definition handled the original payload, so
+  // Agent's own model — which by definition handled the original payload, so
   // it can handle the same payload reformatted as a summarization prompt.
-  // Without this, the API call throws "prompt is too long" and the Kin's
+  // Without this, the API call throws "prompt is too long" and the Agent's
   // context grows unboundedly because compacting silently fails every turn.
   const { resolveLLM } = await import('@/server/llm/core/resolve')
   let effectiveModelId = effectiveConfig.model
@@ -462,24 +462,24 @@ export async function runCompacting(
   // Reserve ~2k tokens for the LLM's own output. If the prompt alone already
   // takes 95%+ of the window, fallback even before the API rejects it.
   const usableWindow = compactingModelWindow > 0 ? compactingModelWindow - 2000 : 0
-  if (compactingModelWindow > 0 && promptTokens > usableWindow && effectiveModelId !== kin.model) {
+  if (compactingModelWindow > 0 && promptTokens > usableWindow && effectiveModelId !== agent.model) {
     log.warn({
-      kinId,
+      agentId,
       configuredModel: effectiveModelId,
       configuredWindow: compactingModelWindow,
       promptTokens,
-      fallbackModel: kin.model,
-    }, 'Compacting prompt exceeds configured model window — falling back to Kin model')
-    effectiveModelId = kin.model
-    effectiveProviderId = kin.providerId
+      fallbackModel: agent.model,
+    }, 'Compacting prompt exceeds configured model window — falling back to Agent model')
+    effectiveModelId = agent.model
+    effectiveProviderId = agent.providerId
   }
 
   let resolved
   try {
     resolved = await resolveLLM({ modelId: effectiveModelId, providerId: effectiveProviderId })
   } catch (err) {
-    log.warn({ kinId, effectiveModelId, effectiveProviderId, err }, 'No LLM model available for compacting — provider/model misconfiguration')
-    throw new Error(`Compacting model '${effectiveModelId}' is unavailable. Check the Kin's compacting model + provider in settings.`)
+    log.warn({ agentId, effectiveModelId, effectiveProviderId, err }, 'No LLM model available for compacting — provider/model misconfiguration')
+    throw new Error(`Compacting model '${effectiveModelId}' is unavailable. Check the Agent's compacting model + provider in settings.`)
   }
 
   // Cap the generated summary at one summary's slice of the budget so the
@@ -493,8 +493,8 @@ export async function runCompacting(
 
   try {
     // Generate summary. Hard timeout: a stuck provider call would otherwise
-    // hold the compactingKins lock indefinitely, blocking every subsequent
-    // user message for this Kin. 5 min covers slow providers / large prompts
+    // hold the compactingAgents lock indefinitely, blocking every subsequent
+    // user message for this Agent. 5 min covers slow providers / large prompts
     // while still surfacing a real hang within a tolerable window.
     const result = await safeGenerateText({
       resolved,
@@ -502,7 +502,7 @@ export async function runCompacting(
       maxTokens: summaryMaxTokens,
       timeoutMs: 5 * 60 * 1000,
       callSite: 'compacting',
-      kinId,
+      agentId,
     })
 
     const summary = result.text
@@ -514,7 +514,7 @@ export async function runCompacting(
     const actualTokens = estimateTokens(summary)
     if (actualTokens > perSummaryBudget * 2) {
       log.warn(
-        { kinId, actualTokens, perSummaryBudget, summaryMaxTokens },
+        { agentId, actualTokens, perSummaryBudget, summaryMaxTokens },
         'Generated summary exceeds 2x its per-summary budget — consider lowering keepPercent or raising maxSummaries',
       )
     }
@@ -526,7 +526,7 @@ export async function runCompacting(
     const newSummaryId = uuid()
     await db.insert(compactingSummaries).values({
       id: newSummaryId,
-      kinId,
+      agentId,
       summary,
       firstMessageAt: new Date(firstMsgAt),
       lastMessageAt: new Date(lastMsgAt),
@@ -540,41 +540,41 @@ export async function runCompacting(
     })
 
     // Extract memories (awaited so we can report count)
-    const memoriesExtracted = await extractMemories(kinId, kin.model, kin.providerId, messagesToSummarize, lastSummarizedMessage.id)
+    const memoriesExtracted = await extractMemories(agentId, agent.model, agent.providerId, messagesToSummarize, lastSummarizedMessage.id)
 
     // Run memory consolidation to merge near-duplicate memories
     let memoriesConsolidated = 0
     try {
       const { consolidateMemories } = await import('@/server/services/consolidation')
-      memoriesConsolidated = await consolidateMemories(kinId)
+      memoriesConsolidated = await consolidateMemories(agentId)
       if (memoriesConsolidated > 0) {
-        log.info({ kinId, memoriesConsolidated }, 'Memories consolidated after extraction')
+        log.info({ agentId, memoriesConsolidated }, 'Memories consolidated after extraction')
       }
     } catch (err) {
-      log.error({ kinId, err }, 'Memory consolidation error')
+      log.error({ agentId, err }, 'Memory consolidation error')
     }
 
     // Recalibrate importance scores based on retrieval patterns
     let memoriesRecalibrated = 0
     try {
       const { recalibrateImportance } = await import('@/server/services/memory')
-      memoriesRecalibrated = await recalibrateImportance(kinId)
+      memoriesRecalibrated = await recalibrateImportance(agentId)
       if (memoriesRecalibrated > 0) {
-        log.info({ kinId, memoriesRecalibrated }, 'Memory importance recalibrated')
+        log.info({ agentId, memoriesRecalibrated }, 'Memory importance recalibrated')
       }
     } catch (err) {
-      log.error({ kinId, err }, 'Memory importance recalibration error')
+      log.error({ agentId, err }, 'Memory importance recalibration error')
     }
 
     // Prune stale memories (low importance, never retrieved, old)
     let memoriesPruned = 0
     try {
-      memoriesPruned = await pruneStaleMemories(kinId)
+      memoriesPruned = await pruneStaleMemories(agentId)
       if (memoriesPruned > 0) {
-        log.info({ kinId, memoriesPruned }, 'Stale memories pruned')
+        log.info({ agentId, memoriesPruned }, 'Stale memories pruned')
       }
     } catch (err) {
-      log.error({ kinId, err }, 'Stale memory pruning error')
+      log.error({ agentId, err }, 'Stale memory pruning error')
     }
 
     // Persist a system message so the compaction trace survives page refresh
@@ -582,7 +582,7 @@ export async function runCompacting(
     const compactingMessageId = uuid()
     await db.insert(messages).values({
       id: compactingMessageId,
-      kinId,
+      agentId,
       role: 'system',
       content: summary,
       sourceType: 'compacting',
@@ -592,15 +592,15 @@ export async function runCompacting(
       createdAt: new Date(),
     })
 
-    log.info({ kinId, summaryId: newSummaryId, summarizedMessages: messagesToSummarize.length, memoriesExtracted }, 'Compacting batch completed')
+    log.info({ agentId, summaryId: newSummaryId, summarizedMessages: messagesToSummarize.length, memoriesExtracted }, 'Compacting batch completed')
 
     // Emit SSE: compaction done. messageCount lets the UI tell the user
     // "compacted N messages" — concrete signal of what just happened
     // beyond the abstract "compacting done" status.
-    sseManager.sendToKin(kinId, {
+    sseManager.sendToAgent(agentId, {
       type: 'compacting:done',
-      kinId,
-      data: { kinId, summary, memoriesExtracted, messageCount: messagesToSummarize.length },
+      agentId,
+      data: { agentId, summary, memoriesExtracted, messageCount: messagesToSummarize.length },
     })
 
     // The cached apiContextTokens (provider ground truth from the last main
@@ -609,22 +609,22 @@ export async function runCompacting(
     // pre-compaction "real 750k" until the next main turn. Drop it so the
     // UI falls back to the (calibrated) estimate, which reflects reality
     // until the next roundtrip restores ground truth.
-    const { invalidateApiContextSize } = await import('@/server/services/kin-engine')
-    invalidateApiContextSize(kinId)
-    sseManager.sendToKin(kinId, {
+    const { invalidateApiContextSize } = await import('@/server/services/agent-engine')
+    invalidateApiContextSize(agentId)
+    sseManager.sendToAgent(agentId, {
       type: 'queue:update',
-      kinId,
+      agentId,
       // null (not undefined) signals to the client SSE handler that we want
       // to actively clear apiContextTokens, not just "no update for this
       // field". The handler treats null distinctly from omission.
-      data: { kinId, queueSize: 0, isProcessing: false, apiContextTokens: null },
+      data: { agentId, queueSize: 0, isProcessing: false, apiContextTokens: null },
     })
 
     // Check if telescopic merge is needed after adding new summary
-    await maybeMergeSummaries(kinId, ctxWindow)
+    await maybeMergeSummaries(agentId, ctxWindow)
 
     // Clean up old archived summaries beyond retention limit
-    await cleanupSummaries(kinId)
+    await cleanupSummaries(agentId)
 
     return { summary, memoriesExtracted }
   } catch (err) {
@@ -638,12 +638,12 @@ export async function runCompacting(
         : err.message
     }
 
-    log.error({ kinId, err, model: effectiveConfig.model, providerId: effectiveConfig.providerId }, 'Compacting LLM call failed')
+    log.error({ agentId, err, model: effectiveConfig.model, providerId: effectiveConfig.providerId }, 'Compacting LLM call failed')
 
     // Persist error in conversation history
     await db.insert(messages).values({
       id: uuid(),
-      kinId,
+      agentId,
       role: 'system',
       content: '',
       sourceType: 'compacting',
@@ -654,10 +654,10 @@ export async function runCompacting(
     })
 
     // Emit SSE: compaction failed (so UI can clear the spinner)
-    sseManager.sendToKin(kinId, {
+    sseManager.sendToAgent(agentId, {
       type: 'compacting:error',
-      kinId,
-      data: { kinId, error: errorMessage },
+      agentId,
+      data: { agentId, error: errorMessage },
     })
     throw err // re-throw for maybeCompact to log
   }
@@ -670,16 +670,16 @@ export async function runCompacting(
  * This creates a higher-level (depth+1) summary and archives the originals.
  * NO memory extraction during merge — memories were already extracted at depth 0.
  */
-async function maybeMergeSummaries(kinId: string, contextWindow: number): Promise<void> {
-  const effectiveConfig = await getEffectiveCompactingConfig(kinId)
-  const activeSummaries = await getActiveSummaries(kinId)
+async function maybeMergeSummaries(agentId: string, contextWindow: number): Promise<void> {
+  const effectiveConfig = await getEffectiveCompactingConfig(agentId)
+  const activeSummaries = await getActiveSummaries(agentId)
 
   if (activeSummaries.length <= 2) return // nothing to merge
 
-  // Calibrate to real tokens (same per-Kin factor as the keep-window) so the
+  // Calibrate to real tokens (same per-Agent factor as the keep-window) so the
   // budget comparison is in the same unit as summaryMaxTokens.
-  const { getLastContextUsage } = await import('@/server/services/kin-engine')
-  const calibration = (await getLastContextUsage(kinId))?.calibrationFactor ?? 1
+  const { getLastContextUsage } = await import('@/server/services/agent-engine')
+  const calibration = (await getLastContextUsage(agentId))?.calibrationFactor ?? 1
   const totalSummaryTokens = activeSummaries.reduce(
     (sum, s) => sum + Math.round(estimateTokens(s.summary) * calibration),
     0,
@@ -728,22 +728,22 @@ async function maybeMergeSummaries(kinId: string, contextWindow: number): Promis
 
   // Same fallback + cap + timeout pattern as runCompacting (a4cd40bf,
   // 1787d529, fa161f30): when the merge prompt exceeds the compacting
-  // model's window, fall back to the Kin's own model; cap output to the
+  // model's window, fall back to the Agent's own model; cap output to the
   // merged-summary budget; hard-timeout to avoid holding things up.
   const { resolveLLM } = await import('@/server/llm/core/resolve')
-  const kin = await db.select({ model: kins.model, providerId: kins.providerId }).from(kins).where(eq(kins.id, kinId)).get()
+  const agent = await db.select({ model: agents.model, providerId: agents.providerId }).from(agents).where(eq(agents.id, agentId)).get()
   let mergeModelId = effectiveConfig.model
   let mergeProviderId = effectiveConfig.providerId
   const mergePromptTokens = estimateTokens(mergePrompt)
   const mergeModelWindow = getModelContextWindow(mergeModelId)
   const usableMergeWindow = mergeModelWindow > 0 ? mergeModelWindow - 2000 : 0
-  if (kin && mergeModelWindow > 0 && mergePromptTokens > usableMergeWindow && mergeModelId !== kin.model) {
+  if (agent && mergeModelWindow > 0 && mergePromptTokens > usableMergeWindow && mergeModelId !== agent.model) {
     log.warn(
-      { kinId, configuredModel: mergeModelId, configuredWindow: mergeModelWindow, promptTokens: mergePromptTokens, fallbackModel: kin.model },
-      'Merge prompt exceeds configured model window — falling back to Kin model',
+      { agentId, configuredModel: mergeModelId, configuredWindow: mergeModelWindow, promptTokens: mergePromptTokens, fallbackModel: agent.model },
+      'Merge prompt exceeds configured model window — falling back to Agent model',
     )
-    mergeModelId = kin.model
-    mergeProviderId = kin.providerId
+    mergeModelId = agent.model
+    mergeProviderId = agent.providerId
   }
 
   let resolved
@@ -769,7 +769,7 @@ async function maybeMergeSummaries(kinId: string, contextWindow: number): Promis
       maxTokens: mergeMaxTokens,
       timeoutMs: 5 * 60 * 1000,
       callSite: 'compacting',
-      kinId,
+      agentId,
     })
 
     const mergedSummary = result.text
@@ -781,7 +781,7 @@ async function maybeMergeSummaries(kinId: string, contextWindow: number): Promis
     // Insert merged summary
     await db.insert(compactingSummaries).values({
       id: uuid(),
-      kinId,
+      agentId,
       summary: mergedSummary,
       firstMessageAt: firstSummary.firstMessageAt,
       lastMessageAt: lastSummary.lastMessageAt,
@@ -801,24 +801,24 @@ async function maybeMergeSummaries(kinId: string, contextWindow: number): Promis
       .set({ isInContext: false })
       .where(inArray(compactingSummaries.id, sourceIds))
 
-    log.info({ kinId, mergedCount: toMerge.length, newDepth: maxDepth + 1 }, 'Telescopic summary merge completed')
+    log.info({ agentId, mergedCount: toMerge.length, newDepth: maxDepth + 1 }, 'Telescopic summary merge completed')
   } catch (err) {
-    log.error({ kinId, err }, 'Summary merge LLM error')
+    log.error({ agentId, err }, 'Summary merge LLM error')
   }
 }
 
 // ─── Summary Cleanup ─────────────────────────────────────────────────────────
 
-async function cleanupSummaries(kinId: string) {
+async function cleanupSummaries(agentId: string) {
   const allSummaries = await db
     .select()
     .from(compactingSummaries)
-    .where(eq(compactingSummaries.kinId, kinId))
+    .where(eq(compactingSummaries.agentId, agentId))
     .orderBy(desc(compactingSummaries.createdAt))
     .all()
 
-  if (allSummaries.length > config.compacting.maxSummariesPerKin) {
-    const toDelete = allSummaries.slice(config.compacting.maxSummariesPerKin)
+  if (allSummaries.length > config.compacting.maxSummariesPerAgent) {
+    const toDelete = allSummaries.slice(config.compacting.maxSummariesPerAgent)
     const idsToDelete = toDelete.filter((s) => !s.isInContext).map((s) => s.id)
 
     if (idsToDelete.length > 0) {
@@ -832,14 +832,14 @@ async function cleanupSummaries(kinId: string) {
 // ─── Memory Extraction Pipeline ──────────────────────────────────────────────
 
 async function addIfNotDuplicate(
-  kinId: string,
+  agentId: string,
   item: { content: string; category: string; subject?: string | null; sourceContext?: string | null },
   importance: number | null,
   lastMessageId: string,
 ): Promise<boolean> {
-  if (await isDuplicateMemory(kinId, item.content)) return false
+  if (await isDuplicateMemory(agentId, item.content)) return false
 
-  await createMemory(kinId, {
+  await createMemory(agentId, {
     content: item.content,
     category: item.category as MemoryCategory,
     subject: item.subject || null,
@@ -852,9 +852,9 @@ async function addIfNotDuplicate(
 }
 
 async function extractMemories(
-  kinId: string,
-  kinModel: string,
-  kinProviderId: string | null,
+  agentId: string,
+  agentModel: string,
+  agentProviderId: string | null,
   messagesToAnalyze: Array<{ id: string; content: string | null; role: string }>,
   lastMessageId: string,
 ): Promise<number> {
@@ -864,10 +864,10 @@ async function extractMemories(
   const effectiveExtractionModel = settingsExtractionModel ?? config.memory.extractionModel
   const extractionProviderId = settingsExtractionProviderId
     ?? config.memory.extractionProviderId
-    ?? (effectiveExtractionModel ? null : kinProviderId)
+    ?? (effectiveExtractionModel ? null : agentProviderId)
   let resolved
   try {
-    resolved = await resolveLLM({ modelId: effectiveExtractionModel ?? kinModel, providerId: extractionProviderId })
+    resolved = await resolveLLM({ modelId: effectiveExtractionModel ?? agentModel, providerId: extractionProviderId })
   } catch {
     return 0
   }
@@ -876,7 +876,7 @@ async function extractMemories(
   const existingMemories = await db
     .select({ id: memories.id, content: memories.content, category: memories.category, subject: memories.subject })
     .from(memories)
-    .where(eq(memories.kinId, kinId))
+    .where(eq(memories.agentId, agentId))
     .all()
 
   const existingMemoriesSummary =
@@ -944,11 +944,11 @@ async function extractMemories(
       // need more than a few thousand tokens. Cap to prevent runaway output.
       maxTokens: 4000,
       // Hard timeout: extraction is awaited inside runCompacting which holds
-      // the compactingKins lock. A stuck call would block all user messages
-      // for this Kin (same hazard as fa161f30 fixed for the summary call).
+      // the compactingAgents lock. A stuck call would block all user messages
+      // for this Agent (same hazard as fa161f30 fixed for the summary call).
       timeoutMs: 3 * 60 * 1000,
       callSite: 'compacting',
-      kinId,
+      agentId,
     })
 
     // Parse JSON array from response
@@ -980,7 +980,7 @@ async function extractMemories(
         // Update an existing memory
         const target = existingMemories[item.updateIndex]
         if (target) {
-          await updateMemory(target.id, kinId, {
+          await updateMemory(target.id, agentId, {
             content: item.content,
             category: item.category as MemoryCategory,
             subject: item.subject || null,
@@ -988,21 +988,21 @@ async function extractMemories(
             importance,
           })
           count++
-          log.debug({ kinId, memoryId: target.id, oldContent: target.content, newContent: item.content }, 'Memory updated via extraction')
+          log.debug({ agentId, memoryId: target.id, oldContent: target.content, newContent: item.content }, 'Memory updated via extraction')
         } else {
           // Invalid index, fall back to add
-          await addIfNotDuplicate(kinId, item, importance, lastMessageId)
+          await addIfNotDuplicate(agentId, item, importance, lastMessageId)
           count++
         }
       } else {
         // Add new memory (with dedup check)
-        const added = await addIfNotDuplicate(kinId, item, importance, lastMessageId)
+        const added = await addIfNotDuplicate(agentId, item, importance, lastMessageId)
         if (added) count++
       }
     }
     return count
   } catch (err) {
-    log.error({ kinId, err }, 'Memory extraction LLM error')
+    log.error({ agentId, err }, 'Memory extraction LLM error')
     return 0
   }
 }
@@ -1011,23 +1011,23 @@ async function extractMemories(
 
 /**
  * Check thresholds and run compacting if needed.
- * Called after each LLM turn in kin-engine.ts.
+ * Called after each LLM turn in agent-engine.ts.
  * Accepts contextTokens/contextWindow from the engine to avoid recomputation.
  */
-export async function maybeCompact(kinId: string, contextTokens?: number, contextWindow?: number): Promise<void> {
+export async function maybeCompact(agentId: string, contextTokens?: number, contextWindow?: number): Promise<void> {
   try {
     let cycles = 0
     let compacted = false
     const maxCycles = 5
 
-    while (await shouldCompact(kinId, contextTokens, contextWindow) && cycles < maxCycles) {
+    while (await shouldCompact(agentId, contextTokens, contextWindow) && cycles < maxCycles) {
       cycles++
-      sseManager.sendToKin(kinId, {
+      sseManager.sendToAgent(agentId, {
         type: 'compacting:start',
-        kinId,
-        data: { kinId, cycle: cycles, estimatedTotal: maxCycles },
+        agentId,
+        data: { agentId, cycle: cycles, estimatedTotal: maxCycles },
       })
-      const result = await runCompacting(kinId, contextWindow)
+      const result = await runCompacting(agentId, contextWindow)
 
       // No-op cycle: runCompacting returned null because there weren't enough
       // messages to summarize, the keep-window already covered everything, etc.
@@ -1038,13 +1038,13 @@ export async function maybeCompact(kinId: string, contextTokens?: number, contex
       // tools / memories instead.
       if (result === null) {
         log.warn(
-          { kinId, cycle: cycles },
+          { agentId, cycle: cycles },
           'Compacting cycle was a no-op (nothing to summarize) — breaking catch-up loop',
         )
-        sseManager.sendToKin(kinId, {
+        sseManager.sendToAgent(agentId, {
           type: 'compacting:done',
-          kinId,
-          data: { kinId, summary: '', memoriesExtracted: 0, messageCount: 0 },
+          agentId,
+          data: { agentId, summary: '', memoriesExtracted: 0, messageCount: 0 },
         })
         break
       }
@@ -1065,12 +1065,12 @@ export async function maybeCompact(kinId: string, contextTokens?: number, contex
     if (compacted) {
       try {
         const { buildContextPreview } = await import('@/server/services/context-preview')
-        const preview = await buildContextPreview(kinId)
-        sseManager.sendToKin(kinId, {
+        const preview = await buildContextPreview(agentId)
+        sseManager.sendToAgent(agentId, {
           type: 'queue:update',
-          kinId,
+          agentId,
           data: {
-            kinId,
+            agentId,
             queueSize: 0,
             isProcessing: false,
             apiContextTokens: null,
@@ -1091,19 +1091,19 @@ export async function maybeCompact(kinId: string, contextTokens?: number, contex
           },
         })
       } catch (err) {
-        log.warn({ kinId, err }, 'post-compaction context refresh failed')
+        log.warn({ agentId, err }, 'post-compaction context refresh failed')
       }
     }
 
     if (cycles > 1) {
-      log.info({ kinId, cycles }, 'Compacting catch-up completed')
+      log.info({ agentId, cycles }, 'Compacting catch-up completed')
     }
   } catch (err) {
-    log.error({ kinId, err }, 'Compacting error')
-    sseManager.sendToKin(kinId, {
+    log.error({ agentId, err }, 'Compacting error')
+    sseManager.sendToAgent(agentId, {
       type: 'compacting:error',
-      kinId,
-      data: { kinId, error: err instanceof Error ? err.message : 'Unknown compacting error' },
+      agentId,
+      data: { agentId, error: err instanceof Error ? err.message : 'Unknown compacting error' },
     })
   }
 }

@@ -29,12 +29,12 @@ import { HelpPanel } from '@/client/components/common/HelpPanel'
 import { SettingsListSkeleton } from '@/client/components/common/SettingsListSkeleton'
 import { api, toastError } from '@/client/lib/api'
 import { useSSE } from '@/client/hooks/useSSE'
-import { useKinList } from '@/client/hooks/useKinList'
+import { useAgentList } from '@/client/hooks/useAgentList'
 import { WebhookCard } from '@/client/components/webhook/WebhookCard'
 import { WebhookFormDialog } from '@/client/components/webhook/WebhookFormDialog'
 import { WebhookLogDialog } from '@/client/components/webhook/WebhookLogDialog'
 import type { WebhookSummary, WebhookFilterMode, WebhookDispatchMode } from '@/shared/types'
-import type { KinOption } from '@/client/components/common/KinSelectItem'
+import type { AgentOption } from '@/client/components/common/AgentSelectItem'
 
 interface WebhookWithToken extends WebhookSummary {
   token: string
@@ -44,8 +44,8 @@ export function WebhooksSettings() {
   const { t } = useTranslation()
   const [webhooks, setWebhooks] = useState<WebhookSummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const { kins: kinList } = useKinList()
-  const kins: KinOption[] = kinList.map((k) => ({ id: k.id, name: k.name, role: k.role ?? '', avatarUrl: k.avatarUrl }))
+  const { agents: agentList } = useAgentList()
+  const agents: AgentOption[] = agentList.map((k) => ({ id: k.id, name: k.name, role: k.role ?? '', avatarUrl: k.avatarUrl }))
   const [modalOpen, setModalOpen] = useState(false)
   const [editingWebhook, setEditingWebhook] = useState<WebhookSummary | null>(null)
   const [regeneratingWebhook, setRegeneratingWebhook] = useState<WebhookSummary | null>(null)
@@ -55,15 +55,15 @@ export function WebhooksSettings() {
   const [revealedToken, setRevealedToken] = useState<{ url: string; token: string; name: string } | null>(null)
   const [showToken, setShowToken] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [filterKinId, setFilterKinId] = useState<string>('')
+  const [filterAgentId, setFilterAgentId] = useState<string>('')
 
   const filteredWebhooks = webhooks.filter((webhook) => {
-    if (filterKinId && webhook.kinId !== filterKinId) return false
+    if (filterAgentId && webhook.agentId !== filterAgentId) return false
     if (!searchQuery.trim()) return true
     const q = searchQuery.toLowerCase()
     if (webhook.name.toLowerCase().includes(q)) return true
     if (webhook.description?.toLowerCase().includes(q)) return true
-    if (webhook.kinName?.toLowerCase().includes(q)) return true
+    if (webhook.agentName?.toLowerCase().includes(q)) return true
     return false
   })
 
@@ -93,7 +93,7 @@ export function WebhooksSettings() {
     'webhook:triggered': () => fetchWebhooks(),
   })
 
-  const handleCreate = async (kinId: string, data: {
+  const handleCreate = async (agentId: string, data: {
     name: string
     description?: string
     dispatchMode?: WebhookDispatchMode
@@ -102,7 +102,7 @@ export function WebhooksSettings() {
     maxConcurrentTasks?: number
   }) => {
     const result = await api.post<{ webhook: WebhookWithToken }>('/webhooks', {
-      kinId,
+      agentId,
       name: data.name,
       description: data.description,
       dispatchMode: data.dispatchMode,
@@ -214,15 +214,15 @@ export function WebhooksSettings() {
               className="pl-9"
             />
           </div>
-          {kins.length > 1 && (
-            <Select value={filterKinId || '__all__'} onValueChange={(v) => setFilterKinId(v === '__all__' ? '' : v)}>
+          {agents.length > 1 && (
+            <Select value={filterAgentId || '__all__'} onValueChange={(v) => setFilterAgentId(v === '__all__' ? '' : v)}>
               <SelectTrigger className="w-auto min-w-[140px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">{t('settings.webhooks.allKins', 'All Kins')}</SelectItem>
-                {kins.map((kin) => (
-                  <SelectItem key={kin.id} value={kin.id}>{kin.name}</SelectItem>
+                <SelectItem value="__all__">{t('settings.webhooks.allAgents', 'All Agents')}</SelectItem>
+                {agents.map((agent) => (
+                  <SelectItem key={agent.id} value={agent.id}>{agent.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -264,7 +264,7 @@ export function WebhooksSettings() {
         onSave={handleCreate}
         onUpdate={handleUpdate}
         webhook={editingWebhook}
-        kins={kins}
+        agents={agents}
       />
 
       {/* Regenerate token confirmation */}

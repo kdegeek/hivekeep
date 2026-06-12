@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Progress } from '@/client/components/ui/progress'
+import { HivekeepLogo } from '@/client/components/common/HivekeepLogo'
 import { StepIdentity } from '@/client/pages/onboarding/StepIdentity'
 import { StepPreferences } from '@/client/pages/onboarding/StepPreferences'
 import { StepBootstrapProvider } from '@/client/pages/onboarding/StepBootstrapProvider'
@@ -32,6 +33,12 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
   const [currentStep, setCurrentStep] = useState(1)
 
   const progressValue = ((currentStep - 1) / (TOTAL_STEPS - 1)) * 100
+  const stepTitleKeys = [
+    'onboarding.steps.identity',
+    'onboarding.steps.preferences',
+    'onboarding.steps.provider',
+  ] as const
+  const currentStepTitle = t(stepTitleKeys[currentStep - 1] ?? stepTitleKeys[0])
 
   return (
     <div className="surface-base h-screen overflow-y-auto">
@@ -46,10 +53,8 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
       <div className="relative z-10 w-full max-w-lg animate-fade-in-up">
         {/* Header */}
         <div className="mb-8 text-center">
-          <img src="/kinbot.svg" alt="KinBot" width={64} height={64} className="mx-auto mb-3 rounded-2xl drop-shadow-lg" />
-          <h1 className="gradient-primary-text text-3xl font-bold tracking-tight">
-            KinBot
-          </h1>
+          <HivekeepLogo size={64} title={null} className="mx-auto mb-3" />
+          <h1 className="text-3xl font-extrabold text-foreground">Hivekeep</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {t('onboarding.subtitle')}
           </p>
@@ -57,8 +62,9 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
 
         {/* Progress */}
         <div className="mb-6 space-y-2">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
             <span>{t('onboarding.step', { current: currentStep, total: TOTAL_STEPS })}</span>
+            <span className="font-medium text-foreground">{currentStepTitle}</span>
           </div>
           <Progress value={progressValue} variant="gradient" active />
         </div>

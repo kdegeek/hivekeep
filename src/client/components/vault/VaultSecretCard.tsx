@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/client/components/ui/button'
 import { Card, CardContent } from '@/client/components/ui/card'
-import { KinBadge } from '@/client/components/common/KinBadge'
+import { AgentBadge } from '@/client/components/common/AgentBadge'
 import { ConfirmDeleteButton } from '@/client/components/common/ConfirmDeleteButton'
 import {
   Pencil,
@@ -23,7 +23,7 @@ export interface VaultSecretData {
   entryType?: string
   isFavorite?: boolean
   attachmentCount?: number
-  createdByKinId: string | null
+  createdByAgentId: string | null
   createdAt: number
   updatedAt: number
 }
@@ -38,14 +38,14 @@ const TYPE_CONFIG: Record<string, { icon: typeof KeyRound; color: string }> = {
 
 interface VaultSecretCardProps {
   secret: VaultSecretData
-  kinName?: string
-  kinAvatarUrl?: string | null
+  agentName?: string
+  agentAvatarUrl?: string | null
   onEdit?: () => void
   onDelete?: () => void
   onToggleFavorite?: () => void
 }
 
-export function VaultSecretCard({ secret, kinName, kinAvatarUrl, onEdit, onDelete, onToggleFavorite }: VaultSecretCardProps) {
+export function VaultSecretCard({ secret, agentName, agentAvatarUrl, onEdit, onDelete, onToggleFavorite }: VaultSecretCardProps) {
   const { t } = useTranslation()
   const entryType = secret.entryType ?? 'text'
   const config = TYPE_CONFIG[entryType] ?? { icon: ShieldCheck, color: 'text-muted-foreground bg-muted' }
@@ -73,8 +73,8 @@ export function VaultSecretCard({ secret, kinName, kinAvatarUrl, onEdit, onDelet
                 </>
               )}
               <span className="text-[11px] text-muted-foreground/40">·</span>
-              {secret.createdByKinId && kinName ? (
-                <KinBadge name={kinName} avatarUrl={kinAvatarUrl} />
+              {secret.createdByAgentId && agentName ? (
+                <AgentBadge name={agentName} avatarUrl={agentAvatarUrl} />
               ) : (
                 <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
                   <User className="size-3" />

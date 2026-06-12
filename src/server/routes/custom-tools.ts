@@ -69,9 +69,9 @@ customToolRoutes.get('/:slug', async (c) => {
 // mtime → a NEW `?v=` URL → a fresh fetch, so this is always correct. Without a
 // `?v=`, the legacy ETag/no-cache revalidation path is kept.
 //
-// Host-context: the module shares the page's React instance (window.__KINBOT_REACT__)
+// Host-context: the module shares the page's React instance (window.__HIVEKEEP_REACT__)
 // and renders with full host privileges. Trusted-by-design (custom tools are
-// user/Kin-authored on a self-hosted instance) and authed like every /api/* route.
+// user/Agent-authored on a self-hosted instance) and authed like every /api/* route.
 customToolRoutes.get('/:slug/renderer.js', async (c) => {
   const slug = c.req.param('slug')
   let js: string | null

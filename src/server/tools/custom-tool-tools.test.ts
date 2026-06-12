@@ -80,7 +80,7 @@ const {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const ctx: ToolExecutionContext = { kinId: 'kin-abc', isSubKin: false }
+const ctx: ToolExecutionContext = { agentId: 'agent-abc', isSubAgent: false }
 
 function execute(registration: any, args: any) {
   const t = registration.create(ctx)
@@ -117,7 +117,7 @@ describe('custom-tool-tools (global)', () => {
   })
 
   describe('create_custom_tool', () => {
-    it('creates a tool (createdBy kin) and writes code when provided', async () => {
+    it('creates a tool (createdBy agent) and writes code when provided', async () => {
       const result = await execute(createCustomToolTool, {
         slug: 'scrape',
         name: 'Scrape',
@@ -130,7 +130,7 @@ describe('custom-tool-tools (global)', () => {
       expect(result.toolName).toBe('custom_scrape')
       expect(mockCreateCustomTool).toHaveBeenCalled()
       const arg = (mockCreateCustomTool.mock.calls[0]?.[0] ?? {}) as any
-      expect(arg.createdBy).toBe('kin')
+      expect(arg.createdBy).toBe('agent')
       expect(arg.entrypoint).toBe('main.py') // default for python
       expect(mockWriteCustomToolFile).toHaveBeenCalledWith('scrape', 'main.py', 'print("hi")')
     })

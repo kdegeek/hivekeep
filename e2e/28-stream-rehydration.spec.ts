@@ -2,16 +2,16 @@ import { test, expect, type Page } from '@playwright/test'
 import { loginAs, mockProviderModels } from './helpers/auth'
 
 /**
- * Regression spec for ticket kinbot#19 — "Problème de reprise de streaming
+ * Regression spec for ticket hivekeep#19 — "Problème de reprise de streaming
  * sur le main thread".
  *
  * Scenario:
- *   1. Send a message to a Kin in its main conversation.
+ *   1. Send a message to an Agent in its main conversation.
  *   2. While the assistant is still streaming tokens, navigate away
  *      (Projects page).
  *   3. Navigate back to the conversation BEFORE chat:done fires.
  *   4. Expectation: the partial assistant bubble is visible immediately
- *      (rehydrated from GET /api/kins/:id/messages's `streamingMessage`
+ *      (rehydrated from GET /api/agents/:id/messages's `streamingMessage`
  *      snapshot). Pre-fix behaviour showed only the "Réflexion…" /
  *      typing indicator until chat:done landed.
  *
@@ -23,7 +23,7 @@ import { loginAs, mockProviderModels } from './helpers/auth'
 const ASSISTANT_PHRASE = 'Fresh basil'
 const USER_MESSAGE = 'Tell me about Italian cooking herbs.'
 
-async function openKinChat(page: Page) {
+async function openAgentChat(page: Page) {
   await page.getByText('Test Assistant').first().click()
   const input = page.getByPlaceholder('Send a message...')
   await expect(input).toBeVisible({ timeout: 10_000 })
@@ -35,16 +35,16 @@ test.describe.serial('Main-thread stream rehydration', () => {
     await mockProviderModels(page)
     await page.goto('/')
     const signIn = page.getByRole('button', { name: 'Sign in' })
-    const kins = page.getByText('Kins', { exact: true })
-    await expect(signIn.or(kins)).toBeVisible({ timeout: 10_000 })
+    const agents = page.getByText('Agents', { exact: true })
+    await expect(signIn.or(agents)).toBeVisible({ timeout: 10_000 })
     if (await signIn.isVisible().catch(() => false)) {
       await loginAs(page)
     }
-    await expect(kins).toBeVisible({ timeout: 10_000 })
+    await expect(agents).toBeVisible({ timeout: 10_000 })
   })
 
   test('partial assistant bubble survives a navigate-away mid-stream', async ({ page }) => {
-    const input = await openKinChat(page)
+    const input = await openAgentChat(page)
 
     // Send a fresh prompt — the mock LLM will start streaming back the
     // canned response at the configured token delay.

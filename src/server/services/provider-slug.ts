@@ -3,11 +3,11 @@
  *
  * Slugs are stable, human-readable identifiers for providers (e.g.
  * "openai-codex", "claude-max-2") used in places where the UUID would be
- * awkward — chiefly tool calls made by Kins (spawn_self, spawn_kin) where
+ * awkward — chiefly tool calls made by Agents (spawn_self, spawn_agent) where
  * the model expresses intent in natural language.
  *
  * Slugs are derived from the provider's `name` at creation time and never
- * change afterwards, so a Kin that remembers `provider_id: "openai-codex"`
+ * change afterwards, so an Agent that remembers `provider_id: "openai-codex"`
  * keeps working even if the user later renames the provider in the UI.
  */
 

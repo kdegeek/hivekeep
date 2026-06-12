@@ -316,18 +316,18 @@ export class TelegramAdapter implements ChannelAdapter {
   async onIdentityChange(
     _channelId: string,
     cfg: Record<string, unknown>,
-    newIdentity: { kinSlug: string; kinName: string; avatarUrl?: string },
+    newIdentity: { agentSlug: string; agentName: string; avatarUrl?: string },
   ): Promise<void> {
     const token = await resolveToken(cfg)
     // Telegram setMyName caps the name at 64 chars (Bot API spec).
-    const name = newIdentity.kinName.slice(0, 64)
+    const name = newIdentity.agentName.slice(0, 64)
     await telegramApi(token, 'setMyName', { name })
     // Telegram bot avatars are NOT settable via Bot API: BotFather is the only
     // entry point. Log a debug note when an avatar was provided so operators
     // know it was intentionally skipped.
     if (newIdentity.avatarUrl) {
       log.debug(
-        { kinSlug: newIdentity.kinSlug, avatarUrl: newIdentity.avatarUrl },
+        { agentSlug: newIdentity.agentSlug, avatarUrl: newIdentity.avatarUrl },
         'Telegram avatar swap skipped: setMyName is the only identity API the Bot API exposes; avatars require BotFather.',
       )
     }

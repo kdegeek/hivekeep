@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unpkg.com/@kinbot-developer/sdk/schemas/plugin-manifest.schema.json",
-  "title": "KinBot Plugin Manifest",
-  "description": "Schema for plugin.json — KinBot loads, validates, and registers plugins based on this manifest. Plugin authors get autocomplete and inline validation in any editor that supports JSON Schema (VSCode, JetBrains, …) by referencing this $id at the top of their plugin.json.",
+  "$id": "https://unpkg.com/@hivekeep/sdk/schemas/plugin-manifest.schema.json",
+  "title": "Hivekeep Plugin Manifest",
+  "description": "Schema for plugin.json. Hivekeep loads, validates, and registers plugins based on this manifest. Plugin authors get autocomplete and inline validation in any editor that supports JSON Schema (VSCode, JetBrains, …) by referencing this $id at the top of their plugin.json.",
   "type": "object",
   "required": ["name", "version", "description", "main"],
   "additionalProperties": false,
@@ -14,12 +14,12 @@
     "name": {
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9-]*$",
-      "description": "Unique plugin identifier. Lowercase, digits, dashes. KinBot uses it as the directory name in plugins/ and as the namespace prefix for the plugin's tools, providers, and vault keys."
+      "description": "Unique plugin identifier. Lowercase, digits, dashes. Hivekeep uses it as the directory name in plugins/ and as the namespace prefix for the plugin's tools, providers, and vault keys."
     },
     "displayName": {
       "type": "string",
       "minLength": 1,
-      "description": "Human-readable name shown in the UI (e.g. \"Mistral AI\", \"Notion Sync\"). When omitted, KinBot falls back to the technical `name`."
+      "description": "Human-readable name shown in the UI (e.g. \"Mistral AI\", \"Notion Sync\"). When omitted, Hivekeep falls back to the technical `name`."
     },
     "version": {
       "type": "string",
@@ -33,7 +33,7 @@
     },
     "main": {
       "type": "string",
-      "description": "Entry file (relative to the plugin directory). KinBot dynamically imports it at activation time. Default convention: \"index.ts\"."
+      "description": "Entry file (relative to the plugin directory). Hivekeep dynamically imports it at activation time. Default convention: \"index.ts\"."
     },
     "author": {
       "type": "string",
@@ -48,26 +48,30 @@
       "type": "string",
       "description": "Free-form license identifier (SPDX preferred)."
     },
-    "kinbot": {
+    "hivekeep": {
       "type": "string",
-      "description": "Semver range of KinBot host versions this plugin is compatible with (e.g. \">=0.40.0\"). KinBot blocks activation when the host version is outside the range and surfaces the mismatch in the UI."
+      "description": "Semver range of Hivekeep host versions this plugin is compatible with (e.g. \">=0.40.0\"). Hivekeep blocks activation when the host version is outside the range and surfaces the mismatch in the UI."
     },
     "icon": {
       "type": "string",
       "description": "Display icon. Either an emoji (\"🔔\") or a path to a file inside the plugin directory."
     },
+    "iconUrl": {
+      "type": "string",
+      "description": "Path to a logo image inside the plugin directory (e.g. \"logo.svg\"). Hivekeep serves it via GET /api/plugins/<name>/logo and surfaces it in the Plugins UI and the npm Browse tab."
+    },
     "permissions": {
       "type": "array",
       "items": {
         "type": "string",
-        "pattern": "^(http:[^\\s]+|storage|cards|vault|cron|kins)$",
-        "description": "A permission grant. KinBot enforces http:* permissions at runtime through ctx.http.fetch — calls to undeclared hosts throw before going out. Other grants are informational today and will be enforced in future releases."
+        "pattern": "^(http:[^\\s]+|storage|cards|vault|cron|agents)$",
+        "description": "A permission grant. Hivekeep enforces http:* permissions at runtime through ctx.http.fetch: calls to undeclared hosts throw before going out. Other grants are informational today and will be enforced in future releases."
       },
-      "description": "Permissions the plugin requires. Each entry is either an http permission (\"http:api.example.com\", or \"http:*\" for any host) or one of the named capabilities (\"storage\", \"cards\", \"vault\", \"cron\", \"kins\")."
+      "description": "Permissions the plugin requires. Each entry is either an http permission (\"http:api.example.com\", or \"http:*\" for any host) or one of the named capabilities (\"storage\", \"cards\", \"vault\", \"cron\", \"agents\")."
     },
     "dependencies": {
       "type": "object",
-      "description": "Other plugins this one depends on, keyed by plugin name with a semver range value. KinBot resolves the dependency graph and refuses to activate a plugin whose dependencies are missing or out of range.",
+      "description": "Other plugins this one depends on, keyed by plugin name with a semver range value. Hivekeep resolves the dependency graph and refuses to activate a plugin whose dependencies are missing or out of range.",
       "patternProperties": {
         "^[a-z0-9][a-z0-9-]*$": {
           "type": "string",
@@ -78,7 +82,7 @@
     },
     "config": {
       "type": "object",
-      "description": "Plugin-level configuration schema. The Plugins UI renders a settings form from this; users edit, KinBot persists, then hands the resolved values to your plugin via ctx.config.",
+      "description": "Plugin-level configuration schema. The Plugins UI renders a settings form from this; users edit, Hivekeep persists, then hands the resolved values to your plugin via ctx.config.",
       "additionalProperties": { "$ref": "#/$defs/PluginConfigField" }
     },
     "channels": {
@@ -108,12 +112,12 @@
         "default": {},
         "secret": {
           "type": "boolean",
-          "description": "Marks the field's value as sensitive — KinBot encrypts it at rest and masks it in logs."
+          "description": "Marks the field's value as sensitive: Hivekeep encrypts it at rest and masks it in logs."
         },
         "options": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "For type: 'select' — the allowed values."
+          "description": "For type: 'select', the allowed values."
         },
         "min": { "type": "number", "description": "For type: 'number'." },
         "max": { "type": "number", "description": "For type: 'number'." },

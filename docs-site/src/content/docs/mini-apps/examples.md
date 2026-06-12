@@ -12,11 +12,11 @@ A persistent todo app with add, complete, and delete functionality.
 <script type="text/jsx">
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { useKinBot, useStorage, toast } from "@kinbot/react";
-import { Card, Input, Button, List, Stack, EmptyState, Badge } from "@kinbot/components";
+import { useHivekeep, useStorage, toast } from "@hivekeep/react";
+import { Card, Input, Button, List, Stack, EmptyState, Badge } from "@hivekeep/components";
 
 function App() {
-  const { ready } = useKinBot();
+  const { ready } = useHivekeep();
   if (!ready) return <div className="p-4"><div className="spinner" /></div>;
   return <TodoApp />;
 }
@@ -90,11 +90,11 @@ A dashboard showing stats and charts with mock data.
 <div id="root"></div>
 <script type="text/jsx">
 import { createRoot } from "react-dom/client";
-import { useKinBot } from "@kinbot/react";
-import { Card, Stat, Grid, BarChart, LineChart, PieChart, Stack } from "@kinbot/components";
+import { useHivekeep } from "@hivekeep/react";
+import { Card, Stat, Grid, BarChart, LineChart, PieChart, Stack } from "@hivekeep/components";
 
 function App() {
-  const { ready } = useKinBot();
+  const { ready } = useHivekeep();
   if (!ready) return <div>Loading...</div>;
   return <Dashboard />;
 }
@@ -168,11 +168,11 @@ Using the compound Form component.
 <div id="root"></div>
 <script type="text/jsx">
 import { createRoot } from "react-dom/client";
-import { useKinBot, useStorage, toast } from "@kinbot/react";
-import { Card, Form, Input, Select, Textarea, Switch } from "@kinbot/components";
+import { useHivekeep, useStorage, toast } from "@hivekeep/react";
+import { Card, Form, Input, Select, Textarea, Switch } from "@hivekeep/components";
 
 function App() {
-  const { ready } = useKinBot();
+  const { ready } = useHivekeep();
   if (!ready) return <div>Loading...</div>;
   return <ContactForm />;
 }
@@ -230,11 +230,11 @@ Using hash-based routing for a settings app.
 <div id="root"></div>
 <script type="text/jsx">
 import { createRoot } from "react-dom/client";
-import { useKinBot, useStorage } from "@kinbot/react";
-import { Router, Route, NavLink, Card, Stack, Switch, Select, Input } from "@kinbot/components";
+import { useHivekeep, useStorage } from "@hivekeep/react";
+import { Router, Route, NavLink, Card, Stack, Switch, Select, Input } from "@hivekeep/components";
 
 function App() {
-  const { ready } = useKinBot();
+  const { ready } = useHivekeep();
   if (!ready) return <div>Loading...</div>;
 
   return (
@@ -290,12 +290,47 @@ createRoot(document.getElementById("root")).render(<App />);
 </script>
 ```
 
+## Background Service
+
+A mini-app that keeps working with no UI open: `app.json` declares `"background": true`, the backend polls on a schedule and notifies the user. See [Backend](/docs/mini-apps/backend/) for the full runtime reference, or scaffold it with the `background-service` template.
+
+```javascript
+// _server.js
+export async function onStart(ctx) {
+  ctx.schedule("poll", "*/30 * * * *", async () => {
+    const res = await ctx.fetch("https://api.example.com/status");
+    const status = await res.json();
+    const previous = await ctx.storage.get("status");
+    await ctx.storage.set("status", status);
+    ctx.events.emit("status", status);                  // live update for open UIs
+    if (previous && status.state !== previous.state) {
+      await ctx.notify("Status changed", status.state); // platform notification
+    }
+  });
+}
+
+export function onClientEvent(ctx, event, data, meta) {
+  if (event === "refresh-now") return { ok: true };     // UI → backend channel
+}
+
+export default function (ctx) {
+  const app = new ctx.Hono();
+  app.get("/status", async (c) => c.json(await ctx.storage.get("status")));
+  return app;
+}
+```
+
+```json
+// app.json
+{ "background": true }
+```
+
 ## Templates
 
-KinBot includes built-in templates for common patterns. Ask a Kin:
+Hivekeep includes built-in templates for common patterns. Ask an Agent:
 
 > "Create a mini-app using the kanban template"
 
-Available templates: `dashboard`, `todo-list`, `form`, `data-viewer`, `kanban`, `responsive`.
+Available templates: `dashboard`, `todo-list`, `form`, `data-viewer`, `kanban`, `responsive`, `background-service`.
 
 Use `get_mini_app_templates` to see all templates with descriptions and full source code.

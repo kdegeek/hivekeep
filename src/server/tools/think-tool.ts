@@ -25,7 +25,7 @@ const log = createLogger('think-tool')
  * batch a thought with other read calls in the same step.
  */
 export const thinkTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (ctx) =>
@@ -40,7 +40,7 @@ export const thinkTool: ToolRegistration = {
           .describe('Free-form reasoning. One paragraph or several — go as deep as needed.'),
       }),
       execute: async ({ thought }) => {
-        log.info({ kinId: ctx.kinId, taskId: ctx.taskId, length: thought.length }, 'Thought recorded')
+        log.info({ agentId: ctx.agentId, taskId: ctx.taskId, length: thought.length }, 'Thought recorded')
         recordGuardFire(ctx.taskId, 'thinkCall')
         return {
           success: true,

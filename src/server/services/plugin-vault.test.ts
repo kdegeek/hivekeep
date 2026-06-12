@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach, mock } from 'bun:test'
 const mockVault = {
   getSecretValue: mock((_key: string) => Promise.resolve(null as string | null)),
   getSecretByKey: mock((_key: string) => Promise.resolve(null as { id: string; key: string } | null)),
-  createSecret: mock((_key: string, _value: string, _createdByKinId?: string, _description?: string) =>
+  createSecret: mock((_key: string, _value: string, _createdByAgentId?: string, _description?: string) =>
     Promise.resolve({ id: 'sec-1', key: 'TEST', createdAt: new Date() })),
   updateSecretValueByKey: mock((_key: string, _newValue: string) =>
     Promise.resolve(null as { id: string; key: string; updatedAt: Date } | null)),

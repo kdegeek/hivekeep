@@ -1,9 +1,9 @@
 ---
 title: "Blueprint: Daily Digest"
-description: A copy-paste-ready blueprint for a Kin that curates daily tech news, monitors sources, and delivers a summary report.
+description: A copy-paste-ready blueprint for an Agent that curates daily tech news, monitors sources, and delivers a summary report.
 ---
 
-This blueprint sets up a Kin that runs on a daily schedule to gather information from the web, summarize it, and deliver a structured digest. Use it for tech watch, competitor monitoring, industry news, or any recurring research task.
+This blueprint sets up an Agent that runs on a daily schedule to gather information from the web, summarize it, and deliver a structured digest. Use it for tech watch, competitor monitoring, industry news, or any recurring research task.
 
 ## Use case
 
@@ -23,7 +23,7 @@ You want to:
 | **Channel** (optional) | Telegram, Discord, or Slack for delivery |
 
 :::note
-A search provider is strongly recommended for this blueprint. Without one, the Kin can still use `browse_url` to check specific websites, but won't be able to do broad topic searches.
+A search provider is strongly recommended for this blueprint. Without one, the Agent can still use `browse_url` to check specific websites, but won't be able to do broad topic searches.
 :::
 
 ## System prompt
@@ -61,7 +61,7 @@ You reference previous digests via recall() to track trends over time.
 
 ## Cron configuration
 
-Ask your Kin:
+Ask your Agent:
 
 > Create a cron job called "Daily Tech Digest" that runs every day at 7:00 AM UTC (schedule: "0 7 * * *"). Use this task description:
 
@@ -158,11 +158,11 @@ Format the digest appropriately for the platform:
 - Slack: Use Slack mrkdwn format
 ```
 
-## Self-calibration (wake the parent Kin)
+## Self-calibration (wake the parent Agent)
 
-By default a cron runs silently: its final report is injected into the owner Kin's context, but the Kin is never woken to act on it. If you want the Kin to **re-read its own digest at the end of each run and adjust its behavior** (refine the prompt, decide on a conditional action, fix a recurring quality issue), enable the "Wake the parent Kin at the end of the run" toggle when creating or editing the cron (`trigger_parent_turn` in the `create_cron` / `update_cron` tools).
+By default a cron runs silently: its final report is injected into the owner Agent's context, but the Agent is never woken to act on it. If you want the Agent to **re-read its own digest at the end of each run and adjust its behavior** (refine the prompt, decide on a conditional action, fix a recurring quality issue), enable the "Wake the parent Agent at the end of the run" toggle when creating or editing the cron (`trigger_parent_turn` in the `create_cron` / `update_cron` tools).
 
-When enabled, the final report triggers a real LLM turn on the owner Kin. The Kin can then, for example:
+When enabled, the final report triggers a real LLM turn on the owner Agent. The Agent can then, for example:
 - Call `update_cron(cron_id, { task_description: "..." })` to tune its own instructions based on what worked or didn't
 - Take a conditional follow-up action depending on what the digest surfaced
 - Save a lesson via memory for the next run
@@ -253,26 +253,26 @@ the broader "agentic AI" narrative we've been tracking since March.
 - The `freshness="pd"` parameter in `web_search` filters to the past day — if there's genuinely no news, the digest will be light
 - Try broadening your search queries
 
-### Kin summarizes without actually searching
+### Agent summarizes without actually searching
 
-This is the "text mode" problem — the Kin is generating plausible-sounding content without calling `web_search`. Verify:
+This is the "text mode" problem — the Agent is generating plausible-sounding content without calling `web_search`. Verify:
 1. The task output shows actual `web_search` tool calls
 2. Switch to Claude Sonnet if you're on a different model
-3. See [Model Selection](/kinbot/docs/guides/model-selection/) for details
+3. See [Model Selection](/docs/guides/model-selection/) for details
 
 ### Digest quality is low
 
 - Add more specific search queries to the task description
-- Include example outputs so the Kin knows what quality looks like
+- Include example outputs so the Agent knows what quality looks like
 - Use the `recall()` instruction to build up domain knowledge over time
 
 ### Channel delivery fails
 
 - Verify the channel is active: check **Settings > Channels**
-- The sub-Kin needs channel tools available — they shouldn't be in `disabledNativeTools`
+- The sub-Agent needs channel tools available — they shouldn't be in `disabledNativeTools`
 - Check that the `chat_id` is correct (use `list_channel_conversations` to find it)
 
 ### Cron runs but produces duplicate content
 
 - Ensure the task description includes the `recall()` instruction to check previous digests
-- The "previous run context" feature helps — the sub-Kin receives the last run's result automatically
+- The "previous run context" feature helps — the sub-Agent receives the last run's result automatically

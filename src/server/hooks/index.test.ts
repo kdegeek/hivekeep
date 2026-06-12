@@ -52,19 +52,19 @@ class HookRegistry {
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
 const beforeChat: HookPayloadMap['beforeChat'] = {
-  kinId: 'kin-123',
+  agentId: 'agent-123',
   userId: 'user-1',
   message: 'hello',
 }
 const afterChat: HookPayloadMap['afterChat'] = {
-  kinId: 'kin-123',
+  agentId: 'agent-123',
   userId: 'user-1',
   message: 'hello',
   response: 'hi',
 }
 const beforeToolCall: HookPayloadMap['beforeToolCall'] = {
-  kinId: 'kin-123',
-  isSubKin: false,
+  agentId: 'agent-123',
+  isSubAgent: false,
   toolName: 'read_file',
   toolArgs: { path: '/tmp/x' },
 }
@@ -200,11 +200,11 @@ describe('HookRegistry', () => {
       expect(order).toEqual([1, 2])
     })
 
-    it('lets a handler modify the kinId via the returned payload', async () => {
-      registry.register('beforeChat', (ctx) => ({ ...ctx, kinId: 'modified-kin' }))
+    it('lets a handler modify the agentId via the returned payload', async () => {
+      registry.register('beforeChat', (ctx) => ({ ...ctx, agentId: 'modified-agent' }))
 
       const result = await registry.execute('beforeChat', beforeChat)
-      expect(result.kinId).toBe('modified-kin')
+      expect(result.agentId).toBe('modified-agent')
     })
 
     it('supports every declared hook name', async () => {
@@ -227,13 +227,13 @@ describe('HookRegistry', () => {
   describe('edge cases', () => {
     it('handles a handler that replaces the context entirely', async () => {
       registry.register('beforeChat', () => ({
-        kinId: 'new-kin',
+        agentId: 'new-agent',
         userId: 'new-user',
         message: 'replaced',
       }))
 
       const result = await registry.execute('beforeChat', beforeChat)
-      expect(result.kinId).toBe('new-kin')
+      expect(result.agentId).toBe('new-agent')
       expect(result.userId).toBe('new-user')
       expect(result.message).toBe('replaced')
     })

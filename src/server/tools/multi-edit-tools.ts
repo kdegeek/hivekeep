@@ -8,6 +8,7 @@ import { resolveAndValidate } from '@/server/tools/filesystem-tools'
 import { hasReadPath, recordGuardFire } from '@/server/services/tool-call-tracker'
 import type { ToolRegistration } from '@/server/tools/types'
 import { resolveToolWorkspace } from '@/server/tools/workspace'
+import { emitWorkspaceChangedForTool } from '@/server/services/workspace-files'
 
 const log = createLogger('multi-edit-tools')
 
@@ -33,7 +34,7 @@ function detectLanguage(filePath: string): string | undefined {
 // ── multi_edit ────────────────────────────────────────────
 
 export const multiEditTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: (ctx) =>
     tool({
       description:
@@ -103,11 +104,12 @@ export const multiEditTool: ToolRegistration = {
 
           // All edits succeeded — write once
           await writeFile(absPath, content, 'utf-8')
+          emitWorkspaceChangedForTool(ctx, absPath, 'modified')
 
           const language = detectLanguage(absPath)
 
           log.info(
-            { kinId: ctx.kinId, path: filePath, editsApplied: edits.length },
+            { agentId: ctx.agentId, path: filePath, editsApplied: edits.length },
             'Multi-edit applied',
           )
 

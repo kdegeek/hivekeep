@@ -8,17 +8,17 @@ import { EmptyState } from '@/client/components/common/EmptyState'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
 import { SettingsListSkeleton } from '@/client/components/common/SettingsListSkeleton'
 import { api, toastError } from '@/client/lib/api'
-import { useKinList } from '@/client/hooks/useKinList'
+import { useAgentList } from '@/client/hooks/useAgentList'
 import { useSSE } from '@/client/hooks/useSSE'
-import { ContactCard, type ContactData, type KinInfo } from '@/client/components/contacts/ContactCard'
+import { ContactCard, type ContactData, type AgentInfo } from '@/client/components/contacts/ContactCard'
 import { ContactFormDialog } from '@/client/components/contacts/ContactFormDialog'
 
 export function ContactsSettings() {
   const { t } = useTranslation()
   const [contacts, setContacts] = useState<ContactData[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const { kins: kinList } = useKinList()
-  const kinInfo = new Map<string, KinInfo>(kinList.map((k) => [k.id, { name: k.name, avatarUrl: k.avatarUrl }]))
+  const { agents: agentList } = useAgentList()
+  const agentInfo = new Map<string, AgentInfo>(agentList.map((k) => [k.id, { name: k.name, avatarUrl: k.avatarUrl }]))
   const [modalOpen, setModalOpen] = useState(false)
   const [editingContact, setEditingContact] = useState<ContactData | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -135,7 +135,7 @@ export function ContactsSettings() {
         <ContactCard
           key={contact.id}
           contact={contact}
-          kinInfo={kinInfo}
+          agentInfo={agentInfo}
           onEdit={() => openEdit(contact)}
           onDelete={() => handleDeleteContact(contact.id)}
           onRefresh={fetchContacts}

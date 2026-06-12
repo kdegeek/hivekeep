@@ -67,8 +67,8 @@ describe('generateToken', () => {
 
 describe('buildInvitationUrl', () => {
   it('constructs URL with token', () => {
-    const url = buildInvitationUrl('abc123', 'https://kinbot.example.com')
-    expect(url).toBe('https://kinbot.example.com/invite/abc123')
+    const url = buildInvitationUrl('abc123', 'https://hivekeep.example.com')
+    expect(url).toBe('https://hivekeep.example.com/invite/abc123')
   })
 
   it('handles trailing slash in publicUrl', () => {
@@ -183,10 +183,10 @@ describe('validateInvitation logic', () => {
   })
 })
 
-// ─── Rate limiting pattern (from inter-kin.ts, tested here as shared pattern) ─
+// ─── Rate limiting pattern (from inter-agent.ts, tested here as shared pattern) ─
 
 describe('in-memory rate limiter', () => {
-  // Replicate the rate limiter from inter-kin.ts
+  // Replicate the rate limiter from inter-agent.ts
   const rateLimitMap = new Map<string, number[]>()
 
   function checkRateLimit(
@@ -260,54 +260,54 @@ describe('in-memory rate limiter', () => {
   })
 })
 
-// ─── kinAvatarUrl pattern (shared across tasks.ts, notifications.ts) ────────
+// ─── agentAvatarUrl pattern (shared across tasks.ts, notifications.ts) ────────
 
-describe('kinAvatarUrl', () => {
-  function kinAvatarUrl(
-    kinId: string,
+describe('agentAvatarUrl', () => {
+  function agentAvatarUrl(
+    agentId: string,
     avatarPath: string | null,
     updatedAt?: Date | null,
   ): string | null {
     if (!avatarPath) return null
     const ext = avatarPath.split('.').pop() ?? 'png'
     const v = updatedAt ? updatedAt.getTime() : Date.now()
-    return `/api/uploads/kins/${kinId}/avatar.${ext}?v=${v}`
+    return `/api/uploads/agents/${agentId}/avatar.${ext}?v=${v}`
   }
 
   it('returns null when avatarPath is null', () => {
-    expect(kinAvatarUrl('kin-1', null)).toBeNull()
+    expect(agentAvatarUrl('agent-1', null)).toBeNull()
   })
 
   it('returns null when avatarPath is empty string', () => {
     // empty string is falsy
-    expect(kinAvatarUrl('kin-1', '')).toBeNull()
+    expect(agentAvatarUrl('agent-1', '')).toBeNull()
   })
 
   it('extracts extension from avatarPath', () => {
-    const url = kinAvatarUrl('kin-1', 'avatar.jpg', new Date(1000))
-    expect(url).toBe('/api/uploads/kins/kin-1/avatar.jpg?v=1000')
+    const url = agentAvatarUrl('agent-1', 'avatar.jpg', new Date(1000))
+    expect(url).toBe('/api/uploads/agents/agent-1/avatar.jpg?v=1000')
   })
 
   it('handles png extension', () => {
-    const url = kinAvatarUrl('kin-1', 'uploads/photo.png', new Date(2000))
-    expect(url).toBe('/api/uploads/kins/kin-1/avatar.png?v=2000')
+    const url = agentAvatarUrl('agent-1', 'uploads/photo.png', new Date(2000))
+    expect(url).toBe('/api/uploads/agents/agent-1/avatar.png?v=2000')
   })
 
   it('handles webp extension', () => {
-    const url = kinAvatarUrl('kin-1', 'path/to/image.webp', new Date(3000))
-    expect(url).toBe('/api/uploads/kins/kin-1/avatar.webp?v=3000')
+    const url = agentAvatarUrl('agent-1', 'path/to/image.webp', new Date(3000))
+    expect(url).toBe('/api/uploads/agents/agent-1/avatar.webp?v=3000')
   })
 
   it('defaults to png when no extension found', () => {
-    const url = kinAvatarUrl('kin-1', 'noextension', new Date(4000))
+    const url = agentAvatarUrl('agent-1', 'noextension', new Date(4000))
     // 'noextension'.split('.').pop() === 'noextension', not undefined
     // So it won't default to png — it uses the last segment after split
-    expect(url).toBe('/api/uploads/kins/kin-1/avatar.noextension?v=4000')
+    expect(url).toBe('/api/uploads/agents/agent-1/avatar.noextension?v=4000')
   })
 
   it('uses Date.now() when updatedAt is null', () => {
     const before = Date.now()
-    const url = kinAvatarUrl('kin-1', 'avatar.png', null)!
+    const url = agentAvatarUrl('agent-1', 'avatar.png', null)!
     const after = Date.now()
 
     const vMatch = url.match(/\?v=(\d+)/)
@@ -319,7 +319,7 @@ describe('kinAvatarUrl', () => {
 
   it('uses Date.now() when updatedAt is undefined', () => {
     const before = Date.now()
-    const url = kinAvatarUrl('kin-1', 'avatar.png')!
+    const url = agentAvatarUrl('agent-1', 'avatar.png')!
     const after = Date.now()
 
     const vMatch = url.match(/\?v=(\d+)/)
@@ -328,9 +328,9 @@ describe('kinAvatarUrl', () => {
     expect(v).toBeLessThanOrEqual(after)
   })
 
-  it('includes kinId in the URL path', () => {
-    const url = kinAvatarUrl('abc-def-123', 'avatar.png', new Date(0))
-    expect(url).toContain('/kins/abc-def-123/')
+  it('includes agentId in the URL path', () => {
+    const url = agentAvatarUrl('abc-def-123', 'avatar.png', new Date(0))
+    expect(url).toContain('/agents/abc-def-123/')
   })
 })
 

@@ -42,16 +42,16 @@ promptRoutes.post('/:id/respond', async (c) => {
 
 /**
  * GET /api/prompts/pending — get pending prompts for hydration on page load.
- * Query params: kinId (required), taskId (optional)
+ * Query params: agentId (required), taskId (optional)
  */
 promptRoutes.get('/pending', async (c) => {
-  const kinId = c.req.query('kinId')
+  const agentId = c.req.query('agentId')
   const taskId = c.req.query('taskId')
 
-  if (!kinId) {
-    return c.json({ error: { code: 'VALIDATION_ERROR', message: 'kinId is required' } }, 400)
+  if (!agentId) {
+    return c.json({ error: { code: 'VALIDATION_ERROR', message: 'agentId is required' } }, 400)
   }
 
-  const prompts = await getPendingPrompts(kinId, taskId ?? undefined)
+  const prompts = await getPendingPrompts(agentId, taskId ?? undefined)
   return c.json({ prompts })
 })

@@ -1,5 +1,5 @@
 /**
- * Native search tools exposed to Kins.
+ * Native search tools exposed to Agents.
  *
  *  - `list_search_providers` — discovery: configured search providers
  *    plus their static capabilities and the current default.
@@ -38,7 +38,7 @@ const log = createLogger('tools:search')
 // ─── list_search_providers ───────────────────────────────────────────────────
 
 export const listSearchProvidersTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: () =>
@@ -90,7 +90,7 @@ export const listSearchProvidersTool: ToolRegistration = {
 // ─── web_search ──────────────────────────────────────────────────────────────
 
 export const webSearchTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: () =>

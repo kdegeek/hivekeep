@@ -7,12 +7,12 @@ interface MiniAppsResponse {
   apps: MiniAppSummary[]
 }
 
-export function useMiniApps(kinId: string | null, mode: 'kin' | 'all' = 'kin') {
+export function useMiniApps(agentId: string | null, mode: 'agent' | 'all' = 'agent') {
   const [apps, setApps] = useState<MiniAppSummary[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
   const fetchApps = useCallback(async () => {
-    if (mode === 'kin' && !kinId) {
+    if (mode === 'agent' && !agentId) {
       setApps([])
       return
     }
@@ -20,7 +20,7 @@ export function useMiniApps(kinId: string | null, mode: 'kin' | 'all' = 'kin') {
     try {
       const endpoint = mode === 'all'
         ? '/mini-apps'
-        : `/mini-apps?kinId=${kinId}`
+        : `/mini-apps?agentId=${agentId}`
       const data = await api.get<MiniAppsResponse>(endpoint)
       setApps(data.apps)
     } catch {
@@ -28,7 +28,7 @@ export function useMiniApps(kinId: string | null, mode: 'kin' | 'all' = 'kin') {
     } finally {
       setIsLoading(false)
     }
-  }, [kinId, mode])
+  }, [agentId, mode])
 
   useEffect(() => {
     fetchApps()
@@ -42,15 +42,15 @@ export function useMiniApps(kinId: string | null, mode: 'kin' | 'all' = 'kin') {
   // SSE: real-time mini-app updates
   useSSE({
     'miniapp:created': (data) => {
-      if (mode === 'kin' && data.kinId !== kinId) return
+      if (mode === 'agent' && data.agentId !== agentId) return
       const app = data.app as MiniAppSummary
       setApps((prev) => [app, ...prev])
     },
     'miniapp:updated': (data) => {
       const app = data.app as MiniAppSummary
-      // In kin-scoped mode the maintainer may have changed: drop the app if it
-      // moved away from this Kin, add it if it moved in, else update in place.
-      if (mode === 'kin' && data.kinId !== kinId) {
+      // In agent-scoped mode the maintainer may have changed: drop the app if it
+      // moved away from this Agent, add it if it moved in, else update in place.
+      if (mode === 'agent' && data.agentId !== agentId) {
         setApps((prev) => prev.filter((a) => a.id !== app.id))
         return
       }
@@ -61,7 +61,7 @@ export function useMiniApps(kinId: string | null, mode: 'kin' | 'all' = 'kin') {
       )
     },
     'miniapp:deleted': (data) => {
-      if (mode === 'kin' && data.kinId !== kinId) return
+      if (mode === 'agent' && data.agentId !== agentId) return
       const appId = data.appId as string
       setApps((prev) => prev.filter((a) => a.id !== appId))
     },

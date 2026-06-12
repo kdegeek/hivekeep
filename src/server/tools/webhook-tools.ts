@@ -14,7 +14,7 @@ import type { ToolRegistration } from '@/server/tools/types'
 const log = createLogger('tools:webhook')
 
 /**
- * create_webhook — create a new incoming webhook for this Kin.
+ * create_webhook — create a new incoming webhook for this Agent.
  * Returns the webhook URL and secret token (shown only once).
  * Available to main agents only.
  */
@@ -47,13 +47,13 @@ export const createWebhookTool: ToolRegistration = {
           .describe('Max concurrent webhook-spawned tasks (task mode only). Default: 1. 0 = unlimited.'),
       }),
       execute: async ({ name, description, filter_mode, filter_field, filter_allowed_values, filter_expression, dispatch_mode, task_title_template, task_prompt_template, max_concurrent_tasks }) => {
-        log.debug({ kinId: ctx.kinId, name }, 'Webhook creation requested')
+        log.debug({ agentId: ctx.agentId, name }, 'Webhook creation requested')
         try {
           const webhook = await createWebhook({
-            kinId: ctx.kinId,
+            agentId: ctx.agentId,
             name,
             description,
-            createdBy: 'kin',
+            createdBy: 'agent',
             filterMode: filter_mode ?? null,
             filterField: filter_field ?? null,
             filterAllowedValues: filter_allowed_values ? JSON.stringify(filter_allowed_values) : null,
@@ -140,7 +140,7 @@ export const updateWebhookTool: ToolRegistration = {
 
         // Verify ownership
         const existing = await getWebhook(webhook_id)
-        if (!existing || existing.kinId !== ctx.kinId) {
+        if (!existing || existing.agentId !== ctx.agentId) {
           return { error: 'Webhook not found' }
         }
 
@@ -224,7 +224,7 @@ export const deleteWebhookTool: ToolRegistration = {
       execute: async ({ webhook_id }) => {
         // Verify ownership
         const existing = await getWebhook(webhook_id)
-        if (!existing || existing.kinId !== ctx.kinId) {
+        if (!existing || existing.agentId !== ctx.agentId) {
           return { error: 'Webhook not found' }
         }
 
@@ -239,7 +239,7 @@ export const deleteWebhookTool: ToolRegistration = {
 }
 
 /**
- * list_webhooks — list all webhooks for this Kin with their filter configuration.
+ * list_webhooks — list all webhooks for this Agent with their filter configuration.
  * Tokens are never included in the response.
  * Available to main agents only.
  */
@@ -250,10 +250,10 @@ export const listWebhooksTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'List all webhooks for this Kin with their filter configuration. Tokens are not included.',
+        'List all webhooks for this Agent with their filter configuration. Tokens are not included.',
       inputSchema: z.object({}),
       execute: async () => {
-        const items = await listWebhooks(ctx.kinId)
+        const items = await listWebhooks(ctx.agentId)
         return {
           webhooks: items.map((w) => ({
             id: w.id,

@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { api, getErrorMessage } from '@/client/lib/api'
-import type { ProviderData } from '@/client/components/kin/ProviderCard'
+import type { ProviderData } from '@/client/components/agent/ProviderCard'
 
 export interface TestAllState {
   running: boolean

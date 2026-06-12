@@ -1,5 +1,5 @@
 [test]
-# Default `bun test` discovers under src/ (KinBot core). Workspace + plugin
+# Default `bun test` discovers under src/ (Hivekeep core). Workspace + plugin
 # tests are run by the `test` npm script — see `package.json` — which passes
 # explicit paths so ad-hoc `bun test` invocations stay snappy.
 root = "./src"

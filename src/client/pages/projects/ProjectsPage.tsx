@@ -12,7 +12,7 @@ import { CreateProjectModal } from '@/client/components/project/CreateProjectMod
 import { CreateTicketModal } from '@/client/components/project/CreateTicketModal'
 import { EditProjectModal } from '@/client/components/project/EditProjectModal'
 import { CloneStatusBadge } from '@/client/components/project/CloneStatusBadge'
-import { ActiveKinsIndicator } from '@/client/components/project/ActiveKinsIndicator'
+import { ActiveAgentsIndicator } from '@/client/components/project/ActiveAgentsIndicator'
 import { EmptyState } from '@/client/components/common/EmptyState'
 import { PageHeader } from '@/client/components/layout/PageHeader'
 import { Tabs, TabsList, TabsTrigger } from '@/client/components/ui/tabs'
@@ -161,7 +161,7 @@ export function ProjectsPage() {
                       </TabsTrigger>
                     </TabsList>
                   </Tabs>
-                  <ActiveKinsIndicator projectId={routeProjectId} size="size-7" maxVisible={5} />
+                  <ActiveAgentsIndicator projectId={routeProjectId} size="size-7" maxVisible={5} />
                 </>
               }
             >

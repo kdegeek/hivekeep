@@ -1,22 +1,22 @@
 import { describe, it, expect } from 'bun:test'
 import { buildSegmentedMessages } from '@/server/services/llm-cache-hints'
 import type {
-  KinbotMessage,
-  KinbotMessageBlock,
+  HivekeepMessage,
+  HivekeepMessageBlock,
   TextBlock,
   ToolUseBlock,
   ToolResultBlock,
 } from '@/server/llm/llm/types'
 
-function findCachedBlock(msg: KinbotMessage): KinbotMessageBlock | undefined {
+function findCachedBlock(msg: HivekeepMessage): HivekeepMessageBlock | undefined {
   return msg.content.find((b) => (b as { cacheControl?: unknown }).cacheControl !== undefined)
 }
 
-function hasCacheHint(msg: KinbotMessage): boolean {
+function hasCacheHint(msg: HivekeepMessage): boolean {
   return findCachedBlock(msg) !== undefined
 }
 
-function textOf(msg: KinbotMessage): string {
+function textOf(msg: HivekeepMessage): string {
   return msg.content
     .filter((b): b is TextBlock => b.type === 'text')
     .map((b) => b.text)
@@ -43,7 +43,7 @@ describe('buildSegmentedMessages', () => {
   })
 
   it('multi-turn history: places cross-turn breakpoint before new user msg, within-turn breakpoint on last', () => {
-    const history: KinbotMessage[] = [
+    const history: HivekeepMessage[] = [
       { role: 'user', content: [{ type: 'text', text: 'turn 1' }] },
       { role: 'assistant', content: [{ type: 'text', text: 'reply 1' }] },
       { role: 'user', content: [{ type: 'text', text: 'turn 2' }] },
@@ -73,7 +73,7 @@ describe('buildSegmentedMessages', () => {
   it('mid tool-loop: cross-turn breakpoint stays anchored on pre-user-msg position', () => {
     // Simulates a request mid-way through a tool loop: the new user message
     // is in the middle of history, followed by assistant + tool messages.
-    const history: KinbotMessage[] = [
+    const history: HivekeepMessage[] = [
       { role: 'user', content: [{ type: 'text', text: 'turn 1' }] },
       { role: 'assistant', content: [{ type: 'text', text: 'reply 1' }] },
       { role: 'user', content: [{ type: 'text', text: 'turn 2' }] },
@@ -122,7 +122,7 @@ describe('buildSegmentedMessages', () => {
   })
 
   it('cache hint anchors on the LAST non-empty text block of a message', () => {
-    const history: KinbotMessage[] = [
+    const history: HivekeepMessage[] = [
       {
         role: 'assistant',
         content: [
@@ -145,11 +145,11 @@ describe('buildSegmentedMessages', () => {
   })
 
   it('skips empty-text-only message as cross-turn anchor (Anthropic rejects cache_control on empty text blocks)', () => {
-    // Reproduces the sub-Kin resume failure after request_input: an assistant
+    // Reproduces the sub-Agent resume failure after request_input: an assistant
     // row with content=[{text: ''}] sat between the original user message
     // and the human-response user message. The natural anchor (idx 1) is
     // empty, so cache_control must walk back to a prior carriable message.
-    const history: KinbotMessage[] = [
+    const history: HivekeepMessage[] = [
       { role: 'user', content: [{ type: 'text', text: 'do the task' }] },
       { role: 'assistant', content: [{ type: 'text', text: '' }] },
       { role: 'user', content: [{ type: 'text', text: '[Human response]: yes' }] },
@@ -165,7 +165,7 @@ describe('buildSegmentedMessages', () => {
   it('skips a single-empty-text content array as the last-message anchor', () => {
     // Same hazard but on BP_LAST: if the final message is a single empty
     // text block, we must not attach cache_control there either.
-    const history: KinbotMessage[] = [
+    const history: HivekeepMessage[] = [
       { role: 'user', content: [{ type: 'text', text: 'hello' }] },
       { role: 'assistant', content: [{ type: 'text', text: '' }] },
     ]
@@ -202,7 +202,7 @@ describe('buildSegmentedMessages', () => {
     // Multi-step tool loop: last message of step N is a tool-result-only
     // user turn. cache_control must land on the tool-result block since
     // there is no text block to anchor it on.
-    const history: KinbotMessage[] = [
+    const history: HivekeepMessage[] = [
       { role: 'user', content: [{ type: 'text', text: 'go' }] },
       {
         role: 'assistant',

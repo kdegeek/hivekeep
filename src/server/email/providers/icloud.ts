@@ -16,7 +16,7 @@ import type {
   SendEmailParams,
   SendEmailResult,
 } from '@/server/email/types'
-import type { ProviderConfig, AuthResult } from '@kinbot-developer/sdk'
+import type { ProviderConfig, AuthResult } from '@hivekeep/sdk'
 
 /** Map the iCloud credentials onto the generic IMAP provider's config keys,
  *  with Apple's well-known mail servers. */

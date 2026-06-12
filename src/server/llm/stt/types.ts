@@ -8,4 +8,4 @@ export type {
   TranscribeResult,
   STTCapabilities,
   STTProvider,
-} from '@kinbot-developer/sdk'
+} from '@hivekeep/sdk'

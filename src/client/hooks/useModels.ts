@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { api } from '@/client/lib/api'
 import { useSSE } from '@/client/hooks/useSSE'
+import type { AgentThinkingEffort } from '@/shared/types'
 
 /** Model as returned by GET /api/providers/models */
 export interface ProviderModel {
@@ -10,8 +11,11 @@ export interface ProviderModel {
   providerName: string
   providerType: string
   capability: string
-  /** LLM-family only — chat accepts image attachments. */
+  /** LLM-family only — chat accepts image attachments. (Tri-state: true /
+   *  false = explicitly not / undefined = unknown.) */
   supportsImageInput?: boolean
+  /** LLM-family only — chat accepts PDF attachments. Same tri-state. */
+  supportsPdfInput?: boolean
   /** Image-family only — how many source images the model accepts
    *  (0 = text-to-image, 1 = single-image edit, N>1 = multi-reference). */
   maxImageInputs?: number
@@ -19,11 +23,15 @@ export interface ProviderModel {
   contextWindow?: number
   /** Maximum output tokens. Populated when the provider's API exposes it. */
   maxOutput?: number
+  /** LLM-family only — reasoning support after registry enrichment.
+   *  Absent = not a reasoning model (or unknown); `efforts: []` = reasoning
+   *  toggle-only (no granularity). Drives the effort selectors. */
+  thinking?: { efforts: AgentThinkingEffort[]; note?: string }
 }
 
 /**
  * Shared hook to fetch all available provider models.
- * Replaces inline fetches in GeneralSettings, StepProviders, and useKins.
+ * Replaces inline fetches in GeneralSettings, StepProviders, and useAgents.
  */
 export function useModels() {
   const [models, setModels] = useState<ProviderModel[]>([])

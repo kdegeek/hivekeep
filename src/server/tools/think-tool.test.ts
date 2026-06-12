@@ -7,7 +7,7 @@ mock.module('@/server/logger', () => ({
 const { thinkTool } = await import('./think-tool')
 
 function execute(input: { thought: string }) {
-  const ctx = { kinId: 'kin-1', isSubKin: false }
+  const ctx = { agentId: 'agent-1', isSubAgent: false }
   // The AI SDK's `Tool` type marks `execute` as optional. We unwrap it once
   // here so the rest of the tests stay terse.
   const t = thinkTool.create(ctx as never) as unknown as {
@@ -22,8 +22,8 @@ describe('thinkTool', () => {
     expect(thinkTool.concurrencySafe).toBe(true)
   })
 
-  it('is available to main and sub-Kin contexts', () => {
-    expect(thinkTool.availability).toEqual(['main', 'sub-kin'])
+  it('is available to main and sub-Agent contexts', () => {
+    expect(thinkTool.availability).toEqual(['main', 'sub-agent'])
   })
 
   it('records the thought and echoes it back', async () => {

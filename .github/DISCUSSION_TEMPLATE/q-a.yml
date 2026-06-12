@@ -4,7 +4,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Ask a question about KinBot! Check the [README](https://github.com/MarlBurroW/kinbot#readme) and [Troubleshooting](https://github.com/MarlBurroW/kinbot/blob/main/TROUBLESHOOTING.md) first.
+        Ask a question about Hivekeep! Check the [README](https://github.com/MarlBurroW/hivekeep#readme) and [Troubleshooting](https://github.com/MarlBurroW/hivekeep/blob/main/TROUBLESHOOTING.md) first.
   - type: textarea
     attributes:
       label: Question

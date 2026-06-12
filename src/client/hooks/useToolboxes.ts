@@ -21,7 +21,7 @@ export type UpdateToolboxInput = Partial<CreateToolboxInput>
 
 /**
  * CRUD over the global, user-defined (and built-in) toolboxes
- * (GET/POST/PUT/DELETE /api/toolboxes). Mirrors useKins/useCrons: keeps a local
+ * (GET/POST/PUT/DELETE /api/toolboxes). Mirrors useAgents/useCrons: keeps a local
  * list, mutates optimistically through the API, and returns the helpers the
  * management page and task-creation multi-select consume. Built-in toolboxes
  * (builtin=true) are returned by the list but reject edit/delete server-side.

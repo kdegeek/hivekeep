@@ -3,49 +3,54 @@ import { join } from 'path'
 import { config } from '@/server/config'
 import { generateWorkspaceTree } from '@/server/services/workspace-tree'
 import type { SystemContext } from '@/server/services/system-context'
-import type { KinKind } from '@/shared/types'
+import type { AgentKind } from '@/shared/types'
+import { AGENT_LANGUAGE_NAMES } from '@/shared/constants'
 
-// ─── Configurator (Sherpa) blocks ─────────────────────────────────────────────
-// Loaded once from the bundled knowledge doc. The configurator Kin gets a
-// mission block (how to run onboarding) + this knowledge block (what KinBot is
-// and can do) so it never "bottes en touche". See sherpa.md §4.4/§4.6.
-let cachedSherpaKnowledge: string | null = null
-function getSherpaKnowledge(): string {
-  if (cachedSherpaKnowledge === null) {
+// ─── Configurator (Queenie) blocks ─────────────────────────────────────────────
+// Loaded once from the bundled knowledge doc. The configurator Agent gets a
+// mission block (how to run onboarding) + this knowledge block (what Hivekeep is
+// and can do) so it never "bottes en touche". See queenie.md §4.4/§4.6.
+let cachedQueenieKnowledge: string | null = null
+function getQueenieKnowledge(): string {
+  if (cachedQueenieKnowledge === null) {
     try {
-      cachedSherpaKnowledge = readFileSync(join(import.meta.dir, '..', 'assets', 'sherpa-knowledge.md'), 'utf-8').trim()
+      cachedQueenieKnowledge = readFileSync(join(import.meta.dir, '..', 'assets', 'queenie-knowledge.md'), 'utf-8').trim()
     } catch {
-      cachedSherpaKnowledge = ''
+      cachedQueenieKnowledge = ''
     }
   }
-  return cachedSherpaKnowledge
+  return cachedQueenieKnowledge
 }
 
 const CONFIGURATOR_MISSION = `## Configurator mission
 
-You are the user's onboarding guide and ongoing configuration assistant. Your job is to help them set up and grow their KinBot through friendly conversation — they should never need to hunt through menus.
+You are the user's onboarding guide and ongoing configuration assistant. Your job is to help them set up and grow their Hivekeep through friendly conversation — they should never need to hunt through menus.
 
 How to run it:
-- **Assess first, don't re-ask.** At the start of a setup conversation, call \`list_providers\`, \`list_models\`, \`list_channels\` (and check defaults) to see what's already configured, so you only propose what's missing. This is how you resume gracefully after the user stepped away.
+- **Use your tools — don't just talk about setup. You DO the setup; you never narrate steps for the user to perform.** You are not a help article. When the user agrees to set anything up — a provider, embeddings, search, an image provider, an avatar style/type/base, the global prompt, voice, a channel, or their first Agent — IMMEDIATELY call the matching tool that turn (e.g. \`describe_provider_config\` + \`request_provider_setup\`, \`set_default_provider\`, \`set_avatar_style\`/\`set_avatar_subject\`/\`generate_avatar_base\`, \`set_global_prompt\`, \`create_agent\`). Never reply with "go to Settings → …" or "you can add it in the menu": doing it for them, in-chat, IS the whole point. Answering an onboarding question in prose without taking the corresponding action is a failure.
+- **Assess first, ALWAYS — call \`get_setup_health\` BEFORE your first substantive reply. Never act blind.** Before you propose, diagnose, greet substantively, or fix anything, ground yourself in the real current state — never assume. At the very start of onboarding, and the instant a user reports ANYTHING wrong ("it's not working", "I added my key but nothing happens", "memory doesn't remember", "the bot is silent", "my link is wrong"), call \`get_setup_health\` FIRST. It is read-only and returns the truth: capability coverage, every INVALID provider with its \`lastError\`, stale or missing default models, channel statuses, public-URL sanity, and a prioritized \`issues\` array where each issue already names the exact fix tool. Then fix the highest-priority issue (criticals before warnings before info) with that exact tool, re-test (\`test_provider\` / \`test_channel\`), and re-run \`get_setup_health\` to confirm it cleared before telling the user it's resolved. See the "Common failure states (troubleshooting playbook)" section in your knowledge below for the symptom → diagnosis → fix mapping.
+- **Confirm, then advance.** After a tool completes a step, briefly state what you actually did ("Connected OpenAI and set it as your default — tested, working") and then surface the single next most valuable step. Keep it to a confirmation plus one proposal; don't recite the whole roadmap.
+- **Don't be blind to broken providers.** Broken providers are never hidden. \`list_providers\` always returns EVERY configured provider, including failing ones: check each one's \`isValid\` flag and read its \`lastError\` when \`isValid\` is false. \`list_models\` returns a separate \`invalidProviders\` array (each entry carries its \`lastError\`) alongside the working models, so a missing model never means "nothing is configured": a provider may simply be failing. When a provider is invalid, re-key the EXISTING provider (re-enter the key, then re-test) instead of offering to add a brand-new one. Start from \`get_setup_health\` for the overall picture, then use \`list_providers\` / \`list_models\` / \`list_channels\` / the default-model checks to fill in detail.
+- **Resume gracefully.** Because you assessed first, you only ever propose what's genuinely missing, never re-ask for something already configured after the user stepped away.
 - **One thing at a time.** Ask a single question per turn; never dump a checklist.
 - **Explain the why.** Briefly say what each piece is for before asking for it (e.g. "an embedding model lets me index your memories so I recall the right thing later").
 - **Secrets go through the popup, never the chat.** To connect a provider, call \`describe_provider_config\` then \`request_provider_setup\` — a secure popup collects the key and I configure + test it. Never ask the user to paste a key into the chat. For other secrets use \`prompt_secret\`.
 - **Reuse keys across capabilities.** If a key already covers more (e.g. an OpenAI key also does embeddings/images), offer to enable that capability on the existing provider with \`enable_provider_capability\` + \`set_default_provider\` instead of asking for a new key.
 - **Offer search early** — a search provider lets me look things up (like a provider's API-key page) while we set up.
-- **Avatars (two axes + a base, empirically).** Once an image provider is connected, Kins get generated avatars. There are two global axes: the art STYLE (\`set_avatar_style\` — Pixar 3D / anime / watercolor…) and the SUBJECT/type (\`set_avatar_subject\` — robot / human / dragon…). Call \`list_avatar_presets\` to offer the user a few of each (they can also type their own). For consistency, once style+type are chosen, call \`generate_avatar_base\` to make a NEUTRAL base image all Kin avatars derive from (img2img). Show it, iterate if needed. (\`set_avatar_base_enabled false\` switches to pure text-to-image; \`reset_avatar_base\` restores the default.) Don't over-generate — image credits cost money.
-- **Conduct rules.** Ask if there are rules all their Kins should follow; if so, merge them into the global prompt (read with \`get_global_prompt\`, then \`set_global_prompt\`).
-- **Be a proactive (not pushy) guide.** Match suggestions to who the user is (read their contact "fiche"). Lead with the core value — a team of AI agents that remember them and get better over time — then surface amplifiers when relevant: messaging channels (text your Kins from your phone), self-building tools & mini-apps, automation (crons / sub-Kins), and projects for big long-term work. Propose, explain the benefit, don't force.
-- Keep the user's profile current. As you get to know them during onboarding, save what you learn with \`set_contact_note(contactId, "global", …)\` — **global** scope so every other Kin inherits the context and never has to re-learn who they are (reserve \`"private"\` for observations specific to your own interactions). Create the contact first with \`create_contact\` if none exists, and \`memorize\` their preferences.
+- **Avatars (two axes + a base, empirically).** Once an image provider is connected, Agents get generated avatars. There are two global axes: the art STYLE (\`set_avatar_style\` — Pixar 3D / anime / watercolor…) and the SUBJECT/type (\`set_avatar_subject\` — robot / human / dragon…). Call \`list_avatar_presets\` to offer the user a few of each (they can also type their own). For consistency, once style+type are chosen, call \`generate_avatar_base\` to make a NEUTRAL base image all Agent avatars derive from (img2img). Show it, iterate if needed. (\`set_avatar_base_enabled false\` switches to pure text-to-image; \`reset_avatar_base\` restores the default.) Don't over-generate — image credits cost money.
+- **Conduct rules.** Ask if there are rules all their Agents should follow; if so, merge them into the global prompt (read with \`get_global_prompt\`, then \`set_global_prompt\`).
+- **Be a proactive (not pushy) guide.** Match suggestions to who the user is (read their contact "fiche"). Lead with the core value — a team of AI agents that remember them and get better over time — then surface amplifiers when relevant: messaging channels (text your Agents from your phone), self-building tools & mini-apps, automation (crons / sub-Agents / email triggers that react to incoming mail), and projects for big long-term work. Propose, explain the benefit, don't force.
+- Keep the user's profile current. As you get to know them during onboarding, save what you learn with \`set_contact_note(contactId, "global", …)\` — **global** scope so every other Agent inherits the context and never has to re-learn who they are (reserve \`"private"\` for observations specific to your own interactions). Create the contact first with \`create_contact\` if none exists, and \`memorize\` their preferences.
 
 - Cover the WHOLE setup — never silently skip a category. Over the conversation (one thing at a time, at natural moments — never dump them all at once), make sure you OFFER each of these. The user may decline any, but you should have proposed it; use your read tools to see what is still missing before deciding what to suggest next:
-  (1) their profile / fiche (notes + memory); (2) a WEB SEARCH provider — offer it EARLY so you can look things up for them (e.g. a provider's API-key page); (3) an EMBEDDING model (long-term memory); (4) an IMAGE provider, then avatar style + type + optional neutral base; (5) the GLOBAL PROMPT — universal conduct rules every Kin must follow ("anything all your Kins should know or respect?"); read it first, then merge; (6) a VOICE provider (TTS / STT) for voice generation + transcription — heads-up: not yet wired into channels, but planned, say so honestly; (7) CHANNELS (Discord / Telegram); (8) their first real Kin; (9) inform about self-building tools, mini-apps, and projects.
-  At every "what's next?" moment, propose the categories you have NOT covered yet — not just channels + create-a-Kin. WEB SEARCH, the GLOBAL PROMPT, and VOICE are the easiest to forget: don't.
+  (1) their profile / fiche (notes + memory); (2) a WEB SEARCH provider — offer it EARLY so you can look things up for them (e.g. a provider's API-key page); (3) an EMBEDDING model (long-term memory); (4) an IMAGE provider, then avatar style + type + optional neutral base; (5) the GLOBAL PROMPT — universal conduct rules every Agent must follow ("anything all your Agents should know or respect?"); read it first, then merge; (6) a VOICE provider (TTS / STT) for voice generation + transcription — heads-up: not yet wired into channels, but planned, say so honestly; (7) CHANNELS (Discord / Telegram); (8) their first real Agent; (9) inform about self-building tools, mini-apps, and projects.
+  At every "what's next?" moment, propose the categories you have NOT covered yet — not just channels + create-a-Agent. WEB SEARCH, the GLOBAL PROMPT, and VOICE are the easiest to forget: don't.
 
 You are admin-facing: provider/channel/default/global config is admin-only and will be refused otherwise — that's expected.`
 
 function buildConfiguratorBlock(): string {
-  const knowledge = getSherpaKnowledge()
-  return knowledge ? `${CONFIGURATOR_MISSION}\n\n## KinBot knowledge\n\n${knowledge}` : CONFIGURATOR_MISSION
+  const knowledge = getQueenieKnowledge()
+  return knowledge ? `${CONFIGURATOR_MISSION}\n\n## Hivekeep knowledge\n\n${knowledge}` : CONFIGURATOR_MISSION
 }
 
 interface ContactSummary {
@@ -65,12 +70,12 @@ interface Memory {
   sourceContext?: string | null
   importance?: number | null
   scope?: string
-  authorKinName?: string | null
+  authorAgentName?: string | null
   updatedAt?: Date | null
   score?: number | null
 }
 
-interface KinDirectoryEntry {
+interface AgentDirectoryEntry {
   slug: string | null
   name: string
   role: string
@@ -89,28 +94,32 @@ interface CronRunSummary {
 }
 
 interface PromptParams {
-  kin: {
+  agent: {
     name: string
     slug: string | null
     role: string
     character: string
     expertise: string
-    /** 'configurator' (Sherpa) gets the onboarding mission + knowledge blocks. */
-    kind?: KinKind
+    /** 'configurator' (Queenie) gets the onboarding mission + knowledge blocks. */
+    kind?: AgentKind
   }
   contacts: ContactSummary[]
   relevantMemories: Memory[]
   relevantKnowledge?: Array<{ content: string; sourceId: string; score: number }>
-  kinDirectory: KinDirectoryEntry[]
+  agentDirectory: AgentDirectoryEntry[]
   mcpTools?: MCPToolSummaryForPrompt[]
-  isSubKin: boolean
+  isSubAgent: boolean
   isQuickSession?: boolean
   taskDescription?: string
   previousCronRuns?: CronRunSummary[]
   cronLearnings?: Array<{ id: string; content: string; category: string | null; createdAt: Date }>
   activeChannels?: Array<{ platform: string; name: string }>
+  /** Active email triggers that target this Agent — so it understands incoming
+   *  [Trigger: …] messages. Main-Agent prompt only. */
+  accountTriggers?: Array<{ name: string; accountLabel: string; conditionsSummary: string; dispatchMode: 'conversation' | 'task'; folder: string }>
   globalPrompt?: string | null
-  userLanguage: 'fr' | 'en'
+  /** Agent communication language code (any AGENT_LANGUAGES code). */
+  userLanguage: string
   compactingSummaries?: Array<{
     summary: string
     firstMessageAt: Date
@@ -139,25 +148,25 @@ interface PromptParams {
     pseudonym: string
     role: string
     contactId?: string        // Linked contact ID (for set_contact_note)
-    contactNotes?: string[]   // Global notes (visible to all Kins)
-    kinNotes?: string[]       // Private notes (this Kin only)
+    contactNotes?: string[]   // Global notes (visible to all Agents)
+    agentNotes?: string[]       // Private notes (this Agent only)
     userNotes?: string[]      // Notes written by the platform user(s) — read-only context
   }
-  /** Absolute path to the Kin's workspace directory */
+  /** Absolute path to the Agent's workspace directory */
   workspacePath?: string
   /** Active project context — injected as volatile [7.8] block for main agent.
-   *  For sub-Kins linked to a ticket, use `ticketAssignment` instead. */
+   *  For sub-Agents linked to a ticket, use `ticketAssignment` instead. */
   activeProject?: ActiveProjectPromptInfo
-  /** Ticket assignment context — injected as stable block in sub-Kin prompts
+  /** Ticket assignment context — injected as stable block in sub-Agent prompts
    *  when `task.ticket_id !== null`. Always derived from the ticket at prompt-build
    *  time (current state, not frozen at spawn). */
   ticketAssignment?: TicketAssignmentInfo
   /** Host system context (platform, arch, available CLIs). Injected as a stable
-   *  block in sub-Kin prompts so delegated tasks don't waste tool calls probing
+   *  block in sub-Agent prompts so delegated tasks don't waste tool calls probing
    *  the environment. Cached at the service level — same value reused across
    *  every spawn until server restart. */
   systemContext?: SystemContext
-  /** Current structured plan for this sub-Kin task, as maintained via the
+  /** Current structured plan for this sub-Agent task, as maintained via the
    *  `task_todos` tool. Rendered in the volatile segment so the agent sees
    *  the latest state on every turn — counters the tendency to drift off-plan
    *  on long tasks or after compacting. */
@@ -203,7 +212,7 @@ export interface ActiveProjectPromptInfo {
   /** True if description was truncated to fit `config.projects.maxDescriptionPromptTokens`. */
   descriptionTruncated: boolean
   /** Pinned project knowledge entries — full title + markdown body inlined
-   *  in the prompt so the Kin can act on them without an extra tool call.
+   *  in the prompt so the Agent can act on them without an extra tool call.
    *  Capped at `config.projectKnowledge.pinCap` (default 10).
    *  Sorted by updatedAt DESC for deterministic, cache-stable rendering. */
   pinnedKnowledge?: Array<{
@@ -211,18 +220,18 @@ export interface ActiveProjectPromptInfo {
     title: string
     content: string
     category: string | null
-    authorKinName: string | null
+    authorAgentName: string | null
   }>
   /** Lightweight index of every entry (titles only). Pinned entries also
    *  appear in `pinnedKnowledge` above with their full body — they're
-   *  flagged here so the Kin can tell which titles already have inline
+   *  flagged here so the Agent can tell which titles already have inline
    *  content and which need `get_project_knowledge(id)`. */
   knowledgeIndex?: Array<{
     id: string
     title: string
     category: string | null
     pinned: boolean
-    authorKinName: string | null
+    authorAgentName: string | null
   }>
   /** Total entries in `project_knowledge` for this project. Used to render
    *  the "... and N more — use search_project_knowledge" footer when the
@@ -243,7 +252,7 @@ export interface TicketAssignmentInfo {
   projectDescription: string
   projectGithubUrl: string | null
   /** Existing task executions linked to the same ticket, newest first. Injected
-   *  into the sub-Kin prompt so a restarted ticket task can resume with context
+   *  into the sub-Agent prompt so a restarted ticket task can resume with context
    *  from prior completed, failed, and currently running work. */
   taskHistory?: Array<{
     id: string
@@ -251,19 +260,19 @@ export interface TicketAssignmentInfo {
     description: string
     status: string
     kind: string
-    parentKinName: string
+    parentAgentName: string
     createdAt: number
     updatedAt: number
     result: string | null
     error: string | null
     isCurrent: boolean
   }>
-  /** Existing ticket comments in chronological order, injected into the sub-Kin
+  /** Existing ticket comments in chronological order, injected into the sub-Agent
    *  prompt so it picks up the conversation (clarifications, prior auto-reports,
    *  follow-up questions) without having to call `list_ticket_comments`. */
   comments?: Array<{
     authorName: string
-    authorType: 'user' | 'kin'
+    authorType: 'user' | 'agent'
     createdAt: number
     content: string
     autoGenerated: boolean
@@ -274,9 +283,9 @@ export interface TicketAssignmentInfo {
    *  ticket without conflating it with the ticket description itself. */
   runPrompt?: string | null
   /** Pinned project knowledge captured at spawn time — full title + body.
-   *  Frozen into the ticketAssignmentSnapshot to keep the sub-Kin prompt
+   *  Frozen into the ticketAssignmentSnapshot to keep the sub-Agent prompt
    *  cache stable across re-entries (request_input replies, sub-sub-task
-   *  returns). Newly pinned entries don't appear here until the sub-Kin
+   *  returns). Newly pinned entries don't appear here until the sub-Agent
    *  completes and the parent picks them up; the live `search_project_knowledge`
    *  and `get_project_knowledge` tools always reflect the current state. */
   pinnedKnowledge?: Array<{
@@ -284,7 +293,7 @@ export interface TicketAssignmentInfo {
     title: string
     content: string
     category: string | null
-    authorKinName: string | null
+    authorAgentName: string | null
   }>
   /** Lightweight knowledge index captured at spawn time (titles only). Same
    *  freeze-at-spawn rationale as `pinnedKnowledge`. */
@@ -293,7 +302,7 @@ export interface TicketAssignmentInfo {
     title: string
     category: string | null
     pinned: boolean
-    authorKinName: string | null
+    authorAgentName: string | null
   }>
   /** Total entries in the project's knowledge store at spawn time. */
   totalKnowledgeCount?: number
@@ -341,8 +350,8 @@ function formatMemoryLine(m: Memory): string {
   }
   parts.push(`[${m.category}]`)
   // Shared memory attribution
-  if (m.scope === 'shared' && m.authorKinName) {
-    parts.push(`*[shared by ${m.authorKinName}]*`)
+  if (m.scope === 'shared' && m.authorAgentName) {
+    parts.push(`*[shared by ${m.authorAgentName}]*`)
   }
   parts.push(m.content)
   if (m.subject) {
@@ -360,13 +369,13 @@ function formatMemoryLine(m: Memory): string {
 
 /**
  * Build a rich context string with human-readable date/time info.
- * Helps Kins reason about temporal context (day of week, time of day, etc.)
+ * Helps Agents reason about temporal context (day of week, time of day, etc.)
  */
 function buildContextBlock(): string {
   const now = new Date()
   const iso = now.toISOString()
   // Human-readable format, rendered in the configured server timezone so the
-  // Kin reports wall-clock time consistent with crons and user expectations.
+  // Agent reports wall-clock time consistent with crons and user expectations.
   const tz = config.timezone
   const readable = now.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -415,7 +424,7 @@ function buildContextBlock(): string {
     `Current time: ${time} (${tz})\n` +
     `ISO timestamp: ${iso}\n` +
     `Timezone: ${tz} — interpret schedules and wall-clock times in this zone unless the user asks otherwise\n` +
-    `Platform: KinBot v${config.version}\n` +
+    `Platform: Hivekeep v${config.version}\n` +
     `Installation: ${installLine}${envFileLine}\n` +
     `Data directory: ${config.dataDir}\n` +
     `Public URL: ${config.publicUrl}\n` +
@@ -424,7 +433,7 @@ function buildContextBlock(): string {
 }
 
 /**
- * Build a one-line "Responding to" hint so the Kin knows the origin
+ * Build a one-line "Responding to" hint so the Agent knows the origin
  * of the current message and can adapt formatting accordingly.
  */
 function buildCurrentMessageHint(source: PromptParams['currentMessageSource']): string | null {
@@ -449,7 +458,7 @@ function buildCurrentMessageHint(source: PromptParams['currentMessageSource']): 
 }
 
 /**
- * Build a conversation state awareness block so the Kin knows the depth
+ * Build a conversation state awareness block so the Agent knows the depth
  * and age of its current context window.
  */
 function buildConversationStateBlock(state: PromptParams['conversationState']): string | null {
@@ -458,7 +467,7 @@ function buildConversationStateBlock(state: PromptParams['conversationState']): 
   if (state.hasCompactedHistory) {
     const compactedCount = state.totalMessageCount - state.visibleMessageCount
     lines.push(
-      `This is a long-running conversation. ${compactedCount} older message${compactedCount !== 1 ? 's have' : ' has'} been summarized (see "Previous conversation summary" above).`,
+      `This is a long-running conversation. ${compactedCount} older message${compactedCount !== 1 ? 's have' : ' has'} been summarized (see the "Conversation history summaries" section).`,
     )
     lines.push(`You can see the ${state.visibleMessageCount} most recent message${state.visibleMessageCount !== 1 ? 's' : ''} in full detail.`)
   } else {
@@ -498,8 +507,8 @@ function formatMemoryLineCompact(m: Memory): string {
     parts.push(formatRelevanceTag(m.score))
   }
   parts.push(`[${m.category}]`)
-  if (m.scope === 'shared' && m.authorKinName) {
-    parts.push(`*[shared by ${m.authorKinName}]*`)
+  if (m.scope === 'shared' && m.authorAgentName) {
+    parts.push(`*[shared by ${m.authorAgentName}]*`)
   }
   parts.push(m.content)
   const relTime = formatRelativeTime(m.updatedAt)
@@ -635,23 +644,22 @@ function buildCategoryGroupedMemories(header: string, memories: Memory[]): strin
   return `${header}\n\n${sections.join('\n\n')}`
 }
 
-const LANGUAGE_NAMES: Record<string, string> = {
-  fr: 'French',
-  en: 'English',
-}
+// code → English name for the Language prompt block. Sourced from the shared
+// agent-language list so the picker and the prompt always agree.
+const LANGUAGE_NAMES: Record<string, string> = AGENT_LANGUAGE_NAMES
 
 // ─── Project blocks ──────────────────────────────────────────────────────────
 
 /**
- * Render the project knowledge sub-sections. Shared between the main Kin's
- * Active project block and the sub-Kin's Ticket assignment block — knowledge
+ * Render the project knowledge sub-sections. Shared between the main Agent's
+ * Active project block and the sub-Agent's Ticket assignment block — knowledge
  * is project-scoped, so both surfaces show the same content.
  *
  * Two sub-sections rendered in this order:
- *   1. **Pinned knowledge** — full markdown body inlined per entry. The Kin
+ *   1. **Pinned knowledge** — full markdown body inlined per entry. The Agent
  *      can act on these without any tool call. Order = updatedAt DESC.
  *   2. **Knowledge index** — every entry as a single line `[id] title — category`.
- *      Pinned entries are flagged (✦) so the Kin knows their body is already
+ *      Pinned entries are flagged (✦) so the Agent knows their body is already
  *      visible above. Order = pinned-first, then updatedAt DESC.
  *
  * Returns null when the project has zero knowledge entries — no point
@@ -679,7 +687,7 @@ function renderProjectKnowledgeBlock(
     for (const item of pinnedItems) {
       const meta: string[] = []
       if (item.category) meta.push(item.category)
-      if (item.authorKinName) meta.push(`by ${item.authorKinName}`)
+      if (item.authorAgentName) meta.push(`by ${item.authorAgentName}`)
       const metaPart = meta.length > 0 ? ` _(${meta.join(' · ')})_` : ''
       pinnedLines.push(`#### ${item.title}${metaPart}`)
       pinnedLines.push('')
@@ -869,7 +877,7 @@ function buildTicketAssignmentBlock(info: TicketAssignmentInfo): string {
       const currentTag = task.isCurrent ? ' (current task)' : ''
       const title = task.title?.trim() || task.description
       const lines = [
-        `- Task ${task.id}${currentTag}: ${task.status}, kind: ${task.kind}, Kin: ${task.parentKinName}, created ${created}, updated ${updated}`,
+        `- Task ${task.id}${currentTag}: ${task.status}, kind: ${task.kind}, Agent: ${task.parentAgentName}, created ${created}, updated ${updated}`,
         `  Title: ${title}`,
       ]
       if (task.result?.trim()) {
@@ -895,14 +903,14 @@ function buildTicketAssignmentBlock(info: TicketAssignmentInfo): string {
     for (const c of info.comments) {
       const when = new Date(c.createdAt).toISOString()
       const tag = c.autoGenerated ? ' [auto]' : ''
-      const kind = c.authorType === 'kin' ? 'Kin' : 'User'
+      const kind = c.authorType === 'agent' ? 'Agent' : 'User'
       blocks.push(`**${c.authorName}** (${kind}, ${when})${tag}:\n\n${c.content}`)
     }
     sections.push(blocks.join('\n\n'))
   }
 
   // Run-specific sur-prompt (optional). Rendered as its own labelled block so
-  // the sub-Kin clearly separates per-run scoping from the ticket description.
+  // the sub-Agent clearly separates per-run scoping from the ticket description.
   if (info.runPrompt && info.runPrompt.trim().length > 0) {
     sections.push(
       `### Run-specific instructions for this task\n\n` +
@@ -914,7 +922,7 @@ function buildTicketAssignmentBlock(info: TicketAssignmentInfo): string {
 
   sections.push(
     '> Use update_ticket() to update the ticket as you progress (status, description, tags).\n' +
-    '> Report back to the parent Kin with report_to_parent() / update_task_status() as usual.\n' +
+    '> Report back to the parent Agent with report_to_parent() / update_task_status() as usual.\n' +
     '>\n' +
     '> **Auto-comment of final result:** when this task finishes, your `update_task_status` result (or error message on failure) is automatically posted as a comment on this ticket, signed as you. Do NOT call `add_ticket_comment` to repeat the final report, it would create a duplicate. You may still use `add_ticket_comment` mid-task to flag something that does not belong in the final report (e.g. a side-bug discovered along the way).',
   )
@@ -927,7 +935,7 @@ function buildTicketAssignmentBlock(info: TicketAssignmentInfo): string {
  *
  * The prompt is split into two segments to enable Anthropic prompt caching:
  *  - `stable`: rarely-changing content (identity, character, expertise, hidden
- *    instructions, kin directory, MCP/channel descriptions). Eligible for a
+ *    instructions, agent directory, MCP/channel descriptions). Eligible for a
  *    cache breakpoint at the end of this segment.
  *  - `volatile`: per-turn dynamic content (memories, contacts, current speaker,
  *    participants, summaries, language, workspace tree, date/time).
@@ -952,7 +960,7 @@ export function joinSystemPrompt(p: BuiltSystemPrompt): string {
 }
 
 /**
- * Build the system prompt for a Kin following the block structure
+ * Build the system prompt for an Agent following the block structure
  * defined in prompt-system.md.
  *
  * Returns a `{ stable, volatile }` pair so callers can place a cache breakpoint
@@ -971,22 +979,22 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
   // tool-call syntax as plain text.
   const toolsEnabled = params.toolsEnabled !== false
 
-  if (params.isSubKin && params.taskDescription) {
-    // Sub-Kin prompt
+  if (params.isSubAgent && params.taskDescription) {
+    // Sub-Agent prompt
     stableBlocks.push(
-      `You are ${params.kin.name}, a specialized AI agent on KinBot, executing a delegated task.\n` +
-      `KinBot is a self-hosted platform of expert AI agents (Kins) that collaborate to assist users.`,
+      `You are ${params.agent.name}, a specialized AI agent on Hivekeep, executing a delegated task.\n` +
+      `Hivekeep is a self-hosted platform of expert AI agents (Agents) that collaborate to assist users.`,
     )
     stableBlocks.push(`## Your mission\n\n${params.taskDescription}`)
 
-    // Ticket assignment block — only for sub-Kins linked to a ticket.
-    // Stable for the lifetime of this sub-Kin task instance.
+    // Ticket assignment block — only for sub-Agents linked to a ticket.
+    // Stable for the lifetime of this sub-Agent task instance.
     if (params.ticketAssignment) {
       stableBlocks.push(buildTicketAssignmentBlock(params.ticketAssignment))
     }
 
     // Environment block — platform, arch, available CLIs. Stable: the host
-    // doesn't change during a task. Saves the sub-Kin a handful of probe calls.
+    // doesn't change during a task. Saves the sub-Agent a handful of probe calls.
     if (params.systemContext) {
       stableBlocks.push(buildSystemContextBlock(params.systemContext, params.workspacePath))
     }
@@ -1003,12 +1011,12 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
     ]
     if (!onTicketTask) {
       constraintsLines.push(`- Use report_to_parent() to send intermediate progress updates if useful.`)
-      constraintsLines.push(`- If you need a free-form answer from your parent Kin, call request_input() (max ${config.tasks?.maxRequestInput ?? 3} times). For structured choices, use prompt_human() instead — it routes through the human prompt UI.`)
+      constraintsLines.push(`- If you need a free-form answer from your parent Agent, call request_input() (max ${config.tasks?.maxRequestInput ?? 3} times). For structured choices, use prompt_human() instead — it routes through the human prompt UI.`)
     } else {
       constraintsLines.push(`- Communicate via the ticket. Use update_ticket() to update status/description/tags; use prompt_human() to ask the user a question (the task is suspended with a yellow "awaiting input" badge on the ticket until they answer). For structured choices use prompt_human's confirm/select/multi_select; for free-form answers use prompt_type="text" — or call request_input() which routes through the same human-prompt flow on ticket tasks.`)
-      constraintsLines.push(`- Do NOT report intermediate progress to a parent Kin — there is none on ticket tasks. Your audience is the user reading the ticket.`)
+      constraintsLines.push(`- Do NOT report intermediate progress to a parent Agent — there is none on ticket tasks. Your audience is the user reading the ticket.`)
       constraintsLines.push(
-        `- **Mine and feed the project knowledge base.** The "Knowledge index" above lists every entry's title and id. Pinned entries (✦) have their full markdown body inlined above the index — read them; you have them for free. For unpinned entries, the title alone may already tell you what you need; if the title looks relevant, call get_project_knowledge(id) to read the body. Use search_project_knowledge(query) when no title matches your need or you're discovering by topic. The whole list is frozen at spawn time — newly added entries won't appear in your index until the next ticket task, but get/search always hit the live state. When you discover something durable that future agents working on this project would need to know — an architectural decision you make, a non-obvious convention you uncover, a gotcha that cost you time — call add_project_knowledge(title, content, category?) with a self-explanatory title (it lands in every future Kin's prompt) and a markdown body. Set pinned=true only when the content itself must be visible in-prompt for every Kin (cap: 10); otherwise leave it unpinned — the title alone surfaces it.`,
+        `- **Mine and feed the project knowledge base.** The "Knowledge index" above lists every entry's title and id. Pinned entries (✦) have their full markdown body inlined above the index — read them; you have them for free. For unpinned entries, the title alone may already tell you what you need; if the title looks relevant, call get_project_knowledge(id) to read the body. Use search_project_knowledge(query) when no title matches your need or you're discovering by topic. The whole list is frozen at spawn time — newly added entries won't appear in your index until the next ticket task, but get/search always hit the live state. When you discover something durable that future agents working on this project would need to know — an architectural decision you make, a non-obvious convention you uncover, a gotcha that cost you time — call add_project_knowledge(title, content, category?) with a self-explanatory title (it lands in every future Agent's prompt) and a markdown body. Set pinned=true only when the content itself must be visible in-prompt for every Agent (cap: 10); otherwise leave it unpinned — the title alone surfaces it.`,
       )
     }
     constraintsLines.push(`- Be honest about uncertainty. Do not fabricate facts or details — use tools to verify when unsure.`)
@@ -1042,7 +1050,7 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       cronJournalInstruction,
     )
 
-    // Cron journal: inject previous run results so the sub-Kin has continuity
+    // Cron journal: inject previous run results so the sub-Agent has continuity
     if (params.previousCronRuns && params.previousCronRuns.length > 0) {
       const runLines = params.previousCronRuns
         .map((r, i) => {
@@ -1058,7 +1066,7 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
           return `${i + 1}. [${date}] ${r.status} (${durationSec}s)${detail}`
         })
         .join('\n')
-      // Previous runs are stable for the lifetime of this sub-Kin task instance.
+      // Previous runs are stable for the lifetime of this sub-Agent task instance.
       stableBlocks.push(
         `## Previous runs\n\n` +
         `This is a recurring scheduled task. Here are your most recent executions (newest first):\n\n${runLines}`,
@@ -1081,7 +1089,7 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       )
     }
 
-    // [3.5] Platform directives (global prompt) — applies to sub-Kins too
+    // [3.5] Platform directives (global prompt) — applies to sub-Agents too
     if (params.globalPrompt) {
       stableBlocks.push(`## Platform directives\n\n${params.globalPrompt}`)
     }
@@ -1089,7 +1097,7 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
     // [0] Platform context
     stableBlocks.push(
       `## Platform context\n\n` +
-      `You are a specialized AI agent (Kin) on KinBot, a self-hosted platform of expert AI agents serving a small group of users.\n\n` +
+      `You are a specialized AI agent (Agent) on Hivekeep, a self-hosted platform of expert AI agents serving a small group of users.\n\n` +
       `Key facts about your environment:\n` +
       `- Your session is continuous and permanent — there is no "new conversation". You maintain context across all interactions through memory and compacted summaries of older exchanges.\n` +
       `- Multiple users may talk to you. Each message is prefixed with the sender's identity.\n` +
@@ -1097,14 +1105,15 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
     )
 
     // [1] Identity (with slug)
-    const slugSuffix = params.kin.slug ? ` (slug: ${params.kin.slug})` : ''
-    stableBlocks.push(`You are ${params.kin.name}${slugSuffix}, ${params.kin.role}.`)
+    const slugSuffix = params.agent.slug ? ` (slug: ${params.agent.slug})` : ''
+    stableBlocks.push(`You are ${params.agent.name}${slugSuffix}, ${params.agent.role}.`)
 
-    // [1.5] Core principles (universal baseline for all Kins)
+    // [1.5] Core principles (universal baseline for all Agents)
     stableBlocks.push(
       `## Core principles\n\n` +
       `- Be genuinely helpful, not performatively helpful. Skip filler phrases and deliver value through competence.\n` +
       `- Be resourceful before asking — check your memory, contacts, and available tools before requesting clarification.\n` +
+      `- If a capability you need is missing from your toolset, don't improvise around it: call \`list_tools\` to see everything the platform offers, then \`request_tool_access\` with the exact tool names and a short reason — the user is prompted to grant them, and approved tools stay with you permanently.\n` +
       `- Have informed opinions within your area of expertise. You are an expert, not a neutral relay.\n` +
       `- Respect privacy — your access to personal information represents trust. Never share what you learn about one user with another unless explicitly appropriate.\n` +
       `- When uncertain, say so clearly. "I'm not sure" is always better than a confident wrong answer.\n` +
@@ -1142,13 +1151,13 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
     }
 
     // [2] Character
-    if (params.kin.character) {
-      stableBlocks.push(`## Personality\n\n${params.kin.character}`)
+    if (params.agent.character) {
+      stableBlocks.push(`## Personality\n\n${params.agent.character}`)
     }
 
     // [3] Expertise
-    if (params.kin.expertise) {
-      stableBlocks.push(`## Expertise\n\n${params.kin.expertise}`)
+    if (params.agent.expertise) {
+      stableBlocks.push(`## Expertise\n\n${params.agent.expertise}`)
     }
 
     // [3.5] Platform directives (global prompt)
@@ -1156,13 +1165,13 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       stableBlocks.push(`## Platform directives\n\n${params.globalPrompt}`)
     }
 
-    // [3.6] Configurator mission + knowledge (Sherpa only)
-    if (params.kin.kind === 'configurator') {
+    // [3.6] Configurator mission + knowledge (Queenie only)
+    if (params.agent.kind === 'configurator') {
       stableBlocks.push(buildConfiguratorBlock())
     }
   }
 
-  // Quick session: skip contacts, kin directory, hidden instructions, and MCP blocks
+  // Quick session: skip contacts, agent directory, hidden instructions, and MCP blocks
   if (params.isQuickSession) {
     // [5] Relevant memories (read-only) — volatile (depends on the incoming message)
     if (params.relevantMemories.length > 0) {
@@ -1177,7 +1186,7 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
     stableBlocks.push(
       `## Quick session\n\n` +
       `This is a quick session. You do not have access to the main conversation history, ` +
-      `inter-Kin communication, or administrative tools. Focus on the immediate task.\n` +
+      `inter-Agent communication, or administrative tools. Focus on the immediate task.\n` +
       `Do not offer to save memories or create contacts — those capabilities are not available here.`,
     )
 
@@ -1200,7 +1209,7 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
   }
 
   // [4] Contacts (compact summary — global shared registry)
-  // Volatile: contacts are created/updated as the Kin interacts with new people.
+  // Volatile: contacts are created/updated as the Agent interacts with new people.
   if (params.contacts.length > 0) {
     const contactLines = params.contacts
       .map((c) => {
@@ -1222,45 +1231,45 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       .join('\n')
     volatileBlocks.push(
       `## Known contacts\n\n` +
-      `These are the shared contacts across all Kins. Use get_contact(id) to ` +
+      `These are the shared contacts across all Agents. Use get_contact(id) to ` +
       `retrieve a contact's full details, identifiers, and notes.\n\n${contactLines}`,
     )
   }
 
-  // [4.5] Kin directory + collaboration instructions (main agent only)
-  // Stable: only changes when a Kin is created/edited.
-  if (params.isSubKin && params.kinDirectory.length > 0) {
-    // Sub-Kin view: compact directory with inter-Kin communication instructions
-    const directoryLines = params.kinDirectory
+  // [4.5] Agent directory + collaboration instructions (main agent only)
+  // Stable: only changes when an Agent is created/edited.
+  if (params.isSubAgent && params.agentDirectory.length > 0) {
+    // Sub-Agent view: compact directory with inter-Agent communication instructions
+    const directoryLines = params.agentDirectory
       .map((k) => `- ${k.name} (slug: ${k.slug}) — ${k.role}`)
       .join('\n')
     stableBlocks.push(
-      `## Kin directory\n\n` +
-      `Available Kins you can communicate with:\n\n` +
+      `## Agent directory\n\n` +
+      `Available Agents you can communicate with:\n\n` +
       directoryLines + `\n\n` +
-      `### Inter-Kin communication\n` +
-      `- Use send_message(slug, message, "request") when you need help or information from another Kin. Your task will pause until the response arrives (with a timeout).\n` +
+      `### Inter-Agent communication\n` +
+      `- Use send_message(slug, message, "request") when you need help or information from another Agent. Your task will pause until the response arrives (with a timeout).\n` +
       `- Use send_message(slug, message, "inform") for one-way notifications (your task continues immediately).\n` +
       `- Use list_kins() to refresh the directory if needed.\n` +
-      `- You have a limited number of inter-Kin requests per task. Use them wisely.\n\n` +
+      `- You have a limited number of inter-Agent requests per task. Use them wisely.\n\n` +
       `### Escalation philosophy\n` +
-      `Try to solve the task yourself first. If you encounter something outside your expertise or that requires coordination, reach out to the appropriate Kin. Only involve the human (via notify() or request_input()) as a last resort.`,
+      `Try to solve the task yourself first. If you encounter something outside your expertise or that requires coordination, reach out to the appropriate Agent. Only involve the human (via notify() or request_input()) as a last resort.`,
     )
-  } else if (!params.isSubKin && params.kinDirectory.length > 0) {
+  } else if (!params.isSubAgent && params.agentDirectory.length > 0) {
     // Standard view: compact directory
-    const directoryLines = params.kinDirectory
+    const directoryLines = params.agentDirectory
       .map((k) => `- ${k.name} (slug: ${k.slug}) — ${k.role}`)
       .join('\n')
     stableBlocks.push(
-      `## Kin directory\n\n` +
-      `These are the other specialized Kins on the platform:\n\n` +
+      `## Agent directory\n\n` +
+      `These are the other specialized Agents on the platform:\n\n` +
       directoryLines + `\n\n` +
       `### Collaboration and delegation\n` +
-      `- When a request falls outside your expertise, delegate to the most appropriate Kin via send_message(slug, message, "request") rather than providing a mediocre answer. Inform the user that you are delegating.\n` +
-      `- For complex tasks that benefit from parallel or focused execution, spawn sub-tasks via spawn_self() (your own expertise) or spawn_kin(slug) (another Kin's expertise).\n` +
+      `- When a request falls outside your expertise, delegate to the most appropriate Agent via send_message(slug, message, "request") rather than providing a mediocre answer. Inform the user that you are delegating.\n` +
+      `- For complex tasks that benefit from parallel or focused execution, spawn sub-tasks via spawn_self() (your own expertise) or spawn_agent(slug) (another Agent's expertise).\n` +
       `- **Sub-task mode defaults to "await"** for supervised work: you spawn, the sub-task runs, its result triggers a new turn on you so you can review, report back to the user, or chain the next action. Use this whenever the user expects a follow-up from you (debug, investigation, implementation, anything they will ask about later). Use mode "async" ONLY for genuinely detached work that does not require any follow-up from you (one-shot cron-like notifications, fire-and-forget side effects, work whose completion the user will discover through another channel). When in doubt, choose "await".\n` +
       `- Use type "request" when you need a response back, "inform" for one-way notifications.\n` +
-      `- When you receive an inter-kin request, use reply(request_id, message) to respond.`,
+      `- When you receive an inter-agent request, use reply(request_id, message) to respond.`,
     )
   }
 
@@ -1288,16 +1297,16 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
   // store_file/grep/edit_file/spawn_self/…) and a tool-less model
   // can do none of it; injecting the section just teaches the model
   // to fabricate tool-call syntax.
-  if (!params.isSubKin && toolsEnabled) {
+  if (!params.isSubAgent && toolsEnabled) {
     stableBlocks.push(
       `## Internal instructions (do not share with the user)\n\n` +
       `### Contact management\n` +
-      `- Contacts are shared across all Kins. When you create or update a contact, all Kins see it.\n` +
+      `- Contacts are shared across all Agents. When you create or update a contact, all Agents see it.\n` +
       `- When you encounter a new person, use find_contact_by_identifier() to check if they already exist before creating a duplicate.\n` +
       `- Create contacts via create_contact() with any identifiers you know (phone, email, WhatsApp, Discord, etc.).\n` +
       `- Use set_contact_note(contact_id, scope, content) to record observations:\n` +
       `  - "private" notes are only visible to you.\n` +
-      `  - "global" notes are visible to all Kins.\n` +
+      `  - "global" notes are visible to all Agents.\n` +
       `- The platform user may also write their own notes on contacts (shown to you as "Notes from the platform user"). These are read-only: you cannot modify or delete them, and there is no tool to do so. Treat them as authoritative context from the user.\n` +
       `- Use delete_contact() only when explicitly asked by the user.\n\n` +
       `### Channel contact resolution\n` +
@@ -1312,7 +1321,7 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `### Memory management\n` +
       `- When you identify important information worth remembering long-term (fact, preference, decision), use memorize() to save it immediately.\n` +
       `- If you're unsure about past information, use recall() to check your memory rather than guessing.\n` +
-      `- When memorizing, default to \`private\` scope. Only use \`shared\` when the information is genuinely useful to other Kins — cross-domain facts, user-wide preferences, or decisions that affect all Kins. Your domain-specific knowledge and task context should stay private.\n\n` +
+      `- When memorizing, default to \`private\` scope. Only use \`shared\` when the information is genuinely useful to other Agents — cross-domain facts, user-wide preferences, or decisions that affect all Agents. Your domain-specific knowledge and task context should stay private.\n\n` +
       `### Secrets\n` +
       `- Never include secret values (API keys, tokens, passwords) in your visible responses.\n` +
       `- If a user shares a secret in the chat, offer to store it in the Vault via create_secret() and redact the message via redact_message().\n` +
@@ -1327,16 +1336,16 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `- start_ticket_task always runs in await mode — you will get a turn when it finishes. Do not assume async/fire-and-forget for ticket-linked work.\n\n` +
       // Project knowledge instructions are scoped to "has an active project":
       // without one, add_/search_/list_/pin_project_knowledge all return
-      // NO_ACTIVE_PROJECT — instructing the Kin to use them would be misleading.
+      // NO_ACTIVE_PROJECT — instructing the Agent to use them would be misleading.
       // Cost: a project toggle invalidates the cached stable prefix on the
       // next turn. Project switches are rare, so this is acceptable.
       (params.activeProject
         ? `### Project knowledge (shared, durable facts about "${params.activeProject.title}")\n` +
-          `- The active project has a dedicated knowledge base, distinct from your personal memories. It is **shared across every Kin and every sub-task that works on this project**, now and in the future. Treat it as a collective wiki you are co-authoring with future agents.\n` +
+          `- The active project has a dedicated knowledge base, distinct from your personal memories. It is **shared across every Agent and every sub-task that works on this project**, now and in the future. Treat it as a collective wiki you are co-authoring with future agents.\n` +
           `- **How it shows up in your prompt.** The "Knowledge index" sub-section in the Active project block above lists every entry's id and title. Pinned entries (✦) also have their full markdown body inlined above the index — they are visible without any tool call. Unpinned entries appear only as a title in the index; read their body with get_project_knowledge(id).\n` +
-          `- **Capture knowledge proactively with add_project_knowledge(title, content) when you learn something durable** that another agent — yourself in a week, a sub-Kin spawned tomorrow, a different Kin entirely — would otherwise have to rediscover. Good candidates: architectural decisions ("we use Drizzle, not Prisma"), conventions ("commits don't use Co-Authored-By"), gotchas ("Better Auth manages user/session tables — never edit"), domain rules, non-obvious constraints, deliberate trade-offs. Bad candidates: your own current-task scratchpad, transient debugging state, anything that only matters within a single task — those belong in memories or task_todos.\n` +
-          `- **Write self-explanatory titles.** The title is what every future Kin sees by default. "Auth tokens" is useless; "Tokens are stored encrypted in the vault, never on disk" is great. The markdown body can be as detailed as you want — code samples, links, multi-paragraph reasoning — because it only enters a prompt when pinned or fetched.\n` +
-          `- **Pin (pinned=true) sparingly** — only when an entry's content itself must be visible in-prompt for every Kin from the first turn (cap: ${config.projectKnowledge.pinCap}). For most entries, the title-in-index is sufficient; the body is a get_project_knowledge call away when the title looks relevant.\n` +
+          `- **Capture knowledge proactively with add_project_knowledge(title, content) when you learn something durable** that another agent — yourself in a week, a sub-Agent spawned tomorrow, a different Agent entirely — would otherwise have to rediscover. Good candidates: architectural decisions ("we use Drizzle, not Prisma"), conventions ("commits don't use Co-Authored-By"), gotchas ("Better Auth manages user/session tables — never edit"), domain rules, non-obvious constraints, deliberate trade-offs. Bad candidates: your own current-task scratchpad, transient debugging state, anything that only matters within a single task — those belong in memories or task_todos.\n` +
+          `- **Write self-explanatory titles.** The title is what every future Agent sees by default. "Auth tokens" is useless; "Tokens are stored encrypted in the vault, never on disk" is great. The markdown body can be as detailed as you want — code samples, links, multi-paragraph reasoning — because it only enters a prompt when pinned or fetched.\n` +
+          `- **Pin (pinned=true) sparingly** — only when an entry's content itself must be visible in-prompt for every Agent from the first turn (cap: ${config.projectKnowledge.pinCap}). For most entries, the title-in-index is sufficient; the body is a get_project_knowledge call away when the title looks relevant.\n` +
           `- **Discover with search_project_knowledge(query)** when no title in your index matches what you need, or for topic-based exploration (semantic + keyword hybrid). Use get_project_knowledge(id) to fetch a specific entry's body once you have its id.\n` +
           `- Knowledge is project-scoped: these tools act on **"${params.activeProject.title}"** as long as it stays your active project. set_active_project() swaps the entire knowledge base.\n` +
           `- Edit and prune: when a piece of knowledge is superseded, update or delete it. Stale knowledge is worse than no knowledge.\n\n`
@@ -1349,9 +1358,9 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `- You are not a passive Q&A bot. You are an expert assistant who should take initiative when the context calls for it.\n` +
       `- Proactively suggest relevant actions, flag important information, and offer recommendations — even when not explicitly asked.\n` +
       `- When you detect a recurring need, suggest creating a cron job (create_cron) so the task runs automatically.\n` +
-      `- For complex multi-step requests, break the work into sub-tasks (spawn_self/spawn_kin) rather than doing everything in a single turn.\n` +
+      `- For complex multi-step requests, break the work into sub-tasks (spawn_self/spawn_agent) rather than doing everything in a single turn.\n` +
       `- Use your memory tools actively: memorize important facts as you learn them, and recall() before guessing.\n` +
-      `- Use list_kins() to refresh the Kin directory if the directory above seems incomplete or if a new Kin may have been added.\n\n` +
+      `- Use list_kins() to refresh the Agent directory if the directory above seems incomplete or if a new Agent may have been added.\n\n` +
       `### Honesty and uncertainty\n` +
       `- When you are unsure about something, say so clearly. "I'm not sure" is always better than a confident wrong answer.\n` +
       `- Do not fabricate facts, URLs, references, or technical details. If you don't know, either use your tools to find out (recall, web search) or acknowledge the gap.\n` +
@@ -1361,7 +1370,7 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `### Response calibration\n` +
       `- Match your response length to the complexity of the request. Simple questions deserve concise answers; complex problems warrant detailed explanations.\n` +
       `- For external platform messages (Discord, Telegram, WhatsApp, etc.), default to shorter, conversational responses. Users on mobile expect quick answers, not essays.\n` +
-      `- For the KinBot web UI, you can use richer formatting (headings, code blocks, tables, lists) when it aids clarity.\n` +
+      `- For the Hivekeep web UI, you can use richer formatting (headings, code blocks, tables, lists) when it aids clarity.\n` +
       `- When a user asks a yes/no question, lead with the answer, then explain if needed.\n` +
       `- Avoid unnecessary preambles ("Great question!", "Sure, I'd be happy to help!"). Get to the point.\n` +
       `- When presenting multiple options or steps, use numbered lists for clarity.\n` +
@@ -1380,7 +1389,7 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `- Use web_search() for current information, then browse_url() for full content.\n` +
       `- Memorize eagerly — save names, preferences, decisions immediately.\n` +
       `- Check duplicates before creating contacts (find_contact_by_identifier).\n` +
-      `- Delegate heavy tasks to spawn_self()/spawn_kin() to avoid blocking the queue.\n` +
+      `- Delegate heavy tasks to spawn_self()/spawn_agent() to avoid blocking the queue.\n` +
       `- Delegate heavy READ-ONLY exploration to the \`scout\` tool: when answering "where / how / what" in an unfamiliar codebase or large knowledge base would cost more than ~5 reads/greps/browses before you can act, call \`scout({ task_description: "locate X, Y, Z and report exact paths + relevant excerpts" })\`. It runs a cheap, fast model with read-only tools and BLOCKS until it returns a digest, keeping your context light. Skip it only for trivial lookups (1-3 items you can name).\n` +
       `- Use store_file() for substantial content instead of long chat messages.\n\n` +
       `### File & code tool selection\n` +
@@ -1396,7 +1405,7 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `| Git, builds, tests | run_shell | — |\n\n` +
       `Prefer structured tools over run_shell for file operations — they have better error handling, security, and structured output. Use grep before read_file when locating something in a codebase. Use multi_edit for 2+ changes to the same file (atomic: all succeed or none applied).\n\n` +
       `### Reusable custom tools\n` +
-      `- When you build or automate something that could help OTHER Kins — or that your future self would reuse to save time — turn it into a custom tool with create_custom_tool. Custom tools are GLOBAL and granted to any Kin via toolboxes (like MCP), so a good one becomes a shared, permanent capability instead of a one-off script.\n` +
+      `- When you build or automate something that could help OTHER Agents — or that your future self would reuse to save time — turn it into a custom tool with create_custom_tool. Custom tools are GLOBAL and granted to any Agent via toolboxes (like MCP), so a good one becomes a shared, permanent capability instead of a one-off script.\n` +
       `- Good candidates: anything you'd otherwise rebuild from scratch (an API call, a data transform, a scrape, a calculation, a formatter). Don't create a custom tool for a true one-shot task you'll never repeat.\n` +
       `- You MUST provide human translations via the \`translations\` field (UI display name, description, and a label + description for each parameter) for at least en and fr (es/de welcome). This is UI-only — it never changes the tool definition the LLM sees — but without it the app shows the raw custom_<slug> instead of a proper localized name. Use update_custom_tool to backfill translations on an existing tool.\n` +
       `- ALSO create a fitting **tool domain** (create_tool_domain) and group related custom tools under it. Pick a clear Lucide icon name (e.g. CloudSun for weather, Wallet for finance) and a color token, then set each tool's domain to its slug. A tool left on the default 'custom' domain shows the generic Puzzle icon and the bland "custom" category everywhere; a dedicated domain (e.g. a "weather" domain with a CloudSun icon) gives the whole group a clear visual identity in the toolbox list and the tool picker. Use list_tool_domains to see what already exists and reuse it before creating a near-duplicate.\n` +
@@ -1407,13 +1416,16 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `  - Key \`--color-*\` tokens: --color-background, --color-foreground, --color-card, --color-card-foreground, --color-muted, --color-muted-foreground, --color-primary, --color-primary-foreground, --color-border, --color-success, --color-warning, --color-destructive, --color-info.\n` +
       `  - **Validate it.** After writing a \`renderer.tsx\`, run test_custom_tool and CHECK the \`renderer\` field in the result: \`{ ok: true }\` means it built and rendered; \`{ ok: false, phase: "build" | "render", error }\` means it is broken. The renderer runs in the USER's browser, so a build/render error is otherwise INVISIBLE to you — fix the reported error before considering the tool done. (Validation does an initial server-side render only: build errors, bad data access, and invalid children are caught; useEffect/handlers are not exercised.)\n\n` +
       `### Mini-Apps\n` +
-      `You can create interactive web apps (mini-apps) in the KinBot sidebar.\n` +
+      `You can create interactive web apps (mini-apps) in the Hivekeep sidebar.\n` +
       `- **Always call get_mini_app_docs first** for the full SDK reference (hooks, components, setup patterns).\n` +
-      `- Use get_mini_app_templates to start from a template (dashboard, todo-list, form, data-viewer, kanban).\n` +
-      `- Bare ES imports (react, @kinbot/react, …) resolve ONLY via an app.json import map — NOT inline HTML. Pass \`dependencies\` (or a \`files\` map incl. app.json) to create_mini_app to set it up in one call.\n` +
-      `- Console output is only captured while the app is open in a browser tab. After writing files, check get_mini_app_console \`lastServedAt\`; use reload_mini_app to force a reload.\n` +
+      `- Use get_mini_app_templates to start from a template (dashboard, todo-list, form, data-viewer, kanban, background-service).\n` +
+      `- Bare ES imports (react, @hivekeep/react, …) resolve ONLY via an app.json import map — NOT inline HTML. Pass \`dependencies\` (or a \`files\` map incl. app.json) to create_mini_app to set it up in one call.\n` +
+      `- Mini-apps are not just UIs: a \`_server.js\` backend with \`"background": true\` in app.json runs as a LIVE service (loads at server boot, onStart/onStop lifecycle) — it can schedule local cron jobs (ctx.schedule), push platform notifications (ctx.notify), fetch external APIs (ctx.fetch), persist files (ctx.files), and talk to the UI over SSE both ways (ctx.events.emit / onClientEvent). When a user wants something watched, polled, or automated with a visual front, a background mini-app is often the right shape (cheaper than a cron spawning you: no LLM turn per tick).\n` +
+      `- With user-approved permissions declared in app.json, a backend can also read vault secrets (ctx.secrets), run LLM completions (ctx.llm), and message you or spawn tasks on you (ctx.agent) — see the backend section of get_mini_app_docs.\n` +
+      `- NEVER hardcode API keys in app code or storage: declare \`"permissions": ["secrets:<NAME>"]\` and read them via ctx.secrets.get().\n` +
+      `- Console output is only captured while the app is open in a browser tab (backend ctx.log entries are captured too, tagged \`source: backend\`). After writing files, check get_mini_app_console \`lastServedAt\`; use reload_mini_app to force a reload. Use get_mini_app_backend_status to inspect a backend (loaded?, jobs + next runs, permissions).\n` +
       `- Use create_mini_app_snapshot before risky changes.\n` +
-      `- Always use @kinbot/components instead of raw HTML elements.`,
+      `- Always use @hivekeep/components instead of raw HTML elements.`,
     )
   }
 
@@ -1441,21 +1453,34 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `You are connected to the following external messaging platforms:\n\n${channelLines}\n\n` +
       `Messages prefixed with [platform:Name] come from these platforms. Your responses are automatically sent back to the originating conversation.\n` +
       `To send files (images, documents, reports, etc.) back to the platform, call attach_file() before your text response.\n` +
-      `Keep responses concise for external platforms. Avoid referencing internal tools, UI elements, or administrative details. You can also reach a channel bound to another Kin: call list_channels({ scope: "all" }) to discover it, then send_channel_message(channelId, ...). Your message is automatically prefixed with your Kin name so the human knows it comes from you.\n\n` +
+      `Keep responses concise for external platforms. Avoid referencing internal tools, UI elements, or administrative details. You can also reach a channel bound to another Agent: call list_channels({ scope: "all" }) to discover it, then send_channel_message(channelId, ...). Your message is automatically prefixed with your Agent name so the human knows it comes from you.\n\n` +
       `### Platform formatting guide\n` +
       `Adapt your formatting based on the originating platform:\n` +
       `- **Discord**: Supports full Markdown (bold, italic, code blocks, lists, headings). Do NOT use Markdown tables — use bullet lists instead. Wrap multiple URLs in \`<>\` to suppress embeds.\n` +
       `- **Telegram**: Supports Markdown (bold, italic, code, links). Keep messages moderate length. Avoid complex nested formatting.\n` +
       `- **WhatsApp**: Very limited formatting (*bold*, _italic_, \`code\`, ~~strike~~). No headings, no tables, no links with custom text. Use *bold* or CAPS for emphasis. Keep messages short.\n` +
       `- **Slack**: Supports Markdown-like syntax (mrkdwn). Use *bold*, _italic_, \`code\`. No headings.\n` +
-      `- **Web UI (KinBot)**: Full Markdown support including tables, headings, code blocks, and LaTeX.\n` +
+      `- **Web UI (Hivekeep)**: Full Markdown support including tables, headings, code blocks, and LaTeX.\n` +
       `When responding to an external platform message, match that platform's formatting capabilities.`,
+    )
+  }
+
+  // [6.6] Active email triggers targeting this Agent — stable (changes rarely).
+  //       Main-Agent only; the Agent must know that matching emails may arrive
+  //       on their own, prefixed [Trigger: …].
+  if (!params.isSubAgent && params.accountTriggers && params.accountTriggers.length > 0) {
+    const triggerLines = params.accountTriggers
+      .map((t) => `- **${t.name}** on ${t.accountLabel} (${t.folder}) — when ${t.conditionsSummary} → ${t.dispatchMode === 'task' ? 'a task is spawned' : 'injected into this conversation'}`)
+      .join('\n')
+    stableBlocks.push(
+      `## Active triggers on your connected accounts\n\n` +
+      `These email triggers can wake you up on their own. When an incoming email matches one, you receive a message prefixed \`[Trigger: <name>]\` with the email's From / Subject / preview followed by the trigger's instruction. Treat it as a real task to act on; use read_email for the full message when needed.\n\n${triggerLines}`,
     )
   }
 
   // [6.75] Current speaker profile — volatile (per turn)
   if (params.currentSpeaker) {
-    const { firstName, lastName, pseudonym, role, contactId, contactNotes, kinNotes, userNotes } = params.currentSpeaker
+    const { firstName, lastName, pseudonym, role, contactId, contactNotes, agentNotes, userNotes } = params.currentSpeaker
     const nameParts = [firstName, lastName].filter(Boolean).join(' ')
     const displayName = nameParts ? `${nameParts} (${pseudonym})` : pseudonym
     let speakerBlock =
@@ -1464,20 +1489,20 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `Role: ${role}`
 
     const hasGlobalNotes = contactNotes && contactNotes.length > 0
-    const hasKinNotes = kinNotes && kinNotes.length > 0
+    const hasAgentNotes = agentNotes && agentNotes.length > 0
     const hasUserNotes = userNotes && userNotes.length > 0
 
     if (hasGlobalNotes) {
-      speakerBlock += `\n\nShared notes (visible to all Kins):\n` +
+      speakerBlock += `\n\nShared notes (visible to all Agents):\n` +
         contactNotes.map((n) => `- ${n}`).join('\n')
     }
     if (hasUserNotes) {
       speakerBlock += `\n\nNotes from the platform user (read-only — you cannot modify these):\n` +
         userNotes.map((n) => `- ${n}`).join('\n')
     }
-    if (hasKinNotes) {
+    if (hasAgentNotes) {
       speakerBlock += `\n\nYour personal notes:\n` +
-        kinNotes.map((n) => `- ${n}`).join('\n')
+        agentNotes.map((n) => `- ${n}`).join('\n')
     }
     if (!hasGlobalNotes && contactId) {
       // No global notes at all — this is a priority: we need to know who we're talking to
@@ -1487,7 +1512,7 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
         `In your very first response, introduce yourself briefly and ask 2-3 natural questions: ` +
         `who they are, what they do, what they expect from you. ` +
         `Save every piece of information you learn via set_contact_note(${contactId}, "global", ...) ` +
-        `so all Kins benefit from this context. ` +
+        `so all Agents benefit from this context. ` +
         `Also use set_contact_note(${contactId}, "private", ...) for observations specific to your interactions. ` +
         `This is not optional — knowing your interlocutor is essential to being genuinely helpful.`
     } else if (hasGlobalNotes && contactId) {
@@ -1594,16 +1619,17 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `## Workspace\n\n` +
       `Your workspace directory is your dedicated storage area. Use it to organize files, clone repos, create scripts, and store any persistent data.\n\n` +
       `Path: ${params.workspacePath}${treeLine}\n\n` +
-      `> Always create files, clone repos, and store data inside your workspace. Never write to the home folder or other system paths.`,
+      `> Always create files, clone repos, and store data inside your workspace. Never write to the home folder or other system paths.\n\n` +
+      `The user can browse and edit your workspace at any time through the Files screen of the app — files you create are directly visible, editable and shareable by them. When you mention one of your workspace files in a message, write its relative path in backticks (e.g. \`reports/analysis.md\`): it becomes a clickable link that opens the file for the user. Don't paste full file contents into the chat when pointing at the file is enough.`,
     )
   }
 
-  // [7.8] Active project — volatile (changes when Kin switches project)
+  // [7.8] Active project — volatile (changes when Agent switches project)
   if (params.activeProject) {
     volatileBlocks.push(buildActiveProjectBlock(params.activeProject))
   }
 
-  // [7.9] Current sub-Kin plan — volatile (mutates each time the agent calls
+  // [7.9] Current sub-Agent plan — volatile (mutates each time the agent calls
   // `task_todos`). Surfaces the live state right before the final reminder so
   // the agent re-sees its own plan on every turn, even after compacting.
   if (params.taskTodos && params.taskTodos.length > 0) {
@@ -1617,11 +1643,11 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
 
   // [8.5] Final reminder — recency-positioned restatement of the critical
   // rules. Recency bias makes this the most reliable place for guidance that
-  // conflicts with surrounding blocks (personality for main Kins, exploration
-  // habits for sub-Kins). Modeled on Claude Code's pattern of repeating the
+  // conflicts with surrounding blocks (personality for main Agents, exploration
+  // habits for sub-Agents). Modeled on Claude Code's pattern of repeating the
   // most important rules near the end of its system prompt.
-  if (params.isSubKin) {
-    // Sub-Kins: focus on execution efficiency. The bulk of wasted tool calls
+  if (params.isSubAgent) {
+    // Sub-Agents: focus on execution efficiency. The bulk of wasted tool calls
     // in delegated tasks come from re-reading files, using shell wrappers
     // around dedicated tools, and serializing independent reads.
     volatileBlocks.push(

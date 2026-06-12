@@ -85,7 +85,7 @@ export function ProjectKnowledgePanel({ projectId }: Props) {
     if (typeof window === 'undefined') return true
     return localStorage.getItem('projectKnowledge.helpDismissed') !== 'true'
   })
-  // Pinned cards default-expanded (their body is in every Kin's prompt
+  // Pinned cards default-expanded (their body is in every Agent's prompt
   // anyway, hiding it would be misleading). Unpinned default-collapsed.
   // The set stores ids whose default state has been toggled.
   const [toggledIds, setToggledIds] = useState<Set<string>>(new Set())
@@ -500,10 +500,10 @@ function KnowledgeCard({ entry, expanded, onToggleExpand, onTogglePin, onEdit, o
                 </Badge>
               )}
               <Badge variant="outline" className="gap-1 font-normal">
-                {entry.authorKinName ? (
+                {entry.authorAgentName ? (
                   <>
                     <Sparkles className="size-2.5 text-primary" />
-                    {t('projects.knowledge.byKin', { name: entry.authorKinName })}
+                    {t('projects.knowledge.byAgent', { name: entry.authorAgentName })}
                   </>
                 ) : (
                   <>

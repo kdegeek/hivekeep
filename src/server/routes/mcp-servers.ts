@@ -27,7 +27,7 @@ function serialize(server: typeof mcpServers.$inferSelect) {
     env: maskedEnv,
     hasEnv: envParsed !== null && Object.keys(envParsed).length > 0,
     status: server.status,
-    createdByKinId: server.createdByKinId,
+    createdByAgentId: server.createdByAgentId,
     createdAt: new Date(server.createdAt).getTime(),
     updatedAt: new Date(server.updatedAt).getTime(),
   }
@@ -47,7 +47,7 @@ mcpServerRoutes.post('/', async (c) => {
     args?: string[]
     env?: Record<string, string>
     status?: string
-    createdByKinId?: string
+    createdByAgentId?: string
   }>()
 
   const trimmedName = body.name?.trim()
@@ -93,7 +93,7 @@ mcpServerRoutes.post('/', async (c) => {
     args: body.args ? JSON.stringify(body.args) : null,
     env: body.env ? JSON.stringify(body.env) : null,
     status: body.status ?? 'active',
-    createdByKinId: body.createdByKinId ?? null,
+    createdByAgentId: body.createdByAgentId ?? null,
     createdAt: now,
     updatedAt: now,
   })
@@ -271,7 +271,7 @@ mcpServerRoutes.delete('/:id', async (c) => {
   // Disconnect if running
   await disconnectServer(id)
 
-  // Delete (cascade removes kin_mcp_servers links)
+  // Delete (cascade removes agent_mcp_servers links)
   await db.delete(mcpServers).where(eq(mcpServers.id, id))
 
   log.info({ serverId: id, name: existing.name }, 'MCP server deleted')

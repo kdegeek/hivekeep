@@ -1,7 +1,7 @@
 import { eq, and, inArray, max, count, desc, like, or, sql } from 'drizzle-orm'
 import { v4 as uuid } from 'uuid'
 import { db, sqlite } from '@/server/db/index'
-import { tickets, ticketTags, projectTags, projects, tasks, kins, user, userProfiles, ticketAttachments } from '@/server/db/schema'
+import { tickets, ticketTags, projectTags, projects, tasks, agents, user, userProfiles, ticketAttachments } from '@/server/db/schema'
 import { sseManager } from '@/server/sse/index'
 import { config } from '@/server/config'
 import { TICKET_STATUSES, TICKET_RUNNING_TASK_STATUSES } from '@/shared/constants'
@@ -17,9 +17,9 @@ import type {
   TicketSummary,
   TicketTaskSummary,
   ProjectTag,
-  RunningKinOnTicket,
+  RunningAgentOnTicket,
   TicketReporter,
-  KinThinkingConfig,
+  AgentThinkingConfig,
 } from '@/shared/types'
 import type { TicketAssignmentInfo } from '@/server/services/prompt-builder'
 
@@ -112,23 +112,23 @@ async function fetchTaskCountsForTickets(
   return result
 }
 
-/** For each ticket, fetch the Kins currently executing a task on it (one entry per running task). */
-async function fetchRunningKinsForTickets(
+/** For each ticket, fetch the Agents currently executing a task on it (one entry per running task). */
+async function fetchRunningAgentsForTickets(
   ticketIds: string[],
-): Promise<Map<string, RunningKinOnTicket[]>> {
+): Promise<Map<string, RunningAgentOnTicket[]>> {
   if (ticketIds.length === 0) return new Map()
   const rows = db
     .select({
       ticketId: tasks.ticketId,
       taskId: tasks.id,
-      kinId: kins.id,
-      kinName: kins.name,
-      kinSlug: kins.slug,
-      avatarPath: kins.avatarPath,
-      avatarUpdatedAt: kins.updatedAt,
+      agentId: agents.id,
+      agentName: agents.name,
+      agentSlug: agents.slug,
+      avatarPath: agents.avatarPath,
+      avatarUpdatedAt: agents.updatedAt,
     })
     .from(tasks)
-    .innerJoin(kins, eq(tasks.parentKinId, kins.id))
+    .innerJoin(agents, eq(tasks.parentAgentId, agents.id))
     .where(
       and(
         inArray(tasks.ticketId, ticketIds),
@@ -137,16 +137,16 @@ async function fetchRunningKinsForTickets(
     )
     .all()
 
-  const result = new Map<string, RunningKinOnTicket[]>()
+  const result = new Map<string, RunningAgentOnTicket[]>()
   for (const row of rows) {
     if (!row.ticketId) continue
     const list = result.get(row.ticketId) ?? []
     list.push({
-      kinId: row.kinId,
-      kinName: row.kinName,
-      kinSlug: row.kinSlug,
+      agentId: row.agentId,
+      agentName: row.agentName,
+      agentSlug: row.agentSlug,
       avatarUrl: row.avatarPath
-        ? `/api/uploads/kins/${row.kinId}/avatar.${row.avatarPath.split('.').pop() ?? 'png'}?v=${toMillis(row.avatarUpdatedAt)}`
+        ? `/api/uploads/agents/${row.agentId}/avatar.${row.avatarPath.split('.').pop() ?? 'png'}?v=${toMillis(row.avatarUpdatedAt)}`
         : null,
       taskId: row.taskId,
     })
@@ -159,8 +159,8 @@ async function fetchRunningKinsForTickets(
  * For each ticket, compute the timestamp (unix-ms) at which the EARLIEST
  * currently-running task started being processed. "Running" here means the
  * task sits in one of TICKET_RUNNING_TASK_STATUSES (queued/pending/in_progress
- * plus the suspended-but-alive states paused/awaiting_kin_response/
- * awaiting_subtask) — the same set that powers `runningKins` and the running
+ * plus the suspended-but-alive states paused/awaiting_agent_response/
+ * awaiting_subtask) — the same set that powers `runningAgents` and the running
  * framing on the card, so a task that delegates to a scout keeps its ticket
  * framed as running. We coalesce
  * `started_at` (actual execution start) → `queued_at` → `created_at` so a
@@ -203,25 +203,25 @@ async function fetchRunningSinceForTickets(
   return result
 }
 
-/** Resolve a reporter (user or kin) into the public-facing shape. Null if neither set. */
+/** Resolve a reporter (user or agent) into the public-facing shape. Null if neither set. */
 async function fetchReporterForTicket(
   reporterUserId: string | null,
-  reporterKinId: string | null,
+  reporterAgentId: string | null,
 ): Promise<TicketReporter | null> {
-  if (reporterKinId) {
+  if (reporterAgentId) {
     const k = db
-      .select({ id: kins.id, slug: kins.slug, name: kins.name, avatarPath: kins.avatarPath, updatedAt: kins.updatedAt })
-      .from(kins)
-      .where(eq(kins.id, reporterKinId))
+      .select({ id: agents.id, slug: agents.slug, name: agents.name, avatarPath: agents.avatarPath, updatedAt: agents.updatedAt })
+      .from(agents)
+      .where(eq(agents.id, reporterAgentId))
       .get()
     if (k) {
       return {
-        type: 'kin',
+        type: 'agent',
         id: k.id,
         slug: k.slug,
         name: k.name,
         avatarUrl: k.avatarPath
-          ? `/api/uploads/kins/${k.id}/avatar.${k.avatarPath.split('.').pop() ?? 'png'}?v=${toMillis(k.updatedAt)}`
+          ? `/api/uploads/agents/${k.id}/avatar.${k.avatarPath.split('.').pop() ?? 'png'}?v=${toMillis(k.updatedAt)}`
           : null,
       }
     }
@@ -259,7 +259,7 @@ async function rowToTicketSummary(
   row: typeof tickets.$inferSelect,
   tags: ProjectTag[],
   taskCounts: { total: number; running: number; awaitingInput: number },
-  runningKins: RunningKinOnTicket[] = [],
+  runningAgents: RunningAgentOnTicket[] = [],
   reporter: TicketReporter | null = null,
   attachmentCount = 0,
   runningSince: number | null = null,
@@ -276,7 +276,7 @@ async function rowToTicketSummary(
     taskCount: taskCounts.total,
     runningTaskCount: taskCounts.running,
     awaitingHumanInputCount: taskCounts.awaitingInput,
-    runningKins,
+    runningAgents,
     reporter,
     attachmentCount,
     inProgressAt: row.inProgressAt ? toMillis(row.inProgressAt) : null,
@@ -658,7 +658,7 @@ function escapeLike(value: string): string {
  *   - Default sort: `updatedAt DESC` so recently-active tickets come first;
  *     done tickets are pushed to the bottom by an explicit status order.
  *
- * Returns the lean `TicketSearchHit` shape — no task counts, no running Kins,
+ * Returns the lean `TicketSearchHit` shape — no task counts, no running Agents,
  * no reporter — to keep the response cheap on the chat hot-path.
  */
 export async function searchTickets(input: SearchTicketsInput): Promise<TicketSearchHit[]> {
@@ -812,10 +812,10 @@ export async function listTickets(
   const slice = hasMore ? rows.slice(0, limit) : rows
 
   const ids = slice.map((r) => r.id)
-  const [tagsByTicket, taskCountsByTicket, runningKinsByTicket, attachmentCountsByTicket, runningSinceByTicket] = await Promise.all([
+  const [tagsByTicket, taskCountsByTicket, runningAgentsByTicket, attachmentCountsByTicket, runningSinceByTicket] = await Promise.all([
     fetchTagsForTickets(ids),
     fetchTaskCountsForTickets(ids),
-    fetchRunningKinsForTickets(ids),
+    fetchRunningAgentsForTickets(ids),
     fetchAttachmentCountsForTickets(ids),
     fetchRunningSinceForTickets(ids),
   ])
@@ -826,8 +826,8 @@ export async function listTickets(
         row,
         tagsByTicket.get(row.id) ?? [],
         taskCountsByTicket.get(row.id) ?? { total: 0, running: 0, awaitingInput: 0 },
-        runningKinsByTicket.get(row.id) ?? [],
-        await fetchReporterForTicket(row.reporterUserId, row.reporterKinId),
+        runningAgentsByTicket.get(row.id) ?? [],
+        await fetchReporterForTicket(row.reporterUserId, row.reporterAgentId),
         attachmentCountsByTicket.get(row.id) ?? 0,
         runningSinceByTicket.get(row.id) ?? null,
       ),
@@ -846,10 +846,10 @@ export async function getTicket(ticketId: string): Promise<Ticket | null> {
     db
       .select({
         id: tasks.id,
-        parentKinId: tasks.parentKinId,
-        parentKinName: kins.name,
-        parentKinAvatarPath: kins.avatarPath,
-        parentKinUpdatedAt: kins.updatedAt,
+        parentAgentId: tasks.parentAgentId,
+        parentAgentName: agents.name,
+        parentAgentAvatarPath: agents.avatarPath,
+        parentAgentUpdatedAt: agents.updatedAt,
         status: tasks.status,
         mode: tasks.mode,
         kind: tasks.kind,
@@ -859,30 +859,30 @@ export async function getTicket(ticketId: string): Promise<Ticket | null> {
         updatedAt: tasks.updatedAt,
       })
       .from(tasks)
-      .innerJoin(kins, eq(tasks.parentKinId, kins.id))
+      .innerJoin(agents, eq(tasks.parentAgentId, agents.id))
       .where(eq(tasks.ticketId, ticketId))
       .orderBy(desc(tasks.createdAt))
       .all(),
   ])
 
-  const [taskCountsMap, runningKinsMap, attachmentCountsMap, runningSinceMap] = await Promise.all([
+  const [taskCountsMap, runningAgentsMap, attachmentCountsMap, runningSinceMap] = await Promise.all([
     fetchTaskCountsForTickets([ticketId]),
-    fetchRunningKinsForTickets([ticketId]),
+    fetchRunningAgentsForTickets([ticketId]),
     fetchAttachmentCountsForTickets([ticketId]),
     fetchRunningSinceForTickets([ticketId]),
   ])
   const counts = taskCountsMap.get(ticketId) ?? { total: 0, running: 0, awaitingInput: 0 }
-  const runningKins = runningKinsMap.get(ticketId) ?? []
-  const reporter = await fetchReporterForTicket(row.reporterUserId, row.reporterKinId)
+  const runningAgents = runningAgentsMap.get(ticketId) ?? []
+  const reporter = await fetchReporterForTicket(row.reporterUserId, row.reporterAgentId)
   const attachmentCount = attachmentCountsMap.get(ticketId) ?? 0
   const runningSince = runningSinceMap.get(ticketId) ?? null
 
   const ticketTasks: TicketTaskSummary[] = taskRows.map((t) => ({
     id: t.id,
-    parentKinId: t.parentKinId,
-    parentKinName: t.parentKinName,
-    parentKinAvatarUrl: t.parentKinAvatarPath
-      ? `/api/uploads/kins/${t.parentKinId}/avatar.${t.parentKinAvatarPath.split('.').pop() ?? 'png'}?v=${toMillis(t.parentKinUpdatedAt)}`
+    parentAgentId: t.parentAgentId,
+    parentAgentName: t.parentAgentName,
+    parentAgentAvatarUrl: t.parentAgentAvatarPath
+      ? `/api/uploads/agents/${t.parentAgentId}/avatar.${t.parentAgentAvatarPath.split('.').pop() ?? 'png'}?v=${toMillis(t.parentAgentUpdatedAt)}`
       : null,
     status: t.status as TicketTaskSummary['status'],
     mode: t.mode as TicketTaskSummary['mode'],
@@ -905,7 +905,7 @@ export async function getTicket(ticketId: string): Promise<Ticket | null> {
     taskCount: counts.total,
     runningTaskCount: counts.running,
     awaitingHumanInputCount: counts.awaitingInput,
-    runningKins,
+    runningAgents,
     reporter,
     attachmentCount,
     inProgressAt: row.inProgressAt ? toMillis(row.inProgressAt) : null,
@@ -958,7 +958,7 @@ export interface CreateTicketInput {
   status?: TicketStatus
   tagIds?: string[]
   /** Who's creating this ticket — set exactly one (or neither for system seeds). */
-  reporter?: { type: 'user'; id: string } | { type: 'kin'; id: string } | null
+  reporter?: { type: 'user'; id: string } | { type: 'agent'; id: string } | null
 }
 
 export async function createTicket(input: CreateTicketInput): Promise<TicketSummary> {
@@ -973,7 +973,7 @@ export async function createTicket(input: CreateTicketInput): Promise<TicketSumm
   const position = await computeNextPositionInColumn(input.projectId, status)
 
   const reporterUserId = input.reporter?.type === 'user' ? input.reporter.id : null
-  const reporterKinId = input.reporter?.type === 'kin' ? input.reporter.id : null
+  const reporterAgentId = input.reporter?.type === 'agent' ? input.reporter.id : null
 
   // Allocate the per-project monotonic number atomically.
   // SQLite serializes writers so MAX(...)+1 inside a single tx is race-safe;
@@ -997,7 +997,7 @@ export async function createTicket(input: CreateTicketInput): Promise<TicketSumm
         status,
         position,
         reporterUserId,
-        reporterKinId,
+        reporterAgentId,
         inProgressAt: status === 'in_progress' ? now : null,
         createdAt: now,
         updatedAt: now,
@@ -1011,7 +1011,7 @@ export async function createTicket(input: CreateTicketInput): Promise<TicketSumm
   }
 
   const tags = await fetchTagsForTicket(id)
-  const reporter = await fetchReporterForTicket(reporterUserId, reporterKinId)
+  const reporter = await fetchReporterForTicket(reporterUserId, reporterAgentId)
   const summary: TicketSummary = {
     id,
     projectId: input.projectId,
@@ -1024,7 +1024,7 @@ export async function createTicket(input: CreateTicketInput): Promise<TicketSumm
     taskCount: 0,
     runningTaskCount: 0,
     awaitingHumanInputCount: 0,
-    runningKins: [],
+    runningAgents: [],
     reporter,
     attachmentCount: 0,
     inProgressAt: status === 'in_progress' ? now.getTime() : null,
@@ -1092,19 +1092,19 @@ export async function updateTicket(
   if (!refreshed) return null
 
   const tags = await fetchTagsForTicket(ticketId)
-  const [taskCountsMap, runningKinsMap, attachmentCountsMap, runningSinceMap] = await Promise.all([
+  const [taskCountsMap, runningAgentsMap, attachmentCountsMap, runningSinceMap] = await Promise.all([
     fetchTaskCountsForTickets([ticketId]),
-    fetchRunningKinsForTickets([ticketId]),
+    fetchRunningAgentsForTickets([ticketId]),
     fetchAttachmentCountsForTickets([ticketId]),
     fetchRunningSinceForTickets([ticketId]),
   ])
   const counts = taskCountsMap.get(ticketId) ?? { total: 0, running: 0, awaitingInput: 0 }
-  const runningKins = runningKinsMap.get(ticketId) ?? []
-  const reporter = await fetchReporterForTicket(refreshed.reporterUserId, refreshed.reporterKinId)
+  const runningAgents = runningAgentsMap.get(ticketId) ?? []
+  const reporter = await fetchReporterForTicket(refreshed.reporterUserId, refreshed.reporterAgentId)
   const attachmentCount = attachmentCountsMap.get(ticketId) ?? 0
   const runningSince = runningSinceMap.get(ticketId) ?? null
 
-  const summary = await rowToTicketSummary(refreshed, tags, counts, runningKins, reporter, attachmentCount, runningSince)
+  const summary = await rowToTicketSummary(refreshed, tags, counts, runningAgents, reporter, attachmentCount, runningSince)
 
   sseManager.broadcast({
     type: 'ticket:updated',
@@ -1157,18 +1157,18 @@ async function getTicketSummary(ticketId: string): Promise<TicketSummary | null>
   const row = db.select().from(tickets).where(eq(tickets.id, ticketId)).get()
   if (!row) return null
   const tags = await fetchTagsForTicket(ticketId)
-  const [taskCountsMap, runningKinsMap, attachmentCountsMap, runningSinceMap] = await Promise.all([
+  const [taskCountsMap, runningAgentsMap, attachmentCountsMap, runningSinceMap] = await Promise.all([
     fetchTaskCountsForTickets([ticketId]),
-    fetchRunningKinsForTickets([ticketId]),
+    fetchRunningAgentsForTickets([ticketId]),
     fetchAttachmentCountsForTickets([ticketId]),
     fetchRunningSinceForTickets([ticketId]),
   ])
   const counts = taskCountsMap.get(ticketId) ?? { total: 0, running: 0, awaitingInput: 0 }
-  const runningKins = runningKinsMap.get(ticketId) ?? []
-  const reporter = await fetchReporterForTicket(row.reporterUserId, row.reporterKinId)
+  const runningAgents = runningAgentsMap.get(ticketId) ?? []
+  const reporter = await fetchReporterForTicket(row.reporterUserId, row.reporterAgentId)
   const attachmentCount = attachmentCountsMap.get(ticketId) ?? 0
   const runningSince = runningSinceMap.get(ticketId) ?? null
-  return rowToTicketSummary(row, tags, counts, runningKins, reporter, attachmentCount, runningSince)
+  return rowToTicketSummary(row, tags, counts, runningAgents, reporter, attachmentCount, runningSince)
 }
 
 /** Re-fetch a ticket summary and broadcast a `ticket:updated` SSE event.
@@ -1184,7 +1184,7 @@ export async function broadcastTicketUpdated(ticketId: string): Promise<void> {
 
 // ─── Prompt block info ────────────────────────────────────────────────────────
 
-/** Fetch the current ticket + its project context for the sub-Kin prompt.
+/** Fetch the current ticket + its project context for the sub-Agent prompt.
  *  Returns null if the ticket has been deleted (graceful fallback).
  *
  *  `options.runPrompt` is the optional sur-prompt persisted on the task row
@@ -1216,14 +1216,14 @@ export async function buildTicketAssignmentInfo(
       description: tasks.description,
       status: tasks.status,
       kind: tasks.kind,
-      parentKinName: kins.name,
+      parentAgentName: agents.name,
       createdAt: tasks.createdAt,
       updatedAt: tasks.updatedAt,
       result: tasks.result,
       error: tasks.error,
     })
     .from(tasks)
-    .innerJoin(kins, eq(tasks.parentKinId, kins.id))
+    .innerJoin(agents, eq(tasks.parentAgentId, agents.id))
     .where(eq(tasks.ticketId, ticketId))
     .orderBy(desc(tasks.createdAt))
     .limit(20)
@@ -1235,7 +1235,7 @@ export async function buildTicketAssignmentInfo(
     description: t.description,
     status: t.status,
     kind: t.kind,
-    parentKinName: t.parentKinName,
+    parentAgentName: t.parentAgentName,
     createdAt: toMillis(t.createdAt),
     updatedAt: toMillis(t.updatedAt),
     result: t.result,
@@ -1251,7 +1251,7 @@ export async function buildTicketAssignmentInfo(
 
   // Capture pinned project knowledge into the snapshot. Frozen for cache
   // stability — newly pinned entries appear only at the next ticket task spawn
-  // (or via live `search_project_knowledge` calls from inside the sub-Kin).
+  // (or via live `search_project_knowledge` calls from inside the sub-Agent).
   let pinnedKnowledge: TicketAssignmentInfo['pinnedKnowledge'] = []
   let knowledgeIndex: TicketAssignmentInfo['knowledgeIndex'] = []
   let totalKnowledgeCount = 0
@@ -1267,7 +1267,7 @@ export async function buildTicketAssignmentInfo(
       title: p.title,
       content: p.content,
       category: p.category,
-      authorKinName: p.authorKinName,
+      authorAgentName: p.authorAgentName,
     }))
     knowledgeIndex = index
     totalKnowledgeCount = total
@@ -1301,7 +1301,7 @@ export async function buildTicketAssignmentInfo(
 export interface StartTicketTaskResult {
   taskId: string
   ticketId: string
-  parentKinId: string
+  parentAgentId: string
   status: string
   mode: 'await'
   createdAt: number
@@ -1313,38 +1313,38 @@ export interface StartTicketTaskResult {
  *  spawn helper to keep persisted rows bounded. */
 export const TICKET_TASK_RUN_PROMPT_MAX = 500
 
-/** Spawn a sub-Kin to work on a ticket. Always in await mode (projects.md § 5).
- *  No side-effect on the ticket — the Kin manages status manually.
+/** Spawn a sub-Agent to work on a ticket. Always in await mode (projects.md § 5).
+ *  No side-effect on the ticket — the Agent manages status manually.
  *
  *  `options.runPrompt` is an optional free-form sur-prompt that scopes this
  *  particular run (e.g. "only backend", "stop after migration phase"). It is
  *  persisted on the task row and injected into the brief at prompt-build time. */
 export async function startTicketTask(
   ticketId: string,
-  parentKinId: string,
+  parentAgentId: string,
   options: {
     runPrompt?: string | null
     toolboxIds?: string[]
     /** Per-run model override. Must be paired with `providerId`. When unset,
-     *  spawnTask falls back to project default → Kin model. */
+     *  spawnTask falls back to project default → Agent model. */
     model?: string
     providerId?: string
     /** Per-run thinking/effort override. When unset, spawnTask falls back to
-     *  project default → Kin config. */
-    thinkingConfig?: KinThinkingConfig
+     *  project default → Agent config. */
+    thinkingConfig?: AgentThinkingConfig
   } = {},
 ): Promise<StartTicketTaskResult> {
   const ticket = db.select().from(tickets).where(eq(tickets.id, ticketId)).get()
   if (!ticket) throw new Error('TICKET_NOT_FOUND')
 
-  const kin = db.select({ id: kins.id }).from(kins).where(eq(kins.id, parentKinId)).get()
-  if (!kin) throw new Error('KIN_NOT_FOUND')
+  const agent = db.select({ id: agents.id }).from(agents).where(eq(agents.id, parentAgentId)).get()
+  if (!agent) throw new Error('KIN_NOT_FOUND')
 
   // Gate: when the ticket's project has a GitHub repo wired up, refuse to
   // spawn until the per-project clone is ready. Otherwise the sub-task
   // runner would fail mid-setup trying to fork a worktree off a missing/
   // broken clone — better to surface a clear error at the tool layer so
-  // the parent Kin can prompt the user to retry the clone from the UI.
+  // the parent Agent can prompt the user to retry the clone from the UI.
   const project = db
     .select({ githubRepo: projects.githubRepo, cloneStatus: projects.cloneStatus })
     .from(projects)
@@ -1364,7 +1364,7 @@ export async function startTicketTask(
   const description = `Work on ticket: ${ticket.title}`
 
   const result = await spawnTask({
-    parentKinId,
+    parentAgentId,
     description,
     title: `Ticket: ${ticket.title}`,
     mode: 'await',
@@ -1376,7 +1376,7 @@ export async function startTicketTask(
     // the 'code' built-in for ticket tasks (back-compat with old presets).
     toolboxIds: options.toolboxIds && options.toolboxIds.length > 0 ? options.toolboxIds : undefined,
     // Per-run overrides. When unset, spawnTask resolves model/thinking via
-    // project default → Kin (priority chain handled inside spawnTask).
+    // project default → Agent (priority chain handled inside spawnTask).
     model: options.model,
     providerId: options.providerId,
     thinkingConfig: options.thinkingConfig,
@@ -1389,7 +1389,7 @@ export async function startTicketTask(
   return {
     taskId: row.id,
     ticketId,
-    parentKinId,
+    parentAgentId,
     status: row.status,
     mode: 'await',
     createdAt: row.createdAt instanceof Date ? row.createdAt.getTime() : Number(row.createdAt),
@@ -1405,7 +1405,7 @@ export const TICKET_ENRICH_REWRITE_THRESHOLD = 500
 export interface StartTicketEnrichmentResult {
   taskId: string
   ticketId: string
-  parentKinId: string
+  parentAgentId: string
   status: string
   mode: 'await'
   kind: 'enrich'
@@ -1427,7 +1427,7 @@ export async function hasActiveEnrichment(ticketId: string): Promise<boolean> {
           'in_progress',
           'paused',
           'awaiting_human_input',
-          'awaiting_kin_response',
+          'awaiting_agent_response',
           'awaiting_subtask',
         ]),
       ),
@@ -1437,7 +1437,7 @@ export async function hasActiveEnrichment(ticketId: string): Promise<boolean> {
   return !!row
 }
 
-/** Build the system mission used by the dedicated enrichment sub-Kin.
+/** Build the system mission used by the dedicated enrichment sub-Agent.
  *  This is injected as the task description (= "## Your mission" block) so we
  *  don't need a new prompt-builder branch — the regular `## Ticket assignment`
  *  block already carries the current ticket state. */
@@ -1467,7 +1467,7 @@ export function buildEnrichmentBrief(input: {
     `## What to do\n\n` +
     `1. Read the existing ticket title, description, and tags (visible in the "Ticket you are working on" block above).\n` +
     `2. Gather context. Use any tool that helps:\n` +
-    `   - read_file / grep / list_directory on the project repo (kinbot-dev/) for code and docs\n` +
+    `   - read_file / grep / list_directory on the project repo (hivekeep-dev/) for code and docs\n` +
     `   - search_history if the ticket might have been discussed in chat\n` +
     `   - list_tickets / get_ticket to cross-check related tickets in the same project\n` +
     `   - If a GitHub URL is set on the project, you may consult GitHub issues for additional context.\n` +
@@ -1491,18 +1491,18 @@ export function buildEnrichmentBrief(input: {
   )
 }
 
-/** Spawn a dedicated enrichment sub-Kin on a ticket. Always in await mode.
+/** Spawn a dedicated enrichment sub-Agent on a ticket. Always in await mode.
  *  Refuses if another enrichment is already in flight on the same ticket. */
 export async function startTicketEnrichment(
   ticketId: string,
-  parentKinId: string,
+  parentAgentId: string,
   options: { focus?: string | null } = {},
 ): Promise<StartTicketEnrichmentResult> {
   const ticket = db.select().from(tickets).where(eq(tickets.id, ticketId)).get()
   if (!ticket) throw new Error('TICKET_NOT_FOUND')
 
-  const kin = db.select({ id: kins.id }).from(kins).where(eq(kins.id, parentKinId)).get()
-  if (!kin) throw new Error('KIN_NOT_FOUND')
+  const agent = db.select({ id: agents.id }).from(agents).where(eq(agents.id, parentAgentId)).get()
+  if (!agent) throw new Error('KIN_NOT_FOUND')
 
   if (await hasActiveEnrichment(ticketId)) {
     throw new Error('ENRICHMENT_ALREADY_RUNNING')
@@ -1515,7 +1515,7 @@ export async function startTicketEnrichment(
   })
 
   const result = await spawnTask({
-    parentKinId,
+    parentAgentId,
     description,
     title: `Enrich ticket: ${ticket.title}`,
     mode: 'await',
@@ -1530,7 +1530,7 @@ export async function startTicketEnrichment(
   return {
     taskId: row.id,
     ticketId,
-    parentKinId,
+    parentAgentId,
     status: row.status,
     mode: 'await',
     kind: 'enrich',

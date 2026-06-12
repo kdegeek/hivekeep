@@ -1,0 +1,287 @@
+---
+/**
+ * Mini-apps showcase: a full-width marquee of fake-but-plausible mini-app
+ * windows, so visitors can project what agents actually build — from a simple
+ * grocery list to dashboards wired to external APIs with real actions. Pure
+ * HTML/CSS using the site tokens (no JS): the track is duplicated and scrolled
+ * with a CSS animation; hover pauses; reduced-motion gets a manual scroll.
+ * Every card credits the agent that "built" it (ties back to the household).
+ */
+import { Icon } from 'astro-icon/components';
+import { getDict, type Locale } from '../i18n';
+
+interface Props {
+  lang: Locale;
+}
+const { lang } = Astro.props;
+const t = getDict(lang).components.marquee;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const av = (n: string) => `${base}/avatars/${n}.jpg`;
+---
+<section class="apps reveal" id="mini-apps">
+  <div class="wrap">
+    <span class="kicker">{t.kicker}</span>
+    <h2 class="display">{t.heading}</h2>
+    <p class="apps-sub">{t.sub}</p>
+  </div>
+
+  <div class="apps-view" aria-label="Examples of mini-apps built by agents">
+    <div class="apps-track">
+      {[0, 1].map((copy) => (
+        <div class="apps-set" aria-hidden={copy === 1 ? 'true' : undefined}>
+
+          <!-- 1 · groceries (todo) -->
+          <div class="mapp">
+            <div class="mapp-head"><span class="mi g1"><Icon name="lucide:shopping-basket" /></span> Groceries <span class="by"><img src={av('cuisine')} alt="" loading="lazy" /> Cuisine</span></div>
+            <div class="mapp-body">
+              <div class="mtodo done"><span class="cb on"><Icon name="lucide:check" /></span> Oat milk ×2</div>
+              <div class="mtodo done"><span class="cb on"><Icon name="lucide:check" /></span> Sourdough loaf</div>
+              <div class="mtodo"><span class="cb"></span> Parmesan (the good one)</div>
+              <div class="mtodo"><span class="cb"></span> Cherry tomatoes</div>
+              <div class="mtodo"><span class="cb"></span> Basil, for Friday's pasta</div>
+              <div class="mtodo-add"><Icon name="lucide:plus" /> Add item…</div>
+            </div>
+          </div>
+
+          <!-- 2 · pomodoro -->
+          <div class="mapp">
+            <div class="mapp-head"><span class="mi g2"><Icon name="lucide:timer" /></span> Deep Focus <span class="by"><img src={av('tutor')} alt="" loading="lazy" /> Tutor</span></div>
+            <div class="mapp-body pomo">
+              <svg viewBox="0 0 64 64" class="pomo-ring" aria-hidden="true">
+                <circle cx="32" cy="32" r="26" class="rg" />
+                <circle cx="32" cy="32" r="26" class="rp" />
+              </svg>
+              <div class="pomo-mid"><b>17:24</b><span>focus · 3/4</span></div>
+              <div class="pomo-btns"><span class="pbt main"><Icon name="lucide:pause" /></span><span class="pbt"><Icon name="lucide:skip-forward" /></span></div>
+            </div>
+          </div>
+
+          <!-- 3 · smart home (actions) -->
+          <div class="mapp">
+            <div class="mapp-head"><span class="mi g3"><Icon name="lucide:house" /></span> Home Control <span class="by"><img src={av('nest')} alt="" loading="lazy" /> Nest</span></div>
+            <div class="mapp-body">
+              <div class="mrow"><Icon name="lucide:lamp" /> Living room <span class="tgl on"><i></i></span></div>
+              <div class="mrow"><Icon name="lucide:lamp-desk" /> Office <span class="tgl"><i></i></span></div>
+              <div class="mrow"><Icon name="lucide:thermometer" /> Heating <span class="step"><b>21.5°</b><span class="s-btn">−</span><span class="s-btn">+</span></span></div>
+              <div class="scenes"><span class="scene on"><Icon name="lucide:moon" /> Night</span><span class="scene"><Icon name="lucide:clapperboard" /> Movie</span><span class="scene"><Icon name="lucide:sunrise" /> Morning</span></div>
+            </div>
+          </div>
+
+          <!-- 4 · homelab monitor (API) -->
+          <div class="mapp">
+            <div class="mapp-head"><span class="mi g4"><Icon name="lucide:server" /></span> Homelab <span class="by"><img src={av('atlas')} alt="" loading="lazy" /> Atlas</span></div>
+            <div class="mapp-body">
+              <div class="srv"><span class="dot ok"></span> proxmox-01 <span class="meter"><i style="width:42%"></i></span><b>42%</b></div>
+              <div class="srv"><span class="dot ok"></span> nas <span class="meter"><i style="width:17%"></i></span><b>17%</b></div>
+              <div class="srv"><span class="dot warn"></span> pi-cluster <span class="meter"><i class="hot" style="width:81%"></i></span><b>81%</b></div>
+              <div class="srv"><span class="dot ok"></span> hivekeep <span class="meter"><i style="width:23%"></i></span><b>23%</b></div>
+              <div class="mfoot"><Icon name="lucide:activity" /> 28 days uptime · alerts → Telegram</div>
+            </div>
+          </div>
+
+          <!-- 5 · budget (chart) -->
+          <div class="mapp">
+            <div class="mapp-head"><span class="mi g5"><Icon name="lucide:piggy-bank" /></span> Budget <span class="by"><img src={av('ledger')} alt="" loading="lazy" /> Ledger</span></div>
+            <div class="mapp-body">
+              <div class="bars">
+                <i style="height:34%"></i><i style="height:52%"></i><i style="height:41%"></i><i style="height:66%"></i><i style="height:48%"></i><i class="hi" style="height:78%"></i><i class="ghost" style="height:30%"></i>
+              </div>
+              <div class="brow"><span class="sw a"></span> Groceries <b>€412</b><span class="pct up">−8%</span></div>
+              <div class="brow"><span class="sw b"></span> Subscriptions <b>€96</b><span class="pct down">+2 new</span></div>
+            </div>
+          </div>
+
+          <!-- 6 · watchlist (external API + sparklines) -->
+          <div class="mapp">
+            <div class="mapp-head"><span class="mi g6"><Icon name="lucide:candlestick-chart" /></span> Watchlist <span class="by"><img src={av('prism')} alt="" loading="lazy" /> Prism</span></div>
+            <div class="mapp-body">
+              <div class="tick"><b>BTC</b><svg viewBox="0 0 60 18"><polyline points="0,14 9,12 18,13 27,9 36,10 45,6 52,7 60,3" /></svg><span class="pct up">+2.4%</span></div>
+              <div class="tick"><b>ETH</b><svg viewBox="0 0 60 18"><polyline points="0,8 9,10 18,7 27,11 36,9 45,12 52,10 60,11" /></svg><span class="pct down">−1.1%</span></div>
+              <div class="tick"><b>NVDA</b><svg viewBox="0 0 60 18"><polyline points="0,15 9,13 18,14 27,10 36,11 45,8 52,9 60,5" /></svg><span class="pct up">+4.7%</span></div>
+              <div class="mfoot"><Icon name="lucide:bell-ring" /> alert: BTC &lt; $90k → ping me</div>
+            </div>
+          </div>
+
+          <!-- 7 · habits -->
+          <div class="mapp">
+            <div class="mapp-head"><span class="mi g7"><Icon name="lucide:flame" /></span> Habits <span class="by"><img src={av('vitals')} alt="" loading="lazy" /> Vitals</span></div>
+            <div class="mapp-body">
+              <div class="hb-name"><Icon name="lucide:dumbbell" /> Morning workout <b class="streak">12🔥</b></div>
+              <div class="hgrid">
+                {Array.from({ length: 28 }).map((_, i) => (
+                  <span class={`hd ${[1,2,4,5,7,8,9,11,12,14,15,16,18,19,21,22,23,25,26].includes(i) ? 'on' : ''} ${i === 26 ? 'today' : ''}`}></span>
+                ))}
+              </div>
+              <div class="mfoot"><Icon name="lucide:trending-up" /> best month yet: 19/28 days</div>
+            </div>
+          </div>
+
+          <!-- 8 · kanban -->
+          <div class="mapp">
+            <div class="mapp-head"><span class="mi g8"><Icon name="lucide:kanban" /></span> Reno Tracker <span class="by"><img src={av('forge')} alt="" loading="lazy" /> Forge</span></div>
+            <div class="mapp-body kb">
+              <div class="kcol"><span class="kt">To do</span><div class="kc">Paint hallway</div><div class="kc">Order tiles</div></div>
+              <div class="kcol"><span class="kt">Doing</span><div class="kc doing">Kitchen quotes</div></div>
+              <div class="kcol"><span class="kt">Done</span><div class="kc done">Plumber visit</div><div class="kc done">Floor plan</div></div>
+            </div>
+          </div>
+
+          <!-- 9 · weather (external API) -->
+          <div class="mapp">
+            <div class="mapp-head"><span class="mi g9"><Icon name="lucide:cloud-sun" /></span> Weather <span class="by"><img src={av('compass')} alt="" loading="lazy" /> Compass</span></div>
+            <div class="mapp-body">
+              <div class="wx-now"><Icon name="lucide:cloud-sun" /><b>18°</b><span>Grenoble · clearing up</span></div>
+              <div class="wx-days">
+                <span class="wd"><i>Thu</i><Icon name="lucide:sun" /><b>21°</b></span>
+                <span class="wd"><i>Fri</i><Icon name="lucide:cloud-rain" /><b>14°</b></span>
+                <span class="wd"><i>Sat</i><Icon name="lucide:sun" /><b>23°</b></span>
+                <span class="wd"><i>Sun</i><Icon name="lucide:cloudy" /><b>19°</b></span>
+              </div>
+              <div class="mfoot"><Icon name="lucide:bike" /> “good evening for a ride, go before 7pm”</div>
+            </div>
+          </div>
+
+        </div>
+      ))}
+    </div>
+  </div>
+
+  <div class="wrap apps-note-wrap"><p class="apps-note mono" set:html={t.note}></p></div>
+</section>
+
+<style>
+  .apps{padding:72px 0 64px;overflow:hidden;}
+  .apps h2{font-size:clamp(1.9rem,3.4vw,2.7rem);line-height:1.04;letter-spacing:-.025em;margin:12px 0 14px;}
+  .apps-sub{font-size:1.06rem;color:var(--ink-soft);margin:0;max-width:62ch;}
+  .apps-sub b{color:var(--ink);font-weight:600;}
+  .apps-note-wrap{margin-top:6px;}
+  .apps-note{font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);margin:18px 0 0;}
+  .apps-note b{color:var(--peach);font-weight:600;}
+
+  /* marquee */
+  .apps-view{margin-top:30px;-webkit-mask-image:var(--feather-x);mask-image:var(--feather-x);}
+  .apps-track{display:flex;width:max-content;animation:apps-scroll 64s linear infinite;}
+  .apps-view:hover .apps-track{animation-play-state:paused;}
+  .apps-set{display:flex;gap:16px;padding-right:16px;}
+  @keyframes apps-scroll{to{transform:translateX(-50%);}}
+  @media (prefers-reduced-motion: reduce){
+    .apps-view{overflow-x:auto;mask-image:none;-webkit-mask-image:none;}
+    .apps-track{animation:none;}
+  }
+
+  /* mini-app window */
+  .mapp{width:282px;flex:0 0 auto;background:var(--surface);border:1px solid var(--line-strong);border-radius:14px;overflow:hidden;box-shadow:0 2px 8px oklch(0 0 0/.3),0 14px 34px oklch(0 0 0/.28);position:relative;}
+  .mapp::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--grad);opacity:.85;}
+  .mapp-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);font-weight:700;font-size:.86rem;color:var(--ink);}
+  .mi{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;flex:0 0 auto;color:#fff;}
+  .mi svg{width:13px;height:13px;}
+  .g1{background:oklch(0.72 0.17 60/.8);} .g2{background:oklch(0.64 0.21 305/.8);} .g3{background:oklch(0.7 0.18 342/.8);}
+  .g4{background:oklch(0.62 0.14 235/.8);} .g5{background:oklch(0.7 0.15 150/.8);} .g6{background:oklch(0.66 0.18 275/.8);}
+  .g7{background:oklch(0.72 0.18 25/.8);} .g8{background:oklch(0.68 0.13 200/.8);} .g9{background:oklch(0.78 0.13 80/.8);}
+  .by{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-family:"JetBrains Mono",monospace;font-size:.6rem;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-soft);}
+  .by img{width:16px;height:16px;border-radius:50%;object-fit:cover;border:1px solid var(--line-strong);}
+  .mapp-body{height:172px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;font-size:.82rem;color:var(--ink);}
+  .mfoot{margin-top:auto;display:flex;align-items:center;gap:6px;font-family:"JetBrains Mono",monospace;font-size:.6rem;letter-spacing:.02em;color:var(--ink-soft);border-top:1px solid var(--line);padding-top:8px;}
+  .mfoot svg{width:11px;height:11px;color:var(--peach);flex:0 0 auto;}
+
+  /* todo */
+  .mtodo{display:flex;align-items:center;gap:9px;}
+  .mtodo.done{color:var(--ink-soft);text-decoration:line-through;}
+  .cb{width:16px;height:16px;border-radius:5px;border:1px solid var(--line-strong);display:grid;place-items:center;flex:0 0 auto;}
+  .cb.on{background:var(--grad);border:0;color:#fff;}
+  .cb svg{width:11px;height:11px;}
+  .mtodo-add{display:flex;align-items:center;gap:7px;color:var(--ink-soft);font-size:.78rem;border:1px dashed var(--line-strong);border-radius:8px;padding:5px 9px;margin-top:2px;}
+  .mtodo-add svg{width:12px;height:12px;}
+
+  /* pomodoro */
+  .pomo{position:relative;align-items:center;justify-content:center;}
+  .pomo-ring{position:absolute;inset:10px auto auto 50%;transform:translateX(-50%);width:108px;height:108px;}
+  .pomo-ring circle{fill:none;stroke-width:5;stroke-linecap:round;}
+  .pomo-ring .rg{stroke:oklch(1 0 0/.08);}
+  .pomo-ring .rp{stroke:oklch(0.72 0.19 305);stroke-dasharray:163.4;stroke-dashoffset:49;transform:rotate(-90deg);transform-origin:center;}
+  .pomo-mid{margin-top:26px;text-align:center;position:relative;z-index:1;}
+  .pomo-mid b{display:block;font-size:1.5rem;font-weight:800;letter-spacing:-.02em;}
+  .pomo-mid span{font-family:"JetBrains Mono",monospace;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);}
+  .pomo-btns{display:flex;gap:8px;justify-content:center;margin-top:14px;}
+  .pbt{width:30px;height:30px;border-radius:50%;border:1px solid var(--line-strong);display:grid;place-items:center;color:var(--ink);}
+  .pbt.main{background:var(--grad);border:0;color:#fff;}
+  .pbt svg{width:13px;height:13px;}
+
+  /* home control */
+  .mrow{display:flex;align-items:center;gap:9px;}
+  .mrow svg{width:14px;height:14px;color:var(--ink-soft);flex:0 0 auto;}
+  .tgl{margin-left:auto;width:32px;height:18px;border-radius:999px;background:oklch(1 0 0/.08);border:1px solid var(--line-strong);position:relative;}
+  .tgl i{position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--ink-soft);transition:none;}
+  .tgl.on{background:var(--grad);border-color:transparent;}
+  .tgl.on i{left:auto;right:2px;background:#fff;}
+  .step{margin-left:auto;display:inline-flex;align-items:center;gap:6px;}
+  .step b{font-size:.82rem;}
+  .s-btn{width:18px;height:18px;border-radius:6px;border:1px solid var(--line-strong);display:grid;place-items:center;font-size:.72rem;color:var(--ink-soft);line-height:1;}
+  .scenes{display:flex;gap:6px;margin-top:auto;}
+  .scene{display:inline-flex;align-items:center;gap:5px;font-family:"JetBrains Mono",monospace;font-size:.56rem;letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--line-strong);border-radius:999px;padding:4px 8px;color:var(--ink-soft);}
+  .scene.on{background:oklch(0.72 0.19 305/.16);border-color:oklch(0.72 0.19 305/.5);color:var(--ink);}
+  .scene svg{width:10px;height:10px;}
+
+  /* homelab */
+  .srv{display:flex;align-items:center;gap:8px;font-family:"JetBrains Mono",monospace;font-size:.7rem;}
+  .srv b{font-size:.62rem;color:var(--ink-soft);width:30px;text-align:right;}
+  .dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;}
+  .dot.ok{background:var(--green);box-shadow:0 0 7px var(--green);}
+  .dot.warn{background:var(--peach);box-shadow:0 0 7px var(--peach);}
+  .meter{flex:1;height:6px;border-radius:999px;background:oklch(1 0 0/.07);overflow:hidden;}
+  .meter i{display:block;height:100%;background:var(--grad);border-radius:999px;}
+  .meter i.hot{background:var(--grad-warm);}
+
+  /* budget */
+  .bars{display:flex;align-items:flex-end;gap:7px;height:64px;padding:0 4px;}
+  .bars i{flex:1;border-radius:4px 4px 0 0;background:oklch(0.72 0.19 305/.45);}
+  .bars i.hi{background:var(--grad);}
+  .bars i.ghost{background:oklch(1 0 0/.08);border:1px dashed var(--line-strong);}
+  .brow{display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--ink-soft);}
+  .brow b{margin-left:auto;color:var(--ink);font-size:.78rem;}
+  .sw{width:9px;height:9px;border-radius:3px;flex:0 0 auto;}
+  .sw.a{background:oklch(0.72 0.19 305);} .sw.b{background:oklch(0.84 0.13 60);}
+  .pct{font-family:"JetBrains Mono",monospace;font-size:.62rem;}
+  .pct.up{color:var(--green);} .pct.down{color:var(--peach);}
+
+  /* watchlist */
+  .tick{display:flex;align-items:center;gap:10px;}
+  .tick b{font-family:"JetBrains Mono",monospace;font-size:.72rem;width:38px;}
+  .tick svg{flex:1;height:18px;}
+  .tick polyline{fill:none;stroke:oklch(0.72 0.19 305);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+  .tick:nth-child(2) polyline{stroke:oklch(0.84 0.13 60);}
+  .tick .pct{width:44px;text-align:right;}
+
+  /* habits */
+  .hb-name{display:flex;align-items:center;gap:7px;font-size:.82rem;font-weight:600;}
+  .hb-name svg{width:13px;height:13px;color:var(--ink-soft);}
+  .hb-name .streak{margin-left:auto;font-size:.74rem;color:var(--peach);}
+  .hgrid{display:grid;grid-template-columns:repeat(14,1fr);gap:4px;margin-top:2px;}
+  .hd{aspect-ratio:1;border-radius:3px;background:oklch(1 0 0/.06);}
+  .hd.on{background:oklch(0.72 0.19 305/.75);}
+  .hd.today{outline:1.5px solid var(--peach);outline-offset:1px;}
+
+  /* kanban */
+  .kb{flex-direction:row;gap:8px;}
+  .kcol{flex:1;display:flex;flex-direction:column;gap:6px;min-width:0;}
+  .kt{font-family:"JetBrains Mono",monospace;font-size:.54rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);}
+  .kc{border:1px solid var(--line);border-left:3px solid oklch(0.72 0.19 305/.7);border-radius:7px;background:oklch(1 0 0/.03);padding:6px 7px;font-size:.68rem;line-height:1.3;color:var(--ink);}
+  .kc.doing{border-left-color:var(--peach);}
+  .kc.done{border-left-color:var(--green);color:var(--ink-soft);text-decoration:line-through;}
+
+  /* weather */
+  .wx-now{display:flex;align-items:center;gap:10px;}
+  .wx-now svg{width:26px;height:26px;color:var(--peach);}
+  .wx-now b{font-size:1.6rem;font-weight:800;letter-spacing:-.02em;}
+  .wx-now span{font-size:.74rem;color:var(--ink-soft);line-height:1.3;}
+  .wx-days{display:flex;gap:6px;margin-top:4px;}
+  .wd{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;border:1px solid var(--line);border-radius:8px;padding:7px 4px;}
+  .wd i{font-style:normal;font-family:"JetBrains Mono",monospace;font-size:.54rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);}
+  .wd svg{width:14px;height:14px;color:var(--ink-soft);}
+  .wd b{font-size:.72rem;}
+
+  @media(max-width:860px){
+    .apps{padding:56px 0 48px;}
+    .mapp{width:248px;}
+  }
+</style>

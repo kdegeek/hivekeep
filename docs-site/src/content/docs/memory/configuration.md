@@ -70,7 +70,7 @@ Session compacting uses **token-aware multi-summary accumulation**: when context
 | `COMPACTING_KEEP_PERCENT` | `40` | % of context window preserved as raw messages (keep-window) |
 | `COMPACTING_SUMMARY_BUDGET_PERCENT` | `20` | Max % of context window for summary tokens before telescopic merge |
 | `COMPACTING_MAX_SUMMARIES` | `10` | Max active summaries before telescopic merge |
-| `COMPACTING_MAX_SUMMARIES_PER_KIN` | `50` | Total summary retention per Kin (active + archived) |
+| `COMPACTING_MAX_SUMMARIES_PER_KIN` | `50` | Total summary retention per Agent (active + archived) |
 
 ### General settings
 
@@ -78,11 +78,11 @@ Session compacting uses **token-aware multi-summary accumulation**: when context
 |----------|---------|-------------|
 | `COMPACTING_MODEL` | Provider default | Model used for session compacting/summarization. Supports `providerId:modelId` format |
 
-All compacting settings can be configured **per-Kin** (overrides global values) via the **Compaction** tab in the Kin's settings. Available per-Kin fields: `thresholdPercent`, `keepPercent`, `summaryBudgetPercent`, `maxSummaries`, `compactingModel`, and `compactingProviderId`.
+All compacting settings can be configured **per-Agent** (overrides global values) via the **Compaction** tab in the Agent's settings. Available per-Agent fields: `thresholdPercent`, `keepPercent`, `summaryBudgetPercent`, `maxSummaries`, `compactingModel`, and `compactingProviderId`.
 
 ### Progressive context pipeline
 
-Before compacting runs, KinBot applies a progressive pipeline to reduce context size without LLM calls:
+Before compacting runs, Hivekeep applies a progressive pipeline to reduce context size without LLM calls:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -119,14 +119,14 @@ Memory requires an **embedding provider** to be configured in **Settings > Provi
 - **xAI** — Embedding support
 
 :::caution
-Without an embedding provider, memory storage and retrieval will not work. The Kin will still function but won't remember anything across sessions.
+Without an embedding provider, memory storage and retrieval will not work. The Agent will still function but won't remember anything across sessions.
 :::
 
 ## Tuning Tips
 
 ### Basic Tuning
 - **Lower `MEMORY_SIMILARITY_THRESHOLD`** (e.g., 0.5) to retrieve more memories at the cost of relevance
-- **Raise `MEMORY_MAX_RELEVANT`** if your Kin needs broader context awareness
+- **Raise `MEMORY_MAX_RELEVANT`** if your Agent needs broader context awareness
 - **Lower `COMPACTING_THRESHOLD_PERCENT`** (e.g., 60) for earlier compaction triggers
 - **Raise `COMPACTING_KEEP_PERCENT`** (e.g., 50) to keep more raw context visible to the LLM
 

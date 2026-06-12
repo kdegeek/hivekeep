@@ -38,10 +38,12 @@ mock.module('@/server/db/index', () => ({
 mock.module('@/server/db/schema', () => ({
   ...fullMockSchema,
   userProfiles: { userId: 'userId', role: 'role' },
-  kins: { id: 'id', name: 'name', slug: 'slug' },
+  agents: { id: 'id', name: 'name', slug: 'slug' },
 }))
 
+const _realAppSettings = await import('@/server/services/app-settings')
 mock.module('@/server/services/app-settings', () => ({
+  ..._realAppSettings,
   getSetting: mock(() => Promise.resolve(null)),
   setSetting: mock(() => Promise.resolve()),
   getGlobalPrompt: mockGetGlobalPrompt,
@@ -340,7 +342,7 @@ describe('settings routes', () => {
   //
   // The dashboard checklist (7 items: add LLM, set default LLM, etc.) lets
   // the user skip items they don't care about. Skip-state is persisted
-  // *globally* under app_settings.dismissed_setup_items — KinBot is a
+  // *globally* under app_settings.dismissed_setup_items — Hivekeep is a
   // small-group product with shared configuration, not multi-tenant
   // per-user, so a dismissal applies to every admin.
 

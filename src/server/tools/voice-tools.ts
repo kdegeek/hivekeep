@@ -1,5 +1,5 @@
 /**
- * Native voice tools exposed to Kins.
+ * Native voice tools exposed to Agents.
  *
  * Discovery:
  *  - `list_tts_providers` / `list_stt_providers` — configured providers
@@ -12,7 +12,7 @@
  * Action:
  *  - `text_to_speech` — synthesizes audio bytes, persists them in the
  *    messages-attachment file table (same path as generate_image), and
- *    returns the file_id + URL the Kin can attach to its reply.
+ *    returns the file_id + URL the Agent can attach to its reply.
  *  - `transcribe_audio` — reads bytes from an existing file_id, sends
  *    them to the resolved STT provider, returns the transcript.
  *
@@ -55,7 +55,7 @@ const log = createLogger('tools:voice')
 // ─── list_tts_providers ──────────────────────────────────────────────────────
 
 export const listTtsProvidersTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: () =>
@@ -100,7 +100,7 @@ export const listTtsProvidersTool: ToolRegistration = {
 // ─── list_voices ─────────────────────────────────────────────────────────────
 
 export const listVoicesTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: () =>
@@ -206,7 +206,7 @@ export const listVoicesTool: ToolRegistration = {
 // ─── text_to_speech ──────────────────────────────────────────────────────────
 
 export const textToSpeechTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   // Not readOnly: writes a file to disk + a row in `files`. Concurrency-safe:
   // each call produces its own file with a fresh UUID; no shared state.
   concurrencySafe: true,
@@ -335,11 +335,11 @@ export const textToSpeechTool: ToolRegistration = {
         }
 
         // Persist the audio as a message attachment — same path as
-        // generate_image (files table + /api/uploads/messages/<kinId>/...).
+        // generate_image (files table + /api/uploads/messages/<agentId>/...).
         const ext = extensionForMediaType(result.mediaType)
         const fileId = uuid()
         const storedName = `${fileId}-tts.${ext}`
-        const dir = join(config.upload.dir, 'messages', ctx.kinId)
+        const dir = join(config.upload.dir, 'messages', ctx.agentId)
         const storedPath = join(dir, storedName)
 
         await mkdir(dir, { recursive: true })
@@ -347,7 +347,7 @@ export const textToSpeechTool: ToolRegistration = {
 
         await db.insert(files).values({
           id: fileId,
-          kinId: ctx.kinId,
+          agentId: ctx.agentId,
           originalName: storedName,
           storedPath,
           mimeType: result.mediaType,
@@ -355,7 +355,7 @@ export const textToSpeechTool: ToolRegistration = {
           createdAt: new Date(),
         })
 
-        const url = `/api/uploads/messages/${ctx.kinId}/${storedName}`
+        const url = `/api/uploads/messages/${ctx.agentId}/${storedName}`
 
         const allWarnings = [...new Set([...warnings, ...(result.warnings ?? [])])]
 
@@ -376,7 +376,7 @@ export const textToSpeechTool: ToolRegistration = {
 // ─── list_stt_providers ──────────────────────────────────────────────────────
 
 export const listSttProvidersTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: () =>
@@ -421,7 +421,7 @@ export const listSttProvidersTool: ToolRegistration = {
 // ─── list_stt_models ─────────────────────────────────────────────────────────
 
 export const listSttModelsTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: () =>
@@ -508,7 +508,7 @@ export const listSttModelsTool: ToolRegistration = {
 // ─── transcribe_audio ────────────────────────────────────────────────────────
 
 export const transcribeAudioTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (ctx) =>
@@ -561,9 +561,9 @@ export const transcribeAudioTool: ToolRegistration = {
         if (!fileRow) {
           return { error: `No file with id "${file_id}".`, code: 'FILE_NOT_FOUND' }
         }
-        if (fileRow.kinId !== ctx.kinId) {
-          // Kin isolation — never let a Kin transcribe another Kin's audio.
-          return { error: 'File belongs to another Kin.', code: 'FILE_FORBIDDEN' }
+        if (fileRow.agentId !== ctx.agentId) {
+          // Agent isolation — never let an Agent transcribe another Agent's audio.
+          return { error: 'File belongs to another Agent.', code: 'FILE_FORBIDDEN' }
         }
 
         // Resolve provider.

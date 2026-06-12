@@ -1,5 +1,5 @@
 /**
- * Remark plugin: scan text nodes for ticket mention tokens (`#42`, `kinbot#42`)
+ * Remark plugin: scan text nodes for ticket mention tokens (`#42`, `hivekeep#42`)
  * and replace them with a synthetic mdast node that surfaces as an HTML
  * `<ticket-mention>` element. The corresponding React component is registered
  * in MarkdownContent's `components` map.
@@ -38,7 +38,7 @@ function buildReplace() {
       re,
       (raw: string) => {
         // The matched substring is what the author wrote, e.g. "#42" or
-        // "kinbot#42". We pass it verbatim to the component which uses it
+        // "hivekeep#42". We pass it verbatim to the component which uses it
         // both as the cache key AND the display label.
         const node = {
           type: 'text' as const,

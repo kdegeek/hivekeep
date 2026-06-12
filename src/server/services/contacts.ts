@@ -43,7 +43,7 @@ interface ContactWithDetails {
   updatedAt: Date
   nicknames: Array<{ id: string; nickname: string }>
   identifiers: Array<{ id: string; label: string; value: string }>
-  notes: Array<{ id: string; kinId: string | null; userId: string | null; scope: string; content: string; createdAt: Date; updatedAt: Date }>
+  notes: Array<{ id: string; agentId: string | null; userId: string | null; scope: string; content: string; createdAt: Date; updatedAt: Date }>
   platformIds: Array<{ id: string; contactId: string; platform: string; platformId: string; createdAt: number }>
 }
 
@@ -69,7 +69,7 @@ export async function getContact(contactId: string) {
 
 export async function getContactWithDetails(
   contactId: string,
-  kinId?: string,
+  agentId?: string,
 ): Promise<ContactWithDetails | null> {
   const contact = db.select().from(contacts).where(eq(contacts.id, contactId)).get()
   if (!contact) return null
@@ -87,8 +87,8 @@ export async function getContactWithDetails(
     .all()
 
   let notes
-  if (kinId) {
-    // Global notes from all Kins + private notes from requesting Kin + user notes (read-only context)
+  if (agentId) {
+    // Global notes from all Agents + private notes from requesting Agent + user notes (read-only context)
     notes = db
       .select()
       .from(contactNotes)
@@ -97,7 +97,7 @@ export async function getContactWithDetails(
           eq(contactNotes.contactId, contactId),
           or(
             eq(contactNotes.scope, 'global'),
-            eq(contactNotes.kinId, kinId),
+            eq(contactNotes.agentId, agentId),
             eq(contactNotes.scope, 'user'),
           ),
         ),
@@ -145,7 +145,7 @@ export async function getContactWithDetails(
     })),
     notes: notes.map((n) => ({
       id: n.id,
-      kinId: n.kinId,
+      agentId: n.agentId,
       userId: n.userId,
       scope: n.scope,
       content: n.content,
@@ -232,7 +232,7 @@ export async function listContactsWithDetails(): Promise<ContactWithDetails[]> {
       nicknames,
       identifiers: (identifiersByContact.get(contact.id) ?? []).map((i) => ({ id: i.id, label: i.label, value: i.value })),
       notes: (notesByContact.get(contact.id) ?? []).map((n) => ({
-        id: n.id, kinId: n.kinId, userId: n.userId, scope: n.scope, content: n.content, createdAt: n.createdAt, updatedAt: n.updatedAt,
+        id: n.id, agentId: n.agentId, userId: n.userId, scope: n.scope, content: n.content, createdAt: n.createdAt, updatedAt: n.updatedAt,
       })),
       platformIds: (pidsByContact.get(contact.id) ?? []).map((p) => ({
         id: p.id, contactId: p.contactId, platform: p.platform, platformId: p.platformId,
@@ -367,7 +367,7 @@ export async function deleteContact(contactId: string): Promise<boolean> {
 
 export async function searchContacts(
   query: string,
-  kinId?: string,
+  agentId?: string,
 ): Promise<ContactWithDetails[]> {
   const pattern = `%${query}%`
 
@@ -390,7 +390,7 @@ export async function searchContacts(
     .all()
 
   let byNote
-  if (kinId) {
+  if (agentId) {
     byNote = db
       .select({ id: contactNotes.contactId })
       .from(contactNotes)
@@ -399,7 +399,7 @@ export async function searchContacts(
           like(contactNotes.content, pattern),
           or(
             eq(contactNotes.scope, 'global'),
-            eq(contactNotes.kinId, kinId),
+            eq(contactNotes.agentId, agentId),
             eq(contactNotes.scope, 'user'),
           ),
         ),
@@ -422,7 +422,7 @@ export async function searchContacts(
 
   const results: ContactWithDetails[] = []
   for (const id of uniqueIds) {
-    const detail = await getContactWithDetails(id, kinId)
+    const detail = await getContactWithDetails(id, agentId)
     if (detail) results.push(detail)
   }
 
@@ -652,7 +652,7 @@ export function replaceContactNicknames(contactId: string, nicknames: string[]) 
 
 // ─── Notes ───────────────────────────────────────────────────────────────────
 
-export function setContactNote(contactId: string, kinId: string, scope: NoteScope, content: string) {
+export function setContactNote(contactId: string, agentId: string, scope: NoteScope, content: string) {
   const now = new Date()
   const existing = db
     .select()
@@ -660,7 +660,7 @@ export function setContactNote(contactId: string, kinId: string, scope: NoteScop
     .where(
       and(
         eq(contactNotes.contactId, contactId),
-        eq(contactNotes.kinId, kinId),
+        eq(contactNotes.agentId, agentId),
         eq(contactNotes.scope, scope),
       ),
     )
@@ -684,7 +684,7 @@ export function setContactNote(contactId: string, kinId: string, scope: NoteScop
   db.insert(contactNotes).values({
     id,
     contactId,
-    kinId,
+    agentId,
     userId: null,
     scope,
     content,
@@ -697,7 +697,7 @@ export function setContactNote(contactId: string, kinId: string, scope: NoteScop
     data: { contactId },
   })
 
-  return { id, contactId, kinId, userId: null, scope, content, createdAt: now, updatedAt: now }
+  return { id, contactId, agentId, userId: null, scope, content, createdAt: now, updatedAt: now }
 }
 
 export function setUserContactNote(contactId: string, userId: string, content: string) {
@@ -732,7 +732,7 @@ export function setUserContactNote(contactId: string, userId: string, content: s
   db.insert(contactNotes).values({
     id,
     contactId,
-    kinId: null,
+    agentId: null,
     userId,
     scope: 'user',
     content,
@@ -745,7 +745,7 @@ export function setUserContactNote(contactId: string, userId: string, content: s
     data: { contactId },
   })
 
-  return { id, contactId, kinId: null, userId, scope: 'user' as const, content, createdAt: now, updatedAt: now }
+  return { id, contactId, agentId: null, userId, scope: 'user' as const, content, createdAt: now, updatedAt: now }
 }
 
 export function deleteUserContactNote(contactId: string, userId: string): boolean {
@@ -805,7 +805,7 @@ export function deleteContactNote(noteId: string, contactId?: string) {
   return true
 }
 
-export function getVisibleNotes(contactId: string, kinId: string) {
+export function getVisibleNotes(contactId: string, agentId: string) {
   return db
     .select()
     .from(contactNotes)
@@ -814,7 +814,7 @@ export function getVisibleNotes(contactId: string, kinId: string) {
         eq(contactNotes.contactId, contactId),
         or(
           eq(contactNotes.scope, 'global'),
-          eq(contactNotes.kinId, kinId),
+          eq(contactNotes.agentId, agentId),
           eq(contactNotes.scope, 'user'),
         ),
       ),
@@ -822,8 +822,8 @@ export function getVisibleNotes(contactId: string, kinId: string) {
     .all()
 }
 
-export function deleteNotesByKin(kinId: string) {
-  db.delete(contactNotes).where(eq(contactNotes.kinId, kinId)).run()
+export function deleteNotesByAgent(agentId: string) {
+  db.delete(contactNotes).where(eq(contactNotes.agentId, agentId)).run()
 }
 
 // ─── Prompt helpers ──────────────────────────────────────────────────────────

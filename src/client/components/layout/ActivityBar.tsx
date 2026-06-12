@@ -1,8 +1,9 @@
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Home, FolderKanban, ListTodo, CalendarClock, Blocks } from 'lucide-react'
+import { Home, FolderKanban, ListTodo, CalendarClock, Folder, Blocks, Boxes, SquareTerminal } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 import { useTasksContext } from '@/client/contexts/TasksContext'
+import { useAuth } from '@/client/hooks/useAuth'
 
 interface ActivityBarItem {
   /** URL prefix that activates this item. */
@@ -13,34 +14,42 @@ interface ActivityBarItem {
   labelKey: string
   /** When true, shows the active-task badge. */
   badge?: boolean
+  /** When true, the item is only shown to admin users. */
+  adminOnly?: boolean
 }
 
-// Order: Kins first (default landing), then the dedicated section pages.
+// Order: Agents first (default landing), then the dedicated section pages.
 const ITEMS: ActivityBarItem[] = [
-  // Default landing — "Kins" matches any path not claimed by a section below.
-  { matchPrefix: '/', navigateTo: '/', icon: Home, labelKey: 'activityBar.kins' },
+  // Default landing — "Agents" matches any path not claimed by a section below.
+  { matchPrefix: '/', navigateTo: '/', icon: Home, labelKey: 'activityBar.agents' },
   { matchPrefix: '/projects', navigateTo: '/projects', icon: FolderKanban, labelKey: 'activityBar.projects' },
   { matchPrefix: '/tasks', navigateTo: '/tasks', icon: ListTodo, labelKey: 'activityBar.tasks', badge: true },
   { matchPrefix: '/crons', navigateTo: '/crons', icon: CalendarClock, labelKey: 'activityBar.crons' },
+  { matchPrefix: '/files', navigateTo: '/files', icon: Folder, labelKey: 'activityBar.files' },
   { matchPrefix: '/mini-apps', navigateTo: '/mini-apps', icon: Blocks, labelKey: 'activityBar.apps' },
+  { matchPrefix: '/models', navigateTo: '/models', icon: Boxes, labelKey: 'activityBar.models', adminOnly: true },
+  { matchPrefix: '/terminal', navigateTo: '/terminal', icon: SquareTerminal, labelKey: 'activityBar.terminal', adminOnly: true },
 ]
 
-const SECTION_PREFIXES = ['/projects', '/tasks', '/crons', '/mini-apps']
+const SECTION_PREFIXES = ['/projects', '/tasks', '/crons', '/files', '/mini-apps', '/models', '/terminal']
 
 export function ActivityBar() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const { activeTasks } = useTasksContext()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
+  const items = ITEMS.filter((item) => !item.adminOnly || isAdmin)
 
   const activeCount = activeTasks.length
   const hasAwaiting = activeTasks.some(
-    (task) => task.status === 'awaiting_human_input' || task.status === 'awaiting_kin_response',
+    (task) => task.status === 'awaiting_human_input' || task.status === 'awaiting_agent_response',
   )
 
   function isActive(item: ActivityBarItem): boolean {
     if (item.matchPrefix === '/') {
-      // "Kins" — active iff no dedicated section claims the path.
+      // "Agents" — active iff no dedicated section claims the path.
       return !SECTION_PREFIXES.some((p) => location.pathname.startsWith(p))
     }
     return location.pathname.startsWith(item.matchPrefix)
@@ -51,7 +60,7 @@ export function ActivityBar() {
       className="surface-base hidden h-full w-12 shrink-0 flex-col items-center gap-1 border-r border-border py-3 md:flex"
       aria-label="Application sections"
     >
-      {ITEMS.map((item) => {
+      {items.map((item) => {
         const Icon = item.icon
         const active = isActive(item)
         return (

@@ -20,7 +20,7 @@ import { Button } from '@/client/components/ui/button'
 import { CronCard, SortableCronCard } from '@/client/components/crons/CronCard'
 import { useCrons } from '@/client/hooks/useCrons'
 import { useTasksContext } from '@/client/contexts/TasksContext'
-import { useKins } from '@/client/hooks/useKins'
+import { useAgents } from '@/client/hooks/useAgents'
 import { useToolboxes } from '@/client/hooks/useToolboxes'
 import { Plus, Loader2, Search, Timer, CalendarClock } from 'lucide-react'
 import { EmptyState } from '@/client/components/common/EmptyState'
@@ -32,7 +32,7 @@ const CronDetailModal = lazy(() => import('@/client/components/sidebar/CronDetai
 
 export function CronsPage() {
   const { t } = useTranslation()
-  const { kins, llmModels } = useKins()
+  const { agents, llmModels } = useAgents()
   const { toolboxes } = useToolboxes()
   const { activeCronIds } = useTasksContext()
   const {
@@ -51,9 +51,9 @@ export function CronsPage() {
   const [duplicateDefaults, setDuplicateDefaults] = useState<Partial<CronSummary> | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
 
-  const cronKins = useMemo(
-    () => kins.map((k) => ({ id: k.id, name: k.name, role: k.role, avatarUrl: k.avatarUrl })),
-    [kins],
+  const cronAgents = useMemo(
+    () => agents.map((k) => ({ id: k.id, name: k.name, role: k.role, avatarUrl: k.avatarUrl })),
+    [agents],
   )
 
   const filteredCrons = useMemo(() => {
@@ -62,7 +62,7 @@ export function CronsPage() {
     return crons.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
-        c.kinName.toLowerCase().includes(q) ||
+        c.agentName.toLowerCase().includes(q) ||
         c.schedule.toLowerCase().includes(q),
     )
   }, [crons, searchQuery])
@@ -163,7 +163,7 @@ export function CronsPage() {
                       cron={cron}
                       llmModels={llmModels}
                       toolboxes={toolboxes}
-                      kins={kins}
+                      agents={agents}
                       onClick={() => setDetailCron(cron)}
                       onApprove={() => approveCron(cron.id)}
                       isRunning={activeCronIds?.has(cron.id)}
@@ -185,7 +185,7 @@ export function CronsPage() {
                           cron={cron}
                           llmModels={llmModels}
                           toolboxes={toolboxes}
-                          kins={kins}
+                          agents={agents}
                           onClick={() => setDetailCron(cron)}
                           onToggleActive={(isActive) => updateCron(cron.id, { isActive })}
                           isRunning={activeCronIds?.has(cron.id)}
@@ -202,7 +202,7 @@ export function CronsPage() {
                       cron={cron}
                       llmModels={llmModels}
                       toolboxes={toolboxes}
-                      kins={kins}
+                      agents={agents}
                       onClick={() => setDetailCron(cron)}
                       onToggleActive={(isActive) => updateCron(cron.id, { isActive })}
                       isRunning={activeCronIds?.has(cron.id)}
@@ -224,7 +224,7 @@ export function CronsPage() {
               setShowCreateModal(open)
               if (!open) setDuplicateDefaults(null)
             }}
-            kins={cronKins}
+            agents={cronAgents}
             llmModels={llmModels}
             defaults={duplicateDefaults}
             onCreate={createCron}
@@ -238,7 +238,7 @@ export function CronsPage() {
           <CronFormModal
             open={editCron !== null}
             onOpenChange={(open) => { if (!open) setEditCron(null) }}
-            kins={cronKins}
+            agents={cronAgents}
             llmModels={llmModels}
             cron={editCron}
             onUpdate={updateCron}

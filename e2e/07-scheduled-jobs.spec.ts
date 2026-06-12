@@ -50,10 +50,10 @@ async function createJob(
   // Fill name
   await page.getByPlaceholder('e.g. Daily report, Weekly cleanup...').fill(opts.name)
 
-  // Select Kin (pick first available)
-  const kinCombobox = page.locator('[role="combobox"]').filter({ hasText: /select a kin/i })
-  if (await kinCombobox.isVisible({ timeout: 2_000 }).catch(() => false)) {
-    await kinCombobox.click()
+  // Select Agent (pick first available)
+  const agentCombobox = page.locator('[role="combobox"]').filter({ hasText: /select an agent/i })
+  if (await agentCombobox.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    await agentCombobox.click()
     await page.getByRole('option').first().click()
   }
 
@@ -87,7 +87,7 @@ test.describe.serial('Scheduled jobs management', () => {
     await page.goto('/')
     await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible({ timeout: 10_000 })
     await loginAs(page)
-    await expect(page.getByText('Kins', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Agents', { exact: true })).toBeVisible({ timeout: 10_000 })
   })
 
   test('should see empty scheduled jobs section in sidebar', async ({ page }) => {
@@ -104,7 +104,7 @@ test.describe.serial('Scheduled jobs management', () => {
     // Verify form fields are present
     await expect(page.getByPlaceholder('e.g. Daily report, Weekly cleanup...')).toBeVisible()
     await expect(page.getByPlaceholder('e.g. 0 9 * * *')).toBeVisible()
-    await expect(page.getByText('Owner Kin')).toBeVisible()
+    await expect(page.getByText('Owner Agent')).toBeVisible()
     await expect(page.getByText('Task instructions')).toBeVisible()
   })
 

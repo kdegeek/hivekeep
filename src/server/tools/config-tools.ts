@@ -1,5 +1,5 @@
 /**
- * Platform configuration tools — used mainly by the configurator Kin (Sherpa)
+ * Platform configuration tools — used mainly by the configurator Agent (Queenie)
  * to set up the platform through chat: discover provider types + their config
  * schema, re-test providers, enable extra capabilities on an existing provider
  * (key reuse), set capability defaults, and edit the global prompt.
@@ -125,7 +125,7 @@ const MODEL_DEFAULT_SETTERS: Record<ModelService, { setModel: (m: string) => Pro
 // ─── describe_provider_config ────────────────────────────────────────────────
 
 export const describeProviderConfigTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (_ctx) =>
@@ -170,7 +170,7 @@ export const describeProviderConfigTool: ToolRegistration = {
 // ─── list_provider_types ─────────────────────────────────────────────────────
 
 export const listProviderTypesTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (_ctx) =>
@@ -212,7 +212,7 @@ export const listProviderTypesTool: ToolRegistration = {
 // ─── test_provider ───────────────────────────────────────────────────────────
 
 export const testProviderTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: (ctx) =>
     tool({
       description:
@@ -252,7 +252,7 @@ export const testProviderTool: ToolRegistration = {
 // ─── enable_provider_capability ──────────────────────────────────────────────
 
 export const enableProviderCapabilityTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: (ctx) =>
     tool({
       description:
@@ -299,7 +299,7 @@ export const enableProviderCapabilityTool: ToolRegistration = {
 // ─── set_default_provider ────────────────────────────────────────────────────
 
 export const setDefaultProviderTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: (ctx) =>
     tool({
       description:
@@ -331,7 +331,7 @@ export const setDefaultProviderTool: ToolRegistration = {
 // ─── set_default_model / get_default_models ──────────────────────────────────
 
 export const setDefaultModelTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: (ctx) =>
     tool({
       description:
@@ -366,7 +366,7 @@ export const setDefaultModelTool: ToolRegistration = {
 }
 
 export const getDefaultModelsTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (_ctx) =>
@@ -414,13 +414,13 @@ export const getDefaultModelsTool: ToolRegistration = {
 // ─── get_global_prompt / set_global_prompt ───────────────────────────────────
 
 export const getGlobalPromptTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (_ctx) =>
     tool({
       description:
-        'Read the current GLOBAL PROMPT — shared conduct rules / directives injected into EVERY Kin\'s system prompt. ' +
+        'Read the current GLOBAL PROMPT — shared conduct rules / directives injected into EVERY Agent\'s system prompt. ' +
         'Always read this before set_global_prompt so you can append rather than overwrite.',
       inputSchema: z.object({}),
       execute: async () => {
@@ -431,11 +431,11 @@ export const getGlobalPromptTool: ToolRegistration = {
 }
 
 export const setGlobalPromptTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: (ctx) =>
     tool({
       description:
-        'Set the GLOBAL PROMPT — conduct rules / preferences that ALL Kins must follow (injected into every Kin\'s system prompt). ' +
+        'Set the GLOBAL PROMPT — conduct rules / preferences that ALL Agents must follow (injected into every Agent\'s system prompt). ' +
         'This REPLACES the whole value, so first call get_global_prompt and merge: keep existing rules and add the new ones. ' +
         'Use this when the user states cross-cutting preferences (tone, languages, do/don\'t rules).',
       inputSchema: z.object({
@@ -454,7 +454,7 @@ export const setGlobalPromptTool: ToolRegistration = {
 // ─── get_avatar_style / set_avatar_style ─────────────────────────────────────
 
 export const getAvatarStyleTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (_ctx) =>
@@ -477,7 +477,7 @@ export const getAvatarStyleTool: ToolRegistration = {
 }
 
 export const listAvatarPresetsTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (_ctx) =>
@@ -493,7 +493,7 @@ export const listAvatarPresetsTool: ToolRegistration = {
 }
 
 export const setAvatarBaseEnabledTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: (ctx) =>
     tool({
       description:
@@ -509,11 +509,11 @@ export const setAvatarBaseEnabledTool: ToolRegistration = {
 }
 
 export const generateAvatarBaseTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: (ctx) =>
     tool({
       description:
-        'Generate a NEUTRAL base avatar in the current (or given) style + subject and lock it in as the img2img base reference — so every Kin avatar derives from it and they all share a consistent look. Requires an image provider. Returns a URL to show the user. Tip: do this after the user has chosen a style + type.',
+        'Generate a NEUTRAL base avatar in the current (or given) style + subject and lock it in as the img2img base reference — so every Agent avatar derives from it and they all share a consistent look. Requires an image provider. Returns a URL to show the user. Tip: do this after the user has chosen a style + type.',
       inputSchema: z.object({
         style: z.string().optional().describe('Override the art style for this base (else uses the global setting).'),
         subject: z.string().optional().describe('Override the subject/type for this base (else uses the global setting).'),
@@ -537,7 +537,7 @@ export const generateAvatarBaseTool: ToolRegistration = {
 }
 
 export const resetAvatarBaseTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: (ctx) =>
     tool({
       description: 'Reset the img2img base reference back to the bundled default (a neutral robot). Use if the user wants to undo a custom/generated base.',
@@ -552,7 +552,7 @@ export const resetAvatarBaseTool: ToolRegistration = {
 }
 
 export const setAvatarStyleTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: (ctx) =>
     tool({
       description:
@@ -572,11 +572,11 @@ export const setAvatarStyleTool: ToolRegistration = {
 }
 
 export const setAvatarSubjectTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: (ctx) =>
     tool({
       description:
-        'Set the GLOBAL avatar SUBJECT — what every Kin avatar depicts (e.g. "a human character", "a dragon", "a cyborg", "an alien", "a cute animal"). This is the subject, NOT the art style (for that use set_avatar_style). ' +
+        'Set the GLOBAL avatar SUBJECT — what every Agent avatar depicts (e.g. "a human character", "a dragon", "a cyborg", "an alien", "a cute animal"). This is the subject, NOT the art style (for that use set_avatar_style). ' +
         'Note: a non-default subject forces text-to-image generation (the built-in image-to-image base is a robot, so it can only be tweaked, not turned into another creature). Empty string = the default friendly robot. Does not change existing avatars.',
       inputSchema: z.object({
         subject: z.string().describe('What the avatar depicts. Empty string resets to the default robot.'),

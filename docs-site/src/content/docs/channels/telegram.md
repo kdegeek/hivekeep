@@ -1,6 +1,6 @@
 ---
 title: Telegram
-description: Connect your Kin to Telegram using a bot.
+description: Connect your Agent to Telegram using a bot.
 ---
 
 Telegram integration uses the [Bot API](https://core.telegram.org/bots/api) with automatic transport selection: **webhooks** when a public HTTPS URL is available, or **long polling** for local/development setups.
@@ -9,12 +9,12 @@ Telegram integration uses the [Bot API](https://core.telegram.org/bots/api) with
 
 1. **Create a bot** with [@BotFather](https://t.me/BotFather) on Telegram
 2. Copy the bot token
-3. In KinBot, go to your Kin's **Channels** tab
+3. In Hivekeep, go to your Agent's **Channels** tab
 4. Click **Add Channel**, select **Telegram**
-5. Paste your bot token — it will be encrypted in KinBot's vault
+5. Paste your bot token — it will be encrypted in Hivekeep's vault
 6. Optionally, restrict to specific chat IDs with the allowlist
 
-KinBot automatically selects the best transport mode based on your configuration.
+Hivekeep automatically selects the best transport mode based on your configuration.
 
 ## Configuration
 
@@ -27,19 +27,19 @@ KinBot automatically selects the best transport mode based on your configuration
 
 ### Webhook mode (default for production)
 
-When `PUBLIC_URL` is set and starts with `https://`, KinBot registers a webhook with Telegram pointing to your instance. Telegram sends updates directly to this endpoint for real-time delivery.
+When `PUBLIC_URL` is set and starts with `https://`, Hivekeep registers a webhook with Telegram pointing to your instance. Telegram sends updates directly to this endpoint for real-time delivery.
 
 **Requirements:**
-- `PUBLIC_URL` must be configured in your KinBot environment
+- `PUBLIC_URL` must be configured in your Hivekeep environment
 - The URL must be HTTPS (Telegram requirement)
 - Your instance must be reachable from the internet
 
 ### Long polling mode (local/development)
 
-When `PUBLIC_URL` is not set or is not HTTPS, KinBot automatically falls back to **long polling** using Telegram's `getUpdates` API. This enables Telegram channels on local or development setups without a public HTTPS endpoint.
+When `PUBLIC_URL` is not set or is not HTTPS, Hivekeep automatically falls back to **long polling** using Telegram's `getUpdates` API. This enables Telegram channels on local or development setups without a public HTTPS endpoint.
 
 **How it works:**
-- KinBot deletes any existing webhook on the bot (Telegram requirement before using `getUpdates`)
+- Hivekeep deletes any existing webhook on the bot (Telegram requirement before using `getUpdates`)
 - A per-channel polling loop runs in the background, fetching updates every 30 seconds
 - Exponential backoff (up to 30 seconds) handles transient API failures
 - No public URL or HTTPS is required
@@ -50,7 +50,7 @@ Long polling mode is selected automatically — no manual configuration needed. 
 
 ## How It Works
 
-- **Inbound:** Messages are received via webhook or polling. The adapter parses text and attachments (photos, documents, audio, video) and routes them to the Kin.
+- **Inbound:** Messages are received via webhook or polling. The adapter parses text and attachments (photos, documents, audio, video) and routes them to the Agent.
 - **Outbound:** Messages are sent via the Bot API. Long messages (>4,096 chars) are automatically split. File attachments are uploaded as multipart form data.
 
 ## Features

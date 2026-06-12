@@ -176,7 +176,7 @@ export function ToolboxFormDialog({
             onChange={setSelected}
             readOnly={isReadOnly}
             toolNote={(tool) =>
-              tool.hardExcludedFromSubKin ? t('toolboxes.form.hardExcludedNote') : undefined
+              tool.hardExcludedFromSubAgent ? t('toolboxes.form.hardExcludedNote') : undefined
             }
           />
         )}

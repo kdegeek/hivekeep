@@ -16,8 +16,8 @@ import Default from '@astrojs/starlight/components/PageFrame.astro';
 			stroke-dasharray="122.52" stroke-dashoffset="122.52" />
 		<defs>
 			<linearGradient id="btt-grad" x1="0" y1="0" x2="1" y2="1">
-				<stop offset="0%" stop-color="oklch(0.60 0.22 300)" />
-				<stop offset="100%" stop-color="oklch(0.66 0.24 340)" />
+				<stop offset="0%" stop-color="oklch(0.72 0.19 305)" />
+				<stop offset="100%" stop-color="oklch(0.72 0.22 342)" />
 			</linearGradient>
 		</defs>
 	</svg>
@@ -39,7 +39,7 @@ import Default from '@astrojs/starlight/components/PageFrame.astro';
 		border-radius: 50%;
 		background: radial-gradient(
 			circle,
-			oklch(0.76 0.16 15 / 0.04) 0%,
+			oklch(0.84 0.13 60 / 0.04) 0%,
 			transparent 70%
 		);
 		filter: blur(80px);
@@ -50,7 +50,7 @@ import Default from '@astrojs/starlight/components/PageFrame.astro';
 	:root[data-theme='light'] .page::before {
 		background: radial-gradient(
 			circle,
-			oklch(0.72 0.16 15 / 0.03) 0%,
+			oklch(0.84 0.13 60 / 0.03) 0%,
 			transparent 70%
 		);
 	}
@@ -58,7 +58,7 @@ import Default from '@astrojs/starlight/components/PageFrame.astro';
 	/* Sidebar border: use gradient instead of solid */
 	@media (min-width: 50rem) {
 		[data-has-sidebar] .sidebar-pane {
-			border-inline-end: 1px solid oklch(0.60 0.22 300 / 0.10) !important;
+			border-inline-end: 1px solid oklch(0.72 0.19 305 / 0.10) !important;
 		}
 	}
 </style>

@@ -8,7 +8,7 @@ import { createLogger } from '@/server/logger'
 import {
   ticketAttachments,
   tickets,
-  kins,
+  agents,
   user,
   userProfiles,
 } from '@/server/db/schema'
@@ -59,33 +59,33 @@ function buildRawUrl(_projectId: string, ticketId: string, attachmentId: string)
 
 interface UploaderJoinRow {
   uploadedByUserId: string | null
-  uploadedByKinId: string | null
+  uploadedByAgentId: string | null
 }
 
 async function resolveUploader(row: UploaderJoinRow): Promise<TicketAttachmentUploader> {
-  if (row.uploadedByKinId) {
+  if (row.uploadedByAgentId) {
     const k = db
       .select({
-        id: kins.id,
-        name: kins.name,
-        avatarPath: kins.avatarPath,
-        updatedAt: kins.updatedAt,
+        id: agents.id,
+        name: agents.name,
+        avatarPath: agents.avatarPath,
+        updatedAt: agents.updatedAt,
       })
-      .from(kins)
-      .where(eq(kins.id, row.uploadedByKinId))
+      .from(agents)
+      .where(eq(agents.id, row.uploadedByAgentId))
       .get()
     if (k) {
       const ext = k.avatarPath ? k.avatarPath.split('.').pop() ?? 'png' : null
       return {
-        type: 'kin',
+        type: 'agent',
         id: k.id,
         name: k.name,
         avatarUrl: ext
-          ? `/api/uploads/kins/${k.id}/avatar.${ext}?v=${toMillis(k.updatedAt)}`
+          ? `/api/uploads/agents/${k.id}/avatar.${ext}?v=${toMillis(k.updatedAt)}`
           : null,
       }
     }
-    return { type: 'kin', id: row.uploadedByKinId, name: 'Deleted Kin', avatarUrl: null }
+    return { type: 'agent', id: row.uploadedByAgentId, name: 'Deleted Agent', avatarUrl: null }
   }
   if (row.uploadedByUserId) {
     const u = db
@@ -125,7 +125,7 @@ async function rowToAttachment(
     description: row.description,
     uploadedBy: await resolveUploader({
       uploadedByUserId: row.uploadedByUserId,
-      uploadedByKinId: row.uploadedByKinId,
+      uploadedByAgentId: row.uploadedByAgentId,
     }),
     url: buildRawUrl(projectId, row.ticketId, row.id),
     createdAt: toMillis(row.createdAt),
@@ -209,7 +209,7 @@ export interface CreateAttachmentParams {
   buffer: Buffer | ArrayBuffer
   mimeType: string
   description?: string | null
-  uploader: { type: 'user'; id: string } | { type: 'kin'; id: string } | null
+  uploader: { type: 'user'; id: string } | { type: 'agent'; id: string } | null
 }
 
 export async function createAttachment(
@@ -237,7 +237,7 @@ export async function createAttachment(
 
   const now = new Date()
   const uploadedByUserId = params.uploader?.type === 'user' ? params.uploader.id : null
-  const uploadedByKinId = params.uploader?.type === 'kin' ? params.uploader.id : null
+  const uploadedByAgentId = params.uploader?.type === 'agent' ? params.uploader.id : null
 
   db.insert(ticketAttachments)
     .values({
@@ -249,7 +249,7 @@ export async function createAttachment(
       size,
       description: params.description ?? null,
       uploadedByUserId,
-      uploadedByKinId,
+      uploadedByAgentId,
       createdAt: now,
       updatedAt: now,
     })
@@ -278,14 +278,14 @@ export async function createAttachment(
   return attachment
 }
 
-// ─── Create from existing on-disk file (Kin tool path) ────────────────────────
+// ─── Create from existing on-disk file (Agent tool path) ────────────────────────
 
 export interface CreateAttachmentFromPathParams {
   ticketId: string
   sourcePath: string
   originalName?: string
   description?: string | null
-  uploader: { type: 'user'; id: string } | { type: 'kin'; id: string } | null
+  uploader: { type: 'user'; id: string } | { type: 'agent'; id: string } | null
 }
 
 /**
@@ -320,7 +320,7 @@ export async function createAttachmentFromPath(
   const mimeType = guessMimeType(originalName)
   const now = new Date()
   const uploadedByUserId = params.uploader?.type === 'user' ? params.uploader.id : null
-  const uploadedByKinId = params.uploader?.type === 'kin' ? params.uploader.id : null
+  const uploadedByAgentId = params.uploader?.type === 'agent' ? params.uploader.id : null
 
   db.insert(ticketAttachments)
     .values({
@@ -332,7 +332,7 @@ export async function createAttachmentFromPath(
       size: stats.size,
       description: params.description ?? null,
       uploadedByUserId,
-      uploadedByKinId,
+      uploadedByAgentId,
       createdAt: now,
       updatedAt: now,
     })
@@ -451,23 +451,23 @@ export async function purgeAttachmentsForTicket(ticketId: string): Promise<numbe
   return rows.length
 }
 
-// ─── Source resolver (for Kin tools) ─────────────────────────────────────────
+// ─── Source resolver (for Agent tools) ─────────────────────────────────────────
 
 /**
  * Resolve a free-form `source` string to a local absolute file path,
- * mirroring the resolver used by `attach_file` so kins can reference the
+ * mirroring the resolver used by `attach_file` so agents can reference the
  * same kinds of sources (workspace path, internal /api/uploads URL, etc).
  *
  *   - `/api/uploads/...`     -> `${dataDir}/uploads/...`
  *   - `/api/file-storage/...` -> `${dataDir}/file-storage/...` (token lookup)
  *   - `https://` / `http://` -> downloaded into a temp buffer (caller decides)
- *   - anything else          -> treated as relative to the kin's workspace
+ *   - anything else          -> treated as relative to the agent's workspace
  *
  * Returns `{ kind: 'path', path }` for direct-file sources, or
  * `{ kind: 'url', url }` for remote URLs (caller must `fetch`).
  */
 export function resolveAttachmentSource(
-  kinId: string,
+  agentId: string,
   source: string,
 ): { kind: 'path'; path: string } | { kind: 'url'; url: string } | { kind: 'error'; message: string } {
   if (!source || typeof source !== 'string') {
@@ -487,7 +487,7 @@ export function resolveAttachmentSource(
     return { kind: 'url', url: source }
   }
   // Treat as workspace-relative path.
-  const workspaceBase = join(config.workspace.baseDir, kinId)
+  const workspaceBase = join(config.workspace.baseDir, agentId)
   const candidate = resolve(workspaceBase, source)
   if (!candidate.startsWith(workspaceBase)) {
     return { kind: 'error', message: 'Path traversal blocked' }
@@ -528,7 +528,7 @@ export function guessMimeType(filename: string): string {
   return EXT_TO_MIME[ext] ?? 'application/octet-stream'
 }
 
-/** Best-effort text-decoding for a Kin reading the attachment inline. Returns
+/** Best-effort text-decoding for an Agent reading the attachment inline. Returns
  *  `null` when the content is binary or too large for a sane inline read. */
 export async function readAttachmentAsText(
   attachmentId: string,

@@ -27,13 +27,13 @@ const mockTasks: Record<string, any> = {
   spawnTask: mock(() => Promise.resolve({ taskId: 'task-123' })),
   respondToTask: mock(() => Promise.resolve(true)),
   cancelTask: mock(() => Promise.resolve(true)),
-  listKinTasks: mock(() => Promise.resolve([])),
-  listSourceKinTasks: mock(() => Promise.resolve([])),
+  listAgentTasks: mock(() => Promise.resolve([])),
+  listSourceAgentTasks: mock(() => Promise.resolve([])),
   listAllTasks: mock(() => Promise.resolve([])),
   listTasksPaginated: mock(() => Promise.resolve({ tasks: [], total: 0 })),
   getTask: mock(() => Promise.resolve(null)),
   recoverStaleTasks: mock(() => {}),
-  resumeSubKin: mock(() => Promise.resolve()),
+  resumeSubAgent: mock(() => Promise.resolve()),
   resolveTask: mock(() => Promise.resolve()),
   reportToParent: mock(() => Promise.resolve()),
   updateTaskStatus: mock(() => Promise.resolve()),
@@ -48,13 +48,13 @@ const mockTasks: Record<string, any> = {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockKinResolver: Record<string, any> = {
-  resolveKinId: mock(() => null as string | null),
+const mockAgentResolver: Record<string, any> = {
+  resolveAgentId: mock(() => null as string | null),
 }
 
 mock.module('@/server/services/tasks', () => mockTasks)
 mock.module('@/server/services/crons', () => mockCrons)
-mock.module('@/server/services/kin-resolver', () => mockKinResolver)
+mock.module('@/server/services/agent-resolver', () => mockAgentResolver)
 mock.module('@/server/logger', () => ({
   createLogger: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }),
 }))
@@ -86,9 +86,9 @@ const itMocked = _mocksWorking ? it : it.skip
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const fakeCtx: ToolExecutionContext = {
-  kinId: 'kin-123',
+  agentId: 'agent-123',
   userId: 'user-1',
-  isSubKin: false,
+  isSubAgent: false,
 }
 
 const opts = { toolCallId: 'tc', messages: [] as any, abortSignal: new AbortController().signal }
@@ -108,7 +108,7 @@ describe('cron-tools', () => {
     mockCrons.listCrons.mockReset()
     mockCrons.triggerCronManually.mockReset()
     mockTasks.fetchPreviousCronRuns.mockReset()
-    mockKinResolver.resolveKinId.mockReset()
+    mockAgentResolver.resolveAgentId.mockReset()
 
     mockCrons.createCron.mockImplementation(() => Promise.resolve({
       id: 'cron-abc', name: 'Test Cron', schedule: '0 9 * * *',
@@ -120,7 +120,7 @@ describe('cron-tools', () => {
     mockCrons.listCrons.mockImplementation(() => Promise.resolve([]))
     mockCrons.triggerCronManually.mockImplementation(() => Promise.resolve({ taskId: 'task-xyz' }))
     mockTasks.fetchPreviousCronRuns.mockImplementation(() => Promise.resolve([]))
-    mockKinResolver.resolveKinId.mockImplementation(() => null)
+    mockAgentResolver.resolveAgentId.mockImplementation(() => null)
   })
 
   // ─── Availability ──────────────────────────────────────────────────────
@@ -147,10 +147,10 @@ describe('cron-tools', () => {
       expect(result).toHaveProperty('requiresApproval', true)
       expect(mockCrons.createCron).toHaveBeenCalledTimes(1)
       const call = mockCrons.createCron.mock.calls[0][0]
-      expect(call.kinId).toBe('kin-123')
+      expect(call.agentId).toBe('agent-123')
       expect(call.name).toBe('Daily check')
       expect(call.schedule).toBe('0 9 * * *')
-      expect(call.createdBy).toBe('kin')
+      expect(call.createdBy).toBe('agent')
     })
 
     itMocked('creates a run_once cron', async () => {
@@ -167,19 +167,19 @@ describe('cron-tools', () => {
       expect(mockCrons.createCron.mock.calls[0][0].runOnce).toBe(true)
     })
 
-    itMocked('resolves target_kin_slug when provided', async () => {
-      mockKinResolver.resolveKinId.mockImplementation(() => 'kin-target-456')
+    itMocked('resolves target_agent_slug when provided', async () => {
+      mockAgentResolver.resolveAgentId.mockImplementation(() => 'agent-target-456')
       await execute(createCronTool, {
-        name: 'Cross-kin', schedule: '*/30 * * * *', task_description: 'Do it', target_kin_slug: 'other-kin',
+        name: 'Cross-agent', schedule: '*/30 * * * *', task_description: 'Do it', target_agent_slug: 'other-agent',
       })
-      expect(mockKinResolver.resolveKinId).toHaveBeenCalledWith('other-kin')
-      expect(mockCrons.createCron.mock.calls[0][0].targetKinId).toBe('kin-target-456')
+      expect(mockAgentResolver.resolveAgentId).toHaveBeenCalledWith('other-agent')
+      expect(mockCrons.createCron.mock.calls[0][0].targetAgentId).toBe('agent-target-456')
     })
 
-    itMocked('returns error when target_kin_slug is not found', async () => {
-      mockKinResolver.resolveKinId.mockImplementation(() => null)
+    itMocked('returns error when target_agent_slug is not found', async () => {
+      mockAgentResolver.resolveAgentId.mockImplementation(() => null)
       const result = await execute(createCronTool, {
-        name: 'Bad', schedule: '0 0 * * *', task_description: 'Nope', target_kin_slug: 'nonexistent',
+        name: 'Bad', schedule: '0 0 * * *', task_description: 'Nope', target_agent_slug: 'nonexistent',
       })
       expect(result).toHaveProperty('error')
       expect(result.error).toContain('nonexistent')
@@ -294,7 +294,7 @@ describe('cron-tools', () => {
           id: 'c1', name: 'Daily', schedule: '0 9 * * *',
           taskDescription: 'Check email', isActive: true, runOnce: false,
           requiresApproval: false, lastTriggeredAt: new Date('2026-03-01T09:00:00Z'),
-          kinId: 'kin-123', createdAt: new Date(),
+          agentId: 'agent-123', createdAt: new Date(),
         },
       ]))
       const result = await execute(listCronsTool, {})
@@ -303,13 +303,13 @@ describe('cron-tools', () => {
       expect(crons[0].id).toBe('c1')
       expect(crons[0].name).toBe('Daily')
       expect(crons[0].isActive).toBe(true)
-      expect(crons[0]).not.toHaveProperty('kinId')
+      expect(crons[0]).not.toHaveProperty('agentId')
       expect(crons[0]).not.toHaveProperty('createdAt')
     })
 
-    itMocked('passes kinId from context', async () => {
+    itMocked('passes agentId from context', async () => {
       await execute(listCronsTool, {})
-      expect(mockCrons.listCrons).toHaveBeenCalledWith('kin-123')
+      expect(mockCrons.listCrons).toHaveBeenCalledWith('agent-123')
     })
   })
 

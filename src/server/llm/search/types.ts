@@ -9,4 +9,4 @@ export type {
   SearchAnswer,
   SearchResult,
   SearchProvider,
-} from '@kinbot-developer/sdk'
+} from '@hivekeep/sdk'

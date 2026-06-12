@@ -5,21 +5,21 @@ import { api } from '@/client/lib/api'
 import { useSSE } from '@/client/hooks/useSSE'
 import type { QuickSessionSummary } from '@/shared/types'
 
-export function useQuickSession(kinId: string | null) {
+export function useQuickSession(agentId: string | null) {
   const { t } = useTranslation()
   const [activeSession, setActiveSession] = useState<QuickSessionSummary | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
 
-  // Fetch active sessions on mount / kinId change
+  // Fetch active sessions on mount / agentId change
   const fetchSessions = useCallback(async () => {
-    if (!kinId) {
+    if (!agentId) {
       setActiveSession(null)
       return
     }
     try {
       const data = await api.get<{ sessions: QuickSessionSummary[] }>(
-        `/kins/${kinId}/quick-sessions`,
+        `/agents/${agentId}/quick-sessions`,
       )
       // If there's an active session, restore it
       const first = data.sessions[0]
@@ -27,7 +27,7 @@ export function useQuickSession(kinId: string | null) {
     } catch {
       toast.error(t('quickSession.errors.fetchFailed', 'Failed to load quick sessions'))
     }
-  }, [kinId, t])
+  }, [agentId, t])
 
   useEffect(() => {
     fetchSessions()
@@ -36,11 +36,11 @@ export function useQuickSession(kinId: string | null) {
 
   // Create a new quick session and open the panel
   const createSession = useCallback(async (title?: string) => {
-    if (!kinId || isCreating) return null
+    if (!agentId || isCreating) return null
     setIsCreating(true)
     try {
       const session = await api.post<QuickSessionSummary>(
-        `/kins/${kinId}/quick-sessions`,
+        `/agents/${agentId}/quick-sessions`,
         { title },
       )
       setActiveSession(session)
@@ -52,7 +52,7 @@ export function useQuickSession(kinId: string | null) {
     } finally {
       setIsCreating(false)
     }
-  }, [kinId, isCreating, t])
+  }, [agentId, isCreating, t])
 
   // Close a session (with optional save-as-memory)
   const closeSession = useCallback(async (

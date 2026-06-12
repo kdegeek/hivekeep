@@ -44,24 +44,25 @@ import {
   InvalidRequestError,
   NetworkError,
   ProviderServerError,
-  KinbotProviderError,
+  HivekeepProviderError,
 } from '@/server/llm/core/types'
 import type {
   LLMProvider,
   LLMModel,
   ChatRequest,
   ChatChunk,
-  KinbotMessage,
+  HivekeepMessage,
   ThinkingEffort,
 } from '@/server/llm/llm/types'
+import { downgradeEffort } from '@/server/llm/llm/types'
 
 const BASE_URL = 'https://openrouter.ai/api/v1'
 
 // OpenRouter recommends these headers for request attribution. Purely
 // cosmetic on their dashboard; safe to send on every call.
 const ATTRIBUTION_HEADERS: Record<string, string> = {
-  'HTTP-Referer': 'https://kinbot.marlburrow.io',
-  'X-Title': 'KinBot',
+  'HTTP-Referer': 'https://hivekeep.marlburrow.io',
+  'X-Title': 'Hivekeep',
 }
 
 // ─── Config schema ───────────────────────────────────────────────────────────
@@ -116,7 +117,7 @@ export function inferImageInput(model: OpenRouterModel): boolean {
 /**
  * Reasoning support: OpenRouter advertises `reasoning` in
  * `supported_parameters` for models that accept a reasoning effort. We map
- * that to KinBot's `low | medium | high` efforts (OpenRouter has no `max`).
+ * that to Hivekeep's `low | medium | high` efforts (OpenRouter has no `max`).
  *
  * @internal exported for tests.
  */
@@ -139,7 +140,7 @@ export function inferMaxTools(model: OpenRouterModel): number | undefined {
   return 0
 }
 
-/** OpenRouter prices in USD per token (string). KinBot's `LLMModel.pricing`
+/** OpenRouter prices in USD per token (string). Hivekeep's `LLMModel.pricing`
  *  is USD per million tokens. Convert, dropping absent / sentinel (`-1`,
  *  variable-router) values.
  *
@@ -168,7 +169,7 @@ export function convertPricing(model: OpenRouterModel): LLMModel['pricing'] | un
 }
 
 /**
- * A model is usable as a KinBot LLM iff it produces text output. OpenRouter
+ * A model is usable as a Hivekeep LLM iff it produces text output. OpenRouter
  * also lists image / audio generation models (Lyria, GPT Image, Nano Banana)
  * — those output `image`/`audio` only and are filtered out here.
  *
@@ -182,7 +183,7 @@ export function isTextOutputModel(model: OpenRouterModel): boolean {
 }
 
 /**
- * Map an OpenRouter catalogue entry to a KinBot `LLMModel`, or null if it
+ * Map an OpenRouter catalogue entry to a Hivekeep `LLMModel`, or null if it
  * isn't a text-output chat model. Classification is purely metadata-driven.
  *
  * @internal exported for tests.
@@ -248,8 +249,8 @@ function mapFinishReason(
   }
 }
 
-function mapApiError(err: unknown): KinbotProviderError {
-  if (err instanceof KinbotProviderError) return err
+function mapApiError(err: unknown): HivekeepProviderError {
+  if (err instanceof HivekeepProviderError) return err
   if (err instanceof APIError) {
     const status = err.status
     const message = err.message
@@ -286,17 +287,6 @@ function parseRetryAfter(header: string | string[] | undefined): number | undefi
   return undefined
 }
 
-function downgradeEffort(
-  requested: ThinkingEffort,
-  supported: readonly ThinkingEffort[],
-): ThinkingEffort | undefined {
-  const order: ThinkingEffort[] = ['low', 'medium', 'high', 'max']
-  const idx = order.indexOf(requested)
-  for (let i = idx; i >= 0; i--) {
-    if (supported.includes(order[i]!)) return order[i]
-  }
-  return supported[0]
-}
 
 function uint8ToBase64(bytes: Uint8Array): string {
   let binary = ''
@@ -304,7 +294,7 @@ function uint8ToBase64(bytes: Uint8Array): string {
   return globalThis.btoa(binary)
 }
 
-// ─── Message conversion (kinbot → OpenAI-compatible) ─────────────────────────
+// ─── Message conversion (hivekeep → OpenAI-compatible) ─────────────────────────
 
 function systemPromptToMessage(
   system: ChatRequest['system'],
@@ -316,7 +306,7 @@ function systemPromptToMessage(
 }
 
 function userBlocksToContent(
-  blocks: KinbotMessage['content'],
+  blocks: HivekeepMessage['content'],
 ): ChatCompletionUserMessageParam['content'] | null {
   const parts: ChatCompletionContentPart[] = []
   for (const b of blocks) {
@@ -335,7 +325,7 @@ function userBlocksToContent(
 }
 
 function assistantMessage(
-  blocks: KinbotMessage['content'],
+  blocks: HivekeepMessage['content'],
 ): ChatCompletionAssistantMessageParam {
   let text = ''
   const toolCalls: ChatCompletionMessageToolCall[] = []
@@ -360,7 +350,7 @@ function assistantMessage(
 }
 
 function messagesToOpenAI(
-  messages: KinbotMessage[],
+  messages: HivekeepMessage[],
   system: ChatCompletionSystemMessageParam | undefined,
 ): ChatCompletionMessageParam[] {
   const out: ChatCompletionMessageParam[] = []

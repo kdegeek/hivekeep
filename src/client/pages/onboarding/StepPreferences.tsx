@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/client/components/ui/button'
 import { Label } from '@/client/components/ui/label'
-import { LanguageSelector } from '@/client/components/common/LanguageSelector'
+import { LanguageSelector, AgentLanguageSelector } from '@/client/components/common/LanguageSelector'
 import { Sun, Moon, Monitor, Contrast, CircleDot, Loader2 } from 'lucide-react'
 import { usePalette, useTheme, PALETTES } from '@/client/components/theme-provider'
 import { api } from '@/client/lib/api'
+import { changeAppLanguage } from '@/client/lib/i18n'
 
 interface StepPreferencesProps {
   onComplete: () => void
@@ -17,6 +18,8 @@ export function StepPreferences({ onComplete, onBack }: StepPreferencesProps) {
   const { palette, setPalette, contrastMode, setContrastMode } = usePalette()
   const { theme, setTheme } = useTheme()
   const [language, setLanguage] = useState(i18n.language || 'en')
+  // null = Agents follow the UI language (DB default)
+  const [agentLanguage, setAgentLanguage] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
 
   const handleComplete = async () => {
@@ -24,7 +27,7 @@ export function StepPreferences({ onComplete, onBack }: StepPreferencesProps) {
     try {
       // Persist appearance prefs alongside language so they're DB-backed from the
       // very first session (ThemeDbSync also keeps them in sync afterwards).
-      await api.patch('/me', { language, theme: theme ?? 'system', palette, contrastMode })
+      await api.patch('/me', { language, agentLanguage, theme: theme ?? 'system', palette, contrastMode })
     } catch {
       // Non-blocking: defaults apply but onboarding can continue
     } finally {
@@ -44,10 +47,22 @@ export function StepPreferences({ onComplete, onBack }: StepPreferencesProps) {
         </p>
       </div>
 
-      {/* Language */}
+      {/* Interface language */}
       <div className="space-y-2">
         <Label>{t('onboarding.preferences.language')}</Label>
-        <LanguageSelector value={language} onValueChange={(v) => { setLanguage(v); i18n.changeLanguage(v) }} />
+        <LanguageSelector value={language} onValueChange={(v) => { setLanguage(v); void changeAppLanguage(v) }} />
+        <p className="text-xs text-muted-foreground">
+          {t('onboarding.preferences.languageHint')}
+        </p>
+      </div>
+
+      {/* Agent communication language */}
+      <div className="space-y-2">
+        <Label>{t('onboarding.preferences.agentLanguage')}</Label>
+        <AgentLanguageSelector value={agentLanguage} onValueChange={setAgentLanguage} />
+        <p className="text-xs text-muted-foreground">
+          {t('onboarding.preferences.agentLanguageHint')}
+        </p>
       </div>
 
       {/* Color theme */}

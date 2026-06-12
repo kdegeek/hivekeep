@@ -64,7 +64,7 @@ mock.module('@/server/db/index', () => {
 mock.module('@/server/db/schema', () => ({
   ...fullMockSchema,
   userProfiles: { role: 'role', userId: 'user_id' },
-  kins: { id: 'id', toolboxIds: 'toolboxIds' },
+  agents: { id: 'id', toolboxIds: 'toolboxIds' },
 }))
 
 mock.module('drizzle-orm', () => ({
@@ -328,7 +328,7 @@ describe('onboarding routes', () => {
       expect(body.error.code).toBe('VALIDATION_ERROR')
     })
 
-    it('returns 400 when lastName is missing', async () => {
+    it('allows a missing last name (now optional)', async () => {
       mockGetSession = mock(() => Promise.resolve(fakeSession))
       mockDbSelect = mock(() => makeChain(null))
 
@@ -339,9 +339,10 @@ describe('onboarding routes', () => {
         }),
       )
 
-      expect(res.status).toBe(400)
+      expect(res.status).toBe(201)
       const body = await res.json()
-      expect(body.error.code).toBe('VALIDATION_ERROR')
+      expect(body.lastName).toBe('')
+      expect(mockDbInsert).toHaveBeenCalled()
     })
 
     it('returns 400 when pseudonym is missing', async () => {
@@ -387,6 +388,7 @@ describe('onboarding routes', () => {
         lastName: 'Doe',
         pseudonym: 'johnd',
         language: 'fr',
+        agentLanguage: null,
         role: 'admin',
       })
 

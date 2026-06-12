@@ -1,6 +1,6 @@
 ---
 title: Discord
-description: Connect your Kin to Discord using a bot.
+description: Connect your Agent to Discord using a bot.
 ---
 
 Discord integration uses the [Gateway API](https://discord.com/developers/docs/events/gateway) (WebSocket) for real-time message delivery, with the REST API for sending messages.
@@ -11,9 +11,9 @@ Discord integration uses the [Gateway API](https://discord.com/developers/docs/e
 2. Under **Bot**, create a bot and copy the token
 3. Enable **Message Content Intent** under Privileged Gateway Intents
 4. Generate an invite link with the required permissions and add the bot to your server
-5. In KinBot, go to your Kin's **Channels** tab
+5. In Hivekeep, go to your Agent's **Channels** tab
 6. Click **Add Channel**, select **Discord**
-7. Paste your bot token — it will be encrypted in KinBot's vault
+7. Paste your bot token — it will be encrypted in Hivekeep's vault
 8. Optionally, restrict to specific channel IDs with the allowlist
 
 ## Configuration
@@ -25,7 +25,7 @@ Discord integration uses the [Gateway API](https://discord.com/developers/docs/e
 
 ## How It Works
 
-- **Inbound:** KinBot maintains a persistent WebSocket connection to Discord's Gateway. It receives message events, ignores its own messages, and routes incoming messages to the Kin.
+- **Inbound:** Hivekeep maintains a persistent WebSocket connection to Discord's Gateway. It receives message events, ignores its own messages, and routes incoming messages to the Agent.
 - **Outbound:** Messages are sent via the REST API. Long messages (>2,000 chars) are automatically split. File attachments are uploaded as multipart form data.
 
 ## Gateway Features

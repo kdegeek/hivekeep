@@ -3,7 +3,7 @@
  * truth in `packages/sdk/src/index.ts`. Server-side modules keep the
  * existing import path (`@/server/channels/adapter`) for stability
  * across every built-in channel adapter; plugin authors should
- * import directly from `@kinbot-developer/sdk` instead.
+ * import directly from `@hivekeep/sdk` instead.
  *
  * This file also keeps the outbound-attachment helpers (file/URL
  * reading, name derivation, image detection) since they're host-side
@@ -26,9 +26,9 @@ export type {
   OutboundAttachment,
   OutboundMessageParams,
   OutboundMessageResult,
-} from '@kinbot-developer/sdk'
+} from '@hivekeep/sdk'
 
-import type { OutboundAttachment } from '@kinbot-developer/sdk'
+import type { OutboundAttachment } from '@hivekeep/sdk'
 
 // ─── Outbound attachment helpers (host-only) ────────────────────────────────
 

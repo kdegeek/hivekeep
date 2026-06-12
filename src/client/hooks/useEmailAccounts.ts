@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ConfigField } from '@kinbot-developer/sdk'
+import type { ConfigField } from '@hivekeep/sdk'
 import { api } from '@/client/lib/api'
 import { registerProviderReactIcon } from '@/client/components/common/ProviderIcon'
 import { useSSE, useSSEResync } from '@/client/hooks/useSSE'
@@ -16,7 +16,7 @@ export interface EmailAccount {
   capabilities: string[]
   /** Email send mode when the account serves email; null otherwise. */
   sendMode: 'direct' | 'approval' | null
-  allowedKinIds: string[] | null
+  allowedAgentIds: string[] | null
   isValid: boolean
   lastError: string | null
 }

@@ -42,7 +42,7 @@ export const ToolCallItem = memo(function ToolCallItem({ toolCall }: ToolCallIte
   const isError = toolCall.status === 'error'
 
   const CustomRenderer = getRenderer(toolCall.name)
-  // Custom tools (custom_<slug>) carry user/Kin-authored localized names — prefer
+  // Custom tools (custom_<slug>) carry user/Agent-authored localized names — prefer
   // those over the static i18n key so the chat shows a human name, not the slug.
   // The reactive store re-renders this component when the cache hydrates/refreshes
   // so a session-new tool (or a newly added renderer) appears without a reload.

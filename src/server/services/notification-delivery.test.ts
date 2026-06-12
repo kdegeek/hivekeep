@@ -77,8 +77,8 @@ describe('escapeTelegramMarkdown', () => {
   })
 
   it('handles real-world notification text', () => {
-    const input = 'Error in kin "my-kin": connection failed (timeout=30s)'
-    const expected = 'Error in kin "my\\-kin": connection failed \\(timeout\\=30s\\)'
+    const input = 'Error in agent "my-agent": connection failed (timeout=30s)'
+    const expected = 'Error in agent "my\\-agent": connection failed \\(timeout\\=30s\\)'
     expect(escapeTelegramMarkdown(input)).toBe(expected)
   })
 })
@@ -90,7 +90,7 @@ const NOTIFICATION_EMOJI: Record<string, string> = {
   'channel:user-pending': '\uD83D\uDC64',
   'cron:pending-approval': '\u23F0',
   'mcp:pending-approval': '\uD83E\uDDE9',
-  'kin:error': '\u26A0\uFE0F',
+  'agent:error': '\u26A0\uFE0F',
 }
 
 describe('NOTIFICATION_EMOJI', () => {
@@ -110,8 +110,8 @@ describe('NOTIFICATION_EMOJI', () => {
     expect(NOTIFICATION_EMOJI['mcp:pending-approval']).toBe('🧩')
   })
 
-  it('maps kin:error to warning sign', () => {
-    expect(NOTIFICATION_EMOJI['kin:error']).toBe('⚠️')
+  it('maps agent:error to warning sign', () => {
+    expect(NOTIFICATION_EMOJI['agent:error']).toBe('⚠️')
   })
 
   it('returns undefined for unknown types', () => {
@@ -125,26 +125,26 @@ interface NotificationPayload {
   type: string
   title: string
   body?: string | null
-  kinName?: string | null
+  agentName?: string | null
 }
 
 function formatNotification(payload: NotificationPayload, platform: string): string {
   const emoji = NOTIFICATION_EMOJI[payload.type] ?? '🔔'
-  const kinSuffix = payload.kinName ? `\n— ${payload.kinName}` : ''
+  const agentSuffix = payload.agentName ? `\n— ${payload.agentName}` : ''
 
   switch (platform) {
     case 'telegram':
       return [
         `${emoji} *${escapeTelegramMarkdown(payload.title)}*`,
         payload.body ? escapeTelegramMarkdown(payload.body) : null,
-        kinSuffix ? escapeTelegramMarkdown(kinSuffix) : null,
+        agentSuffix ? escapeTelegramMarkdown(agentSuffix) : null,
       ].filter(Boolean).join('\n')
 
     default:
       return [
         `${emoji} ${payload.title}`,
         payload.body,
-        kinSuffix,
+        agentSuffix,
       ].filter(Boolean).join('\n')
   }
 }
@@ -157,22 +157,22 @@ describe('formatNotification', () => {
     })
 
     it('includes body when present', () => {
-      const result = formatNotification({ type: 'kin:error', title: 'Error', body: 'Something broke' }, 'discord')
+      const result = formatNotification({ type: 'agent:error', title: 'Error', body: 'Something broke' }, 'discord')
       expect(result).toBe('⚠️ Error\nSomething broke')
     })
 
-    it('includes kin name suffix', () => {
-      const result = formatNotification({ type: 'kin:error', title: 'Error', kinName: 'my-kin' }, 'discord')
-      // kinSuffix = "\n— my-kin", joined with \n → double newline before dash
-      expect(result).toBe('⚠️ Error\n\n— my-kin')
+    it('includes agent name suffix', () => {
+      const result = formatNotification({ type: 'agent:error', title: 'Error', agentName: 'my-agent' }, 'discord')
+      // agentSuffix = "\n— my-agent", joined with \n → double newline before dash
+      expect(result).toBe('⚠️ Error\n\n— my-agent')
     })
 
-    it('includes both body and kin name', () => {
+    it('includes both body and agent name', () => {
       const result = formatNotification({
         type: 'prompt:pending',
         title: 'Question',
         body: 'Please confirm',
-        kinName: 'assistant',
+        agentName: 'assistant',
       }, 'slack')
       expect(result).toBe('❓ Question\nPlease confirm\n\n— assistant')
     })
@@ -183,12 +183,12 @@ describe('formatNotification', () => {
     })
 
     it('excludes null body', () => {
-      const result = formatNotification({ type: 'kin:error', title: 'Fail', body: null }, 'discord')
+      const result = formatNotification({ type: 'agent:error', title: 'Fail', body: null }, 'discord')
       expect(result).toBe('⚠️ Fail')
     })
 
-    it('excludes null kinName', () => {
-      const result = formatNotification({ type: 'kin:error', title: 'Fail', kinName: null }, 'discord')
+    it('excludes null agentName', () => {
+      const result = formatNotification({ type: 'agent:error', title: 'Fail', agentName: null }, 'discord')
       expect(result).toBe('⚠️ Fail')
     })
   })
@@ -200,27 +200,27 @@ describe('formatNotification', () => {
     })
 
     it('escapes special chars in title', () => {
-      const result = formatNotification({ type: 'kin:error', title: 'Error in my-kin' }, 'telegram')
+      const result = formatNotification({ type: 'agent:error', title: 'Error in my-agent' }, 'telegram')
       expect(result).toContain('\\-')
     })
 
     it('escapes body text', () => {
       const result = formatNotification({
-        type: 'kin:error',
+        type: 'agent:error',
         title: 'Error',
         body: 'Failed (timeout=30s)',
       }, 'telegram')
       expect(result).toContain('\\(timeout\\=30s\\)')
     })
 
-    it('escapes kin name suffix', () => {
+    it('escapes agent name suffix', () => {
       const result = formatNotification({
-        type: 'kin:error',
+        type: 'agent:error',
         title: 'Error',
-        kinName: 'my_kin',
+        agentName: 'my_agent',
       }, 'telegram')
-      // The kin suffix "— my_kin" has both — and _ which get escaped
-      expect(result).toContain('my\\_kin')
+      // The agent suffix "— my_agent" has both — and _ which get escaped
+      expect(result).toContain('my\\_agent')
     })
 
     it('excludes null body', () => {
@@ -233,12 +233,12 @@ describe('formatNotification', () => {
         type: 'cron:pending-approval',
         title: 'Approve cron',
         body: 'Run daily backup',
-        kinName: 'backup-kin',
+        agentName: 'backup-agent',
       }, 'telegram')
       expect(result).toContain('⏰')
       expect(result).toContain('*Approve cron*')
       expect(result).toContain('Run daily backup')
-      expect(result).toContain('backup\\-kin')
+      expect(result).toContain('backup\\-agent')
     })
   })
 })
@@ -357,28 +357,28 @@ function shouldDeliver(typeFilter: string | null, notificationType: string): boo
 
 describe('Type filter logic', () => {
   it('delivers when typeFilter is null', () => {
-    expect(shouldDeliver(null, 'kin:error')).toBe(true)
+    expect(shouldDeliver(null, 'agent:error')).toBe(true)
   })
 
   it('delivers when type is in the filter', () => {
-    expect(shouldDeliver('["kin:error","prompt:pending"]', 'kin:error')).toBe(true)
+    expect(shouldDeliver('["agent:error","prompt:pending"]', 'agent:error')).toBe(true)
   })
 
   it('blocks when type is not in the filter', () => {
-    expect(shouldDeliver('["prompt:pending"]', 'kin:error')).toBe(false)
+    expect(shouldDeliver('["prompt:pending"]', 'agent:error')).toBe(false)
   })
 
   it('delivers when filter includes all types', () => {
-    const all = '["prompt:pending","channel:user-pending","cron:pending-approval","mcp:pending-approval","kin:error","mention"]'
+    const all = '["prompt:pending","channel:user-pending","cron:pending-approval","mcp:pending-approval","agent:error","mention"]'
     expect(shouldDeliver(all, 'mention')).toBe(true)
   })
 
   it('blocks with empty array filter', () => {
-    expect(shouldDeliver('[]', 'kin:error')).toBe(false)
+    expect(shouldDeliver('[]', 'agent:error')).toBe(false)
   })
 
   it('is case-sensitive', () => {
-    expect(shouldDeliver('["kin:error"]', 'Kin:Error')).toBe(false)
+    expect(shouldDeliver('["agent:error"]', 'Agent:Error')).toBe(false)
   })
 })
 

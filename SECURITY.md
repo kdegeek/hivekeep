@@ -16,7 +16,7 @@ We only actively support the latest release. Please update before reporting issu
 Instead, report them privately:
 
 1. **Email:** Send details to the repository owner via the contact information on their [GitHub profile](https://github.com/MarlBurroW)
-2. **GitHub Security Advisories:** Use the [private vulnerability reporting](https://github.com/MarlBurroW/kinbot/security/advisories/new) feature
+2. **GitHub Security Advisories:** Use the [private vulnerability reporting](https://github.com/MarlBurroW/hivekeep/security/advisories/new) feature
 
 ### What to include
 
@@ -33,7 +33,7 @@ Instead, report them privately:
 
 ## Security Architecture
 
-KinBot takes security seriously:
+Hivekeep takes security seriously:
 
 - **Vault encryption** — All secrets (API keys, tokens) are encrypted at rest using AES-256-GCM
 - **Secret redaction** — Vault references are never expanded in prompts or logs; redaction prevents leaking into compacted summaries

@@ -7,17 +7,17 @@ import type { AppVariables } from '@/server/app'
 
 const memoryRoutes = new Hono<{ Variables: AppVariables }>()
 
-// GET /api/memories — list all memories across all Kins
+// GET /api/memories — list all memories across all Agents
 memoryRoutes.get('/', async (c) => {
   const category = c.req.query('category')
   const subject = c.req.query('subject')
-  const kinId = c.req.query('kinId')
+  const agentId = c.req.query('agentId')
   const scope = c.req.query('scope')
   const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 50), 1), 200)
   const offset = Math.max(Number(c.req.query('offset') ?? 0), 0)
 
   const conditions = []
-  if (kinId) conditions.push(eq(memories.kinId, kinId))
+  if (agentId) conditions.push(eq(memories.agentId, agentId))
   if (category) conditions.push(eq(memories.category, category))
   if (subject) conditions.push(eq(memories.subject, subject))
   if (scope) conditions.push(eq(memories.scope, scope))
@@ -33,7 +33,7 @@ memoryRoutes.get('/', async (c) => {
     db
       .select({
         id: memories.id,
-        kinId: memories.kinId,
+        agentId: memories.agentId,
         content: memories.content,
         category: memories.category,
         subject: memories.subject,
@@ -61,28 +61,28 @@ memoryRoutes.get('/', async (c) => {
 
 // POST /api/memories/backfill-importance — score importance for unscored memories
 memoryRoutes.post('/backfill-importance', async (c) => {
-  const body = await c.req.json<{ kinId?: string }>().catch(() => ({} as { kinId?: string }))
-  const { kinId } = body
+  const body = await c.req.json<{ agentId?: string }>().catch(() => ({} as { agentId?: string }))
+  const { agentId } = body
   const { backfillImportance } = await import('@/server/services/importance-backfill')
-  const result = await backfillImportance(kinId || undefined)
+  const result = await backfillImportance(agentId || undefined)
   return c.json(result)
 })
 
 // POST /api/memories/consolidate — trigger memory consolidation manually
 memoryRoutes.post('/consolidate', async (c) => {
-  const { kinId } = await c.req.json<{ kinId: string }>()
-  if (!kinId) return c.json({ error: 'kinId is required' }, 400)
+  const { agentId } = await c.req.json<{ agentId: string }>()
+  if (!agentId) return c.json({ error: 'agentId is required' }, 400)
   const { consolidateMemories } = await import('@/server/services/consolidation')
-  const removed = await consolidateMemories(kinId)
+  const removed = await consolidateMemories(agentId)
   return c.json({ removed })
 })
 
 // POST /api/memories/reembed — re-embed all memories with the current embedding model
 memoryRoutes.post('/reembed', async (c) => {
-  const body = await c.req.json<{ kinId?: string }>().catch(() => ({} as { kinId?: string }))
-  const { kinId } = body
+  const body = await c.req.json<{ agentId?: string }>().catch(() => ({} as { agentId?: string }))
+  const { agentId } = body
   const { reembedAllMemories } = await import('@/server/services/memory')
-  const result = await reembedAllMemories(kinId || undefined)
+  const result = await reembedAllMemories(agentId || undefined)
   return c.json(result)
 })
 

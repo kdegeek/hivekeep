@@ -8,14 +8,14 @@ Référence pour **éviter les bugs de synchro temps réel** (état périmé, me
 
 ## 1. Le modèle en 30 secondes
 
-- **Une seule connexion SSE par client** (`EventSource` sur `/api/sse`), multiplexée par `kinId`. Pas de connexion par-Kin.
+- **Une seule connexion SSE par client** (`EventSource` sur `/api/sse`), multiplexée par `agentId`. Pas de connexion par-Agent.
 - **Émission serveur** via `sseManager` (`src/server/sse/index.ts`) :
   | Méthode | Portée | Quand l'utiliser |
   |---|---|---|
-  | `sendToKin(kinId, ev)` | **TOUS** les clients connectés (ne filtre PAS côté serveur) | événement lié à un Kin (chat, queue, tasks…) — le **front filtre par `kinId`** |
+  | `sendToAgent(agentId, ev)` | **TOUS** les clients connectés (ne filtre PAS côté serveur) | événement lié à un Agent (chat, queue, tasks…) — le **front filtre par `agentId`** |
   | `sendToUser(userId, ev)` | toutes les connexions de cet utilisateur | événement perso (notifications, read-state, profil, comptes) |
-  | `broadcast(ev)` | tous les clients | global, non scopé à un Kin/user (custom-tools, toolboxes, providers globaux…) |
-- **Forme du fil** : `formatSSE` aplatit en `{ type, kinId, ...data }`. Donc `data: dto` ⇒ les champs du DTO sont au **top-level** du payload reçu côté client (pas sous `data.xxx`).
+  | `broadcast(ev)` | tous les clients | global, non scopé à un Agent/user (custom-tools, toolboxes, providers globaux…) |
+- **Forme du fil** : `formatSSE` aplatit en `{ type, agentId, ...data }`. Donc `data: dto` ⇒ les champs du DTO sont au **top-level** du payload reçu côté client (pas sous `data.xxx`).
 - **Réception client** : `useSSE({ 'event': (data) => … })`. Statut : `useSSEStatus()`. Rattrapage : `useSSEResync(cb)` (`src/client/hooks/useSSE.ts`).
 - **⚠️ SSE ne rejoue PAS les events manqués.** Onglet en arrière-plan / téléphone verrouillé / déconnexion = events perdus → il **faut refetch** au retour.
 - Catalogue des events : `src/server/sse/types.ts` (`SSEEventType`). Contrats payload : `api.md`.
@@ -34,7 +34,7 @@ Référence pour **éviter les bugs de synchro temps réel** (état périmé, me
 
 ### …un nouvel event SSE
 - [ ] Ajouter le `type` à l'union `SSEEventType` dans `src/server/sse/types.ts` (**jamais** de cast `as SSEEventType` — ça contourne la sécurité de type et planque un event non déclaré).
-- [ ] Choisir la portée : `sendToKin` (lié Kin) / `sendToUser` (perso) / `broadcast` (global).
+- [ ] Choisir la portée : `sendToAgent` (lié Agent) / `sendToUser` (perso) / `broadcast` (global).
 - [ ] Documenter le payload dans `api.md` (section SSE).
 - [ ] Écrire le **handler client** dans le(s) hook(s) concerné(s).
 - [ ] Vérifier que les champs émis = champs lus côté client (cf. piège #2).
@@ -47,7 +47,7 @@ Référence pour **éviter les bugs de synchro temps réel** (état périmé, me
 ### …un hook client piloté par SSE
 - [ ] `useSSE({...})` pour les events live.
 - [ ] **`useSSEResync(refetch)`** pour le rattrapage au réveil/reconnexion.
-- [ ] Dans chaque handler : filtrer par `kinId` si applicable, dédupliquer par id, **merger** (ne pas écraser des champs absents de l'event).
+- [ ] Dans chaque handler : filtrer par `agentId` si applicable, dédupliquer par id, **merger** (ne pas écraser des champs absents de l'event).
 
 ---
 
@@ -57,10 +57,10 @@ Référence pour **éviter les bugs de synchro temps réel** (état périmé, me
 |---|---|---|---|
 | 1 | **MISSING_EMIT** — on mute sans émettre | message user mis en file mais jamais diffusé → invisible sur les autres appareils | toute mutation visible émet un event |
 | 2 | **PAYLOAD_SHAPE_MISMATCH** — le serveur envoie une forme ≠ de ce que le client lit, ou le client hardcode/jette un champ | `chat:message` envoyait des lignes DB brutes (sans `url`) **et** le handler faisait `files: []` | sérialiser côté serveur ; mapper `data.xxx` côté client (jamais `[]`/`null` en dur) |
-| 3 | **WRONG_HARDCODED_DATA** — payload avec une valeur figée qui écrase l'état | `enqueueMessage` émettait `isProcessing: false` en plein turn → la bulle de réflexion disparaissait | calculer la vraie valeur (`isKinProcessing()`), pas une constante |
+| 3 | **WRONG_HARDCODED_DATA** — payload avec une valeur figée qui écrase l'état | `enqueueMessage` émettait `isProcessing: false` en plein turn → la bulle de réflexion disparaissait | calculer la vraie valeur (`isAgentProcessing()`), pas une constante |
 | 4 | **CATCHUP_GAP** — pas de refetch au réveil | hooks figés après déverrouillage du téléphone (SSE ne rejoue rien) | `useSSEResync(refetch)` sur le hook |
 | 5 | **EVENT_COVERAGE** — émis sans handler / handler sans émetteur | `knowledge:source-*` émis, aucun consommateur (event mort) | câbler les deux côtés, ou supprimer l'event |
-| 6 | **KINID_OR_DEDUP** — pas de filtre `kinId`, pas de dédup, pas de réconciliation optimiste | doublon bulle optimiste + bulle réelle | filtrer par `kinId` ; dédup par id ; réconcilier l'optimiste via un token (`mergeIncomingMessage` + `clientMessageId`) |
+| 6 | **KINID_OR_DEDUP** — pas de filtre `agentId`, pas de dédup, pas de réconciliation optimiste | doublon bulle optimiste + bulle réelle | filtrer par `agentId` ; dédup par id ; réconcilier l'optimiste via un token (`mergeIncomingMessage` + `clientMessageId`) |
 | 7 | **STATE_CLOBBER_ON_PARTIAL** — le handler écrase des champs absents de l'event | un event « fin de traitement » sans `processingStartedAt` effaçait le timer | **merger** (`?? existing.xxx`), n'écraser que les champs présents |
 | 8 | **MULTI_DEVICE** — update optimiste local jamais diffusé | action visible seulement sur l'appareil émetteur | diffuser côté serveur ; l'émetteur réconcilie son optimiste (dédup par id) |
 
@@ -83,10 +83,10 @@ Quand le client affiche un état optimiste **avant** la confirmation serveur, et
 ## 6. Checklist de revue (PR touchant état partagé / SSE)
 
 - [ ] Chaque mutation visible émet un event ? (sinon refresh requis → bug)
-- [ ] Bonne portée (`sendToKin` / `sendToUser` / `broadcast`) ?
+- [ ] Bonne portée (`sendToAgent` / `sendToUser` / `broadcast`) ?
 - [ ] Payload émis == champs lus côté client ? DTO sérialisés (pas de ligne DB brute) ?
 - [ ] Aucune valeur figée (`false`, `[]`, `null`) là où une vraie valeur est attendue ?
-- [ ] Handler client : filtre `kinId`, dédup par id, merge (pas d'écrasement partiel) ?
+- [ ] Handler client : filtre `agentId`, dédup par id, merge (pas d'écrasement partiel) ?
 - [ ] Le hook a `useSSEResync` si son état dépend d'events ?
 - [ ] `type` ajouté à `SSEEventType` (pas de cast `as SSEEventType`) + documenté dans `api.md` ?
 

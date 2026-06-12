@@ -26,9 +26,9 @@ const { searchHistoryTool } = await import('@/server/tools/history-tools')
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const fakeCtx: ToolExecutionContext = {
-  kinId: 'kin-test-123',
+  agentId: 'agent-test-123',
   userId: 'user-1',
-  isSubKin: false,
+  isSubAgent: false,
 }
 
 function execute(args: any) {
@@ -96,7 +96,7 @@ describe('searchHistoryTool', () => {
 
       expect(mockQuery).toHaveBeenCalledTimes(2)
       // The .all() call receives limit and offset as last params
-      expect(mockAll).toHaveBeenCalledWith('"test"', 'kin-test-123', 5, 0)
+      expect(mockAll).toHaveBeenCalledWith('"test"', 'agent-test-123', 5, 0)
     })
 
     it('returns empty messages for empty query after sanitization', async () => {
@@ -117,19 +117,19 @@ describe('searchHistoryTool', () => {
 
       expect(mockAll).toHaveBeenCalledWith(
         '"hello" OR "world" OR "test"',
-        'kin-test-123',
+        'agent-test-123',
         5,
         0,
       )
     })
 
-    it('passes kinId from context to the query', async () => {
+    it('passes agentId from context to the query', async () => {
       await execute({ query: 'test', limit: 3 })
 
-      // .all() receives: ftsQuery, kinId, limit, offset
+      // .all() receives: ftsQuery, agentId, limit, offset
       expect(mockAll).toHaveBeenCalledWith(
         '"test"',
-        'kin-test-123',
+        'agent-test-123',
         3,
         0,
       )
@@ -162,7 +162,7 @@ describe('searchHistoryTool', () => {
 
       expect(mockAll).toHaveBeenCalledWith(
         '"kubernetes"',
-        'kin-test-123',
+        'agent-test-123',
         5,
         0,
       )
@@ -173,7 +173,7 @@ describe('searchHistoryTool', () => {
 
       expect(mockAll).toHaveBeenCalledWith(
         '"hello" OR "world"',
-        'kin-test-123',
+        'agent-test-123',
         5,
         0,
       )
@@ -184,7 +184,7 @@ describe('searchHistoryTool', () => {
 
       expect(mockAll).toHaveBeenCalledWith(
         '"hello" OR "world"',
-        'kin-test-123',
+        'agent-test-123',
         5,
         0,
       )
@@ -195,7 +195,7 @@ describe('searchHistoryTool', () => {
 
       expect(mockAll).toHaveBeenCalledWith(
         '"test"',
-        'kin-test-123',
+        'agent-test-123',
         5,
         0,
       )
@@ -209,7 +209,7 @@ describe('searchHistoryTool', () => {
 
       expect(mockAll).toHaveBeenCalledWith(
         '"test"',
-        'kin-test-123',
+        'agent-test-123',
         5,
         10,
       )

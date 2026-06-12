@@ -38,7 +38,7 @@ npm_token
 .DS_Store
 
 # Data (SQLite DB, uploads, workspaces)
-data/
+/data/
 
 # VSCode
 .vscode/
@@ -56,8 +56,8 @@ e2e-journal.md
 memory-research.md
 memory-experiments/
 channel-files-journal.md
-kin-context-journal.md
-kin-context.json
+agent-context-journal.md
+agent-context.json
 
 # External tooling clones living in the working dir (not part of this repo)
 opencode/
@@ -74,3 +74,11 @@ promo/
 # has somewhere for the install workflow to write to.
 plugins/*
 !plugins/.gitkeep
+
+# WSL/Windows alternate-data-stream artifacts
+*:Zone.Identifier
+
+# Stray exported context capture (debug artifact, not part of the app)
+kin-context.json
+image.jpg
+.playwright-mcp/

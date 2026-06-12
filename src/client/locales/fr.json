@@ -1,8 +1,7 @@
 {
   "secretPrompt": {
     "getKey": "Générer ta clé ici",
-    "privacyNote": "Ça va directement dans ton coffre chiffré — l'IA ne le voit jamais.",
-    "later": "Plus tard",
+    "privacyNote": "Ça va directement dans ton coffre chiffré. L'IA ne le voit jamais.",
     "saving": "Enregistrement…",
     "submit": "Enregistrer en sécurité"
   },
@@ -25,38 +24,41 @@
     "items": {
       "add_llm_provider": {
         "title": "Ajouter un fournisseur LLM",
-        "description": "Nécessaire pour parler avec les Kins. Sans ça, le moteur de chat n'a rien à appeler. Ajoute un fournisseur comme Anthropic, OpenAI, ou n'importe quel plugin (Mistral, etc.)."
+        "description": "Nécessaire pour parler avec les Agents. Sans ça, le moteur de chat n'a rien à appeler. Ajoute un fournisseur comme Anthropic, OpenAI, ou n'importe quel plugin (Mistral, etc.)."
       },
       "set_default_llm": {
         "title": "Définir un LLM par défaut",
-        "description": "Utilisé comme modèle par défaut pour les nouveaux Kins et par le Wizard de création (génération IA). Sans ça, il faudra choisir un modèle manuellement à chaque fois."
+        "description": "Utilisé comme modèle par défaut pour les nouveaux Agents et par le Wizard de création (génération IA). Sans ça, il faudra choisir un modèle manuellement à chaque fois."
       },
       "add_embedding_provider": {
         "title": "Ajouter un fournisseur embedding",
-        "description": "Active la recherche sémantique dans la mémoire. Sans ça, la mémoire fonctionne en keyword-only (FTS) — opérationnel mais moins précis pour retrouver des souvenirs liés."
+        "description": "Active la recherche sémantique dans la mémoire. Sans ça, la mémoire fonctionne en keyword-only (FTS) : opérationnel mais moins précis pour retrouver des souvenirs liés."
       },
       "add_image_provider": {
         "title": "Ajouter un fournisseur d'image",
-        "description": "Active la génération d'avatars IA pour les Kins et l'outil `generate_image`. Sans ça, les Kins ont des avatars en initiales et ne peuvent pas générer d'images."
+        "description": "Active la génération d'avatars IA pour les Agents et l'outil `generate_image`. Sans ça, les Agents ont des avatars en initiales et ne peuvent pas générer d'images."
       },
       "add_search_provider": {
         "title": "Ajouter un fournisseur de recherche",
-        "description": "Active l'outil `web_search` pour que les Kins puissent récupérer des infos live. Sans ça, web_search retourne une erreur explicite."
+        "description": "Active l'outil `web_search` pour que les Agents puissent récupérer des infos live. Sans ça, web_search retourne une erreur explicite."
       },
       "add_voice_provider": {
         "title": "Ajouter des fournisseurs voix (TTS / STT)",
         "description": "Active les outils `text_to_speech` et `transcribe_audio`, ainsi que les vocaux sur les channels qui le supportent (ex. WhatsApp vocaux)."
       },
-      "create_first_kin": {
-        "title": "Créer ton premier Kin",
-        "description": "Les Kins sont les agents IA avec qui tu discutes. Le wizard utilise ton LLM par défaut pour suggérer une personnalité depuis une courte description — ou tu peux tout configurer manuellement."
+      "create_first_agent": {
+        "title": "Créer ton premier Agent",
+        "description": "Les Agents sont les agents IA avec qui tu discutes. Le wizard utilise ton LLM par défaut pour suggérer une personnalité depuis une courte description, ou tu peux tout configurer manuellement."
       }
     }
   },
   "common": {
     "loading": "Chargement...",
     "save": "Enregistrer",
+    "remove": "Retirer",
     "cancel": "Annuler",
+    "expandAll": "Tout déplier",
+    "collapseAll": "Tout replier",
     "delete": "Supprimer",
     "confirm": "Confirmer",
     "back": "Retour",
@@ -86,7 +88,8 @@
       "discard": "Abandonner"
     },
     "url": "URL",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "agentLanguageFollowUi": "Identique à l'interface"
   },
   "errors": {
     "backendUnavailable": "Impossible de joindre le serveur. Vérifiez que le backend est en cours d'exécution et réessayez.",
@@ -94,11 +97,11 @@
     "uploadFailed": "Échec de l'envoi",
     "copyFailed": "Échec de la copie de l'URL",
     "loadMessagesFailed": "Échec du chargement des messages",
-    "kinErrorGeneric": "Une erreur s'est produite lors du traitement de votre requête"
+    "agentErrorGeneric": "Une erreur s'est produite lors du traitement de votre requête"
   },
   "login": {
     "title": "Bon retour",
-    "subtitle": "Connectez-vous à votre espace KinBot",
+    "subtitle": "Connectez-vous à votre espace Hivekeep",
     "email": "Email",
     "emailPlaceholder": "vous@exemple.com",
     "password": "Mot de passe",
@@ -110,21 +113,37 @@
     "startOnboarding": "Configurer votre espace"
   },
   "onboarding": {
-    "title": "Bienvenue sur KinBot",
+    "title": "Bienvenue sur Hivekeep",
     "subtitle": "Configurons votre espace",
+    "queenieGettingReady": "{{name}} se prépare…",
     "step": "Étape {{current}} sur {{total}}",
+    "steps": {
+      "identity": "Votre identité",
+      "preferences": "Apparence",
+      "provider": "Connectez votre IA"
+    },
+    "connectAi": {
+      "why": "Ce fournisseur alimente tes Agents et Queenie, ton guide de configuration. Commence par un fournisseur intégré. Tu pourras en ajouter d'autres plus tard, et des plugins pour encore plus de fournisseurs."
+    },
     "bootstrap": {
       "title": "Connecte ton IA",
-      "description": "Pour donner vie à ton assistant, connecte un fournisseur d'IA. Commence par un fournisseur intégré — tu pourras en ajouter d'autres plus tard, et des plugins pour encore plus de fournisseurs.",
+      "description": "Pour donner vie à ton assistant, connecte un fournisseur d'IA. Commence par un fournisseur intégré. Tu pourras en ajouter d'autres plus tard, et des plugins pour encore plus de fournisseurs.",
       "connect": "Connecter un fournisseur",
       "seeding": "On donne vie à ton assistant…",
-      "noLlm": "Aucun fournisseur LLM trouvé — connecte-en un."
+      "noLlm": "Aucun fournisseur LLM trouvé. Connecte-en un."
     },
     "modal": {
       "stopTitle": "Arrêter la configuration guidée ?",
-      "stopBody": "Tu pourras reprendre à tout moment en parlant à Sherpa dans ta liste de Kins — ta conversation est sauvegardée.",
+      "stopBody": "Tu pourras reprendre à tout moment en parlant à Queenie dans ta liste d'Agents. Ta conversation est sauvegardée.",
       "keepGoing": "Continuer",
       "stop": "Arrêter pour l'instant"
+    },
+    "rescue": {
+      "title": "Quelque chose a échoué",
+      "body": "Queenie a rencontré une erreur : {{error}}. C'est souvent un souci de clé ou de configuration de fournisseur. Laisse Queenie t'aider à corriger ça.",
+      "reconfigure": "Reconfigurer le fournisseur",
+      "reconfiguring": "On demande à Queenie…",
+      "message": "Quelque chose vient d'échouer avec une erreur. On dirait un souci de clé ou de configuration de fournisseur. Peux-tu m'aider à diagnostiquer et reconfigurer le fournisseur ?"
     },
     "identity": {
       "title": "Votre identité",
@@ -135,7 +154,7 @@
       "lastName": "Nom",
       "email": "Email",
       "pseudonym": "Pseudonyme",
-      "pseudonymHint": "Comment vos Kins s'adresseront à vous",
+      "pseudonymHint": "Comment vos Agents s'adresseront à vous",
       "password": "Mot de passe",
       "passwordConfirm": "Confirmer le mot de passe",
       "passwordMismatch": "Les mots de passe ne correspondent pas",
@@ -144,7 +163,10 @@
     "preferences": {
       "title": "Préférences",
       "subtitle": "Personnalisez votre expérience",
-      "language": "Langue",
+      "language": "Langue de l'interface",
+      "languageHint": "Langue des menus, boutons et pages.",
+      "agentLanguage": "Langue des agents",
+      "agentLanguageHint": "Langue que vos agents utiliseront pour vous parler. Les agents peuvent parler presque toutes les langues, même celles dans lesquelles l'interface n'est pas traduite.",
       "theme": "Thème de couleur",
       "themeHint": "Modifiable à tout moment dans les paramètres",
       "themeMode": "Apparence",
@@ -157,8 +179,6 @@
       "contrastHint": "Le mode doux réduit légèrement le contraste pour un rendu plus apaisé."
     },
     "providers": {
-      "title": "Fournisseurs IA",
-      "subtitle": "Configurez au moins un fournisseur IA pour alimenter vos Kins",
       "addProvider": "Ajouter un fournisseur",
       "addProviderHint": "Testez la connexion avant d'ajouter",
       "test": "Tester la connexion",
@@ -173,109 +193,31 @@
       "familyTts": "Synthèse vocale",
       "familyStt": "Transcription vocale",
       "familiesLabel": "Activer pour",
-      "familiesHint": "Une seule ligne fournisseur est créée avec les capacités sélectionnées. La même clé API alimente toutes les familles activées — les basculer plus tard est une édition de ligne, pas une nouvelle entrée.",
+      "familiesHint": "Une seule ligne fournisseur est créée avec les capacités sélectionnées. La même clé API alimente toutes les familles activées. Les basculer plus tard est une édition de ligne, pas une nouvelle entrée.",
       "type": "Type de fournisseur",
       "name": "Nom d'affichage",
       "namePlaceholder": "Mon compte {{type}}",
       "apiKey": "Clé API",
-      "baseUrl": "URL de base",
-      "baseUrlHint": "Laisser vide pour la valeur par défaut",
       "apiKeyEditHint": "Laisser vide pour conserver l'actuelle",
-      "showApiKey": "Afficher la clé API",
-      "hideApiKey": "Masquer la clé API",
-      "credentialsPath": "Fichier de credentials",
-      "credentialsPathHint": "Auto-détecté - ne remplir que si nécessaire",
       "testing": "Test de connexion...",
       "testSuccess": "Connexion réussie",
       "testFailed": "Échec de la connexion",
-      "capabilities": "Capacités",
-      "required": "Capacités requises",
-      "requiredHint": "Vous devez couvrir les capacités LLM et Embedding pour continuer",
-      "llmRequired": "LLM",
-      "embeddingRequired": "Embedding",
-      "imageOptional": "Image (optionnel)",
-      "covered": "Couvert",
-      "missing": "Manquant",
-      "finish": "Terminer la configuration",
-      "cannotFinish": "Configurez des fournisseurs couvrant les capacités LLM et Embedding",
       "nameTip": "Un nom pour identifier ce provider dans votre tableau de bord. Si vide, le nom du type de provider est utilisé.",
-      "baseUrlTip": "Remplace l'URL par défaut de l'API. Utile pour les instances auto-hébergées, proxies, ou API tierces compatibles.",
-      "getApiKey": "Obtenir votre clé API {{provider}}",
-      "guidanceIntro": "Pas sûr par où commencer ? Voici les options les plus populaires :",
-      "getKey": "Obtenir",
-      "noKeyNeeded": "Pas de clé API nécessaire",
-      "guidanceFooter": "Vous pourrez ajouter d'autres fournisseurs plus tard dans les Paramètres. Choisissez-en un pour démarrer !",
-      "advancedSetup": "Configurer mémoire et recherche",
-      "quickFinish": "Terminer avec les paramètres par défaut",
-      "quickFinishHint": "Les modèles par défaut et la recherche sont configurables plus tard dans les Paramètres"
-    },
-    "models": {
-      "title": "Modèles par défaut",
-      "subtitle": "Choisissez les modèles par défaut pour vos Kins",
-      "defaultLlm": "LLM par défaut",
-      "defaultLlmTip": "Le modèle de langage par défaut pour les nouveaux Kins. Chaque Kin peut le remplacer ensuite.",
-      "defaultLlmHint": "Les nouveaux Kins utiliseront ce modèle par défaut.",
-      "defaultLlmPlaceholder": "Sélectionner le LLM par défaut",
-      "embeddingModel": "Modèle d'embedding",
-      "embeddingModelTip": "Convertit les souvenirs en données recherchables. Un petit modèle suffit.",
-      "embeddingModelHint": "Permet la recherche sémantique dans les souvenirs des Kins.",
-      "embeddingModelPlaceholder": "Sélectionner un modèle d'embedding",
-      "extractionModel": "Modèle d'extraction",
-      "extractionModelTip": "Analyse les conversations pour extraire les souvenirs. Un modèle rapide fait très bien l'affaire.",
-      "extractionModelHint": "Laisser vide pour utiliser le modèle de chaque Kin.",
-      "extractionModelPlaceholder": "Optionnel — utilise le modèle du Kin si vide",
-      "imageModel": "Modèle d'image",
-      "imageModelTip": "Modèle par défaut pour la génération d'images quand aucun modèle spécifique n'est demandé.",
-      "imageModelHint": "Optionnel — détection auto si vide.",
-      "imageModelPlaceholder": "Optionnel — détection auto",
-      "compactingModel": "Modèle de compaction",
-      "compactingModelTip": "Résume les anciennes conversations pour économiser l'espace contexte. Un modèle rapide convient bien.",
-      "compactingModelHint": "Optionnel — utilise le modèle de chaque Kin si vide.",
-      "compactingModelPlaceholder": "Optionnel — utilise le modèle du Kin si vide",
-      "finish": "Terminer la configuration"
-    },
-    "memory": {
-      "title": "Mémoire",
-      "subtitle": "Choisissez comment vos Kins se souviennent des conversations passées",
-      "extractionModel": "Modèle d'extraction",
-      "extractionModelHint": "Lit vos conversations et identifie ce qui vaut la peine d'être retenu. Un modèle rapide et abordable fait très bien l'affaire. Laissez vide pour utiliser le modèle de chaque Kin.",
-      "extractionModelTip": "Ce modèle analyse vos conversations après coup et décide quels faits, préférences et décisions méritent d'être sauvegardés comme souvenirs. Pas besoin d'un modèle puissant, un petit modèle rapide suffit.",
-      "embeddingModel": "Modèle d'embedding",
-      "embeddingModelHint": "Transforme les souvenirs en données recherchables pour que vos Kins retrouvent les infos pertinentes plus tard. Un petit modèle économique est parfait.",
-      "embeddingModelTip": "Ce modèle convertit le texte en nombres (vecteurs) pour permettre à vos Kins de chercher dans leurs souvenirs par le sens, pas juste les mots exacts. Par exemple, un souvenir sur « adorer les pâtes » correspondra à une question sur « les plats préférés ».",
-      "embeddingModelPlaceholder": "Sélectionner un modèle d'embedding"
-    }
-  },
-  "hub": {
-    "badge": "Hub",
-    "defaultDescription": "Un coordinateur central qui reçoit tous les messages et les redirige vers les Kins spécialisés en fonction de leur expertise. Amical, efficace, et doué pour comprendre les intentions.",
-    "channelHint": "Les messages de ce canal iront au Hub, qui pourra les rediriger vers les Kins spécialistes.",
-    "deleteWarning": "Ce Kin est votre Hub. Le supprimer retirera votre coordinateur central.",
-    "wizard": {
-      "title": "Créer votre Hub",
-      "subtitle": "Le Hub est le coordinateur central de votre équipe de Kins. Il reçoit vos messages, comprend vos besoins et délègue au bon spécialiste.",
-      "diagramYou": "Vous",
-      "diagramCaption": "Vous parlez au Hub. Il redirige vers le bon Kin automatiquement.",
-      "specDev": "Dev",
-      "specResearch": "Recherche",
-      "specWriter": "Rédaction",
-      "grantAllTools": "Donner accès à tous les outils",
-      "grantAllToolsDescription": "Le Hub aura accès à tous les outils, y compris les outils d'administration (gestion des Kins, système, base de données). Décochez pour laisser l'IA décider des outils à activer."
+      "getApiKey": "Obtenir votre clé API {{provider}}"
     }
   },
   "sidebar": {
-    "kins": {
-      "title": "Kins",
-      "empty": "Aucun Kin",
-      "create": "Nouveau Kin",
-      "shortcutHint": "Basculer vers ce Kin ({{key}})",
+    "agents": {
+      "title": "Agents",
+      "empty": "Aucun Agent",
+      "create": "Nouvel Agent",
+      "shortcutHint": "Basculer vers cet Agent ({{key}})",
       "emptyDescription": "Créez votre premier assistant IA pour commencer",
-      "search": "Filtrer les kins...",
-      "noResults": "Aucun kin ne correspond",
+      "search": "Filtrer les agents...",
+      "noResults": "Aucun agent ne correspond",
       "contextMenu": {
         "edit": "Modifier les paramètres",
-        "delete": "Supprimer le Kin",
-        "setAsHub": "Définir comme Hub",
+        "delete": "Supprimer l'Agent",
         "viewUsage": "Consommation de tokens"
       }
     },
@@ -293,7 +235,7 @@
         "pending": "En attente",
         "in_progress": "En cours",
         "awaiting_human_input": "En attente de votre réponse",
-        "awaiting_kin_response": "En attente d'un Kin",
+        "awaiting_agent_response": "En attente d'un Agent",
         "awaiting_subtask": "En attente du scout",
         "completed": "Terminée",
         "failed": "Échouée",
@@ -301,7 +243,7 @@
         "paused": "En pause",
         "cancelled": "Annulée"
       },
-      "emptyDescription": "Les tâches apparaîtront ici quand vos Kins travaillent",
+      "emptyDescription": "Les tâches apparaîtront ici quand vos Agents travaillent",
       "activeLabel": "En cours",
       "queuedLabel": "En file d'attente",
       "historyLabel": "Historique",
@@ -353,16 +295,16 @@
       },
       "search": "Rechercher...",
       "noResults": "Aucun job trouvé",
-      "emptyDescription": "Planifiez des tâches récurrentes pour vos Kins"
+      "emptyDescription": "Planifiez des tâches récurrentes pour vos Agents"
     },
     "miniApps": {
       "title": "Mini-Apps",
       "empty": "Aucune app",
-      "emptyDescription": "Demandez à un Kin d'en créer une",
+      "emptyDescription": "Demandez à un Agent d'en créer une",
       "search": "Rechercher...",
       "noResults": "Aucune mini-app trouvée",
-      "noKinSelected": "Sélectionnez un Kin",
-      "noKinSelectedDescription": "Sélectionnez un Kin pour voir ses mini-apps",
+      "noAgentSelected": "Sélectionnez un Agent",
+      "noAgentSelectedDescription": "Sélectionnez un Agent pour voir ses mini-apps",
       "viewGrid": "Vue grille",
       "viewList": "Vue liste"
     },
@@ -391,14 +333,14 @@
     "mobileSidebar": "Barre latérale",
     "mobileSidebarDesc": "Affiche la barre latérale mobile."
   },
-  "kin": {
+  "agent": {
     "edit": {
-      "title": "Modifier le Kin",
+      "title": "Modifier l'Agent",
       "slug": "Slug (identifiant URL)",
-      "slugHelp": "Lettres minuscules, chiffres et tirets. Utilisé dans les URLs et la communication inter-Kin."
+      "slugHelp": "Lettres minuscules, chiffres et tirets. Utilisé dans les URLs et la communication inter-Agent."
     },
     "create": {
-      "title": "Créer un nouveau Kin",
+      "title": "Créer un nouvel Agent",
       "name": "Nom",
       "namePlaceholder": "ex. Chef, Conseiller financier...",
       "role": "Rôle",
@@ -422,34 +364,40 @@
       "avatarNoImageProvider": "Aucun fournisseur d'image configuré",
       "noLlm": "Aucun fournisseur LLM configuré",
       "noLlmHint": "Le sélecteur de modèle ci-dessous restera vide tant qu'aucun fournisseur LLM n'est ajouté. Sans modèle, la sauvegarde est désactivée.",
-      "submit": "Créer le Kin",
-      "characterHint": "Définissez la personnalité, le ton et le style de communication. Cela influence la façon dont le Kin s'exprime et se comporte.",
-      "expertiseHint": "Décrivez ce que le Kin sait et sur quoi il doit se concentrer. Cela guide ses réponses et ses domaines de compétence.",
+      "submit": "Créer l'Agent",
+      "characterHint": "Définissez la personnalité, le ton et le style de communication. Cela influence la façon dont l'Agent s'exprime et se comporte.",
+      "expertiseHint": "Décrivez ce que l'Agent sait et sur quoi il doit se concentrer. Cela guide ses réponses et ses domaines de compétence.",
       "totalPromptTokens": "Prompt système total : ~{{tokens}} tokens",
       "memoryEmptyTitle": "La mémoire se configure après la création",
-      "memoryEmptyDescription": "Une fois votre Kin créé, il construira automatiquement des souvenirs à partir des conversations. Vous pouvez aussi ajouter des souvenirs manuellement depuis le dialogue d'édition.",
+      "memoryEmptyDescription": "Une fois votre Agent créé, il construira automatiquement des souvenirs à partir des conversations. Vous pouvez aussi ajouter des souvenirs manuellement depuis le dialogue d'édition.",
       "compactionEmptyTitle": "La compaction se configure après la création",
-      "compactionEmptyDescription": "Une fois votre Kin créé, vous pourrez personnaliser les paramètres de compaction ici.",
+      "compactionEmptyDescription": "Une fois votre Agent créé, vous pourrez personnaliser les paramètres de compaction ici.",
       "thinkingEmptyTitle": "La réflexion se configure après la création",
-      "thinkingEmptyDescription": "Une fois votre Kin créé, vous pourrez activer la réflexion étendue pour les modèles compatibles.",
-      "nameHint": "Un nom court et mémorable pour ce Kin.",
-      "roleHint": "Une brève description de ce que fait ce Kin (affiché dans la barre latérale).",
-      "nameTip": "Un nom court et reconnaissable. C'est ainsi que le Kin apparaît dans la barre latérale et les conversations.",
-      "roleTip": "Un résumé en une ligne de ce que fait ce Kin. Affiché sous le nom dans la barre latérale.",
-      "modelTip": "Le modèle IA qui anime ce Kin. Les modèles plus grands sont plus intelligents mais plus lents et coûteux.",
+      "thinkingEmptyDescription": "Une fois votre Agent créé, vous pourrez activer la réflexion étendue pour les modèles compatibles.",
+      "nameHint": "Un nom court et mémorable pour cet Agent.",
+      "roleHint": "Une brève description de ce que fait cet Agent (affiché dans la barre latérale).",
+      "nameTip": "Un nom court et reconnaissable. C'est ainsi que l'Agent apparaît dans la barre latérale et les conversations.",
+      "roleTip": "Un résumé en une ligne de ce que fait cet Agent. Affiché sous le nom dans la barre latérale.",
+      "modelTip": "Le modèle IA qui anime cet Agent. Les modèles plus grands sont plus intelligents mais plus lents et coûteux.",
       "scoutModel": "Modèle d'exploration",
-      "scoutModelTip": "Un modèle rapide et économique utilisé par l'outil `scout` quand ce Kin (ou ses tâches) délègue une exploration lourde en lecture seule. Laisser sur héritage pour retomber sur le scout par défaut du projet, puis le scout par défaut global, puis le modèle du Kin.",
-      "scoutModelHint": "Utilisé par l'outil `scout` pour déléguer une grosse exploration en lecture seule (localiser du code, cartographier un sous-système) à un modèle moins cher. Héritage → scout par défaut du projet → scout par défaut global → modèle de ce Kin.",
-      "scoutModelInherit": "Héritage (projet / global / modèle du Kin)",
-      "characterTip": "Définit la personnalité du Kin : comment il parle, son ton, ses particularités. C'est en quelque sorte l'\"âme\" du Kin.",
-      "expertiseTip": "Décrit ce que le Kin sait et sur quoi il doit se concentrer. Guide ses réponses et domaines de compétence.",
-      "slugPlaceholder": "mon-kin-slug"
+      "scoutModelTip": "Un modèle rapide et économique utilisé par l'outil `scout` quand cet Agent (ou ses tâches) délègue une exploration lourde en lecture seule. Le scout par défaut d'un projet est prioritaire sur ce réglage. Laissez sur hériter pour retomber sur le défaut global, puis le modèle de l'Agent.",
+      "scoutModelHint": "Utilisé par l'outil `scout` pour déléguer les grosses explorations en lecture seule (localiser du code, cartographier un sous-système) à un modèle moins cher. Priorité : override par appel → scout du projet → ce réglage → défaut global → modèle de cet Agent.",
+      "scoutModelInherit": "Héritage (projet / global / modèle de l'Agent)",
+      "characterTip": "Définit la personnalité de l'Agent : comment il parle, son ton, ses particularités. C'est en quelque sorte l'\"âme\" de l'Agent.",
+      "expertiseTip": "Décrit ce que l'Agent sait et sur quoi il doit se concentrer. Guide ses réponses et domaines de compétence.",
+      "slugPlaceholder": "mon-agent-slug",
+      "scoutThinking": "Raisonnement des scouts",
+      "scoutThinkingTip": "Effort de raisonnement des scouts de cet Agent. Le réglage scout d'un projet est prioritaire ; l'override par appel bat tout. Hériter = retomber sur le défaut global, puis la config de cet Agent.",
+      "scoutThinkingInherit": "Hériter (défaut global, puis cet Agent)"
     },
     "settings": {
-      "title": "Paramètres du Kin",
+      "title": "Paramètres de l'Agent",
       "save": "Enregistrer",
-      "delete": "Supprimer ce Kin",
-      "deleteConfirm": "Êtes-vous sûr ? Cela supprimera définitivement ce Kin et toutes ses données.",
+      "tabSaved": "Modifications enregistrées",
+      "dangerZone": "Zone de danger",
+      "dangerZoneDesc": "Supprimer définitivement cet Agent et toutes ses données. Cette action est irréversible.",
+      "delete": "Supprimer cet Agent",
+      "deleteConfirm": "Êtes-vous sûr ? Cela supprimera définitivement cet Agent et toutes ses données.",
       "deleteAction": "Supprimer définitivement"
     },
     "tabs": {
@@ -467,29 +415,39 @@
       "allEnabled": "Tous activés",
       "allDisabled": "Tous désactivés",
       "countEnabled": "{{count}} / {{total}}",
-      "hubNotice": "Ce Kin est le Hub. Tous les outils opt-in sont automatiquement activés au runtime, indépendamment des toggles ci-dessous.",
       "autoEnabled": "Auto",
       "noMcp": "Aucun serveur MCP configuré.",
-      "saveMcpHint": "Enregistrez le Kin d'abord pour configurer les outils MCP.",
+      "saveMcpHint": "Enregistrez l'Agent d'abord pour configurer les outils MCP.",
       "connectionFailed": "Connexion échouée - impossible de découvrir les outils de ce serveur.",
       "enableAll": "Tout activer",
       "disableAll": "Tout désactiver",
       "optIn": "Activation manuelle",
       "missingCapability": {
-        "image": "Nécessite un fournisseur d'image — la bascule fonctionne mais l'outil renverra une erreur tant qu'aucun n'est configuré.",
-        "search": "Nécessite un fournisseur de recherche — la bascule fonctionne mais l'outil renverra une erreur tant qu'aucun n'est configuré.",
-        "tts": "Nécessite un fournisseur de synthèse vocale — la bascule fonctionne mais l'outil renverra une erreur tant qu'aucun n'est configuré.",
-        "stt": "Nécessite un fournisseur de reconnaissance vocale — la bascule fonctionne mais l'outil renverra une erreur tant qu'aucun n'est configuré.",
-        "embedding": "Nécessite un fournisseur d'embedding — le rappel et l'enregistrement en mémoire échoueront tant qu'aucun n'est configuré."
+        "image": "Nécessite un fournisseur d'image : la bascule fonctionne mais l'outil renverra une erreur tant qu'aucun n'est configuré.",
+        "search": "Nécessite un fournisseur de recherche : la bascule fonctionne mais l'outil renverra une erreur tant qu'aucun n'est configuré.",
+        "tts": "Nécessite un fournisseur de synthèse vocale : la bascule fonctionne mais l'outil renverra une erreur tant qu'aucun n'est configuré.",
+        "stt": "Nécessite un fournisseur de reconnaissance vocale : la bascule fonctionne mais l'outil renverra une erreur tant qu'aucun n'est configuré.",
+        "embedding": "Nécessite un fournisseur d'embedding : le rappel et l'enregistrement en mémoire échoueront tant qu'aucun n'est configuré."
       },
       "toolboxesTitle": "Boîtes à outils",
-      "toolboxesHint": "Choisissez une ou plusieurs boîtes à outils pour accorder ses outils à ce Kin. Une boîte regroupe des outils de toutes les sources (natifs, plugin, MCP, personnalisés).",
-      "defaultsToAll": "Aucune boîte sélectionnée — ce Kin utilise la boîte intégrée « all » (tous les outils natifs et custom).",
+      "manageToolboxes": "Gérer les boîtes à outils",
+      "toolboxesHint": "Choisissez une ou plusieurs boîtes à outils pour accorder ses outils à cet Agent. Une boîte regroupe des outils de toutes les sources (natifs, plugin, MCP, personnalisés).",
+      "defaultsToAll": "Aucune boîte sélectionnée : cet Agent utilise la boîte intégrée « all » (tous les outils natifs et custom).",
       "noToolboxesTitle": "Aucune boîte à outils",
-      "noToolboxesDescription": "Créez des boîtes à outils depuis les Réglages pour accorder des outils à ce Kin.",
+      "noToolboxesDescription": "Créez des boîtes à outils depuis les Réglages pour accorder des outils à cet Agent.",
       "resolvedPreviewTitle": "Outils accordés",
       "resolvedPreviewHint": "Aperçu en lecture seule des outils accordés par les boîtes sélectionnées. Les outils listés qui n'existent pas sont ignorés.",
-      "resolvedPreviewEmpty": "Aucun outil accordé par la sélection actuelle."
+      "resolvedPreviewEmpty": "Aucun outil accordé par la sélection actuelle.",
+      "extras": {
+        "title": "Accès individuels",
+        "hint": "Outils accordés en plus des boîtes à outils : les demandes approuvées arrivent ici.",
+        "add": "Ajouter des outils",
+        "empty": "Aucun accès individuel.",
+        "remove": "Retirer {{name}}",
+        "dialogTitle": "Ajouter des accès individuels",
+        "dialogHint": "Choisissez les outils à accorder à cet Agent en plus de ses boîtes à outils.",
+        "apply": "Appliquer"
+      }
     },
     "defaults": {
       "character": "Tu es un assistant amical, réfléchi et polyvalent. Tu communiques clairement et tu adaptes ton ton au contexte - décontracté quand c'est approprié, précis quand c'est nécessaire.\n\nTu es patient, curieux et tu prends plaisir à aider. Quand tu ne sais pas quelque chose, tu le dis honnêtement. Tu poses des questions de clarification quand la demande est ambiguë.\n\nTu gardes tes réponses concises sauf si l'utilisateur demande explicitement plus de détails.",
@@ -499,8 +457,8 @@
       "title": "Compaction",
       "overrideHint": "Laisser vide pour utiliser les valeurs globales.",
       "modelLabel": "Modèle de compaction",
-      "modelHint": "Modèle utilisé pour la synthèse. Laisser vide pour utiliser le modèle du Kin.",
-      "sameAsKinModel": "Même modèle que le Kin",
+      "modelHint": "Modèle utilisé pour la synthèse. Laisser vide pour utiliser le modèle de l'Agent.",
+      "sameAsAgentModel": "Même modèle que l'Agent",
       "thresholdPercentLabel": "Seuil de contexte (%)",
       "thresholdPercentPlaceholder": "Valeur globale ({{default}} %)",
       "thresholdPercentHint": "La compaction se déclenche quand l'utilisation du contexte dépasse ce pourcentage de la fenêtre du modèle.",
@@ -533,12 +491,12 @@
       "animFilling": "Les messages remplissent la fenêtre de contexte au fil de la conversation.",
       "animApproaching": "Le contexte se remplit. La compaction se déclenchera au seuil.",
       "animCompacting": "Seuil atteint ! Les messages les plus anciens sont compressés en un résumé.",
-      "animMerging": "Trop de résumés — les plus anciens sont fusionnés entre eux.",
+      "animMerging": "Trop de résumés : les plus anciens sont fusionnés entre eux.",
       "animDone": "Cycle terminé. Le processus se répète indéfiniment au fil de la conversation.",
       "animContinuing": "La conversation continue. {{summaries}} résumé(s) conservé(s), les nouveaux messages arrivent.",
-      "animExplanation": "Quand la fenêtre de contexte se remplit, les messages les plus anciens sont compressés en résumés datés. Ces résumés s'accumulent chronologiquement. Quand il y en a trop, les plus anciens sont fusionnés entre eux — les résumés récents restent détaillés, les anciens sont compressés.",
+      "animExplanation": "Quand la fenêtre de contexte se remplit, les messages les plus anciens sont compressés en résumés datés. Ces résumés s'accumulent chronologiquement. Quand il y en a trop, les plus anciens sont fusionnés entre eux : les résumés récents restent détaillés, les anciens sont compressés.",
       "modeDefault": "Utiliser le défaut global",
-      "modeKinOwn": "Utiliser le modèle du Kin",
+      "modeAgentOwn": "Utiliser le modèle de l'Agent",
       "modeCustom": "Modèle personnalisé",
       "selectCustomModel": "Sélectionner un modèle"
     },
@@ -546,9 +504,8 @@
       "title": "Réflexion / Raisonnement",
       "description": "Lorsqu'elle est activée, les modèles compatibles raisonnent étape par étape avant de répondre. Cela peut améliorer la qualité pour les tâches complexes mais consomme plus de tokens. Tous les modèles ne supportent pas cette fonctionnalité.",
       "enableLabel": "Activer la réflexion étendue",
-      "budgetLabel": "Budget de tokens",
-      "budgetPlaceholder": "Adaptatif (défaut du fournisseur)",
-      "budgetHint": "Nombre maximum de tokens que le modèle peut utiliser pour raisonner. Laisser vide pour le mode adaptatif."
+      "effortLabel": "Effort de raisonnement",
+      "effortHint": "Les niveaux proposés sont limités à ce que le modèle sélectionné prend en charge. Les niveaux élevés raisonnent plus longtemps et consomment plus de tokens."
     },
     "avatar": {
       "title": "Choisir l'avatar",
@@ -566,8 +523,8 @@
       "subjectLabel": "Sujet / type",
       "subjectPlaceholder": "ex. un petit robot mignon et sympathique",
       "characterLabel": "Spécificités de cet avatar",
-      "characterPlaceholder": "Facultatif — ajoutez des détails propres à cet avatar (ex. lunettes rondes, palette turquoise, tenant un petit livre). Laissez vide pour tout déduire de l'identité du Kin.",
-      "autoDescription": "Le Kin génère son propre portrait à partir de son identité. Son nom, son rôle et sa personnalité influencent le résultat - assurez-vous de les remplir d'abord.",
+      "characterPlaceholder": "Facultatif : ajoutez des détails propres à cet avatar (ex. lunettes rondes, palette turquoise, tenant un petit livre). Laissez vide pour tout déduire de l'identité de l'Agent.",
+      "autoDescription": "L'Agent génère son propre portrait à partir de son identité. Son nom, son rôle et sa personnalité influencent le résultat - assurez-vous de les remplir d'abord.",
       "promptPlaceholder": "Décrivez l'avatar souhaité...",
       "generate": "Générer",
       "regenerate": "Régénérer",
@@ -575,13 +532,13 @@
       "generating": "Génération...",
       "noImageProvider": "Aucun fournisseur d'image configuré. Ajoutez-en un dans les Paramètres.",
       "noImageProviderAction": "Ouvrir Fournisseurs",
-      "createFirst": "Enregistrez le Kin d'abord pour activer la génération.",
+      "createFirst": "Enregistrez l'Agent d'abord pour activer la génération.",
       "uploadHint": "Cliquez pour sélectionner ou glissez-déposez une image (toute taille)",
       "imageModel": "Modèle d'image",
       "cropConfirm": "Recadrer et utiliser"
     },
     "wizard": {
-      "title": "Décrivez votre Kin",
+      "title": "Décrivez votre Agent",
       "subtitle": "Décrivez l'assistant dont vous avez besoin et nous le configurerons pour vous.",
       "placeholder": "ex. Un expert en droit des entreprises qui peut aider à rédiger des contrats et conseiller sur la conformité...",
       "generate": "Générer",
@@ -600,13 +557,12 @@
     "queue": "{{count}} en file",
     "processing": "En cours...",
     "modelUnavailable": "Modèle indisponible",
-    "modelUnavailableHint": "Le modèle de ce Kin n'est plus disponible. Modifiez le modèle dans les paramètres du Kin ou réajoutez le fournisseur.",
-    "modelUnavailableInput": "Envoi impossible - le modèle de ce Kin est indisponible",
+    "modelUnavailableHint": "Le modèle de cet Agent n'est plus disponible. Modifiez le modèle dans les paramètres de l'Agent ou réajoutez le fournisseur.",
+    "modelUnavailableInput": "Envoi impossible - le modèle de cet Agent est indisponible",
     "modelUnavailableAction": "Ouvrir Fournisseurs",
     "invalidJsonFile": "Fichier JSON invalide",
-    "hub": "Hub",
-    "delete": "Supprimer ce Kin",
-    "deleteConfirm": "Cette action est irréversible. Toutes les conversations et données associées à ce Kin seront définitivement supprimées.",
+    "delete": "Supprimer cet Agent",
+    "deleteConfirm": "Cette action est irréversible. Toutes les conversations et données associées à cet Agent seront définitivement supprimées.",
     "deleteAction": "Supprimer"
   },
   "cron": {
@@ -628,20 +584,20 @@
       "presetWeekly": "Hebdo (lundi)",
       "presetMonthly": "Mensuel (1er)",
       "taskDescription": "Instructions de la tâche",
-      "taskDescriptionPlaceholder": "Que doit faire le Kin à chaque exécution...",
-      "kin": "Kin propriétaire",
-      "kinPlaceholder": "Sélectionner un Kin",
-      "targetKin": "Kin cible (optionnel)",
-      "targetKinHint": "Si défini, ce Kin exécute la tâche au lieu du propriétaire.",
+      "taskDescriptionPlaceholder": "Que doit faire l'Agent à chaque exécution...",
+      "agent": "Agent propriétaire",
+      "agentPlaceholder": "Sélectionner un Agent",
+      "targetAgent": "Agent cible (optionnel)",
+      "targetAgentHint": "Si défini, cet Agent exécute la tâche au lieu du propriétaire.",
       "model": "Modèle (optionnel)",
-      "modelPlaceholder": "Laisser vide pour le modèle par défaut du Kin",
+      "modelPlaceholder": "Laisser vide pour le modèle par défaut de l'Agent",
       "submit": "Créer la tâche",
       "nameTip": "Un nom descriptif pour identifier cette tâche. Affiché dans la barre latérale et les notifications.",
-      "kinTip": "Le Kin qui possède et exécute cette tâche. Il suivra les instructions à chaque déclenchement.",
+      "agentTip": "L'Agent qui possède et exécute cette tâche. Il suivra les instructions à chaque déclenchement.",
       "scheduleTip": "Expression cron standard (5 champs). Utilisez les préréglages ou écrivez la vôtre. Les heures sont dans le fuseau du serveur.",
-      "taskDescriptionTip": "Instructions détaillées pour le Kin. Soyez précis sur ce qu'il doit faire, vérifier ou produire à chaque exécution.",
-      "targetKinTip": "Délègue optionnellement l'exécution à un autre Kin. Utile quand le Kin propriétaire dispatche le travail à un spécialiste.",
-      "modelTip": "Remplace le modèle par défaut du Kin pour cette tâche. Utile pour des modèles moins chers sur les tâches routinières.",
+      "taskDescriptionTip": "Instructions détaillées pour l'Agent. Soyez précis sur ce qu'il doit faire, vérifier ou produire à chaque exécution.",
+      "targetAgentTip": "Délègue optionnellement l'exécution à un autre Agent. Utile quand l'Agent propriétaire dispatche le travail à un spécialiste.",
+      "modelTip": "Remplace le modèle par défaut de l'Agent pour cette tâche. Utile pour des modèles moins chers sur les tâches routinières.",
       "toolboxes": "Boîtes à outils (optionnel)",
       "toolboxesHelp": "Quels ensembles d'outils les tâches lancées par ce job peuvent utiliser, en plus du socle obligatoire. Laissez vide pour donner accès à tous les outils.",
       "toolboxesTip": "Restreint ce que la tâche lancée a le droit de faire. La tâche conserve toujours un socle obligatoire ; les boîtes sélectionnées s'y ajoutent. Laissez vide pour accorder l'ensemble des outils natifs.",
@@ -669,7 +625,7 @@
       "target": "Cible",
       "createdBy": "Créée par",
       "model": "Modèle",
-      "modelInherited": "Hérité du Kin parent",
+      "modelInherited": "Hérité de l'Agent parent",
       "toolboxes": "Boîtes à outils",
       "toolboxesAll": "Tous les outils (aucune restriction)",
       "history": "Historique d'exécutions",
@@ -681,36 +637,43 @@
       "runNow": "Exécuter",
       "triggerSuccess": "Tâche déclenchée avec succès",
       "triggerError": "Impossible de déclencher la tâche",
-      "targetKin": "Kin cible",
+      "targetAgent": "Agent cible",
       "oneTime": "Ponctuel"
     },
     "triggerParentTurn": {
-      "label": "Réveiller le Kin parent à la fin du run",
-      "help": "Le rapport final de chaque exécution déclenche un turn LLM sur le Kin propriétaire (par ex. pour relire son rapport et s'auto-calibrer).",
+      "label": "Réveiller l'Agent parent à la fin du run",
+      "help": "Le rapport final de chaque exécution déclenche un turn LLM sur l'Agent propriétaire (par ex. pour relire son rapport et s'auto-calibrer).",
       "warning": "Ce cron générera un turn LLM à chaque exécution (consommation de tokens).",
       "badge": "Réveille le parent",
-      "detail": "Chaque exécution réveille le Kin parent pour un turn LLM (consommation de tokens)."
+      "detail": "Chaque exécution réveille l'Agent parent pour un turn LLM (consommation de tokens)."
     }
   },
   "chat": {
     "placeholder": "Comment puis-je vous aider ?",
+    "attachmentUnsupported": "{{model}} ne peut pas les lire, ignorés : {{files}}",
     "send": "Envoyer",
     "stop": "Arrêter la génération",
-    "selectKin": "Sélectionnez un Kin pour commencer",
+    "selectAgent": "Sélectionnez un Agent pour commencer",
     "transfer": {
-      "outTitle": "Channel transféré vers {{kinName}}",
-      "outSubtext": "Ce Kin n'a plus ce channel.",
-      "inTitle": "Channel reçu de {{kinName}}",
-      "inSubtext": "Ce Kin a maintenant ce channel."
+      "outTitle": "Channel transféré vers {{agentName}}",
+      "outSubtext": "Cet Agent n'a plus ce channel.",
+      "inTitle": "Channel reçu de {{agentName}}",
+      "inSubtext": "Cet Agent a maintenant ce channel."
     },
     "empty": "Aucun message. Dites bonjour !",
     "streaming": "Réflexion...",
     "thinkingTokens": "{{value}} tokens",
     "thinkingTokensHint": "Tokens générés jusqu'ici (mis à jour à chaque étape)",
-    "thinkingToolsHint": "Outils utilisés ce tour — cliquer pour voir",
+    "thinkingToolsHint": "Outils utilisés ce tour - cliquer pour voir",
     "contextUsage": "Contexte : ~{{tokens}} / {{max}} tokens ({{percent}} %), inclut prompt système, historique et outils",
     "contextNoData": "L'utilisation du contexte apparaîtra après le premier message traité",
     "stepLimitReached": "Réponse tronquée : limite d'étapes atteinte. Demandez-moi de continuer.",
+    "emptyTurn": {
+      "contentFilter": "Le fournisseur a interrompu cette réponse avant qu'un contenu soit produit (filtre de sécurité). Essayez de reformuler votre demande.",
+      "length": "Le modèle a atteint sa limite de tokens de sortie avant de produire un contenu visible. Réessayez, ou réduisez l'effort de réflexion.",
+      "generic": "Le modèle a terminé son tour sans produire de réponse (raison : {{reason}}). Réessayez d'envoyer votre message."
+    },
+    "silentStop": "Le modèle a exécuté ses outils mais n'a produit aucun texte final. Demandez-lui de continuer ou de résumer.",
     "tokenUsage": {
       "label": "{{total}} tokens",
       "input": "Entrée",
@@ -738,14 +701,14 @@
       "realMarkerHint": "Taille de contexte réelle retournée par le provider lors du dernier appel.",
       "unattributedHint": "Taille rapportée par le provider qui dépasse ce que l'estimateur local peut attribuer par section.",
       "dualBarHint": "Le détail par section est calibré pour correspondre au compte du provider. La barre réelle est ce que le provider a effectivement compté lors du dernier appel.",
-      "dualBarExplanation": "L'estimation s'auto-calibre sur les retours API passés de ce Kin (facteur lissé EMA), donc les deux barres convergent à quelques pourcents près. Elles peuvent diverger au tout premier tour (pas encore d'observation) ou juste après un changement majeur de contenu — laisse 2-3 tours pour qu'elles se rejoignent.",
+      "dualBarExplanation": "L'estimation s'auto-calibre sur les retours API passés de cet Agent (facteur lissé EMA), donc les deux barres convergent à quelques pourcents près. Elles peuvent diverger au tout premier tour (pas encore d'observation) ou juste après un changement majeur de contenu. Laisse 2-3 tours pour qu'elles se rejoignent.",
       "calibrationHint": "Facteur lissé EMA appris des retours API. Multiplié avec le compte BPE brut pour que l'estimation suive ce que le provider facture réellement."
     },
     "cacheChip": {
       "aria": "État du cache au dernier tour",
       "title": "Cache (dernier tour)",
-      "hint": "{{hit}}% de l'input venait du cache. Le cache est encore chaud — ta prochaine requête devrait être peu chère sauf si le préfixe change beaucoup.",
-      "hintCold": "{{hit}}% de l'input venait du cache au dernier tour — mais c'était il y a {{ago}}, au-delà du TTL éphémère de ~5min d'Anthropic. Le préfixe est froid ; ta prochaine requête réécrit le préfixe."
+      "hint": "{{hit}}% de l'input venait du cache. Le cache est encore chaud. Ta prochaine requête devrait être peu chère sauf si le préfixe change beaucoup.",
+      "hintCold": "{{hit}}% de l'input venait du cache au dernier tour, mais c'était il y a {{ago}}, au-delà du TTL éphémère de ~5min d'Anthropic. Le préfixe est froid ; ta prochaine requête réécrit le préfixe."
     },
     "forceCompact": "Forcer la compaction",
     "tooltipContext": "Fenêtre de contexte",
@@ -783,8 +746,8 @@
       "copy": "Copier",
       "copied": "Copié",
       "generatedAt": "Généré à {{time}}",
-      "structuredHint": "Vue rendue du contexte envoyé au LLM. Chaque section est colorée pour correspondre à la barre de contexte. C'est une reconstruction pour inspection — le payload réel peut différer légèrement.",
-      "rawHint": "Approximation JSON du payload complet envoyé au fournisseur LLM : prompt système, historique de conversation et schémas d'outils. C'est une reconstruction pour inspection — l'appel API réel peut différer légèrement (masquage de tokens, formatage des messages, adaptations spécifiques au fournisseur).",
+      "structuredHint": "Vue rendue du contexte envoyé au LLM. Chaque section est colorée pour correspondre à la barre de contexte. C'est une reconstruction pour inspection : le payload réel peut différer légèrement.",
+      "rawHint": "Approximation JSON du payload complet envoyé au fournisseur LLM : prompt système, historique de conversation et schémas d'outils. C'est une reconstruction pour inspection : l'appel API réel peut différer légèrement (masquage de tokens, formatage des messages, adaptations spécifiques au fournisseur).",
       "legend": {
         "systemPrompt": "Prompt système",
         "summary": "Résumé",
@@ -854,6 +817,10 @@
       "received": "Webhook reçu",
       "showPayload": "Voir le contenu"
     },
+    "trigger": {
+      "received": "Déclencheur e-mail",
+      "showDetails": "Voir les détails"
+    },
     "attachFile": "Joindre un fichier",
     "dropFiles": "Déposez les fichiers ici",
     "uploading": "Envoi en cours...",
@@ -868,36 +835,25 @@
       "title": "Niveau de réflexion",
       "effort": {
         "off": "Désactivé",
+        "on": "Activé",
+        "minimal": "Minimal",
         "low": "Faible",
         "medium": "Moyen",
         "high": "Élevé",
+        "xhigh": "Très élevé",
         "max": "Maximum"
-      }
+      },
+      "unsupported": "Ce modèle ne prend pas en charge le raisonnement."
     },
     "thinkingToggle": "Réflexion",
-    "thinkingEnable": "Activer la réflexion étendue pour ce Kin",
-    "thinkingDisable": "Désactiver la réflexion étendue pour ce Kin",
+    "thinkingEnable": "Activer la réflexion étendue pour cet Agent",
+    "thinkingDisable": "Désactiver la réflexion étendue pour cet Agent",
     "welcome": {
-      "title": "Bienvenue sur KinBot",
-      "description": "Les Kins sont des personnalités IA que vous créez et personnalisez. Chaque Kin a son propre caractère, son expertise, ses outils et sa mémoire. Créez votre premier Kin pour commencer !",
-      "createFirst": "Créer votre premier Kin",
-      "checklistIntro": "Démarrez en quelques étapes simples. KinBot vous guide pour configurer votre équipe IA.",
-      "step1Title": "Connecter un fournisseur",
-      "step1Desc": "Ajoutez un fournisseur IA (OpenAI, Anthropic, Google, etc.) avec votre clé API. C’est le cerveau de vos Kins.",
-      "step1Action": "Ajouter un fournisseur",
-      "step2Title": "Créer votre Hub",
-      "step2Desc": "Le Hub est votre coordinateur central. Il reçoit les messages et les redirige vers le Kin spécialiste approprié.",
-      "step2Action": "Créer le Hub",
-      "step3Title": "Ajouter un Kin spécialiste",
-      "step3Desc": "Créez un Kin avec une expertise spécifique (finance, code, rédaction...) vers lequel le Hub peut déléguer.",
-      "step3Action": "Créer un Kin",
-      "step4Title": "Connecter un canal",
-      "step4Desc": "Connectez optionnellement Telegram, Discord, Slack ou d’autres plateformes pour discuter avec vos Kins en dehors de l’interface web.",
-      "step4Action": "Ajouter un canal",
-      "allDone": "Tout est prêt ! Sélectionnez un Kin dans la barre latérale pour commencer.",
-      "onboardingStep": "Étape {{current}}/{{total}}"
+      "title": "Bienvenue sur Hivekeep",
+      "checklistIntro": "Démarrez en quelques étapes simples. Hivekeep vous guide pour configurer votre équipe IA.",
+      "allDone": "Tout est prêt ! Sélectionnez un Agent dans la barre latérale pour commencer."
     },
-    "shortcutHint": "pour trouver un Kin rapidement",
+    "shortcutHint": "pour trouver un Agent rapidement",
     "copyMessage": "Copier le message",
     "copied": "Copié dans le presse-papiers",
     "copyFailed": "Échec de la copie",
@@ -965,13 +921,14 @@
       "thinking": "Activer/désactiver la réflexion étendue",
       "clear": "Effacer la conversation",
       "help": "Afficher les commandes disponibles",
-      "helpMessage": "/btw — injecter du contexte pendant le streaming\n/stop — arrêter la génération\n/regen — régénérer la dernière réponse\n/compact — compacter l'historique\n/thinking — activer/désactiver la réflexion étendue\n/clear — effacer la conversation",
+      "helpMessage": "/btw - injecter du contexte pendant le streaming\n/stop - arrêter la génération\n/regen - régénérer la dernière réponse\n/compact - compacter l'historique\n/thinking - activer/désactiver la réflexion étendue\n/clear - effacer la conversation",
       "noResults": "Aucune commande correspondante"
     },
     "mention": {
       "users": "Utilisateur",
-      "kins": "Kin",
-      "noResults": "Aucun résultat"
+      "agents": "Agent",
+      "noResults": "Aucun résultat",
+      "files": "Fichiers"
     },
     "ticketMention": {
       "loading": "Recherche de tickets...",
@@ -993,9 +950,32 @@
       "copy": "Copier le message",
       "quote": "Citer en réponse",
       "editResend": "Modifier et renvoyer",
-      "readAloud": "Lire à voix haute"
+      "readAloud": "Lire à voix haute",
+      "rewindHere": "Revenir à ce message",
+      "deleteMessage": "Supprimer le message"
+    },
+    "deleteMessage": {
+      "success": "Message supprimé"
+    },
+    "rewind": {
+      "title": "Revenir en arrière ?",
+      "description_one": "Ce message devient le plus récent. Environ {{count}} message ultérieur sera définitivement supprimé de la conversation et de son contexte. Irréversible.",
+      "description_other": "Ce message devient le plus récent. Environ {{count}} messages ultérieurs seront définitivement supprimés de la conversation et de son contexte. Irréversible.",
+      "confirm": "Revenir en arrière",
+      "success_one": "Retour effectué : {{count}} message supprimé",
+      "success_other": "Retour effectué : {{count}} messages supprimés"
     },
     "regenerate": "Régénérer",
+    "toolsBadge": {
+      "tooltip_one": "{{count}} outil disponible - cliquez pour le lister",
+      "tooltip_other": "{{count}} outils disponibles - cliquez pour les lister"
+    },
+    "toolsModal": {
+      "title": "{{name}} - outils",
+      "description": "Tous les outils actuellement exposés à cet agent, groupés par domaine.",
+      "descriptionQuick": "Outils exposés dans cette session rapide. Les outils restreints en session (tâches, crons, messagerie inter-agents) sont exclus.",
+      "edit": "Modifier les outils"
+    },
     "mobileInfo": {
       "messages": "messages"
     },
@@ -1047,7 +1027,7 @@
   "quickChat": {
     "title": "Session rapide",
     "open": "Session rapide",
-    "empty": "Lancez une conversation rapide et privée avec ce Kin. Les messages n'apparaîtront pas dans la session principale.",
+    "empty": "Lancez une conversation rapide et privée avec cet Agent. Les messages n'apparaîtront pas dans la session principale.",
     "maxReached": "Nombre maximum de sessions rapides atteint",
     "endSession": "Terminer la session",
     "expired": {
@@ -1128,7 +1108,7 @@
   },
   "customTools": {
     "title": "Outils personnalisés",
-    "description": "Des outils globaux que toi (ou tes Kins) scriptez dans n'importe quel langage. Une fois créés, ajoute-les à une boîte à outils pour les accorder à un Kin — ils s'exécutent sous le nom custom_<slug>.",
+    "description": "Des outils globaux que toi (ou tes Agents) scriptez dans n'importe quel langage. Une fois créés, ajoute-les à une boîte à outils pour les accorder à un Agent. Ils s'exécutent sous le nom custom_<slug>.",
     "create": "Nouvel outil",
     "edit": "Modifier l'outil",
     "empty": "Aucun outil personnalisé",
@@ -1137,7 +1117,7 @@
     "deleteTitle": "Supprimer l'outil",
     "deleteConfirm": "Cela supprimera définitivement « {{name}} » et ses fichiers. Les boîtes à outils qui le listent l'ignoreront simplement.",
     "enabled": "Activé",
-    "byKin": "créé par un Kin",
+    "byAgent": "créé par un Agent",
     "installDeps": "Installer les dépendances",
     "installAfterSave": "Enregistre d'abord l'outil, puis installe ses dépendances.",
     "testTitle": "Test d'exécution",
@@ -1160,8 +1140,8 @@
       "domain": "Domaine",
       "parameters": "Paramètres (JSON Schema)",
       "parametersHint": "Objet JSON Schema décrivant les arguments d'entrée de l'outil.",
-      "code": "Code — {{file}}",
-      "deps": "Dépendances — {{file}}"
+      "code": "Code - {{file}}",
+      "deps": "Dépendances - {{file}}"
     },
     "translations": {
       "title": "Traductions",
@@ -1186,23 +1166,23 @@
       "required": "requis",
       "commaSeparated": "Valeurs séparées par des virgules",
       "jsonField": "JSON",
-      "invalidJson": "JSON invalide — affichage des dernières valeurs du formulaire.",
+      "invalidJson": "JSON invalide : affichage des dernières valeurs du formulaire.",
       "outputJson": "JSON",
       "outputRender": "Rendu",
       "renderAfterRun": "Lance d'abord un test pour prévisualiser le renderer."
     },
     "help": {
-      "content": "Les outils personnalisés permettent d'étendre KinBot avec tes propres scripts.",
+      "content": "Les outils personnalisés permettent d'étendre Hivekeep avec tes propres scripts.",
       "bullet1": "Chaque outil est un script dans son propre dossier ; il lit ses arguments en JSON sur stdin et imprime son résultat sur stdout.",
       "bullet2": "Ajoute un requirements.txt (Python) ou package.json (Node/Bun) puis clique sur Installer pour mettre en place les dépendances.",
-      "bullet3": "Accorde un outil à un Kin en ajoutant custom_<slug> à l'une de ses boîtes à outils."
+      "bullet3": "Accorde un outil à un Agent en ajoutant custom_<slug> à l'une de ses boîtes à outils."
     },
     "iconPicker": {
       "trigger": "Choisir une icône",
       "placeholder": "Choisir une icône",
       "search": "Rechercher des icônes…",
       "noResults": "Aucune icône ne correspond à ta recherche",
-      "truncated": "Affichage des {{count}} premières — affine ta recherche"
+      "truncated": "Affichage des {{count}} premières - affine ta recherche"
     }
   },
   "toolDomains": {
@@ -1283,30 +1263,29 @@
       "hardExcludedNote": "Cet outil ne peut jamais s'exécuter dans une tâche, même si une boîte l'inclut."
     },
     "help": {
-      "content": "Une boîte à outils est un jeu d'outils natifs nommé et réutilisable. Assigne une ou plusieurs boîtes à une tâche et celle-ci pourra utiliser l'union de ces outils — en plus d'un socle toujours disponible.",
+      "content": "Une boîte à outils est un jeu d'outils natifs nommé et réutilisable. Assigne une ou plusieurs boîtes à une tâche et celle-ci pourra utiliser l'union de ces outils, en plus d'un socle toujours disponible.",
       "bullet1": "Les boîtes intégrées (Code, Recherche, Ops, Exploration, Tous les outils) sont en lecture seule mais assignables à n'importe quelle tâche.",
       "bullet2": "Crée tes propres boîtes pour coller à tes types de travail récurrents.",
       "bullet3": "Chaque tâche conserve toujours un socle d'outils, quelles que soient les boîtes assignées.",
-      "bullet4": "Certains outils ne peuvent jamais s'exécuter dans une tâche — ils sont signalés quand tu construis une boîte."
+      "bullet4": "Certains outils ne peuvent jamais s'exécuter dans une tâche. Ils sont signalés quand tu construis une boîte."
     }
   },
   "settings": {
     "title": "Paramètres",
     "general": {
       "title": "Général",
-      "description": "Paramètres globaux qui s'appliquent à tous les Kins.",
+      "description": "Paramètres globaux qui s'appliquent à tous les Agents.",
       "globalPrompt": "Prompt global",
-      "globalPromptPlaceholder": "Saisissez les instructions que tous les Kins doivent suivre...",
-      "globalPromptHint": "Ce texte est injecté dans le prompt système de chaque Kin.",
+      "globalPromptPlaceholder": "Saisissez les instructions que tous les Agents doivent suivre...",
+      "globalPromptHint": "Ce texte est injecté dans le prompt système de chaque Agent.",
       "saved": "Prompt global mis à jour",
-      "globalPromptTip": "Instructions injectées dans le prompt système de chaque Kin. Utilisez-le pour des règles ou directives communes.",
-      "hubKin": "Kin Hub",
-      "hubKinTip": "Le Kin Hub est le coordinateur central qui route les messages et gère les autres Kins. Il a accès à tous les outils automatiquement.",
-      "hubKinPlaceholder": "Sélectionner un Kin...",
-      "hubKinHint": "Le Kin Hub reçoit les messages par défaut et peut déléguer aux Kins spécialistes.",
-      "hubSaved": "Kin Hub mis à jour",
-      "hubKinNone": "Aucun",
+      "globalPromptTip": "Instructions injectées dans le prompt système de chaque Agent. Utilisez-le pour des règles ou directives communes.",
       "fetchError": "Impossible de charger les paramètres",
+      "publicUrlWarning": {
+        "title": "L'URL publique est peut-être mal configurée",
+        "body": "Tu accèdes à Hivekeep via {{actual}}, mais l'URL publique configurée est {{configured}}. Les liens d'invitation, les webhooks et les callbacks OAuth sont construits à partir de l'URL publique : ils pointeront vers {{configured}} et risquent d'être injoignables.",
+        "fix": "Définis PUBLIC_URL sur {{actual}} puis redémarre. Docker : -e PUBLIC_URL={{actual}} (ou dans ton .env) ; install natif : HIVEKEEP_PUBLIC_URL={{actual}}."
+      },
       "interface": {
         "title": "Interface"
       },
@@ -1316,9 +1295,9 @@
       },
       "tasks": {
         "title": "Exécution des tâches",
-        "description": "Contrôlez combien de tâches s'exécutent simultanément pour l'ensemble des Kins. Une tâche n'occupe un emplacement que pendant son exécution active — les tâches suspendues (en attente d'un humain, d'un autre Kin ou d'une sous-tâche) libèrent leur emplacement.",
+        "description": "Contrôlez combien de tâches s'exécutent simultanément pour l'ensemble des Agents. Une tâche n'occupe un emplacement que pendant son exécution active : les tâches suspendues (en attente d'un humain, d'un autre Agent ou d'une sous-tâche) libèrent leur emplacement.",
         "saved": "Limites des tâches mises à jour",
-        "hint": "Augmenter la limite de concurrence remplit immédiatement les emplacements libres depuis la file d'attente. La diminuer est progressif — les tâches en cours ne sont jamais arrêtées, les nouvelles promotions se mettent simplement en pause jusqu'à ce que le compte baisse. Le plafond de la file rejette les nouvelles tâches une fois ce nombre déjà en attente.",
+        "hint": "Augmenter la limite de concurrence remplit immédiatement les emplacements libres depuis la file d'attente. La diminuer est progressif : les tâches en cours ne sont jamais arrêtées, les nouvelles promotions se mettent simplement en pause jusqu'à ce que le compte baisse. Le plafond de la file rejette les nouvelles tâches une fois ce nombre déjà en attente.",
         "maxConcurrent": {
           "label": "Tâches simultanées max",
           "tip": "Combien de tâches peuvent s'exécuter en même temps. Quand c'est plein, les tâches nouvelles ou reprises attendent dans la file et démarrent à mesure que des emplacements se libèrent. Par défaut 10."
@@ -1329,14 +1308,14 @@
         }
       },
       "help": {
-        "content": "Les paramètres généraux contrôlent le comportement global de la plateforme, applicable à tous vos Kins. Le prompt global permet de définir des instructions suivies par chaque Kin.",
-        "bullet1": "Le prompt global est injecté dans le prompt système de chaque Kin. Utilisez-le pour des règles ou directives universelles",
-        "bullet2": "Les limites d'exécution des tâches plafonnent les exécutions simultanées pour l'ensemble des Kins. Les tâches suspendues libèrent leur emplacement ; augmenter la limite remplit la file immédiatement, la diminuer est progressif"
+        "content": "Les paramètres généraux contrôlent le comportement global de la plateforme, applicable à tous vos Agents. Le prompt global permet de définir des instructions suivies par chaque Agent.",
+        "bullet1": "Le prompt global est injecté dans le prompt système de chaque Agent. Utilisez-le pour des règles ou directives universelles",
+        "bullet2": "Les limites d'exécution des tâches plafonnent les exécutions simultanées pour l'ensemble des Agents. Les tâches suspendues libèrent leur emplacement ; augmenter la limite remplit la file immédiatement, la diminuer est progressif"
       }
     },
     "avatars": {
       "title": "Avatars",
-      "description": "Contrôlez l'apparence des avatars générés. Ces réglages globaux sont partagés par chaque nouvel avatar généré pour que vos Kins restent cohérents. Ils ne modifient pas les avatars existants.",
+      "description": "Contrôlez l'apparence des avatars générés. Ces réglages globaux sont partagés par chaque nouvel avatar généré pour que vos Agents restent cohérents. Ils ne modifient pas les avatars existants.",
       "saved": "Réglages d'avatar mis à jour",
       "noProvider": "Aucun fournisseur d'image n'est configuré, les avatars ne peuvent donc pas encore être générés. Ajoutez-en un pour activer la génération.",
       "noProviderAction": "Ouvrir Fournisseurs",
@@ -1359,21 +1338,48 @@
       },
       "style": {
         "title": "Style artistique (A)",
-        "tip": "La façon dont les avatars sont dessinés — le style de rendu. Choisissez un préréglage ou saisissez le vôtre. Partagé par chaque avatar généré.",
+        "tip": "La façon dont les avatars sont dessinés : le style de rendu. Choisissez un préréglage ou saisissez le vôtre. Partagé par chaque avatar généré.",
         "placeholder": "ex. style Pixar / animation 3D, éclairage doux",
         "hint": "Une courte directive de style partagée par tous les avatars générés."
       },
       "subject": {
         "title": "Sujet / type (B)",
-        "tip": "Ce que représente chaque avatar — robot, humain, animal, dragon… Choisissez un préréglage ou saisissez le vôtre. Un sujet non-robot est généré en texte-vers-image (l'image de base fournie est un robot).",
+        "tip": "Ce que représente chaque avatar : robot, humain, animal, dragon… Choisissez un préréglage ou saisissez le vôtre. Un sujet non-robot est généré en texte-vers-image (l'image de base fournie est un robot).",
         "placeholder": "ex. un petit robot mignon et sympathique",
         "hint": "Ce que représente chaque avatar généré."
       },
       "help": {
-        "content": "Les avatars sont construits selon trois axes. Deux sont globaux (réglés ici) ; le troisième est propre à chaque Kin.",
-        "bullet1": "Le style artistique (A) et le sujet/type (B) sont globaux — chaque nouvel avatar généré les utilise pour un rendu cohérent",
+        "content": "Les avatars sont construits selon trois axes. Deux sont globaux (réglés ici) ; le troisième est propre à chaque Agent.",
+        "bullet1": "Le style artistique (A) et le sujet/type (B) sont globaux : chaque nouvel avatar généré les utilise pour un rendu cohérent",
         "bullet2": "L'image de base donne aux modèles compatibles une référence pour que les avatars partagent le même rendu. Générez-en une ou importez-la, puis gardez « Utiliser l'image de base » activé",
-        "bullet3": "Le caractère propre à chaque Kin (C) est écrit automatiquement à partir de son identité — ajustez un avatar précis depuis le sélecteur d'avatar du Kin (onglet Manuel) sans toucher à ces réglages globaux"
+        "bullet3": "Le caractère propre à chaque Agent (C) est écrit automatiquement à partir de son identité. Ajustez un avatar précis depuis le sélecteur d'avatar de l'Agent (onglet Manuel) sans toucher à ces réglages globaux"
+      },
+      "bulk": {
+        "cardTitle": "Régénérer les avatars existants",
+        "cardTip": "Lance la génération automatique habituelle pour chaque Agent sélectionné en utilisant la direction artistique ci-dessus. Les avatars existants sont écrasés.",
+        "cardHint": "Appliquez la direction artistique actuelle aux Agents créés avant que vous ne la modifiiez.",
+        "button": "Régénérer tous les avatars",
+        "title": "Régénérer les avatars",
+        "description": "Choisissez les Agents dont vous voulez régénérer l'avatar avec la direction artistique actuelle. La régénération s'exécute sur le serveur. Vous pouvez fermer cette fenêtre une fois qu'elle a démarré.",
+        "model": "Modèle d'image",
+        "selectAll": "Tout sélectionner",
+        "deselectAll": "Tout désélectionner",
+        "selectedCount": "{{count}} sélectionné(s)",
+        "configuratorTag": "configurateur",
+        "regenerate": "Régénérer ({{count}})",
+        "noAgents": "Aucun Agent à régénérer pour l'instant.",
+        "running": {
+          "note": "La régénération s'exécute sur le serveur. Vous pouvez fermer cette fenêtre sans risque, elle continuera.",
+          "progress": "{{done}} / {{total}} terminé(s)",
+          "failedCount": "{{count}} en échec"
+        },
+        "done": {
+          "allOk": "Les {{count}} avatars ont été régénérés.",
+          "summary": "{{succeeded}} régénéré(s), {{failed}} en échec."
+        },
+        "failedList": "En échec :",
+        "toastDoneAllOk": "Les {{count}} avatars ont été régénérés",
+        "toastDone": "Régénération des avatars terminée : {{succeeded}} réussi(s), {{failed}} en échec"
       }
     },
     "providers": {
@@ -1397,10 +1403,10 @@
       "testAllPartial": "{{passed}} réussis, {{failed}} échoués",
       "testAllPassed": "réussis",
       "testAllFailed": "échoués",
-      "emptyDescription": "Ajoutez un fournisseur d'IA comme OpenAI, Anthropic ou Gemini pour alimenter vos Kins.",
+      "emptyDescription": "Ajoutez un fournisseur d'IA comme OpenAI, Anthropic ou Gemini pour alimenter vos Agents.",
       "modelsModal": {
         "title": "Parcourir {{name}}",
-        "description": "Modèles et voix que le fournisseur expose actuellement (récupérés en direct depuis son API). Utilisez cette liste pour vérifier ce qui est disponible sans quitter KinBot.",
+        "description": "Modèles et voix que le fournisseur expose actuellement (récupérés en direct depuis son API). Utilisez cette liste pour vérifier ce qui est disponible sans quitter Hivekeep.",
         "loading": "Chargement…",
         "fetchError": "Impossible de charger",
         "allCapabilities": "Tous",
@@ -1408,7 +1414,7 @@
         "searchPlaceholder": "Filtrer par nom ou identifiant…",
         "emptyAll": "Ce fournisseur n'a rien à parcourir.",
         "emptyFiltered": "Aucun élément ne correspond au filtre actuel.",
-        "searchOnlyExplain": "Les fournisseurs de recherche n'ont pas de catalogue de modèles ou de voix — ils sont appelés directement via l'outil web_search. Les capacités ci-dessus décrivent ce que ce fournisseur supporte.",
+        "searchOnlyExplain": "Les fournisseurs de recherche n'ont pas de catalogue de modèles ou de voix : ils sont appelés directement via l'outil web_search. Les capacités ci-dessus décrivent ce que ce fournisseur supporte.",
         "imageInput": "image-in",
         "img2img": "img2img",
         "multiImage": "multi-ref ({{count}})",
@@ -1417,63 +1423,105 @@
         "footer": "Affichage de {{shown}} sur {{total}}"
       },
       "help": {
-        "content": "Les providers IA sont les services qui alimentent vos Kins en intelligence. Chaque provider fournit des modèles de langage, d'embedding ou de génération d'images.",
+        "content": "Les providers IA sont les services qui alimentent vos Agents en intelligence. Chaque provider fournit des modèles de langage, d'embedding ou de génération d'images.",
         "bullet1": "Ajoutez plusieurs providers pour accéder à différents modèles (GPT, Claude, Gemini, etc.)",
-        "bullet2": "Chaque Kin peut utiliser un modèle différent selon vos besoins",
+        "bullet2": "Chaque Agent peut utiliser un modèle différent selon vos besoins",
         "bullet3": "Les providers compatibles OpenAI (Groq, Together, etc.) fonctionnent avec la même configuration",
         "bullet4": "Testez la connexion après ajout pour vérifier que la clé API est valide"
       }
+    },
+    "modelRegistry": {
+      "title": "Registre de modèles",
+      "subtitle": "Tous les modèles exposés par vos providers. Les métadonnées (contexte, capacités, tarifs) sont préremplies depuis la base communautaire models.dev. Modifiez une valeur pour la figer, ou corrigez un mauvais mapping.",
+      "openPageTitle": "Ouvrir le registre de modèles",
+      "openPageHint": "Le tableau complet s'ouvre sur sa propre page : plus de place pour le contexte, les tarifs et les capacités.",
+      "openPage": "Ouvrir la page Modèles",
+      "displayName": "Libellé",
+      "displayNameHint": "Affiché partout où apparaît un nom de modèle. Laissez vide pour utiliser le libellé models.dev (à défaut, l'id).",
+      "reviewBanner_one": "{{count}} modèle à vérifier : sa correspondance models.dev était incertaine. Cliquez ✓ pour confirmer qu'elle est bonne, ou ouvrez la ligne pour la remapper.",
+      "reviewBanner_other": "{{count}} modèles à vérifier : leur correspondance models.dev était incertaine. Cliquez ✓ pour confirmer qu'elle est bonne, ou ouvrez la ligne pour la remapper.",
+      "reviewHint": "La correspondance models.dev ci-dessous était incertaine. Vérifiez que les valeurs semblent justes (remappez sinon), puis Enregistrez pour confirmer : ça lève le « review ».",
+      "confirmTooltip": "Confirmer que cette correspondance est correcte (lève le « review »)",
+      "reset": "Réinitialiser en auto",
+      "resetHint": "Ce modèle a des valeurs manuelles. Réinitialisez pour les abandonner et suivre models.dev automatiquement.",
+      "resetDone": "Réinitialisé en auto",
+      "capYes": "Pris en charge",
+      "capNo": "Non pris en charge",
+      "capUnknown": "Inconnu : ni le provider ni models.dev ne l'ont indiqué",
+      "perPage": "Par page",
+      "range": "{{from}}–{{to}} sur {{total}}",
+      "statusAll": "Tous les statuts",
+      "statusEnabled": "Activés",
+      "statusDisabled": "Désactivés",
+      "statusReview": "À vérifier",
+      "statusUnmapped": "Non mappés",
+      "bulkScope": "{{count}} affichés",
+      "bulkEnable": "Tout activer",
+      "bulkDisable": "Tout désactiver",
+      "bulkConfirm_one": "Confirmer {{count}} review",
+      "bulkConfirm_other": "Confirmer {{count}} reviews",
+      "colEnabled": "Activé",
+      "enabledTip": "Activé : visible dans les sélecteurs de modèles. Cliquez pour le masquer.",
+      "disabledTip": "Désactivé : masqué des sélecteurs de modèles. Cliquez pour l'activer.",
+      "enabledLabel": "Activé",
+      "enabledDialogHint": "Désactivé = masqué des sélecteurs (le chat continue de fonctionner si un Agent l'utilise déjà).",
+      "snapshotRefresh": "Mettre à jour models.dev",
+      "snapshotTip": "Télécharge le dernier catalogue models.dev, puis re-mappe : récupère les modèles récents sans mise à jour de l'app.",
+      "snapshotRefreshed": "models.dev mis à jour : {{models}} modèles sur {{providers}} providers. Re-mapping…"
     },
     "models": {
       "title": "Modèles & Services",
       "description": "Configurez les modèles et services par défaut utilisés sur toute la plateforme.",
       "saved": "Paramètre enregistré",
       "defaultLlm": "LLM par défaut",
-      "defaultLlmTip": "Modèle de chat par défaut pour les nouveaux Kins. Chaque Kin peut le remplacer ensuite.",
-      "defaultLlmHint": "Utilisé comme modèle pour chaque nouveau Kin que tu crées, et par le Wizard de création pour générer des suggestions à partir d'une courte description. Sans ça, il faudra choisir un modèle manuellement à chaque fois et le Wizard tombe en mode formulaire manuel pur.",
+      "defaultLlmTip": "Modèle de chat par défaut pour les nouveaux Agents. Chaque Agent peut le remplacer ensuite.",
+      "defaultLlmHint": "Utilisé comme modèle pour chaque nouvel Agent que tu crées, et par le Wizard de création pour générer des suggestions à partir d'une courte description. Sans ça, il faudra choisir un modèle manuellement à chaque fois et le Wizard tombe en mode formulaire manuel pur.",
       "defaultLlmPlaceholder": "Sélectionner le LLM par défaut",
       "defaultCompacting": "Modèle de compaction par défaut",
       "defaultCompactingTip": "Modèle qui résume les anciennes conversations quand la fenêtre de contexte se remplit. Un petit modèle rapide suffit.",
-      "defaultCompactingHint": "Utilisé quand la conversation d'un Kin dépasse sa fenêtre de contexte — les vieux messages sont résumés pour faire de la place. Sans ça, chaque Kin utilise son propre modèle de chat (fonctionne mais peut coûter plus cher sur de longues conversations).",
-      "defaultCompactingPlaceholder": "Utiliser le modèle de chaque Kin (par défaut)",
+      "defaultCompactingHint": "Utilisé quand la conversation d'un Agent dépasse sa fenêtre de contexte : les vieux messages sont résumés pour faire de la place. Sans ça, chaque Agent utilise son propre modèle de chat (fonctionne mais peut coûter plus cher sur de longues conversations).",
+      "defaultCompactingPlaceholder": "Utiliser le modèle de chaque Agent (par défaut)",
       "defaultScout": "Modèle d'exploration par défaut",
       "defaultScoutTip": "Un modèle rapide et économique que l'outil `scout` utilise pour déléguer une exploration lourde en lecture seule. Un petit modèle rapide est idéal ici.",
-      "defaultScoutHint": "Utilisé par l'outil `scout` quand un Kin ou une tâche délègue une grosse exploration en lecture seule (localiser du code, cartographier un sous-système) au lieu de la faire sur le modèle coûteux. Un Kin ou un projet peut le remplacer. Sans cela, le scout retombe sur le modèle du Kin appelant.",
-      "defaultScoutPlaceholder": "Utiliser le modèle du Kin appelant (par défaut)",
+      "defaultScoutHint": "Utilisé par l'outil `scout` quand un Agent ou une tâche délègue une grosse exploration en lecture seule (localiser du code, cartographier un sous-système) au lieu de la faire sur le modèle coûteux. Un Agent ou un projet peut le remplacer. Sans cela, le scout retombe sur le modèle de l'Agent appelant.",
+      "defaultScoutPlaceholder": "Utiliser le modèle de l'Agent appelant (par défaut)",
       "defaultImage": "Modèle d'image par défaut",
       "defaultImageTip": "Modèle de génération d'image utilisé par `generate_image` et la génération d'avatars IA.",
-      "defaultImageHint": "Utilisé par l'outil `generate_image` et pour générer les avatars IA quand tu crées un nouveau Kin. Sans ça, les avatars tombent sur des initiales et `generate_image` renvoie une erreur indiquant qu'aucun provider d'image n'est configuré.",
+      "defaultImageHint": "Utilisé par l'outil `generate_image` et pour générer les avatars IA quand tu crées un nouvel Agent. Sans ça, les avatars tombent sur des initiales et `generate_image` renvoie une erreur indiquant qu'aucun provider d'image n'est configuré.",
       "defaultImagePlaceholder": "Détection auto (par défaut)",
       "defaultSearch": "Provider de recherche par défaut",
       "defaultSearchTip": "Provider de recherche utilisé par `web_search` quand aucun provider_slug n'est passé.",
-      "defaultSearchHint": "Utilisé par l'outil `web_search`. Les Kins peuvent surcharger par appel en passant un `provider_slug`. Sans ça, `web_search` renvoie une erreur explicite « No search provider configured » au Kin.",
+      "defaultSearchHint": "Utilisé par l'outil `web_search`. Les Agents peuvent surcharger par appel en passant un `provider_slug`. Sans ça, `web_search` renvoie une erreur explicite « No search provider configured » à l'Agent.",
       "defaultSearchPlaceholder": "Détection auto (premier provider de recherche valide)",
       "defaultTts": "Provider TTS par défaut",
       "defaultTtsTip": "Provider de synthèse vocale utilisé par `text_to_speech` quand aucun provider n'est passé.",
-      "defaultTtsHint": "Utilisé par l'outil `text_to_speech` pour synthétiser l'audio. La voix est toujours choisie à l'appel (ou dans la config d'un channel). Sans ça, `text_to_speech` renvoie « No TTS provider configured » — pas de vocaux, pas de réponses parlées.",
+      "defaultTtsHint": "Utilisé par l'outil `text_to_speech` pour synthétiser l'audio. La voix est toujours choisie à l'appel (ou dans la config d'un channel). Sans ça, `text_to_speech` renvoie « No TTS provider configured » : pas de vocaux, pas de réponses parlées.",
       "defaultTtsPlaceholder": "Détection auto (premier provider TTS valide)",
       "defaultStt": "Provider STT par défaut",
       "defaultSttTip": "Provider de transcription vocale utilisé par `transcribe_audio` quand aucun provider n'est passé.",
-      "defaultSttHint": "Utilisé par l'outil `transcribe_audio` pour convertir l'audio en texte. Sans ça, `transcribe_audio` renvoie « No STT provider configured » — pas de transcription vocale, pas de vocal-vers-texte sur les channels qui le supportent.",
+      "defaultSttHint": "Utilisé par l'outil `transcribe_audio` pour convertir l'audio en texte. Sans ça, `transcribe_audio` renvoie « No STT provider configured » : pas de transcription vocale, pas de vocal-vers-texte sur les channels qui le supportent.",
       "defaultSttPlaceholder": "Détection auto (premier provider STT valide)",
       "extractionModel": "Modèle d'extraction",
       "extractionModelTip": "Analyse les conversations passées et identifie les faits, préférences et décisions qui méritent d'être sauvegardés comme souvenirs long-terme. Un petit modèle rapide suffit.",
-      "extractionModelHint": "Tourne automatiquement pendant la compaction pour extraire les souvenirs. Sans ça, chaque Kin utilise son propre modèle de chat (fonctionne mais peut être surdimensionné et plus cher).",
-      "extractionModelPlaceholder": "Utiliser le modèle de chaque Kin (par défaut)",
+      "extractionModelHint": "Tourne automatiquement pendant la compaction pour extraire les souvenirs. Sans ça, chaque Agent utilise son propre modèle de chat (fonctionne mais peut être surdimensionné et plus cher).",
+      "extractionModelPlaceholder": "Utiliser le modèle de chaque Agent (par défaut)",
       "embeddingModel": "Modèle d'embedding",
-      "embeddingModelTip": "Convertit le texte en vecteurs numériques pour que les Kins cherchent dans leurs souvenirs par similarité sémantique. Changer le modèle nécessite de retraiter chaque souvenir existant.",
-      "embeddingModelHint": "Alimente la recherche sémantique dans le tab Mémoire de chaque Kin et l'outil `recall`. Sans ça, la recherche de mémoire tombe sur du keyword-only (FTS) — fonctionne, juste moins précis pour trouver des souvenirs liés indirectement.",
+      "embeddingModelTip": "Convertit le texte en vecteurs numériques pour que les Agents cherchent dans leurs souvenirs par similarité sémantique. Changer le modèle nécessite de retraiter chaque souvenir existant.",
+      "embeddingModelHint": "Alimente la recherche sémantique dans le tab Mémoire de chaque Agent et l'outil `recall`. Sans ça, la recherche de mémoire tombe sur du keyword-only (FTS) : fonctionne, juste moins précis pour trouver des souvenirs liés indirectement.",
       "embeddingModelPlaceholder": "Sélectionner un modèle d'embedding",
       "help": {
-        "content": "Les modèles par défaut servent de valeurs de repli lors de la création de nouveaux Kins ou quand aucun modèle spécifique n'est configuré au niveau du Kin.",
-        "bullet1": "Le LLM par défaut est pré-sélectionné lors de la création de nouveaux Kins, ce qui fait gagner du temps",
-        "bullet2": "Les modèles de compaction et d'extraction peuvent être légers — pas besoin du même modèle que le chat",
+        "content": "Les modèles par défaut servent de valeurs de repli lors de la création de nouveaux Agents ou quand aucun modèle spécifique n'est configuré au niveau de l'Agent.",
+        "bullet1": "Le LLM par défaut est pré-sélectionné lors de la création de nouveaux Agents, ce qui fait gagner du temps",
+        "bullet2": "Les modèles de compaction et d'extraction peuvent être légers : pas besoin du même modèle que le chat",
         "bullet3": "Changer le modèle d'embedding nécessite de re-indexer tous les souvenirs existants"
-      }
+      },
+      "defaultScoutThinking": "Raisonnement des scouts",
+      "defaultScoutThinkingTip": "Effort de raisonnement par défaut des scouts. La chaîne suit celle du modèle scout : override par appel, puis projet, puis Agent, puis ce réglage. Non défini = les scouts suivent la config de raisonnement de l'Agent appelant.",
+      "defaultScoutThinkingInherit": "Aucun défaut (suivre l'Agent appelant)"
     },
     "mcp": {
       "title": "Serveurs MCP",
-      "description": "Gérez les serveurs Model Context Protocol qui fournissent des outils externes à vos Kins.",
+      "description": "Gérez les serveurs Model Context Protocol qui fournissent des outils externes à vos Agents.",
       "empty": "Aucun serveur MCP configuré",
       "add": "Ajouter un serveur MCP",
       "addHint": "Connecter un serveur d'outils externe",
@@ -1490,7 +1538,7 @@
       "envValuePlaceholder": "valeur",
       "addEnvVar": "Ajouter une variable",
       "delete": "Supprimer le serveur MCP",
-      "deleteConfirm": "Le serveur MCP sera supprimé définitivement et déconnecté de tous les Kins.",
+      "deleteConfirm": "Le serveur MCP sera supprimé définitivement et déconnecté de tous les Agents.",
       "added": "Serveur MCP ajouté",
       "saved": "Serveur MCP mis à jour",
       "deleted": "Serveur MCP supprimé",
@@ -1501,25 +1549,25 @@
       "toolCount": "{{count}} outils",
       "connectionError": "Erreur de connexion",
       "testConnection": "Tester la connexion",
-      "createdByKin": "par {{name}}",
+      "createdByAgent": "par {{name}}",
       "createdByAdmin": "par l'admin",
-      "emptyDescription": "Les serveurs MCP étendent vos Kins avec des outils et sources de données externes.",
+      "emptyDescription": "Les serveurs MCP étendent vos Agents avec des outils et sources de données externes.",
       "nameTip": "Un nom pour identifier ce serveur dans la liste.",
       "commandTip": "L'exécutable à lancer. Généralement npx pour les packages npm, ou un chemin absolu vers un binaire.",
       "argsTip": "Arguments passés au serveur. Mettez chaque argument sur sa propre ligne.",
       "envTip": "Variables d'environnement passées au processus serveur. Utilisez-les pour les clés API et les secrets.",
       "envPreserveHint": "Laissez les valeurs vides pour conserver les secrets existants",
       "help": {
-        "content": "Les serveurs MCP (Model Context Protocol) sont des programmes externes qui donnent à vos Kins des capacités supplémentaires au-delà de leurs outils intégrés. Ils tournent comme des processus séparés et communiquent via un protocole standard.",
+        "content": "Les serveurs MCP (Model Context Protocol) sont des programmes externes qui donnent à vos Agents des capacités supplémentaires au-delà de leurs outils intégrés. Ils tournent comme des processus séparés et communiquent via un protocole standard.",
         "bullet1": "Chaque serveur MCP fournit un ou plusieurs outils (ex : recherche de fichiers, requêtes base de données, intégrations API)",
-        "bullet2": "Les serveurs sont démarrés automatiquement quand un Kin en a besoin et arrêtés quand inactifs",
+        "bullet2": "Les serveurs sont démarrés automatiquement quand un Agent en a besoin et arrêtés quand inactifs",
         "bullet3": "Les variables d'environnement permettent de passer des clés API et secrets au processus serveur",
-        "bullet4": "Les Kins peuvent aussi découvrir et ajouter des serveurs MCP eux-mêmes (affichés comme \"En attente d'approbation\")"
+        "bullet4": "Les Agents peuvent aussi découvrir et ajouter des serveurs MCP eux-mêmes (affichés comme \"En attente d'approbation\")"
       }
     },
     "vault": {
       "title": "Coffre-fort",
-      "description": "Gérez les entrées chiffrées accessibles par tous les Kins.",
+      "description": "Gérez les entrées chiffrées accessibles par tous les Agents.",
       "empty": "Aucune entrée configurée",
       "emptyFiltered": "Aucune entrée de ce type",
       "add": "Ajouter une entrée",
@@ -1535,11 +1583,11 @@
       "descriptionPlaceholder": "À quoi sert cette entrée ?",
       "entryType": "Type d'entrée",
       "delete": "Supprimer l'entrée",
-      "deleteConfirm": "Cette entrée et ses pièces jointes seront supprimées définitivement. Les Kins qui l'utilisent n'y auront plus accès.",
+      "deleteConfirm": "Cette entrée et ses pièces jointes seront supprimées définitivement. Les Agents qui l'utilisent n'y auront plus accès.",
       "added": "Entrée ajoutée",
       "saved": "Entrée mise à jour",
       "deleted": "Entrée supprimée",
-      "createdByKin": "par {{name}}",
+      "createdByAgent": "par {{name}}",
       "createdByAdmin": "par l'admin",
       "emptyDescription": "Stockez clés API, identifiants, cartes, notes et fichiers en toute sécurité.",
       "tabAll": "Tout",
@@ -1577,12 +1625,12 @@
       "fieldTypeNumber": "Nombre",
       "deleteAttachmentConfirm": "Supprimer définitivement ce fichier joint ? Cette action est irréversible.",
       "deleteTypeConfirm": "Supprimer ce type personnalisé ? Les entrées existantes de ce type seront conservées mais ne pourront plus être créées.",
-      "keyTip": "Un identifiant unique pour cette entrée (ex : GITHUB_TOKEN). Les Kins y accèdent par cette clé.",
+      "keyTip": "Un identifiant unique pour cette entrée (ex : GITHUB_TOKEN). Les Agents y accèdent par cette clé.",
       "entryTypeTip": "Le type détermine les champs disponibles. Choisissez « Texte » pour les valeurs simples ou un type structuré pour les entrées multi-champs.",
-      "descriptionTip": "Une courte note sur l'usage de cette entrée. Aide les Kins à savoir quand l'utiliser.",
+      "descriptionTip": "Une courte note sur l'usage de cette entrée. Aide les Agents à savoir quand l'utiliser.",
       "help": {
-        "content": "Le Coffre-fort est un stockage sécurisé clé-valeur où vous pouvez enregistrer des identifiants, clés API et autres secrets. Les Kins peuvent accéder aux entrées du coffre via leurs outils sans que les valeurs apparaissent dans les conversations.",
-        "bullet1": "Les secrets sont chiffrés au repos et déchiffrés uniquement quand un Kin en a besoin",
+        "content": "Le Coffre-fort est un stockage sécurisé clé-valeur où vous pouvez enregistrer des identifiants, clés API et autres secrets. Les Agents peuvent accéder aux entrées du coffre via leurs outils sans que les valeurs apparaissent dans les conversations.",
+        "bullet1": "Les secrets sont chiffrés au repos et déchiffrés uniquement quand un Agent en a besoin",
         "bullet2": "Vous pouvez organiser les secrets par type (clé API, mot de passe, token, etc.) et créer des types personnalisés",
         "bullet3": "Attachez des fichiers aux entrées pour des certificats, fichiers de config ou autres documents sensibles",
         "bullet4": "Marquez des entrées comme favoris pour un accès rapide"
@@ -1590,7 +1638,7 @@
     },
     "files": {
       "title": "Fichiers",
-      "description": "Gérez les fichiers partagés par les Kins via des URLs de partage.",
+      "description": "Gérez les fichiers partagés par les Agents via des URLs de partage.",
       "empty": "Aucun fichier stocké",
       "add": "Importer un fichier",
       "addHint": "Importer un fichier dans le stockage partagé",
@@ -1598,7 +1646,7 @@
       "editHint": "Modifier les métadonnées et les paramètres d'accès",
       "file": "Fichier",
       "fileRequired": "Un fichier est requis",
-      "kin": "Kin propriétaire",
+      "agent": "Agent propriétaire",
       "name": "Nom d'affichage",
       "namePlaceholder": "ex. Rapport Q4 2025",
       "descriptionLabel": "Description",
@@ -1620,31 +1668,31 @@
       "added": "Fichier importé",
       "saved": "Fichier mis à jour",
       "deleted": "Fichier supprimé",
-      "createdByKin": "par {{name}}",
+      "createdByAgent": "par {{name}}",
       "createdByAdmin": "par l'admin",
-      "emptyDescription": "Uploadez des fichiers que vos Kins pourront consulter pendant les conversations.",
+      "emptyDescription": "Uploadez des fichiers que vos Agents pourront consulter pendant les conversations.",
       "help": {
-        "content": "Le Stockage de fichiers permet à vos Kins de sauvegarder, lire et partager des fichiers pendant les conversations. Les fichiers uploadés par les utilisateurs ou générés par les Kins sont stockés ici et peuvent être référencés entre les sessions.",
-        "bullet1": "Chaque Kin a son propre espace de fichiers pour éviter les conflits",
+        "content": "Le Stockage de fichiers permet à vos Agents de sauvegarder, lire et partager des fichiers pendant les conversations. Les fichiers uploadés par les utilisateurs ou générés par les Agents sont stockés ici et peuvent être référencés entre les sessions.",
+        "bullet1": "Chaque Agent a son propre espace de fichiers pour éviter les conflits",
         "bullet2": "Supporte les images, documents, fichiers de code et tout autre type de fichier",
         "bullet3": "Les fichiers peuvent être partagés dans les messages de canaux et les payloads de webhooks"
       },
-      "kinTip": "Le Kin propriétaire de ce fichier. Seul ce Kin peut y accéder sauf si le fichier est public.",
-      "publicTip": "Les fichiers publics ont une URL partageable. Les fichiers privés ne sont accessibles que par le Kin propriétaire.",
+      "agentTip": "L'Agent propriétaire de ce fichier. Seul cet Agent peut y accéder sauf si le fichier est public.",
+      "publicTip": "Les fichiers publics ont une URL partageable. Les fichiers privés ne sont accessibles que par l'Agent propriétaire.",
       "passwordTip": "Protège le fichier par un mot de passe. Toute personne accédant au fichier devra le saisir.",
       "expiresInTip": "Supprime automatiquement le fichier après ce nombre d'heures. Laisser vide pour le garder indéfiniment.",
       "readAndBurnTip": "Le fichier est automatiquement supprimé après un seul téléchargement. Utile pour les données sensibles."
     },
     "memories": {
       "title": "Souvenirs",
-      "description": "Consultez et gérez les souvenirs de tous les Kins.",
+      "description": "Consultez et gérez les souvenirs de tous les Agents.",
       "modelConfigRedirect": "Les modèles d'extraction et d'embedding se configurent maintenant dans Modèles & Services.",
       "modelConfig": "Configuration des modèles",
       "modelConfigDescription": "Modèles utilisés pour l'extraction mémorielle et la recherche sémantique.",
       "extractionModel": "Modèle d'extraction",
-      "extractionModelPlaceholder": "Utiliser le modèle de chaque Kin (défaut)",
+      "extractionModelPlaceholder": "Utiliser le modèle de chaque Agent (défaut)",
       "extractionModelHint": "Lit vos conversations et identifie ce qui mérite d'être retenu. Un modèle rapide et abordable suffit.",
-      "extractionModelTip": "Ce modèle analyse vos conversations et décide quels faits, préférences et décisions sauvegarder comme souvenirs. Un petit modèle rapide fait très bien l'affaire. Si vide, chaque Kin utilise son propre modèle.",
+      "extractionModelTip": "Ce modèle analyse vos conversations et décide quels faits, préférences et décisions sauvegarder comme souvenirs. Un petit modèle rapide fait très bien l'affaire. Si vide, chaque Agent utilise son propre modèle.",
       "embeddingModel": "Modèle d'embedding",
       "embeddingModelPlaceholder": "Sélectionner un modèle d'embedding",
       "embeddingModelHint": "Transforme les souvenirs en données recherchables pour retrouver les infos pertinentes par le sens, pas juste les mots.",
@@ -1667,8 +1715,8 @@
       "categoryLabel": "Catégorie",
       "subject": "Sujet",
       "subjectPlaceholder": "Contact ou contexte (optionnel)",
-      "kin": "Kin",
-      "kinPlaceholder": "Sélectionner un Kin",
+      "agent": "Agent",
+      "agentPlaceholder": "Sélectionner un Agent",
       "search": "Rechercher des souvenirs...",
       "category": {
         "fact": "Fait",
@@ -1681,34 +1729,34 @@
       "consolidated": "Gén {{gen}}",
       "retrievalCount": "Récupéré {{count}} fois",
       "filterAll": "Toutes les catégories",
-      "filterAllKins": "Tous les Kins",
+      "filterAllAgents": "Tous les Agents",
       "scopeAll": "Toutes les portées",
       "scopePrivate": "Privé",
       "scopeShared": "Partagé",
       "scopeLabel": "Portée",
-      "scopeTip": "Les souvenirs privés ne sont visibles que par ce Kin. Les souvenirs partagés peuvent être rappelés par tous les Kins.",
+      "scopeTip": "Les souvenirs privés ne sont visibles que par cet Agent. Les souvenirs partagés peuvent être rappelés par tous les Agents.",
       "shared": "Partagé",
       "sharedBy": "Partagé par {{name}}",
       "delete": "Supprimer le souvenir",
-      "deleteConfirm": "Le souvenir sera supprimé définitivement. Le Kin ne pourra plus le rappeler.",
+      "deleteConfirm": "Le souvenir sera supprimé définitivement. L'Agent ne pourra plus le rappeler.",
       "added": "Souvenir ajouté",
       "saved": "Souvenir mis à jour",
       "deleted": "Souvenir supprimé",
-      "saveKinFirst": "Enregistrez le Kin d'abord pour gérer ses souvenirs.",
+      "saveAgentFirst": "Enregistrez l'Agent d'abord pour gérer ses souvenirs.",
       "count": "{{count}} souvenirs",
       "pagination": "{{from}}–{{to}} sur {{total}}",
-      "kinTip": "À quel Kin appartient ce souvenir. Chaque Kin a son propre espace mémoire.",
-      "contentTip": "L'information à retenir. Soyez précis, le Kin s'en souviendra tel quel lors des conversations.",
+      "agentTip": "À quel Agent appartient ce souvenir. Chaque Agent a son propre espace mémoire.",
+      "contentTip": "L'information à retenir. Soyez précis, l'Agent s'en souviendra tel quel lors des conversations.",
       "categoryTip": "Catégorisez le souvenir pour une meilleure organisation et recherche.",
       "subjectTip": "Tag optionnel pour regrouper les souvenirs liés (ex : nom de personne, projet, sujet).",
-      "emptyDescription": "Les souvenirs aident vos Kins à retenir les informations importantes d'une conversation à l'autre. Ajoutez-en manuellement ou laissez vos Kins les créer automatiquement.",
+      "emptyDescription": "Les souvenirs aident vos Agents à retenir les informations importantes d'une conversation à l'autre. Ajoutez-en manuellement ou laissez vos Agents les créer automatiquement.",
       "noResults": "Aucun souvenir ne correspond à vos filtres",
       "help": {
-        "content": "Les souvenirs permettent à vos Kins de se rappeler des choses importantes d'une conversation à l'autre. Configurez les modèles qui gèrent la mémorisation et la recherche.",
+        "content": "Les souvenirs permettent à vos Agents de se rappeler des choses importantes d'une conversation à l'autre. Configurez les modèles qui gèrent la mémorisation et la recherche.",
         "bullet1": "Le modèle d'extraction lit les conversations passées et sauvegarde les informations importantes",
         "bullet2": "Le modèle d'embedding rend les souvenirs recherchables par le sens, pour retrouver les infos même avec des mots différents",
         "bullet3": "Des modèles petits et rapides suffisent pour l'extraction et l'embedding, pas besoin de modèles coûteux",
-        "bullet4": "Si aucun modèle d'extraction n'est défini, chaque Kin utilise son propre modèle de chat"
+        "bullet4": "Si aucun modèle d'extraction n'est défini, chaque Agent utilise son propre modèle de chat"
       },
       "compactingThresholdLabel": "Seuil de compaction",
       "compactingThresholdDescription": "Compacter la conversation lorsque l'utilisation du contexte atteint ce pourcentage de la fenetre contextuelle du modele. Des valeurs plus basses compactent plus souvent.",
@@ -1717,7 +1765,7 @@
     },
     "contacts": {
       "title": "Contacts",
-      "description": "Gestion du registre de contacts partagé par tous les Kins.",
+      "description": "Gestion du registre de contacts partagé par tous les Agents.",
       "empty": "Aucun contact",
       "add": "Ajouter un contact",
       "addHint": "Créer une nouvelle fiche contact",
@@ -1738,10 +1786,10 @@
       "delete": "Supprimer le contact",
       "deleteConfirm": "Cela supprimera définitivement ce contact ainsi que tous ses pseudos, champs et notes associés.",
       "deleteWarnPlatforms": "Cela révoquera aussi l'accès depuis {{count}} plateforme(s) connectée(s) ({{platforms}}).",
-      "notes": "Notes des Kins",
+      "notes": "Notes des Agents",
       "notesPrivate": "privée",
       "addNote": "Ajouter une note",
-      "noteKinPlaceholder": "Choisir un Kin",
+      "noteAgentPlaceholder": "Choisir un Agent",
       "noteGlobal": "Globale",
       "noteScopePrivate": "Privée",
       "noteContentPlaceholder": "Écrire une note...",
@@ -1767,23 +1815,23 @@
       "linkToUser": "Lier à un utilisateur",
       "noUserLink": "Aucun",
       "linkedUser": "Utilisateur système",
-      "emptyDescription": "Ajoutez des contacts pour que vos Kins puissent reconnaître et personnaliser les interactions.",
+      "emptyDescription": "Ajoutez des contacts pour que vos Agents puissent reconnaître et personnaliser les interactions.",
       "typeOrSearch": "Saisir ou rechercher...",
       "revokePlatformIdConfirm": "Révoquer cet accès plateforme ? Le contact ne pourra plus interagir via cette plateforme.",
       "deleteNoteConfirm": "Supprimer définitivement cette note ?",
-      "linkToUserTip": "Lie ce contact à un compte utilisateur KinBot existant. Permet aux Kins de le reconnaître sur tous les canaux.",
-      "identifiersTip": "Champs personnalisés (email, mobile, Twitter, LinkedIn, ID Telegram, etc.) pour que les Kins reconnaissent ce contact sur différentes plateformes.",
+      "linkToUserTip": "Lie ce contact à un compte utilisateur Hivekeep existant. Permet aux Agents de le reconnaître sur tous les canaux.",
+      "identifiersTip": "Champs personnalisés (email, mobile, Twitter, LinkedIn, ID Telegram, etc.) pour que les Agents reconnaissent ce contact sur différentes plateformes.",
       "help": {
-        "content": "Le registre de contacts permet à vos Kins de reconnaître les personnes avec qui ils interagissent sur différentes plateformes et de personnaliser leurs réponses.",
-        "bullet1": "Associez des identifiants de plateforme (Telegram, Discord, etc.) pour que le Kin reconnaisse automatiquement les utilisateurs",
-        "bullet2": "Les Kins peuvent ajouter des notes privées sur chaque contact pour se souvenir du contexte",
-        "bullet3": "Liez un contact à un compte utilisateur KinBot pour unifier l'identité sur tous les canaux",
-        "bullet4": "Ajoutez plusieurs pseudos pour que le Kin reconnaisse un contact sous n'importe quel nom"
+        "content": "Le registre de contacts permet à vos Agents de reconnaître les personnes avec qui ils interagissent sur différentes plateformes et de personnaliser leurs réponses.",
+        "bullet1": "Associez des identifiants de plateforme (Telegram, Discord, etc.) pour que l'Agent reconnaisse automatiquement les utilisateurs",
+        "bullet2": "Les Agents peuvent ajouter des notes privées sur chaque contact pour se souvenir du contexte",
+        "bullet3": "Liez un contact à un compte utilisateur Hivekeep pour unifier l'identité sur tous les canaux",
+        "bullet4": "Ajoutez plusieurs pseudos pour que l'Agent reconnaisse un contact sous n'importe quel nom"
       }
     },
     "webhooks": {
       "title": "Webhooks",
-      "description": "Gérez les webhooks entrants permettant aux services externes de notifier vos Kins.",
+      "description": "Gérez les webhooks entrants permettant aux services externes de notifier vos Agents.",
       "empty": "Aucun webhook configuré",
       "add": "Ajouter un webhook",
       "edit": "Modifier le webhook",
@@ -1791,8 +1839,8 @@
       "namePlaceholder": "ex. Alertes Grafana, Événements K8s...",
       "descriptionLabel": "Description",
       "descriptionPlaceholder": "Que va recevoir ce webhook ?",
-      "kin": "Kin cible",
-      "kinPlaceholder": "Sélectionnez un Kin",
+      "agent": "Agent cible",
+      "agentPlaceholder": "Sélectionnez un Agent",
       "active": "Actif",
       "inactive": "Inactif",
       "triggerCount": "{{count}} déclenchements",
@@ -1812,7 +1860,7 @@
       "saved": "Webhook mis à jour",
       "deleted": "Webhook supprimé",
       "search": "Rechercher des webhooks...",
-      "allKins": "Tous les Kins",
+      "allAgents": "Tous les Agents",
       "fetchError": "Impossible de charger les webhooks",
       "viewLogs": "Voir les logs",
       "logs": "Journal des déclenchements",
@@ -1834,8 +1882,8 @@
       "filterFieldTip": "Chemin en notation pointée pour extraire une valeur du payload JSON.",
       "filterAllowedValues": "Valeurs autorisées",
       "filterAllowedValuesPlaceholder": "Saisissez une valeur et appuyez sur Entrée",
-      "filterAllowedValuesTip": "Seuls les payloads dont le champ extrait correspond à l'une de ces valeurs seront transmis au Kin.",
-      "filterAllowedValuesEmpty": "Aucune valeur autorisée — tous les payloads seront bloqués.",
+      "filterAllowedValuesTip": "Seuls les payloads dont le champ extrait correspond à l'une de ces valeurs seront transmis à l'Agent.",
+      "filterAllowedValuesEmpty": "Aucune valeur autorisée : tous les payloads seront bloqués.",
       "filterExpression": "Expression régulière",
       "filterExpressionPlaceholder": "ex. \"completed|success\"",
       "filterExpressionTip": "Une expression régulière testée sur le corps brut du payload.",
@@ -1856,22 +1904,22 @@
       "dispatchMode": "Mode de dispatch",
       "dispatchModeConversation": "Conversation",
       "dispatchModeTask": "Tâche",
-      "dispatchModeTip": "Le mode Conversation injecte le payload comme message dans la session du Kin. Le mode Tâche crée une sous-tâche autonome avec un template de prompt configurable.",
+      "dispatchModeTip": "Le mode Conversation injecte le payload comme message dans la session de l'Agent. Le mode Tâche crée une sous-tâche autonome avec un template de prompt configurable.",
       "taskTitleTemplate": "Template du titre de tâche",
       "taskTitleTemplatePlaceholder": "ex. GitHub : {{action}} sur #{{issue.number}}",
       "taskTitleTemplateTip": "Template pour le titre de la tâche créée. Utilisez {{field.path}} pour insérer des valeurs du payload JSON. Laissez vide pour un titre par défaut.",
       "taskPromptTemplate": "Template du prompt de tâche",
       "taskPromptTemplatePlaceholder": "ex. Analyse cet événement et agis en conséquence.\n\n```json\n{{__payload__}}\n```",
-      "taskPromptTemplateTip": "Template pour la description envoyée au Kin. Utilisez {{field.path}} pour des champs spécifiques ou {{__payload__}} pour le payload brut complet. Laissez vide pour utiliser le payload brut.",
+      "taskPromptTemplateTip": "Template pour la description envoyée à l'Agent. Utilisez {{field.path}} pour des champs spécifiques ou {{__payload__}} pour le payload brut complet. Laissez vide pour utiliser le payload brut.",
       "maxConcurrentTasks": "Tâches simultanées max",
       "maxConcurrentTasksTip": "Nombre maximum de tâches créées par webhook pouvant s'exécuter simultanément. Les webhooks supplémentaires sont mis en file d'attente. 0 = illimité.",
       "templatePreview": "Aperçu (basé sur le dernier payload reçu)",
       "help": {
-        "content": "Les webhooks permettent aux services externes d'envoyer des événements directement à vos Kins via des requêtes HTTP POST. Chaque webhook obtient une URL unique et un token à configurer dans le service externe.",
+        "content": "Les webhooks permettent aux services externes d'envoyer des événements directement à vos Agents via des requêtes HTTP POST. Chaque webhook obtient une URL unique et un token à configurer dans le service externe.",
         "bullet1": "Utilisez les webhooks pour connecter des pipelines CI/CD, alertes de monitoring, soumissions de formulaires, ou tout service capable de faire du HTTP",
-        "bullet2": "Chaque webhook est lié à un Kin spécifique qui traitera les événements entrants",
+        "bullet2": "Chaque webhook est lié à un Agent spécifique qui traitera les événements entrants",
         "bullet3": "Le token du webhook doit être inclus comme Bearer token dans le header Authorization",
-        "bullet4": "Le corps de la requête (JSON ou texte) est transmis comme message au Kin cible"
+        "bullet4": "Le corps de la requête (JSON ou texte) est transmis comme message à l'Agent cible"
       }
     },
     "users": {
@@ -1905,9 +1953,9 @@
         "expiresAt": "Expire le {{date}}",
         "createdBy": "Créée par {{name}}"
       },
-      "emptyDescription": "Invitez d'autres personnes à collaborer et utiliser vos Kins.",
+      "emptyDescription": "Invitez d'autres personnes à collaborer et utiliser vos Agents.",
       "help": {
-        "content": "Gérez les utilisateurs qui ont accès à votre instance KinBot. Invitez des proches ou collègues pour qu'ils puissent discuter avec vos Kins.",
+        "content": "Gérez les utilisateurs qui ont accès à votre instance Hivekeep. Invitez des proches ou collègues pour qu'ils puissent discuter avec vos Agents.",
         "bullet1": "Créez des liens d'invitation avec une durée de validité configurable",
         "bullet2": "Chaque utilisateur a son propre compte et ses propres conversations",
         "bullet3": "Les invitations peuvent être révoquées à tout moment avant utilisation"
@@ -1915,26 +1963,94 @@
     },
     "addressBook": {
       "title": "Carnets d'adresses",
-      "subtitle": "Connecte des carnets d'adresses externes pour que tes Kins puissent consulter les contacts (lecture seule).",
+      "subtitle": "Connecte des carnets d'adresses externes pour que tes Agents puissent consulter les contacts (lecture seule).",
       "add": "Ajouter un carnet",
       "addTitle": "Ajouter un carnet d'adresses",
-      "addDescription": "Connecte une source de contacts externe. Lecture seule — n'entre jamais dans les contacts de KinBot.",
+      "addDescription": "Connecte une source de contacts externe. Lecture seule : n'entre jamais dans les contacts de Hivekeep.",
       "provider": "Fournisseur",
       "connect": "Connecter {{provider}}",
       "connected": "Carnet {{provider}} connecté",
       "disconnect": "Déconnecter",
-      "disconnectConfirm": "Ce Kin ne pourra plus lire ce carnet d'adresses. Les contacts eux-mêmes ne sont pas affectés.",
+      "disconnectConfirm": "Cet Agent ne pourra plus lire ce carnet d'adresses. Les contacts eux-mêmes ne sont pas affectés.",
       "disconnected": "Carnet d'adresses déconnecté",
       "credentialsLink": "Où générer un mot de passe d'app {{provider}}",
       "emptyTitle": "Aucun carnet d'adresses connecté",
-      "emptyDescription": "Connecte iCloud (ou une autre source CardDAV) pour que tes Kins puissent retrouver le téléphone ou l'email d'un contact.",
+      "emptyDescription": "Connecte iCloud (ou une autre source CardDAV) pour que tes Agents puissent retrouver le téléphone ou l'email d'un contact.",
       "help": {
-        "content": "Connecte un carnet d'adresses externe (ex. iCloud via un mot de passe d'application). Les Kins peuvent alors consulter les contacts en lecture seule — par exemple retrouver un numéro avant d'envoyer un SMS. Ces contacts ne sont jamais copiés dans les contacts de KinBot."
+        "content": "Connecte un carnet d'adresses externe (ex. iCloud via un mot de passe d'application). Les Agents peuvent alors consulter les contacts en lecture seule, par exemple retrouver un numéro avant d'envoyer un SMS. Ces contacts ne sont jamais copiés dans les contacts de Hivekeep."
+      }
+    },
+    "triggers": {
+      "sectionTitle": "Déclencheurs",
+      "empty": "Aucun déclencheur pour ce compte.",
+      "add": "Ajouter un déclencheur",
+      "addTitle": "Nouveau déclencheur",
+      "editTitle": "Modifier le déclencheur",
+      "dialogDescription": "Réagis automatiquement quand un nouvel e-mail correspond à tes conditions.",
+      "name": "Nom",
+      "namePlaceholder": "ex. Factures Stripe",
+      "folder": "Dossier",
+      "targetAgent": "Agent cible",
+      "selectAgent": "Choisir un agent",
+      "conditions": "Conditions",
+      "conditionsHint": "Combine les conditions avec des groupes TOUTES / AU MOINS UNE, imbriqués si besoin.",
+      "prompt": "Instruction",
+      "promptHint": "Ce que l'agent doit faire quand le déclencheur se déclenche.",
+      "promptHintTask": "Le mode tâche est isolé (sans historique de conversation). Rends ce prompt auto-suffisant : inclus tout le contexte dont l'agent a besoin pour agir.",
+      "promptPlaceholder": "ex. Résume cette facture et indique-moi le montant.",
+      "dispatchMode": "Au déclenchement",
+      "dispatchHint": "Injecter dans la conversation de l'agent, ou créer une tâche séparée.",
+      "dispatchConversation": "Dans la conversation",
+      "dispatchConversationDesc": "L'agent reçoit le mail dans sa conversation principale : il garde tout son historique et son contexte.",
+      "dispatchTask": "En tâche",
+      "dispatchTaskWarning": "Une tâche s'exécute en session isolée, SANS l'historique de la conversation. Mets dans le prompt ci-dessous tout ce dont l'agent a besoin pour agir.",
+      "active": "Actif",
+      "pendingApproval": "En attente d'approbation",
+      "deleteTitle": "Supprimer le déclencheur",
+      "deleteConfirm": "Supprimer ce déclencheur ? Cette action est irréversible.",
+      "errorName": "Le nom est requis.",
+      "errorPrompt": "Une instruction est requise.",
+      "errorAgent": "Choisis un agent cible.",
+      "approvalTitle": "Approuver les déclencheurs créés par un agent",
+      "approvalDescription": "Si activé, les déclencheurs configurés par un agent restent inactifs jusqu'à ton approbation.",
+      "matchAll": "Toutes les conditions (ET)",
+      "matchAny": "Au moins une (OU)",
+      "addCondition": "Condition",
+      "addGroup": "Groupe",
+      "is": "est",
+      "isNot": "n'est pas",
+      "negateHint": "Inverser cette condition",
+      "regexPlaceholder": "expression régulière",
+      "valuePlaceholder": "valeur",
+      "listPlaceholder": "valeurs, séparées, par virgules",
+      "fields": {
+        "sender_email": "E-mail de l'expéditeur",
+        "sender_domain": "Domaine de l'expéditeur",
+        "sender_name": "Nom de l'expéditeur",
+        "subject": "Sujet",
+        "snippet": "Aperçu",
+        "recipient": "Destinataire",
+        "has_attachment": "A une pièce jointe",
+        "unread": "Non lu",
+        "label": "Label / dossier",
+        "body": "Corps",
+        "attachment_name": "Nom de pièce jointe",
+        "attachment_type": "Type de pièce jointe"
+      },
+      "ops": {
+        "equals": "égal à",
+        "contains": "contient",
+        "starts_with": "commence par",
+        "ends_with": "finit par",
+        "matches": "correspond à (regex)",
+        "in": "est parmi",
+        "is_true": "oui",
+        "is_false": "non"
       }
     },
     "emailAccounts": {
       "title": "Comptes connectés",
-      "description": "Connectez des comptes Google, Microsoft, iCloud ou IMAP pour que vos Kins puissent lire/envoyer des mails et consulter les contacts. Une connexion peut servir plusieurs capacités.",
+      "description": "Connectez des comptes Google, Microsoft, iCloud ou IMAP pour que vos Agents puissent lire/envoyer des mails et consulter les contacts. Une connexion peut servir plusieurs capacités.",
       "add": "Ajouter un compte",
       "addTitle": "Ajouter un compte email",
       "addDescription": "Choisis un fournisseur et connecte une boîte mail.",
@@ -1944,18 +2060,18 @@
       "configureAppFirst": "Configure l'app {{provider}} ci-dessus avant de connecter un compte.",
       "help": {
         "content": "Connectez un compte Gmail via OAuth. Configurez d'abord une app OAuth Google Cloud (client ID + secret), puis cliquez sur Connecter et autorisez l'accès.",
-        "bullet1": "Créez une app OAuth dans Google Cloud Console avec les scopes Gmail, et enregistrez le redirect URI affiché par votre hôte KinBot (…/api/email-accounts/oauth/callback).",
+        "bullet1": "Créez une app OAuth dans Google Cloud Console avec les scopes Gmail, et enregistrez le redirect URI affiché par votre hôte Hivekeep (…/api/email-accounts/oauth/callback).",
         "bullet2": "Collez le client ID et le secret ci-dessous, puis Connecter pour autoriser la boîte mail.",
-        "bullet3": "Donnez la toolbox « email » à un Kin pour qu'il puisse lister, lire, chercher et envoyer des mails via les comptes connectés."
+        "bullet3": "Donnez la toolbox « email » à un Agent pour qu'il puisse lister, lire, chercher et envoyer des mails via les comptes connectés."
       },
       "empty": "Aucun compte email connecté",
       "emptyDescription": "Configurez un provider ci-dessus et connectez une boîte mail pour commencer.",
       "connect": "Connecter {{provider}}",
       "connected": "Compte {{provider}} connecté",
       "alsoContacts": "Lire aussi les contacts",
-      "alsoContactsHint": "Permet aux Kins de consulter le carnet d'adresses de ce compte (lecture seule). Demandé dans le même consentement.",
+      "alsoContactsHint": "Permet aux Agents de consulter le carnet d'adresses de ce compte (lecture seule). Demandé dans le même consentement.",
       "alsoCalendar": "Accéder aussi à l'agenda",
-      "alsoCalendarHint": "Permet aux Kins de lire et gérer les événements de l'agenda de ce compte. Demandé dans le même consentement.",
+      "alsoCalendarHint": "Permet aux Agents de lire et gérer les événements de l'agenda de ce compte. Demandé dans le même consentement.",
       "capEmail": "Mail",
       "capContacts": "Contacts",
       "capCalendar": "Agenda",
@@ -1979,7 +2095,7 @@
       "secretKeep": "Laisser vide pour conserver le secret actuel",
       "deleted": "Compte email déconnecté",
       "delete": "Déconnecter le compte",
-      "deleteConfirm": "Déconnecter ce compte email ? Les Kins ne pourront plus l'utiliser.",
+      "deleteConfirm": "Déconnecter ce compte email ? Les Agents ne pourront plus l'utiliser.",
       "sendModeDirect": "Envoi direct",
       "sendModeApproval": "Validation requise",
       "pendingTitle": "{{count}} email(s) en attente de ta validation",
@@ -1989,7 +2105,7 @@
     },
     "channels": {
       "title": "Canaux",
-      "description": "Connectez vos Kins à des plateformes de messagerie externes. Les messages seront routés vers le Kin sélectionné, et les réponses renvoyées automatiquement.",
+      "description": "Connectez vos Agents à des plateformes de messagerie externes. Les messages seront routés vers l'Agent sélectionné, et les réponses renvoyées automatiquement.",
       "empty": "Aucun canal configuré",
       "add": "Ajouter un canal",
       "platform": "Plateforme",
@@ -2017,7 +2133,7 @@
       "testSuccess": "Connexion réussie !",
       "testFailed": "Connexion échouée",
       "delete": "Supprimer le canal",
-      "deleteConfirm": "Cela supprimera définitivement le canal et ses associations utilisateurs. Les utilisateurs de la plateforme externe ne pourront plus joindre ce Kin.",
+      "deleteConfirm": "Cela supprimera définitivement le canal et ses associations utilisateurs. Les utilisateurs de la plateforme externe ne pourront plus joindre cet Agent.",
       "deleted": "Canal supprimé",
       "saved": "Canal sauvegardé",
       "created": "Canal créé",
@@ -2028,7 +2144,7 @@
       "webhook": {
         "label": "URL du webhook entrant",
         "hint": "Collez cette URL dans la console de votre fournisseur pour recevoir les messages entrants. Pour Twilio : Numéros de téléphone → votre numéro → Messaging → « A message comes in » → HTTP POST.",
-        "localhostWarning": "Cette URL pointe vers localhost — les fournisseurs externes ne peuvent pas l'atteindre. Définissez la variable d'env PUBLIC_URL avec votre URL HTTPS publique pour que les signatures soient valides et que les webhooks arrivent."
+        "localhostWarning": "Cette URL pointe vers localhost : les fournisseurs externes ne peuvent pas l'atteindre. Définissez la variable d'env PUBLIC_URL avec votre URL HTTPS publique pour que les signatures soient valides et que les webhooks arrivent."
       },
       "noUsers": "Aucun utilisateur en attente",
       "newUserPending": "Nouvel utilisateur {{name}} en attente d'approbation",
@@ -2044,7 +2160,7 @@
         "noContacts": "Aucun contact trouvé",
         "approve": "Approuver"
       },
-      "emptyDescription": "Configurez un canal comme Telegram ou Discord pour discuter avec vos Kins en dehors de l'interface web.",
+      "emptyDescription": "Configurez un canal comme Telegram ou Discord pour discuter avec vos Agents en dehors de l'interface web.",
       "setupGuide": {
         "title": "Comment obtenir votre token de bot",
         "telegram": {
@@ -2069,21 +2185,21 @@
           "tip": "Assurez-vous que le Message Content intent est activé, sinon votre bot ne recevra pas le contenu des messages."
         }
       },
-      "kinLabel": "Kin",
-      "kinPlaceholder": "Sélectionner un Kin...",
+      "agentLabel": "Agent",
+      "agentPlaceholder": "Sélectionner un Agent...",
       "nameTip": "Un nom pour cette connexion. Aide à distinguer plusieurs canaux de la même plateforme.",
-      "kinTip": "Le Kin qui répondra aux messages sur ce canal. Chaque canal est géré par un seul Kin.",
-      "transferWarning": "Choisir un autre Kin va transférer ce canal. Le Kin précédent perd le binding et les deux Kins reçoivent une ligne d'audit dans leur conversation.",
+      "agentTip": "L'Agent qui répondra aux messages sur ce canal. Chaque canal est géré par un seul Agent.",
+      "transferWarning": "Choisir un autre Agent va transférer ce canal. L'Agent précédent perd le binding et les deux Agents reçoivent une ligne d'audit dans leur conversation.",
       "transferReasonLabel": "Raison du transfert (optionnelle)",
       "transferReasonPlaceholder": "Note optionnelle pour expliquer pourquoi tu transfères ce canal (200 caractères max).",
-      "transferred": "Canal transféré vers {{kinName}}.",
-      "transferNoop": "Le canal est déjà rattaché à ce Kin.",
+      "transferred": "Canal transféré vers {{agentName}}.",
+      "transferNoop": "Le canal est déjà rattaché à cet Agent.",
       "help": {
-        "content": "Les canaux connectent vos Kins aux plateformes de messagerie externes comme Telegram, Discord, Slack et d'autres. Chaque canal achemine les messages d'une plateforme vers un Kin spécifique.",
-        "bullet1": "Chaque canal est lié à un Kin qui gère tous les messages entrants",
+        "content": "Les canaux connectent vos Agents aux plateformes de messagerie externes comme Telegram, Discord, Slack et d'autres. Chaque canal achemine les messages d'une plateforme vers un Agent spécifique.",
+        "bullet1": "Chaque canal est lié à un Agent qui gère tous les messages entrants",
         "bullet2": "Testez votre connexion après la configuration pour vérifier que le token du bot est valide",
-        "bullet3": "Gérez les approbations d'utilisateurs pour contrôler qui peut discuter avec votre Kin sur chaque plateforme",
-        "bullet4": "Utilisez les IDs de chat autorisés pour restreindre les groupes ou chats auxquels le Kin répond"
+        "bullet3": "Gérez les approbations d'utilisateurs pour contrôler qui peut discuter avec votre Agent sur chaque plateforme",
+        "bullet4": "Utilisez les IDs de chat autorisés pour restreindre les groupes ou chats auxquels l'Agent répond"
       }
     },
     "notifications": {
@@ -2115,7 +2231,7 @@
       "labelTip": "Un nom convivial pour identifier ce canal de livraison dans la liste.",
       "noChannelsDescription": "Ajoutez un canal de livraison pour recevoir les notifications sur Telegram, Discord, email ou d'autres plateformes.",
       "help": {
-        "content": "Les notifications vous tiennent informé des événements importants dans KinBot. Vous pouvez activer ou désactiver chaque type de notification, et configurer des canaux de livraison externes pour les recevoir sur des plateformes comme Telegram, Discord ou par email.",
+        "content": "Les notifications vous tiennent informé des événements importants dans Hivekeep. Vous pouvez activer ou désactiver chaque type de notification, et configurer des canaux de livraison externes pour les recevoir sur des plateformes comme Telegram, Discord ou par email.",
         "bullet1": "Activez/désactivez les types de notifications pour contrôler ce qui apparaît dans la cloche",
         "bullet2": "Les canaux de livraison externes envoient les notifications vers vos plateformes préférées",
         "bullet3": "Chaque canal peut filtrer par type de notification pour un contrôle précis",
@@ -2132,7 +2248,7 @@
     "info": {
       "version": "Version",
       "uptime": "Disponibilité",
-      "kins": "Kins",
+      "agents": "Agents",
       "providers": "Fournisseurs",
       "channels": "Canaux",
       "crons": "Tâches cron",
@@ -2146,7 +2262,7 @@
     },
     "plugins": {
       "title": "Plugins",
-      "description": "Gérez les plugins qui ajoutent des outils, hooks et intégrations à KinBot.",
+      "description": "Gérez les plugins qui ajoutent des outils, hooks et intégrations à Hivekeep.",
       "reload": "Recharger",
       "reloaded": "Plugins rechargés",
       "checkUpdates": "Vérifier les mises à jour",
@@ -2196,7 +2312,7 @@
     },
     "marketplace": {
       "title": "Explorer les plugins",
-      "description": "Plugins publiés sur npm avec le mot-clé `kinbot-plugin`. N'importe qui peut publier — vérifiez l'auteur et le dépôt source avant d'installer.",
+      "description": "Plugins publiés sur npm avec le mot-clé `hivekeep-plugin`. N'importe qui peut publier. Vérifiez l'auteur et le dépôt source avant d'installer.",
       "refresh": "Actualiser",
       "searchPlaceholder": "Rechercher sur npm...",
       "allTags": "Tous",
@@ -2230,7 +2346,7 @@
     },
     "tokenUsage": {
       "title": "Consommation de tokens",
-      "description": "Suivre la consommation de tokens LLM par provider, modèle et kin",
+      "description": "Suivre la consommation de tokens LLM par provider, modèle et agent",
       "period24h": "24h",
       "period7d": "7 jours",
       "period30d": "30 jours",
@@ -2242,16 +2358,19 @@
       "groupBy": "Grouper par",
       "groupByProvider": "Provider",
       "groupByModel": "Modèle",
-      "groupByKin": "Kin",
+      "groupByAgent": "Agent",
       "groupByCallSite": "Type d'appel",
       "groupByDay": "Jour",
-      "filterKin": "Tous les kins",
+      "filterAgent": "Tous les agents",
       "filterProvider": "Tous les providers",
       "columnGroup": "Groupe",
       "columnInput": "Entrée",
       "columnOutput": "Sortie",
       "columnTotal": "Total",
+      "columnCost": "Coût",
       "columnCalls": "Appels",
+      "costEstimate": "Coût (est.)",
+      "costEstimateSub": "tarifs models.dev",
       "columnCacheHit": "Cache hit",
       "columnNonCache": "Sans cache",
       "columnCacheHitFull": "Taux de cache hit",
@@ -2265,11 +2384,24 @@
       "filters": "Filtres",
       "detailTitle": "Journal des requêtes",
       "detailDate": "Date",
-      "detailKin": "Kin",
+      "detailAgent": "Agent",
       "detailModel": "Modèle",
       "detailCallSite": "Type",
       "detailSteps": "Étapes",
       "detailShowing": "{{from}}–{{to}} sur {{total}}"
+    },
+    "updates": {
+      "title": "Mises à jour",
+      "description": "Gardez cette instance Hivekeep à jour.",
+      "help": "Hivekeep vérifie périodiquement les nouvelles versions sur GitHub. Le canal stable suit les releases officielles ; le canal edge suit le dernier commit de la branche main (pour tester les changements non publiés). La mise à jour intégrée est disponible pour les installations gérées par install.sh ; les installations Docker se mettent à jour en tirant une image plus récente.",
+      "channelLabel": "Canal de mise à jour",
+      "channelTip": "Le flux de mises à jour suivi par cette instance.",
+      "channelSaved": "Canal de mise à jour enregistré",
+      "channelStableDescription": "Suit les releases officielles. Recommandé pour la plupart des installations.",
+      "channelEdgeDescription": "Suit le dernier commit de main. Potentiellement instable. Pour les tests uniquement.",
+      "updateAvailableBadge": "{{version}} disponible",
+      "upToDateBadge": "À jour",
+      "lastChecked": "Dernière vérification : {{date}}"
     }
   },
   "notifications": {
@@ -2282,18 +2414,22 @@
       "channel-user-pending": "Utilisateur en attente",
       "cron-pending-approval": "Cron en attente",
       "mcp-pending-approval": "MCP en attente",
-      "kin-error": "Erreur Kin",
-      "kin-alert": "Alerte Kin",
-      "mention": "Mention"
+      "agent-error": "Erreur Agent",
+      "agent-alert": "Alerte Agent",
+      "mention": "Mention",
+      "miniapp-notify": "Notification de Mini-App",
+      "email-pending-send-approval": "E-mail en attente d'approbation"
     },
     "descriptions": {
-      "prompt-pending": "Un Kin attend votre réponse pour continuer",
+      "prompt-pending": "Un Agent attend votre réponse pour continuer",
       "channel-user-pending": "Un nouvel utilisateur sur un canal attend votre approbation",
-      "cron-pending-approval": "Une tâche planifiée créée par un Kin nécessite votre approbation",
-      "mcp-pending-approval": "Un serveur MCP ajouté par un Kin nécessite votre approbation",
-      "kin-error": "Un Kin a rencontré une erreur qui peut nécessiter investigation",
-      "kin-alert": "Un Kin vous a envoyé une notification",
-      "mention": "Quelqu'un vous a mentionné dans une conversation"
+      "cron-pending-approval": "Une tâche planifiée créée par un Agent nécessite votre approbation",
+      "mcp-pending-approval": "Un serveur MCP ajouté par un Agent nécessite votre approbation",
+      "agent-error": "Un Agent a rencontré une erreur qui peut nécessiter investigation",
+      "agent-alert": "Un Agent vous a envoyé une notification",
+      "mention": "Quelqu'un vous a mentionné dans une conversation",
+      "miniapp-notify": "Une Mini-App a envoyé une notification depuis son service en arrière-plan",
+      "email-pending-send-approval": "Un Agent souhaite envoyer un e-mail qui nécessite votre approbation"
     }
   },
   "modelPicker": {
@@ -2301,7 +2437,7 @@
     "search": "Rechercher un modèle...",
     "noResults": "Aucun modèle trouvé",
     "all": "Tous",
-    "clear": "Aucun modèle — utiliser le défaut",
+    "clear": "Aucun modèle (utiliser le défaut)",
     "loading": "Chargement des modèles…",
     "vision": "vision",
     "img2img": "img2img",
@@ -2315,7 +2451,10 @@
     "lastName": "Nom",
     "pseudonym": "Pseudonyme",
     "pseudonymHint": "Lettres, chiffres, underscores, tirets",
-    "language": "Langue",
+    "language": "Langue de l'interface",
+    "languageHint": "Langue des menus, boutons et pages.",
+    "agentLanguage": "Langue des agents",
+    "agentLanguageHint": "Langue que vos agents utilisent pour vous parler. Indépendante de la langue de l'interface : les agents peuvent parler des langues dans lesquelles l'interface n'est pas traduite.",
     "save": "Enregistrer",
     "saved": "Profil mis à jour",
     "cancel": "Annuler",
@@ -2339,8 +2478,9 @@
   "tools": {
     "viewer": {
       "title": "Appels d'outils",
+      "showAvailable": "Voir les outils disponibles",
       "description": "{{count}} appel(s) d'outil dans cette conversation",
-      "empty": "Aucun appel d'outil. Les outils apparaîtront ici quand le Kin les utilisera.",
+      "empty": "Aucun appel d'outil. Les outils apparaîtront ici quand l'Agent les utilisera.",
       "input": "Entrée",
       "output": "Sortie"
     },
@@ -2354,7 +2494,7 @@
       "memory": "Mémoire",
       "vault": "Coffre-fort",
       "tasks": "Tâches",
-      "inter-kin": "Inter-Kin",
+      "inter-agent": "Inter-Agent",
       "crons": "Planification",
       "custom": "Personnalisé",
       "images": "Images",
@@ -2362,7 +2502,7 @@
       "filesystem": "Fichiers",
       "file-storage": "Stockage fichiers",
       "mcp": "MCP",
-      "kin-management": "Gestion des Kins",
+      "agent-management": "Gestion des Agents",
       "webhooks": "Webhooks",
       "system": "Système",
       "channels": "Canaux",
@@ -2380,6 +2520,12 @@
       "search_emails": "Rechercher des emails",
       "send_email": "Envoyer un email",
       "download_email_attachment": "Télécharger une pièce jointe",
+      "describe_trigger_conditions": "Décrire les conditions de déclencheur",
+      "list_email_folders": "Lister les dossiers e-mail",
+      "create_account_trigger": "Créer un déclencheur e-mail",
+      "list_account_triggers": "Lister les déclencheurs e-mail",
+      "update_account_trigger": "Modifier un déclencheur e-mail",
+      "delete_account_trigger": "Supprimer un déclencheur e-mail",
       "list_address_books": "Lister les carnets d'adresses",
       "list_address_book_contacts": "Lister les contacts du carnet",
       "get_address_book_contact": "Obtenir un contact du carnet",
@@ -2453,6 +2599,7 @@
       "deactivate_channel": "Désactiver un canal",
       "attach_file": "Joindre un fichier",
       "get_system_info": "Infos système",
+      "get_setup_health": "Vérifier l'état de la configuration",
       "list_providers": "Lister les fournisseurs",
       "list_models": "Lister les modèles",
       "describe_provider_config": "Décrire la config d'un fournisseur",
@@ -2514,13 +2661,14 @@
       "list_memories": "Lister les souvenirs",
       "search_history": "Rechercher l'historique",
       "get_secret": "Obtenir un secret",
+      "request_tool_access": "Demander l'accès à des outils",
       "create_secret": "Créer un secret",
       "update_secret": "Modifier un secret",
       "delete_secret": "Supprimer un secret",
       "search_secrets": "Rechercher des secrets",
       "redact_message": "Masquer un message",
       "spawn_self": "Lancer une sous-tâche",
-      "spawn_kin": "Lancer une tâche Kin",
+      "spawn_agent": "Lancer une tâche Agent",
       "scout": "Éclaireur",
       "respond_to_task": "Répondre à une tâche",
       "cancel_task": "Annuler une tâche",
@@ -2530,7 +2678,7 @@
       "request_input": "Demander une saisie",
       "send_message": "Envoyer un message",
       "reply": "Répondre",
-      "list_kins": "Lister les Kins",
+      "list_kins": "Lister les Agents",
       "create_cron": "Créer un planning",
       "update_cron": "Modifier un planning",
       "delete_cron": "Supprimer un planning",
@@ -2560,10 +2708,10 @@
       "update_stored_file": "Modifier un fichier",
       "delete_stored_file": "Supprimer un fichier",
       "prompt_human": "Demander à l'utilisateur",
-      "create_kin": "Créer un Kin",
-      "update_kin": "Modifier un Kin",
-      "delete_kin": "Supprimer un Kin",
-      "get_kin_details": "Détails d'un Kin",
+      "create_agent": "Créer un Agent",
+      "update_agent": "Modifier un Agent",
+      "delete_agent": "Supprimer un Agent",
+      "get_agent_details": "Détails d'un Agent",
       "list_toolboxes": "Lister les boîtes à outils",
       "list_tools": "Lister les outils",
       "create_toolbox": "Créer une boîte à outils",
@@ -2641,7 +2789,8 @@
       "get_project_knowledge": "Lire une connaissance projet",
       "update_project_knowledge": "Modifier une connaissance projet",
       "delete_project_knowledge": "Supprimer une connaissance projet",
-      "pin_project_knowledge": "Épingler une connaissance projet"
+      "pin_project_knowledge": "Épingler une connaissance projet",
+      "get_mini_app_backend_status": "Statut du backend de Mini-App"
     },
     "renderers": {
       "rawJson": "JSON brut",
@@ -2762,7 +2911,7 @@
     }
   },
   "invite": {
-    "title": "Rejoindre KinBot",
+    "title": "Rejoindre Hivekeep",
     "subtitle": "Vous avez été invité à rejoindre cet espace",
     "invalidToken": "Ce lien d'invitation est invalide ou a expiré.",
     "backToLogin": "Aller à la connexion",
@@ -2772,7 +2921,9 @@
     "email": "Email",
     "password": "Mot de passe",
     "confirmPassword": "Confirmer le mot de passe",
-    "language": "Langue",
+    "language": "Langue de l'interface",
+    "agentLanguage": "Langue des agents",
+    "agentLanguageHint": "Langue que les agents utiliseront pour vous parler.",
     "avatar": "Photo de profil",
     "submit": "Créer le compte",
     "creating": "Création du compte...",
@@ -2786,7 +2937,7 @@
     "reconnecting": "Reconnexion au serveur..."
   },
   "humanPrompt": {
-    "title": "Question de votre Kin",
+    "title": "Question de votre Agent",
     "confirm": "Confirmer",
     "submit": "Soumettre",
     "submitted": "Réponse envoyée",
@@ -2798,17 +2949,23 @@
     "no": "Non",
     "selectOne": "Sélectionnez une option",
     "selectMultiple": "Sélectionnez une ou plusieurs options",
-    "noneSelected": "Sélectionnez au moins une option"
+    "noneSelected": "Sélectionnez au moins une option",
+    "toolAccess": {
+      "reason": "Raison de l'Agent",
+      "grant": "Accorder la sélection ({{count}})",
+      "deny": "Refuser",
+      "denyAll": "Tout refuser"
+    }
   },
   "commandPalette": {
     "title": "Palette de commandes",
-    "description": "Rechercher des commandes, kins et paramètres...",
+    "description": "Rechercher des commandes, agents et paramètres...",
     "placeholder": "Tapez une commande ou recherchez...",
     "empty": "Aucun résultat.",
-    "kins": "Kins",
+    "agents": "Agents",
     "actions": "Actions",
     "settings": "Paramètres",
-    "createKin": "Créer un nouveau Kin",
+    "createAgent": "Créer un nouvel Agent",
     "toggleTheme": "Basculer thème clair/sombre"
   },
   "shortcuts": {
@@ -2816,17 +2973,18 @@
     "hint": "Appuyez sur ? pour afficher ce dialogue",
     "group": {
       "navigation": "Navigation",
-      "kins": "Kins",
+      "agents": "Agents",
       "chat": "Discussion",
       "formatting": "Mise en forme",
-      "general": "Général"
+      "general": "Général",
+      "files": "Fichiers"
     },
     "commandPalette": "Palette de commandes",
     "toggleSidebar": "Afficher/masquer la barre latérale",
     "openSettings": "Ouvrir les paramètres",
     "showShortcuts": "Afficher les raccourcis clavier",
-    "switchKin": "Basculer vers un Kin par position",
-    "createKin": "Créer un nouveau Kin",
+    "switchAgent": "Basculer vers un Agent par position",
+    "createAgent": "Créer un nouvel Agent",
     "sendMessage": "Envoyer le message",
     "newLine": "Nouvelle ligne",
     "focusInput": "Activer la zone de message",
@@ -2836,7 +2994,13 @@
     "formatItalic": "Italique",
     "formatCode": "Code en ligne",
     "formatCodeBlock": "Bloc de code",
-    "formatStrikethrough": "Barré"
+    "formatStrikethrough": "Barré",
+    "filesSave": "Enregistrer le fichier actif",
+    "filesQuickOpen": "Ouverture rapide d’un fichier du workspace",
+    "filesRename": "Renommer la sélection (focus arborescence)",
+    "filesDelete": "Supprimer la sélection (focus arborescence)",
+    "filesClipboard": "Copier / couper / coller (focus arborescence)",
+    "filesCloseTab": "Fermer l’onglet actif"
   },
   "theme": {
     "palette": "Palette",
@@ -2909,7 +3073,7 @@
     "channelOnline": "Canal connecté",
     "channelOffline": "Canal déconnecté",
     "channelError": "Erreur de connexion au canal",
-    "updateAvailable": "KinOS {{version}} est disponible",
+    "updateAvailable": "Hivekeep {{version}} est disponible",
     "viewRelease": "Voir"
   },
   "errorBoundary": {
@@ -2921,15 +3085,20 @@
     "description": "v{{current}} → v{{latest}}",
     "current": "Actuelle",
     "latest": "Dernière",
-    "releaseNotes": "Notes de version",
+    "releaseNotes": "Nouveautés",
+    "newCommits": "{{count}} nouveau commit sur main",
+    "newCommits_other": "{{count}} nouveaux commits sur main",
     "howToUpdate": "Comment mettre à jour",
-    "dockerInstructions": "Exécutez la commande suivante dans le répertoire contenant votre docker-compose.yml :",
-    "nonDockerInstructions": "Cliquez sur le bouton ci-dessous pour télécharger la dernière version et redémarrer le serveur. La page se rechargera automatiquement.",
-    "viewOnGitHub": "Voir la release sur GitHub",
-    "updateButton": "Mettre à jour maintenant",
-    "updating": "Mise à jour en cours...",
-    "updateSuccess": "Mise à jour appliquée ! Rechargement...",
-    "updateFailed": "La mise à jour a échoué"
+    "dockerInstructions": "Exécutez la commande suivante dans le dossier contenant votre docker-compose.yml :",
+    "dockerTagNote": "Si votre fichier compose épingle un tag de version précis, remplacez-le par {{version}} (ou utilisez le tag latest) avant de puller.",
+    "selfUpdateInstructions": "Hivekeep va sauvegarder sa base de données, télécharger la nouvelle version et redémarrer. En cas de problème, la version précédente est restaurée automatiquement.",
+    "adminOnly": "Seuls les administrateurs peuvent appliquer les mises à jour.",
+    "devModeNote": "Cette instance tourne en mode développement. Mettez-la à jour depuis votre checkout git.",
+    "manualInstallNote": "Cette installation n'est pas gérée par Hivekeep. Mettez-la à jour comme elle a été installée.",
+    "viewOnGitHub": "Voir sur GitHub",
+    "updateButton": "Mettre à jour",
+    "updateSuccess": "Mis à jour vers {{version}} !",
+    "updateFailed": "Échec de la mise à jour"
   },
   "whatsNew": {
     "title": "Nouveautés",
@@ -2964,7 +3133,7 @@
     },
     "appNotFound": "Application \"{{slug}}\" introuvable",
     "sendMessage": {
-      "sent": "Message envoyé au Kin",
+      "sent": "Message envoyé à l'Agent",
       "error": "Échec de l'envoi du message",
       "rateLimited": "Trop de messages, veuillez patienter"
     },
@@ -2978,27 +3147,32 @@
     "improve": {
       "button": "Améliorer cette app",
       "modalTitle": "Améliorer « {{name}} »",
-      "modalDescription": "Décris ce qu'il faut ajouter, modifier ou corriger. Ta demande est envoyée au Kin maintainer ({{kin}}) pour qu'il fasse le travail.",
+      "modalDescription": "Décris ce qu'il faut ajouter, modifier ou corriger. Ta demande est envoyée à l'Agent maintainer ({{agent}}) pour qu'il fasse le travail.",
       "placeholder": "ex. Ajouter un bouton mode sombre dans l'en-tête…",
       "submit": "Envoyer au maintainer",
-      "sent": "Demande envoyée à {{kin}}",
+      "sent": "Demande envoyée à {{agent}}",
       "error": "Échec de l'envoi de la demande"
     },
     "maintainer": {
-      "label": "Maintenue par {{kin}}",
+      "label": "Maintenue par {{agent}}",
       "change": "Changer de maintainer",
       "dialogTitle": "Maintainer de « {{name}} »",
-      "dialogDescription": "Le maintainer est le Kin responsable de cette app et la cible des demandes d'amélioration. N'importe quel Kin peut quand même l'éditer.",
-      "selectPlaceholder": "Choisir un Kin",
+      "dialogDescription": "Le maintainer est l'Agent responsable de cette app et la cible des demandes d'amélioration. N'importe quel Agent peut quand même l'éditer.",
+      "selectPlaceholder": "Choisir un Agent",
       "reassign": "Réassigner",
-      "reassigned": "Maintainer défini sur {{kin}}"
+      "reassigned": "Maintainer défini sur {{agent}}"
+    },
+    "permissions": {
+      "title": "Permissions demandées par le backend",
+      "approve": "Approuver",
+      "granted": "Permissions accordées"
     }
   },
   "accessibility": {
     "themeToggle": "Changer le thème",
     "paletteToggle": "Changer la palette de couleurs",
     "notifications": "Notifications",
-    "kinSettings": "Paramètres du Kin"
+    "agentSettings": "Paramètres de l'Agent"
   },
   "quickSession": {
     "errors": {
@@ -3009,6 +3183,7 @@
       "sendFailed": "Impossible d'envoyer le message",
       "sessionExpired": "Session expirée. Veuillez en démarrer une nouvelle.",
       "stopFailed": "Impossible d'arrêter la génération",
+      "updateFailed": "Impossible de mettre à jour les réglages de la session",
       "fetchHistoryFailed": "Impossible de charger l'historique des sessions",
       "viewSessionFailed": "Impossible de charger les messages de la session"
     }
@@ -3016,20 +3191,52 @@
   "rightPanel": {
     "taskTab": "Tâche"
   },
+  "appTopBar": {
+    "sections": "Sections"
+  },
   "activityBar": {
-    "kins": "Kins",
+    "agents": "Agents",
     "projects": "Projets",
     "tasks": "Tâches",
     "crons": "Tâches planifiées",
-    "apps": "Mini-apps"
+    "apps": "Mini-apps",
+    "models": "Modèles",
+    "files": "Fichiers",
+    "terminal": "Terminal"
+  },
+  "terminal": {
+    "title": "Terminal",
+    "newSession": "Nouvelle session",
+    "reconnect": "Reconnecter",
+    "maxSessions": "Limite de sessions atteinte. Fermez une autre session de terminal et réessayez.",
+    "status": {
+      "connecting": "Connexion...",
+      "connected": "Connecté",
+      "disconnected": "Déconnecté",
+      "ended": "Session terminée"
+    },
+    "disabled": {
+      "title": "Le terminal est désactivé",
+      "description": "Cette fonctionnalité est désactivée sur cette instance. Définissez HIVEKEEP_TERMINAL_ENABLED=true et redémarrez le serveur pour l'activer."
+    },
+    "sessions": {
+      "title": "Sessions",
+      "empty": "Aucune session active",
+      "rename": "Renommer",
+      "close": "Fermer la session",
+      "closeConfirmTitle": "Fermer {{name}} ?",
+      "closeConfirmDescription": "Le shell et tout ce qui y tourne seront arrêtés.",
+      "attached": "Connectée",
+      "detached": "Détachée"
+    }
   },
   "orphanTask": {
     "menuAction": "Lancer une tâche",
     "title": "Lancer une tâche",
-    "description": "Lance une tâche autonome sur {{name}} — sans projet ni ticket. Le résultat est déposé dans ce fil quand elle se termine.",
-    "descriptionGeneric": "Lance une tâche autonome — sans projet ni ticket. Choisis le Kin qui doit l'exécuter ; le résultat est déposé dans son fil quand elle se termine.",
-    "kinField": "Kin",
-    "kinPlaceholder": "Choisir un Kin pour exécuter cette tâche",
+    "description": "Lance une tâche autonome sur {{name}}, sans projet ni ticket. Le résultat est déposé dans ce fil quand elle se termine.",
+    "descriptionGeneric": "Lance une tâche autonome, sans projet ni ticket. Choisis l'Agent qui doit l'exécuter ; le résultat est déposé dans son fil quand elle se termine.",
+    "agentField": "Agent",
+    "agentPlaceholder": "Choisir un Agent pour exécuter cette tâche",
     "promptField": "Que doit faire cette tâche ?",
     "promptPlaceholder": "ex. comparer les 3 meilleures bases vectorielles et résumer les compromis",
     "promptHelp": "Décris le travail de cette tâche ponctuelle.",
@@ -3039,25 +3246,25 @@
     "toolboxesField": "Boîtes à outils (optionnel)",
     "toolboxesHelp": "Les jeux d'outils que cette tâche peut utiliser, en plus du socle obligatoire. Laisse vide pour utiliser la valeur par défaut.",
     "modelField": "Modèle (optionnel)",
-    "modelInherit": "Hériter (modèle du Kin)",
-    "modelHelp": "Remplace le modèle pour cette tâche uniquement. Laisse sur hériter pour utiliser le modèle du Kin.",
+    "modelInherit": "Hériter (modèle de l'Agent)",
+    "modelHelp": "Remplace le modèle pour cette tâche uniquement. Laisse sur hériter pour utiliser le modèle de l'Agent.",
     "thinkingField": "Effort de raisonnement (optionnel)",
-    "thinkingInherit": "Hériter (réglage du Kin)",
-    "thinkingHelp": "Remplace l'effort de raisonnement pour cette tâche uniquement. Laisse sur hériter pour utiliser le réglage du Kin.",
+    "thinkingInherit": "Hériter (réglage de l'Agent)",
+    "thinkingHelp": "Remplace l'effort de raisonnement pour cette tâche uniquement. Laisse sur hériter pour utiliser le réglage de l'Agent.",
     "start": "Lancer la tâche",
     "started": "Tâche lancée sur {{name}}. Le résultat apparaîtra dans ce fil à la fin."
   },
   "projects": {
     "page": {
       "title": "Projets",
-      "comingSoon": "La vue kanban arrive bientôt — le backend est prêt, le frontend en cours."
+      "comingSoon": "La vue kanban arrive bientôt : le backend est prêt, le frontend en cours."
     },
     "sidebar": {
       "title": "Projets",
       "create": "Nouveau projet",
       "empty": "Aucun projet pour le moment. Crée ton premier projet pour démarrer.",
       "emptyTitle": "Aucun projet",
-      "emptyDescription": "Regroupe tes tickets, lance des tâches et suis le travail de tes Kins."
+      "emptyDescription": "Regroupe tes tickets, lance des tâches et suis le travail de tes Agents."
     },
     "empty": {
       "title": "Aucun projet",
@@ -3106,11 +3313,11 @@
       "totalCount_other": "{{count}} entrées",
       "pinnedCount_one": "{{count}} épinglée",
       "pinnedCount_other": "{{count}} épinglées",
-      "searchResults": "{{count}} résultat(s) — {{total}} au total",
+      "searchResults": "{{count}} résultat(s) ({{total}} au total)",
       "pagination": "{{from}}–{{to}} sur {{total}}",
       "pinnedBadge": "Épinglé",
       "byUser": "par vous",
-      "byKin": "par {{name}}",
+      "byAgent": "par {{name}}",
       "pin": "Épingler",
       "unpin": "Désépingler",
       "edit": "Modifier",
@@ -3125,32 +3332,32 @@
         "title": "Comment fonctionne le savoir projet",
         "show": "Comment ça marche",
         "pinnedLead": "Épinglées",
-        "pinned": "leur contenu complet est injecté dans le prompt de chaque Kin, automatiquement — aucun outil à appeler. À utiliser avec parcimonie (max 10 par projet).",
+        "pinned": "leur contenu complet est injecté dans le prompt de chaque Agent, automatiquement (aucun outil à appeler). À utiliser avec parcimonie (max 10 par projet).",
         "unpinnedLead": "Les autres entrées",
-        "unpinned": "n'affichent que leur titre dans l'index du prompt. Les Kins récupèrent le contenu à la demande avec get_project_knowledge, ou recherchent par sujet avec search_project_knowledge.",
-        "scope": "Toutes les entrées sont partagées entre chaque Kin et chaque task de ticket sur ce projet — considérez ça comme un wiki collectif."
+        "unpinned": "n'affichent que leur titre dans l'index du prompt. Les Agents récupèrent le contenu à la demande avec get_project_knowledge, ou recherchent par sujet avec search_project_knowledge.",
+        "scope": "Toutes les entrées sont partagées entre chaque Agent et chaque task de ticket sur ce projet : considérez ça comme un wiki collectif."
       },
       "empty": {
         "title": "Aucun savoir pour l'instant",
-        "description": "Capturez ici les décisions d'architecture, conventions, pièges et règles métier. Chaque Kin travaillant sur ce projet verra les titres dans son prompt et pourra récupérer le contenu de n'importe quelle entrée à la demande.",
+        "description": "Capturez ici les décisions d'architecture, conventions, pièges et règles métier. Chaque Agent travaillant sur ce projet verra les titres dans son prompt et pourra récupérer le contenu de n'importe quelle entrée à la demande.",
         "searchTitle": "Aucun résultat",
-        "searchDescription": "Essayez une autre requête — la recherche combine similarité sémantique et mots-clés."
+        "searchDescription": "Essayez une autre requête : la recherche combine similarité sémantique et mots-clés."
       },
       "dialog": {
         "createTitle": "Ajouter un savoir projet",
         "editTitle": "Modifier le savoir projet",
-        "description": "Visible par chaque Kin travaillant sur ce projet. Le titre de chaque entrée apparaît dans le prompt du Kin ; le contenu markdown n'est injecté que si l'entrée est épinglée.",
+        "description": "Visible par chaque Agent travaillant sur ce projet. Le titre de chaque entrée apparaît dans le prompt de l'Agent ; le contenu markdown n'est injecté que si l'entrée est épinglée.",
         "titleLabel": "Titre",
         "titlePlaceholder": "Un titre court et explicite (ex. « Utiliser Drizzle ORM, pas Prisma »)",
-        "titleHint": "C'est ce que chaque Kin verra par défaut dans son prompt — fais en sorte qu'il raconte toute l'histoire en une ligne.",
+        "titleHint": "C'est ce que chaque Agent verra par défaut dans son prompt. Fais en sorte qu'il raconte toute l'histoire en une ligne.",
         "contentLabel": "Contenu (Markdown)",
         "contentPlaceholder": "## Contexte\nPourquoi c'est important…\n\n## Détails\nExemples de code, liens, raisonnement…",
-        "contentHint": "Markdown libre — aussi long que nécessaire. Injecté dans le prompt des Kins seulement si épinglé ; sinon récupéré à la demande.",
+        "contentHint": "Markdown libre, aussi long que nécessaire. Injecté dans le prompt des Agents seulement si épinglé ; sinon récupéré à la demande.",
         "categoryLabel": "Catégorie (optionnel)",
         "categoryPlaceholder": "ex. arch, décision, piège, convention",
         "pinnedLabel": "Épingler au prompt système",
-        "pinnedOnHint": "Épinglé : le contenu markdown complet sera injecté dans le prompt système de chaque Kin sur ce projet. Le Kin pourra l'utiliser instantanément sans appel d'outil. Limite : 10 entrées épinglées par projet.",
-        "pinnedOffHint": "Non épinglé : seul le titre apparaît dans le prompt du Kin. Le Kin récupèrera le contenu via l'outil get_project_knowledge si le titre semble pertinent."
+        "pinnedOnHint": "Épinglé : le contenu markdown complet sera injecté dans le prompt système de chaque Agent sur ce projet. L'Agent pourra l'utiliser instantanément sans appel d'outil. Limite : 10 entrées épinglées par projet.",
+        "pinnedOffHint": "Non épinglé : seul le titre apparaît dans le prompt de l'Agent. L'Agent récupèrera le contenu via l'outil get_project_knowledge si le titre semble pertinent."
       },
       "metadata": {
         "created": "Créé {{time}}",
@@ -3174,7 +3381,7 @@
       "in_progress": "En cours",
       "paused": "En pause",
       "awaiting_human_input": "Attend ta réponse",
-      "awaiting_kin_response": "Attend un Kin",
+      "awaiting_agent_response": "Attend un Agent",
       "awaiting_subtask": "Attend le scout",
       "completed": "Terminé",
       "failed": "Échec",
@@ -3186,17 +3393,17 @@
       "titleField": "Titre du projet",
       "titlePlaceholder": "ex. Refonte backend",
       "descriptionField": "Description",
-      "descriptionPlaceholder": "Contexte, objectifs, liens, contraintes — tout ce qui sera utile à un Kin travaillant sur ce projet.",
-      "descriptionHint": "Markdown supporté. Cette description est injectée dans le prompt système de tout Kin ayant ce projet actif."
+      "descriptionPlaceholder": "Contexte, objectifs, liens, contraintes : tout ce qui sera utile à un Agent travaillant sur ce projet.",
+      "descriptionHint": "Markdown supporté. Cette description est injectée dans le prompt système de tout Agent ayant ce projet actif."
     },
     "ticket": {
       "create": {
         "title": "Nouveau ticket",
-        "description": "Ajoute un nouveau ticket à ce projet. Le statut par défaut est Backlog — déplace-le vers une autre colonne quand tu es prêt à le travailler.",
+        "description": "Ajoute un nouveau ticket à ce projet. Le statut par défaut est Backlog. Déplace-le vers une autre colonne quand tu es prêt à le travailler.",
         "titleField": "Titre du ticket",
         "titlePlaceholder": "ex. Corriger la boucle de redirection au login",
         "descriptionField": "Description",
-        "descriptionPlaceholder": "Qu'est-ce qu'il y a à faire ? Tout contexte utile pour la personne (ou le Kin) qui prendra ce ticket.",
+        "descriptionPlaceholder": "Qu'est-ce qu'il y a à faire ? Tout contexte utile pour la personne (ou l'Agent) qui prendra ce ticket.",
         "tagsField": "Tags"
       },
       "panel": {
@@ -3213,8 +3420,8 @@
         "startTask": "Démarrer une tâche",
         "noTasks": "Aucune tâche n'a encore été lancée sur ce ticket.",
         "noTasksTitle": "Aucune tâche pour l'instant",
-        "noTasksDescription": "Lance un Kin sur ce ticket pour suivre son exécution ici.",
-        "notFound": "Ce ticket est introuvable — il a peut-être été supprimé.",
+        "noTasksDescription": "Lance un Agent sur ce ticket pour suivre son exécution ici.",
+        "notFound": "Ce ticket est introuvable. Il a peut-être été supprimé.",
         "back": "Retour au/à la {{type}}",
         "ticketRef": "Ticket {{ref}}",
         "editAction": "Modifier le ticket",
@@ -3243,7 +3450,7 @@
         "delete": "Supprimer",
         "auto": "auto",
         "autoTooltip": "Posté automatiquement depuis le résultat d'une tâche.",
-        "kinTag": "Kin",
+        "agentTag": "Agent",
         "edited": "modifié",
         "loading": "Chargement des commentaires...",
         "showAll": "Voir {{count}} de plus",
@@ -3276,22 +3483,22 @@
     },
     "startTask": {
       "title": "Démarrer une tâche",
-      "description": "Spawn un sub-Kin pour travailler sur ce ticket. Le Kin présélectionné est celui qui a ce projet actif. La tâche tourne en mode await — tu auras un turn sur le thread du Kin quand elle se termine.",
-      "kinField": "Quel Kin doit exécuter cette tâche ?",
-      "kinPlaceholder": "Sélectionner un Kin",
+      "description": "Spawn un sub-Agent pour travailler sur ce ticket. L'Agent présélectionné est celui qui a ce projet actif. La tâche tourne en mode await : tu auras un turn sur le thread de l'Agent quand elle se termine.",
+      "agentField": "Quel Agent doit exécuter cette tâche ?",
+      "agentPlaceholder": "Sélectionner un Agent",
       "activeOnProject": "actif ici",
       "runPromptField": "Instructions spécifiques pour ce run (optionnel)",
-      "runPromptPlaceholder": "ex. occupe-toi seulement du backend, laisse l'UI au prochain Kin",
+      "runPromptPlaceholder": "ex. occupe-toi seulement du backend, laisse l'UI au prochain Agent",
       "runPromptHelp": "Optionnel. Cadre ce run précisément, en plus du ticket. Pratique quand tu lances plusieurs agents en parallèle, ou que tu veux t'arrêter à une phase précise. Max 500 caractères.",
       "runPromptCounter": "{{count}} / 500",
       "toolboxesField": "Boîtes à outils",
       "toolboxesHelp": "Les jeux d'outils que cette tâche peut utiliser. La tâche conserve toujours un socle d'outils obligatoire ; les boîtes sélectionnées s'y ajoutent. Par défaut : la boîte Code.",
       "modelField": "Modèle (optionnel)",
-      "modelInherit": "Hériter (projet / Kin)",
-      "modelHelp": "Remplace le modèle pour ce run uniquement. Laisse sur hériter pour utiliser le modèle par défaut du projet, puis celui du Kin.",
+      "modelInherit": "Hériter (projet / Agent)",
+      "modelHelp": "Remplace le modèle pour ce run uniquement. Laisse sur hériter pour utiliser le modèle par défaut du projet, puis celui de l'Agent.",
       "thinkingField": "Effort de raisonnement (optionnel)",
-      "thinkingInherit": "Hériter (projet / Kin)",
-      "thinkingHelp": "Remplace l'effort de raisonnement pour ce run uniquement. Laisse sur hériter pour utiliser le réglage par défaut du projet, puis celui du Kin.",
+      "thinkingInherit": "Hériter (projet / Agent)",
+      "thinkingHelp": "Remplace l'effort de raisonnement pour ce run uniquement. Laisse sur hériter pour utiliser le réglage par défaut du projet, puis celui de l'Agent.",
       "start": "Démarrer"
     },
     "enrich": {
@@ -3308,7 +3515,7 @@
     "chip": {
       "tooltip": "Projet actif : {{title}}. Clique pour ouvrir le kanban."
     },
-    "activeKins": {
+    "activeAgents": {
       "tooltip": "{{name}} a ce projet en actif",
       "openThread": "Ouvrir le thread de {{name}}"
     },
@@ -3323,7 +3530,7 @@
       "attachments_other": "{{count}} fichiers",
       "attachmentsTooltip_one": "{{count}} pièce jointe sur ce ticket",
       "attachmentsTooltip_other": "{{count}} pièces jointes sur ce ticket",
-      "kinRunning": "{{name}} travaille dessus",
+      "agentRunning": "{{name}} travaille dessus",
       "runningSince": "En cours depuis le {{date}}",
       "createdAt": "Créé le {{date}}",
       "updatedAt": "Modifié le {{date}}"
@@ -3331,7 +3538,7 @@
     "reporter": {
       "label": "Rapporté par",
       "byUser": "Rapporté par {{name}}",
-      "byKin": "Rapporté par le Kin {{name}}",
+      "byAgent": "Rapporté par l'Agent {{name}}",
       "tooltip": "{{name}}",
       "unknown": "Inconnu"
     },
@@ -3341,14 +3548,14 @@
       "openEdit": "Modifier le projet",
       "tagsSection": "Tags",
       "modelField": "Modèle par défaut",
-      "modelPlaceholder": "Utiliser le modèle propre à chaque Kin",
-      "modelHint": "Utilisé par les sub-Kins lancés sur les tickets de ce projet — remplace le modèle propre à chaque Kin. Un modèle choisi explicitement au lancement d'une task reste prioritaire. Laisser vide pour retomber sur le modèle du Kin.",
+      "modelPlaceholder": "Utiliser le modèle propre à chaque Agent",
+      "modelHint": "Utilisé par les sub-Agents lancés sur les tickets de ce projet : remplace le modèle propre à chaque Agent. Un modèle choisi explicitement au lancement d'une task reste prioritaire. Laisser vide pour retomber sur le modèle de l'Agent.",
       "scoutModelField": "Modèle d'exploration par défaut",
-      "scoutModelPlaceholder": "Héritage (global / modèle du Kin)",
-      "scoutModelHint": "Modèle rapide et économique utilisé par l'outil `scout` pour les tâches sur les tickets de ce projet — remplace le scout par défaut global. Laisser vide pour retomber sur le scout par défaut global, puis le modèle du Kin.",
+      "scoutModelPlaceholder": "Héritage (global / modèle de l'Agent)",
+      "scoutModelHint": "Modèle rapide et économique utilisé par l'outil `scout` pour le travail sur ce projet : prioritaire sur le réglage scout de chaque Agent et sur le défaut global. Laissez vide pour retomber sur le scout de l'Agent, puis le défaut global, puis le modèle de l'Agent.",
       "thinkingField": "Effort de raisonnement par défaut",
-      "thinkingInherit": "Utiliser le réglage propre à chaque Kin",
-      "thinkingHint": "Appliqué aux sub-Kins lancés sur les tickets de ce projet — remplace la config de thinking propre à chaque Kin. Une valeur choisie explicitement au lancement d'une task reste prioritaire.",
+      "thinkingInherit": "Utiliser le réglage propre à chaque Agent",
+      "thinkingHint": "Appliqué aux sub-Agents lancés sur les tickets de ce projet : remplace la config de thinking propre à chaque Agent. Une valeur choisie explicitement au lancement d'une task reste prioritaire.",
       "toolboxesField": "Boîtes à outils par défaut des tâches",
       "toolboxesHint": "Boîtes à outils attribuées par défaut aux tâches lancées sur les tickets de ce projet. Les boîtes choisies explicitement au lancement d'une tâche restent prioritaires. Laisser vide pour retomber sur la boîte par défaut intégrée.",
       "delete": "Supprimer le projet",
@@ -3356,10 +3563,13 @@
         "title": "Supprimer ce projet ?",
         "description": "« {{title}} » et tous ses tickets, tags et liens d'historique seront définitivement supprimés. L'historique des tâches est conservé (leur lien vers les tickets est désactivé).",
         "confirm": "Supprimer le projet"
-      }
+      },
+      "scoutThinkingField": "Raisonnement des scouts par défaut",
+      "scoutThinkingHint": "Effort de raisonnement des scouts envoyés dans ce projet : prioritaire sur le réglage scout de chaque Agent et sur le défaut global. Hériter = retomber sur le scout de l'Agent, puis le défaut global.",
+      "scoutThinkingInherit": "Hériter (scout de l'Agent, puis global)"
     },
     "tags": {
-      "empty": "Aucun tag pour le moment — ajoutes-en ci-dessous.",
+      "empty": "Aucun tag pour le moment. Ajoutes-en ci-dessous.",
       "newLabel": "Nouveau label"
     },
     "github": {
@@ -3389,11 +3599,114 @@
       "statusError": "Échec du clone",
       "statusBlock": {
         "none": "Aucun clone configuré pour l'instant.",
-        "cloning": "Clonage du dépôt en arrière-plan — les sub-tasks seront bloquées tant que ce n'est pas fini.",
+        "cloning": "Clonage du dépôt en arrière-plan : les sub-tasks seront bloquées tant que ce n'est pas fini.",
         "ready": "Le clone local est prêt. Les sub-tasks peuvent être lancées sur ce projet.",
         "error": "Le clone a échoué. Regarde le message ci-dessous et clique sur Réessayer une fois le problème corrigé."
       },
       "retry": "Réessayer le clone"
     }
+  },
+  "updateChannel": {
+    "stable": "Stable (releases)",
+    "edge": "Edge (branche main)"
+  },
+  "updateProgress": {
+    "title": "Mise à jour en cours",
+    "dontClose": "Vous pouvez continuer à utiliser Hivekeep : la mise à jour s'exécute en arrière-plan et la page se rechargera à la fin.",
+    "waitingForServer": "Redémarrage du serveur… en attente de son retour",
+    "reloading": "La page va se recharger automatiquement.",
+    "failedTitle": "Échec de la mise à jour",
+    "failedSafe": "Rien n'a été modifié. La version actuelle tourne toujours.",
+    "rolledBackTitle": "Mise à jour annulée (rollback)",
+    "rolledBackDescription": "La nouvelle version n'a pas réussi à démarrer : la version précédente a été restaurée automatiquement, ainsi que la sauvegarde de la base de données.",
+    "steps": {
+      "preflight": "Vérifications préalables",
+      "snapshot": "Sauvegarde de la base de données",
+      "backup": "Sauvegarde de la version actuelle",
+      "download": "Téléchargement des assets pré-compilés",
+      "apply": "Récupération de la nouvelle version",
+      "dependencies": "Installation des dépendances",
+      "assets": "Préparation des assets frontend",
+      "restart": "Redémarrage"
+    }
+  },
+  "files": {
+    "selectWorkspace": "Choisir un workspace",
+    "openTree": "Parcourir les fichiers",
+    "refresh": "Rafraîchir",
+    "notFound": "Fichier introuvable : {{path}}",
+    "openError": "Impossible d'ouvrir ce fichier",
+    "empty": {
+      "title": "Ce workspace est vide",
+      "description": "Les fichiers créés par cet agent apparaîtront ici."
+    },
+    "noAgents": {
+      "title": "Pas encore d'agent",
+      "description": "Créez d'abord un agent : son workspace apparaîtra ici."
+    },
+    "noFileOpen": {
+      "title": "Aucun fichier ouvert",
+      "description": "Sélectionnez un fichier dans l’arborescence pour le consulter."
+    },
+    "tree": {
+      "loadError": "Échec du chargement - réessayer",
+      "emptyFolder": "vide",
+      "title": "Fichiers",
+      "newFile": "Nouveau fichier",
+      "newFolder": "Nouveau dossier",
+      "upload": "Uploader des fichiers",
+      "uploadHere": "Uploader ici",
+      "rename": "Renommer",
+      "copy": "Copier",
+      "cut": "Couper",
+      "paste": "Coller",
+      "share": "Partager…",
+      "insertInChat": "Insérer dans le chat",
+      "copyPath": "Copier le chemin relatif",
+      "pathCopied": "Chemin copié dans le presse-papier",
+      "uploaded": "{{count}} fichier(s) uploadé(s)",
+      "uploadErrors": "{{count}} fichier(s) refusé(s) (ex. {{name}})",
+      "deleteConfirm": {
+        "title": "Supprimer « {{name}} » ?",
+        "fileDescription": "Ce fichier sera définitivement supprimé du workspace.",
+        "folderDescription": "Ce dossier et tout son contenu seront définitivement supprimés."
+      }
+    },
+    "editor": {
+      "download": "Télécharger",
+      "tooLarge": "Ce fichier texte est trop volumineux pour être édité ici ({{size}}). Téléchargez-le.",
+      "binary": "Fichier binaire ({{mime}}) : aperçu indisponible.",
+      "edit": "Éditer",
+      "preview": "Aperçu",
+      "save": "Enregistrer",
+      "saved": "Enregistré",
+      "recreate": "Recréer le fichier",
+      "deletedFromDisk": "Ce fichier a été supprimé du disque pendant que vous l’éditiez.",
+      "conflict": {
+        "message": "Le fichier a changé sur le disque depuis son ouverture (probablement écrit par l’agent).",
+        "reload": "Recharger",
+        "overwrite": "Écraser"
+      }
+    },
+    "browseWorkspace": "Parcourir les fichiers",
+    "share": {
+      "title": "Partager le fichier",
+      "snapshotNotice": "Crée une copie figée dans le file storage : les modifications ultérieures du fichier du workspace ne seront pas reflétées.",
+      "submit": "Partager & copier le lien",
+      "urlCopied": "Lien de partage copié dans le presse-papier"
+    },
+    "search": {
+      "placeholder": "Rechercher un fichier par nom ou chemin…",
+      "noResults": "Aucun fichier trouvé",
+      "open": "Ouverture rapide (Ctrl+P)"
+    }
+  },
+  "updateOverlay": {
+    "title": "Mise à jour de Hivekeep",
+    "successTitle": "Mise à jour terminée",
+    "toVersion": "Mise à jour vers {{version}}"
+  },
+  "topbar": {
+    "updateAvailable": "Mise à jour"
   }
 }

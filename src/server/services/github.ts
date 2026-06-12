@@ -23,7 +23,7 @@ export type { GitHubRepoSummary }
 const log = createLogger('github')
 
 const GITHUB_API = 'https://api.github.com'
-const USER_AGENT = 'kinbot'
+const USER_AGENT = 'hivekeep'
 const ACCEPT_HEADER = 'application/vnd.github+json'
 const API_VERSION = '2022-11-28'
 

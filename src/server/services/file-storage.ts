@@ -25,8 +25,8 @@ function getExtension(filename: string): string {
   return ext ? ext.slice(1) : ''
 }
 
-function storageDirForKin(kinId: string): string {
-  return join(config.fileStorage.dir, kinId)
+function storageDirForAgent(agentId: string): string {
+  return join(config.fileStorage.dir, agentId)
 }
 
 function storedFileName(id: string, originalName: string): string {
@@ -41,7 +41,7 @@ export function buildShareUrl(accessToken: string): string {
 function serializeFileMetadata(f: FileStorageRow) {
   return {
     id: f.id,
-    kinId: f.kinId,
+    agentId: f.agentId,
     name: f.name,
     description: f.description,
     originalName: f.originalName,
@@ -53,7 +53,7 @@ function serializeFileMetadata(f: FileStorageRow) {
     expiresAt: f.expiresAt ? f.expiresAt.getTime() : null,
     downloadCount: f.downloadCount,
     url: buildShareUrl(f.accessToken),
-    createdByKinId: f.createdByKinId,
+    createdByAgentId: f.createdByAgentId,
     createdAt: f.createdAt.getTime(),
     updatedAt: f.updatedAt.getTime(),
   }
@@ -62,7 +62,7 @@ function serializeFileMetadata(f: FileStorageRow) {
 // ─── Create ─────────────────────────────────────────────────────────────────
 
 export interface CreateFileParams {
-  kinId: string
+  agentId: string
   name: string
   originalName: string
   buffer: Buffer | ArrayBuffer
@@ -72,13 +72,13 @@ export interface CreateFileParams {
   password?: string
   expiresIn?: number // minutes
   readAndBurn?: boolean
-  createdByKinId?: string
+  createdByAgentId?: string
 }
 
 export async function createFile(params: CreateFileParams) {
   const {
-    kinId, name, originalName, buffer, mimeType,
-    description, isPublic = true, password, expiresIn, readAndBurn = false, createdByKinId,
+    agentId, name, originalName, buffer, mimeType,
+    description, isPublic = true, password, expiresIn, readAndBurn = false, createdByAgentId,
   } = params
 
   const size = buffer instanceof ArrayBuffer ? buffer.byteLength : buffer.length
@@ -91,7 +91,7 @@ export async function createFile(params: CreateFileParams) {
 
   const id = uuid()
   const accessToken = uuid()
-  const dir = storageDirForKin(kinId)
+  const dir = storageDirForAgent(agentId)
   const fileName = storedFileName(id, originalName)
   const storedPath = join(dir, fileName)
 
@@ -104,7 +104,7 @@ export async function createFile(params: CreateFileParams) {
 
   await db.insert(fileStorage).values({
     id,
-    kinId,
+    agentId,
     name,
     description: description ?? null,
     originalName,
@@ -117,12 +117,12 @@ export async function createFile(params: CreateFileParams) {
     readAndBurn,
     expiresAt,
     downloadCount: 0,
-    createdByKinId: createdByKinId ?? null,
+    createdByAgentId: createdByAgentId ?? null,
     createdAt: now,
     updatedAt: now,
   })
 
-  log.info({ kinId, fileId: id, name, size, mimeType }, 'File stored')
+  log.info({ agentId, fileId: id, name, size, mimeType }, 'File stored')
 
   return {
     id,
@@ -138,10 +138,10 @@ export async function createFile(params: CreateFileParams) {
   }
 }
 
-// ─── Create from content (for Kin tools) ────────────────────────────────────
+// ─── Create from content (for Agent tools) ────────────────────────────────────
 
 export async function createFileFromContent(
-  kinId: string,
+  agentId: string,
   name: string,
   content: string,
   mimeType: string,
@@ -152,7 +152,7 @@ export async function createFileFromContent(
     password?: string
     expiresIn?: number
     readAndBurn?: boolean
-    createdByKinId?: string
+    createdByAgentId?: string
   } = {},
 ) {
   const buffer = options.isBase64
@@ -163,7 +163,7 @@ export async function createFileFromContent(
   const originalName = `${name}.${ext}`
 
   return createFile({
-    kinId,
+    agentId,
     name,
     originalName,
     buffer,
@@ -175,7 +175,7 @@ export async function createFileFromContent(
 // ─── Create from workspace file ─────────────────────────────────────────────
 
 export async function createFileFromWorkspace(
-  kinId: string,
+  agentId: string,
   workspacePath: string,
   name: string,
   options: {
@@ -184,10 +184,10 @@ export async function createFileFromWorkspace(
     password?: string
     expiresIn?: number
     readAndBurn?: boolean
-    createdByKinId?: string
+    createdByAgentId?: string
   } = {},
 ) {
-  const workspaceBase = join(config.workspace.baseDir, kinId)
+  const workspaceBase = join(config.workspace.baseDir, agentId)
   const resolvedPath = join(workspaceBase, workspacePath)
 
   // Prevent path traversal
@@ -207,7 +207,7 @@ export async function createFileFromWorkspace(
   const originalName = workspacePath.split('/').pop() || 'file'
   const id = uuid()
   const accessToken = uuid()
-  const dir = storageDirForKin(kinId)
+  const dir = storageDirForAgent(agentId)
   const storedName = storedFileName(id, originalName)
   const storedPath = join(dir, storedName)
 
@@ -221,7 +221,7 @@ export async function createFileFromWorkspace(
 
   await db.insert(fileStorage).values({
     id,
-    kinId,
+    agentId,
     name,
     description: options.description ?? null,
     originalName,
@@ -234,12 +234,12 @@ export async function createFileFromWorkspace(
     readAndBurn: options.readAndBurn ?? false,
     expiresAt,
     downloadCount: 0,
-    createdByKinId: options.createdByKinId ?? null,
+    createdByAgentId: options.createdByAgentId ?? null,
     createdAt: now,
     updatedAt: now,
   })
 
-  log.info({ kinId, fileId: id, name, size: fileStat.size }, 'File stored from workspace')
+  log.info({ agentId, fileId: id, name, size: fileStat.size }, 'File stored from workspace')
 
   return {
     id,
@@ -258,7 +258,7 @@ export async function createFileFromWorkspace(
 // ─── Create from URL ────────────────────────────────────────────────────────
 
 export async function createFileFromUrl(
-  kinId: string,
+  agentId: string,
   url: string,
   name: string,
   options: {
@@ -267,7 +267,7 @@ export async function createFileFromUrl(
     password?: string
     expiresIn?: number
     readAndBurn?: boolean
-    createdByKinId?: string
+    createdByAgentId?: string
   } = {},
 ) {
   const response = await fetch(url)
@@ -296,7 +296,7 @@ export async function createFileFromUrl(
   }
 
   return createFile({
-    kinId,
+    agentId,
     name,
     originalName,
     buffer,
@@ -317,20 +317,20 @@ export async function getFileByToken(token: string) {
   return file ?? null
 }
 
-export async function getFileByName(kinId: string, name: string) {
+export async function getFileByName(agentId: string, name: string) {
   const file = await db.select().from(fileStorage)
-    .where(and(eq(fileStorage.kinId, kinId), eq(fileStorage.name, name)))
+    .where(and(eq(fileStorage.agentId, agentId), eq(fileStorage.name, name)))
     .get()
   return file ? serializeFileMetadata(file) : null
 }
 
-/** Read a stored file's bytes by id, or by (kin-scoped) name. Returns null when
+/** Read a stored file's bytes by id, or by (agent-scoped) name. Returns null when
  *  the row or its on-disk blob is missing. Used to materialize a stored file
  *  into a workspace so the regular file tools can operate on it. */
 export async function readStoredFile(opts: {
   id?: string
   name?: string
-  kinId: string
+  agentId: string
 }): Promise<{ buffer: Buffer; mimeType: string; originalName: string; name: string } | null> {
   let row: FileStorageRow | undefined
   if (opts.id) {
@@ -339,7 +339,7 @@ export async function readStoredFile(opts: {
     row = await db
       .select()
       .from(fileStorage)
-      .where(and(eq(fileStorage.kinId, opts.kinId), eq(fileStorage.name, opts.name)))
+      .where(and(eq(fileStorage.agentId, opts.agentId), eq(fileStorage.name, opts.name)))
       .get()
   }
   if (!row || !existsSync(row.storedPath)) return null
@@ -349,9 +349,9 @@ export async function readStoredFile(opts: {
 
 // ─── List ───────────────────────────────────────────────────────────────────
 
-export async function listFiles(kinId?: string) {
-  const query = kinId
-    ? db.select().from(fileStorage).where(eq(fileStorage.kinId, kinId)).orderBy(desc(fileStorage.createdAt))
+export async function listFiles(agentId?: string) {
+  const query = agentId
+    ? db.select().from(fileStorage).where(eq(fileStorage.agentId, agentId)).orderBy(desc(fileStorage.createdAt))
     : db.select().from(fileStorage).orderBy(desc(fileStorage.createdAt))
 
   const rows = await query.all()
@@ -360,12 +360,12 @@ export async function listFiles(kinId?: string) {
 
 // ─── Search ─────────────────────────────────────────────────────────────────
 
-export async function searchFiles(query: string, kinId?: string) {
+export async function searchFiles(query: string, agentId?: string) {
   const pattern = `%${query}%`
   const nameOrDesc = or(like(fileStorage.name, pattern), like(fileStorage.description, pattern))
 
-  const condition = kinId
-    ? and(eq(fileStorage.kinId, kinId), nameOrDesc)
+  const condition = agentId
+    ? and(eq(fileStorage.agentId, agentId), nameOrDesc)
     : nameOrDesc
 
   const rows = await db.select().from(fileStorage)

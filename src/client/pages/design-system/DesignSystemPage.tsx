@@ -205,7 +205,7 @@ const NAV_SECTIONS = [
   { id: 'toast', label: 'Toast', icon: BellRing },
   { id: 'avatars', label: 'Avatars', icon: User },
   { id: 'animations', label: 'Animations', icon: Play },
-  { id: 'kinbot-patterns', label: 'KinBot Patterns', icon: Shapes },
+  { id: 'hivekeep-patterns', label: 'Hivekeep Patterns', icon: Shapes },
   { id: 'tool-calls', label: 'Tool Calls', icon: Wrench },
   { id: 'loading-states', label: 'Loading States', icon: Loader2 },
   { id: 'spacing', label: 'Spacing & Layout', icon: Ruler },
@@ -267,7 +267,7 @@ export function DesignSystemPage() {
                 <Wand2 className="size-4 text-white" />
               </div>
               <div>
-                <h1 className="text-lg font-bold gradient-primary-text">KinBot Design System</h1>
+                <h1 className="text-lg font-bold gradient-primary-text">Hivekeep Design System</h1>
                 <p className="text-[10px] text-muted-foreground">{currentPalette?.name ?? 'Aurora'} &mdash; 32 components &middot; {NAV_SECTIONS.length} sections</p>
               </div>
             </div>
@@ -368,7 +368,7 @@ export function DesignSystemPage() {
                 <div className="overflow-hidden rounded-xl border">
                   <div className="surface-sidebar p-5 h-36 flex flex-col justify-between">
                     <div className="space-y-1.5">
-                      {['Dashboard', 'Kins', 'Settings'].map((l) => (
+                      {['Dashboard', 'Agents', 'Settings'].map((l) => (
                         <div key={l} className="flex items-center gap-2">
                           <div className="size-3 rounded bg-primary/15" />
                           <div className="h-2 w-14 rounded bg-muted-foreground/15" />
@@ -601,7 +601,7 @@ export function DesignSystemPage() {
               </SubSection>
               <SubSection title="With Icons">
                 <div className="flex flex-wrap items-center gap-3">
-                  <Button><Plus className="size-4" /> Create Kin</Button>
+                  <Button><Plus className="size-4" /> Create Agent</Button>
                   <Button variant="outline"><Settings className="size-4" /> Settings</Button>
                   <Button variant="destructive"><Trash2 className="size-4" /> Delete</Button>
                   <Button variant="ghost" size="icon"><Heart className="size-4" /></Button>
@@ -620,7 +620,7 @@ export function DesignSystemPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="i2">With value</Label>
-                    <Input id="i2" defaultValue="Hello KinBot" />
+                    <Input id="i2" defaultValue="Hello Hivekeep" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="i3">Error</Label>
@@ -642,7 +642,7 @@ export function DesignSystemPage() {
                 <div className="space-y-6">
                   <div className="space-y-2">
                     <Label htmlFor="ta1">Textarea</Label>
-                    <Textarea id="ta1" placeholder="Describe your Kin's personality..." rows={4} />
+                    <Textarea id="ta1" placeholder="Describe your Agent's personality..." rows={4} />
                   </div>
                   <div className="space-y-2">
                     <Label>Select</Label>
@@ -802,7 +802,7 @@ export function DesignSystemPage() {
               <div className="max-w-2xl space-y-3">
                 <Alert>
                   <Info className="size-4" /><AlertTitle>Info</AlertTitle>
-                  <AlertDescription>Your Kin is learning from patterns.</AlertDescription>
+                  <AlertDescription>Your Agent is learning from patterns.</AlertDescription>
                 </Alert>
                 <Alert className="border-success/50 text-success [&>svg]:text-success">
                   <CheckCircle className="size-4" /><AlertTitle>Success</AlertTitle>
@@ -855,12 +855,12 @@ export function DesignSystemPage() {
                 <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                   <DialogTrigger asChild>
                     <Button className="gradient-primary border-0 text-white glow-primary btn-magnetic">
-                      <Plus className="size-4" /> Create a Kin
+                      <Plus className="size-4" /> Create an Agent
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="surface-card dark:glass-strong">
                     <DialogHeader>
-                      <DialogTitle className="gradient-primary-text">Create a new Kin</DialogTitle>
+                      <DialogTitle className="gradient-primary-text">Create a new Agent</DialogTitle>
                       <DialogDescription>Give your AI assistant a name and personality.</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
@@ -901,7 +901,7 @@ export function DesignSystemPage() {
                 <FormDialog
                   open={formDialogOpen}
                   onOpenChange={setFormDialogOpen}
-                  title="Create a new Kin"
+                  title="Create a new Agent"
                   description="Give your AI assistant a name and personality."
                   size="lg"
                   onSubmit={() => setFormDialogOpen(false)}
@@ -915,7 +915,7 @@ export function DesignSystemPage() {
                       <Input id="ds-fd-last" placeholder="e.g. Cuisinier" />
                     </FormField>
                   </FormRow>
-                  <FormField label="Role" htmlFor="ds-fd-role" tip="Shown in the Kin's system prompt.">
+                  <FormField label="Role" htmlFor="ds-fd-role" tip="Shown in the Agent's system prompt.">
                     <Input id="ds-fd-role" placeholder="e.g. Expert gastronomique" />
                   </FormField>
                   <FormField label="Model" htmlFor="ds-fd-model">
@@ -940,9 +940,9 @@ export function DesignSystemPage() {
                       <CheckCircle className="size-8 text-success" />
                     </div>
                     <DialogHeader className="sm:text-center">
-                      <DialogTitle>Kin Created Successfully!</DialogTitle>
+                      <DialogTitle>Agent Created Successfully!</DialogTitle>
                       <DialogDescription>
-                        Your new Kin "Financial Advisor" is ready. You can start chatting now.
+                        Your new Agent "Financial Advisor" is ready. You can start chatting now.
                       </DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="sm:justify-center pt-2">
@@ -957,7 +957,7 @@ export function DesignSystemPage() {
               <SubSection title="Alert Dialog (Destructive)">
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="destructive" className="btn-press"><Trash2 className="size-4" /> Delete Kin</Button>
+                    <Button variant="destructive" className="btn-press"><Trash2 className="size-4" /> Delete Agent</Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
@@ -966,7 +966,7 @@ export function DesignSystemPage() {
                       </div>
                       <AlertDialogTitle>Delete "Financial Advisor"?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This action cannot be undone. All memories, conversations, and settings associated with this Kin will be permanently deleted.
+                        This action cannot be undone. All memories, conversations, and settings associated with this Agent will be permanently deleted.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -1012,8 +1012,8 @@ export function DesignSystemPage() {
                   </SheetTrigger>
                   <SheetContent>
                     <SheetHeader>
-                      <SheetTitle className="gradient-primary-text">Kin Settings</SheetTitle>
-                      <SheetDescription>Configure your Kin's behavior and appearance.</SheetDescription>
+                      <SheetTitle className="gradient-primary-text">Agent Settings</SheetTitle>
+                      <SheetDescription>Configure your Agent's behavior and appearance.</SheetDescription>
                     </SheetHeader>
                     <div className="space-y-4 p-4 flex-1">
                       <div className="space-y-2"><Label>Display Name</Label><Input defaultValue="Financial Advisor" /></div>
@@ -1039,7 +1039,7 @@ export function DesignSystemPage() {
                     <div className="space-y-1 p-4">
                       {[
                         { label: 'Dashboard', icon: BarChart3, active: true },
-                        { label: 'Kins', icon: Bot, active: false },
+                        { label: 'Agents', icon: Bot, active: false },
                         { label: 'Memories', icon: Sparkles, active: false },
                         { label: 'Settings', icon: Settings, active: false },
                       ].map((item) => (
@@ -1067,7 +1067,7 @@ export function DesignSystemPage() {
                       <SheetDescription>Jump to common tasks.</SheetDescription>
                     </SheetHeader>
                     <div className="flex flex-wrap justify-center gap-3 p-4">
-                      <Button variant="outline" size="sm" className="btn-press"><Plus className="size-4" /> New Kin</Button>
+                      <Button variant="outline" size="sm" className="btn-press"><Plus className="size-4" /> New Agent</Button>
                       <Button variant="outline" size="sm" className="btn-press"><Search className="size-4" /> Search</Button>
                       <Button variant="outline" size="sm" className="btn-press"><Settings className="size-4" /> Settings</Button>
                       <Button variant="outline" size="sm" className="btn-press"><Bell className="size-4" /> Notifications</Button>
@@ -1215,10 +1215,10 @@ export function DesignSystemPage() {
               </p>
               <div className="max-w-lg">
                 <Command className="rounded-xl border shadow-md">
-                  <CommandInput placeholder="Search kins, memories, settings..." />
+                  <CommandInput placeholder="Search agents, memories, settings..." />
                   <CommandList>
                     <CommandEmpty>No results found.</CommandEmpty>
-                    <CommandGroup heading="Kins">
+                    <CommandGroup heading="Agents">
                       <CommandItem>
                         <Bot className="mr-2 size-4" /> Financial Advisor
                       </CommandItem>
@@ -1273,7 +1273,7 @@ export function DesignSystemPage() {
                         <ChevronRight className="size-3.5" />
                       </BreadcrumbSeparator>
                       <BreadcrumbItem>
-                        <BreadcrumbLink href="#" className="flex items-center gap-1.5"><Bot className="size-3.5" /> Kins</BreadcrumbLink>
+                        <BreadcrumbLink href="#" className="flex items-center gap-1.5"><Bot className="size-3.5" /> Agents</BreadcrumbLink>
                       </BreadcrumbItem>
                       <BreadcrumbSeparator>
                         <ChevronRight className="size-3.5" />
@@ -1392,7 +1392,7 @@ export function DesignSystemPage() {
                     <div className="space-y-3">
                       {['How are you?', 'I need help with finances', 'What about my subscriptions?', 'Can you track expenses?', 'Show me a summary', 'What are the trends?', 'Any recommendations?', 'Thanks!'].map((msg, i) => (
                         <div key={i} className={`flex ${i % 2 === 0 ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-[80%] rounded-2xl px-3 py-1.5 text-sm ${i % 2 === 0 ? 'gradient-primary text-white rounded-br-md' : 'bg-bubble-kin text-bubble-kin-foreground rounded-bl-md'}`}>
+                          <div className={`max-w-[80%] rounded-2xl px-3 py-1.5 text-sm ${i % 2 === 0 ? 'gradient-primary text-white rounded-br-md' : 'bg-bubble-agent text-bubble-agent-foreground rounded-bl-md'}`}>
                             {msg}
                           </div>
                         </div>
@@ -1429,7 +1429,7 @@ export function DesignSystemPage() {
                         <span className="text-sm text-muted-foreground">80%</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <Label className="text-sm">Max sub-kin depth</Label>
+                        <Label className="text-sm">Max sub-agent depth</Label>
                         <span className="text-sm text-muted-foreground">3</span>
                       </div>
                     </div>
@@ -1478,7 +1478,7 @@ export function DesignSystemPage() {
                     <Button variant="outline" onClick={() => toast('Default notification', { description: 'Something happened in the system.' })}>
                       Default
                     </Button>
-                    <Button variant="outline" onClick={() => toast.success('Kin created', { description: 'Financial Advisor is ready to chat.' })}>
+                    <Button variant="outline" onClick={() => toast.success('Agent created', { description: 'Financial Advisor is ready to chat.' })}>
                       <CheckCircle className="size-4 text-success" /> Success
                     </Button>
                     <Button variant="outline" onClick={() => toast.error('Connection failed', { description: 'Check your API key and try again.' })}>
@@ -1487,7 +1487,7 @@ export function DesignSystemPage() {
                     <Button variant="outline" onClick={() => toast.warning('Token limit near', { description: 'Compacting will trigger soon.' })}>
                       <AlertTriangle className="size-4 text-warning" /> Warning
                     </Button>
-                    <Button variant="outline" onClick={() => toast.info('Pro tip', { description: 'Use @mention to invoke other Kins in conversation.' })}>
+                    <Button variant="outline" onClick={() => toast.info('Pro tip', { description: 'Use @mention to invoke other Agents in conversation.' })}>
                       <Info className="size-4 text-info" /> Info
                     </Button>
                     <Button variant="outline" onClick={() => toast.loading('Processing...', { description: 'Analyzing your data.' })}>
@@ -1498,7 +1498,7 @@ export function DesignSystemPage() {
 
                 <SubSection title="With Actions">
                   <div className="flex flex-wrap gap-3">
-                    <Button variant="outline" onClick={() => toast('Kin deleted', { description: 'Financial Advisor has been removed.', action: { label: 'Undo', onClick: () => toast.success('Restored!', { description: 'Kin has been restored.' }) } })}>
+                    <Button variant="outline" onClick={() => toast('Agent deleted', { description: 'Financial Advisor has been removed.', action: { label: 'Undo', onClick: () => toast.success('Restored!', { description: 'Agent has been restored.' }) } })}>
                       Action Button
                     </Button>
                     <Button variant="outline" onClick={() => toast('Session exported', { description: 'conversation-2024.json saved.', cancel: { label: 'Dismiss', onClick: () => {} } })}>
@@ -1516,9 +1516,9 @@ export function DesignSystemPage() {
                       toast.promise(
                         new Promise<{ name: string }>((resolve) => setTimeout(() => resolve({ name: 'Financial Advisor' }), 2000)),
                         {
-                          loading: 'Creating Kin...',
+                          loading: 'Creating Agent...',
                           success: (data) => `${data.name} is ready!`,
-                          error: 'Failed to create Kin',
+                          error: 'Failed to create Agent',
                         }
                       )
                     }}>
@@ -1541,7 +1541,7 @@ export function DesignSystemPage() {
 
                 <SubSection title="Rich Content">
                   <div className="flex flex-wrap gap-3">
-                    <Button variant="outline" onClick={() => toast('Scheduled job completed', { description: 'Daily report generated at 09:00 AM. 3 Kins participated, 12 tasks executed.', duration: 6000 })}>
+                    <Button variant="outline" onClick={() => toast('Scheduled job completed', { description: 'Daily report generated at 09:00 AM. 3 Agents participated, 12 tasks executed.', duration: 6000 })}>
                       Long Description
                     </Button>
                     <Button variant="outline" onClick={() => toast.success('Memory extracted', { description: 'User prefers dark mode with Aurora palette. Saved to long-term memory.', duration: 5000 })}>
@@ -1740,8 +1740,8 @@ export function DesignSystemPage() {
               </SubSection>
             </Section>
 
-            {/* ─── KINBOT PATTERNS ──────────────────────────────── */}
-            <Section id="kinbot-patterns" title="KinBot Patterns">
+            {/* ─── HIVEKEEP PATTERNS ──────────────────────────────── */}
+            <Section id="hivekeep-patterns" title="Hivekeep Patterns">
 
               <SubSection title="Chat Bubbles">
                 <div className="max-w-2xl space-y-4 surface-chat rounded-xl p-6 border">
@@ -1758,7 +1758,7 @@ export function DesignSystemPage() {
                     </div>
                     <Avatar className="size-8 shrink-0"><AvatarFallback className="bg-secondary text-xs"><User className="size-4" /></AvatarFallback></Avatar>
                   </div>
-                  {/* Kin */}
+                  {/* Agent */}
                   <div className="flex gap-2.5">
                     <Avatar className="size-8 shrink-0"><AvatarFallback className="gradient-primary text-white text-xs"><Bot className="size-4" /></AvatarFallback></Avatar>
                     <div className="max-w-[75%] space-y-1">
@@ -1766,7 +1766,7 @@ export function DesignSystemPage() {
                         <span className="text-xs font-medium">Financial Advisor</span>
                         <span className="text-xs text-muted-foreground">14:33</span>
                       </div>
-                      <div className="rounded-2xl rounded-bl-md bg-bubble-kin px-4 py-2.5 text-bubble-kin-foreground shadow-sm">
+                      <div className="rounded-2xl rounded-bl-md bg-bubble-agent px-4 py-2.5 text-bubble-agent-foreground shadow-sm">
                         <p className="text-sm">Sure! I see three optimization areas: subscriptions, dining, and transport.</p>
                       </div>
                     </div>
@@ -1780,10 +1780,10 @@ export function DesignSystemPage() {
                 </div>
               </SubSection>
 
-              <SubSection title="Kin Cards — Current">
+              <SubSection title="Agent Cards — Current">
                 <p className="text-sm text-muted-foreground mb-3">Current horizontal card with left avatar strip.</p>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {/* Active / selected kin */}
+                  {/* Active / selected agent */}
                   <div className="group relative flex overflow-hidden rounded-xl border border-primary/30 bg-card shadow-md card-hover">
                     <div className="w-20 shrink-0 gradient-primary flex items-center justify-center">
                       <Bot className="size-8 text-white/90" />
@@ -1804,7 +1804,7 @@ export function DesignSystemPage() {
                     </div>
                   </div>
 
-                  {/* Idle kin */}
+                  {/* Idle agent */}
                   <div className="group relative flex overflow-hidden rounded-xl border bg-card card-hover cursor-pointer">
                     <div className="w-20 shrink-0 bg-secondary flex items-center justify-center">
                       <Bot className="size-8 text-secondary-foreground/70" />
@@ -1822,7 +1822,7 @@ export function DesignSystemPage() {
                     </div>
                   </div>
 
-                  {/* Processing kin */}
+                  {/* Processing agent */}
                   <div className="group relative flex overflow-hidden rounded-xl border border-warning/30 bg-card card-hover cursor-pointer">
                     <div className="w-20 shrink-0 bg-gradient-to-b from-primary/80 to-accent/80 flex items-center justify-center">
                       <Bot className="size-8 text-white/90" />
@@ -2155,7 +2155,7 @@ export function DesignSystemPage() {
                     <Avatar className="size-8 shrink-0"><AvatarFallback className="gradient-primary text-white text-xs"><Bot className="size-4" /></AvatarFallback></Avatar>
                     <div className="space-y-1">
                       <span className="text-xs font-medium">Financial Advisor</span>
-                      <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-md bg-bubble-kin px-4 py-3">
+                      <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-md bg-bubble-agent px-4 py-3">
                         <span className="size-2 rounded-full bg-primary/60 animate-typing-dot" />
                         <span className="size-2 rounded-full bg-primary/60 animate-typing-dot delay-2" />
                         <span className="size-2 rounded-full bg-primary/60 animate-typing-dot delay-4" />
@@ -2356,7 +2356,7 @@ export function DesignSystemPage() {
               {/* ── PROPOSAL A ─────────────────────────────────── */}
               <SubSection title="Proposal A — Left border accent">
                 <p className="text-sm text-muted-foreground mb-4">
-                  Colored left border identifies the domain. Subtle, scannable. Background tints on expand. Tool calls appear inline within the Kin&apos;s message flow.
+                  Colored left border identifies the domain. Subtle, scannable. Background tints on expand. Tool calls appear inline within the Agent&apos;s message flow.
                 </p>
                 <div className="grid gap-6 lg:grid-cols-2">
                   {/* In-conversation */}
@@ -2371,13 +2371,13 @@ export function DesignSystemPage() {
                         </div>
                         <Avatar className="size-8 shrink-0"><AvatarFallback className="bg-secondary text-xs"><User className="size-4" /></AvatarFallback></Avatar>
                       </div>
-                      {/* Kin reply with tool calls embedded in the flow */}
+                      {/* Agent reply with tool calls embedded in the flow */}
                       <div className="flex gap-2.5">
                         <Avatar className="size-8 shrink-0"><AvatarFallback className="gradient-primary text-white text-xs"><Bot className="size-4" /></AvatarFallback></Avatar>
                         <div className="max-w-[85%] space-y-2">
                           <div className="flex items-center gap-2"><span className="text-xs font-medium">Assistant</span><span className="text-xs text-muted-foreground">14:32</span></div>
                           {/* First text segment */}
-                          <div className="rounded-2xl rounded-bl-md bg-bubble-kin px-4 py-2.5 text-bubble-kin-foreground shadow-sm"><p className="text-sm">Let me check your memories and search for updates...</p></div>
+                          <div className="rounded-2xl rounded-bl-md bg-bubble-agent px-4 py-2.5 text-bubble-agent-foreground shadow-sm"><p className="text-sm">Let me check your memories and search for updates...</p></div>
                           {/* Tool calls triggered mid-stream */}
                           <div className="space-y-1">
                             {(['memory', 'search'] as BuiltinToolDomain[]).map((domain) => {
@@ -2395,7 +2395,7 @@ export function DesignSystemPage() {
                             })}
                           </div>
                           {/* Continuation after tool results */}
-                          <div className="rounded-2xl rounded-tl-md rounded-bl-md bg-bubble-kin px-4 py-2.5 text-bubble-kin-foreground shadow-sm"><p className="text-sm">Based on your memories, you work Mon–Fri 9–5. I also found a recent schedule update confirming next week&apos;s shift change.</p></div>
+                          <div className="rounded-2xl rounded-tl-md rounded-bl-md bg-bubble-agent px-4 py-2.5 text-bubble-agent-foreground shadow-sm"><p className="text-sm">Based on your memories, you work Mon–Fri 9–5. I also found a recent schedule update confirming next week&apos;s shift change.</p></div>
                         </div>
                       </div>
                     </div>
@@ -2447,7 +2447,7 @@ export function DesignSystemPage() {
               {/* ── PROPOSAL B ─────────────────────────────────── */}
               <SubSection title="Proposal B — Full color card">
                 <p className="text-sm text-muted-foreground mb-4">
-                  Entire card uses domain background. Strong visual separation between domains. Tool calls appear within the Kin&apos;s streaming response.
+                  Entire card uses domain background. Strong visual separation between domains. Tool calls appear within the Agent&apos;s streaming response.
                 </p>
                 <div className="grid gap-6 lg:grid-cols-2">
                   {/* In-conversation */}
@@ -2461,12 +2461,12 @@ export function DesignSystemPage() {
                         </div>
                         <Avatar className="size-8 shrink-0"><AvatarFallback className="bg-secondary text-xs"><User className="size-4" /></AvatarFallback></Avatar>
                       </div>
-                      {/* Kin reply with tool calls embedded */}
+                      {/* Agent reply with tool calls embedded */}
                       <div className="flex gap-2.5">
                         <Avatar className="size-8 shrink-0"><AvatarFallback className="gradient-primary text-white text-xs"><Bot className="size-4" /></AvatarFallback></Avatar>
                         <div className="max-w-[85%] space-y-2">
                           <div className="flex items-center gap-2"><span className="text-xs font-medium">Assistant</span><span className="text-xs text-muted-foreground">14:32</span></div>
-                          <div className="rounded-2xl rounded-bl-md bg-bubble-kin px-4 py-2.5 text-bubble-kin-foreground shadow-sm"><p className="text-sm">Sure! Let me save your preference and create an avatar for you.</p></div>
+                          <div className="rounded-2xl rounded-bl-md bg-bubble-agent px-4 py-2.5 text-bubble-agent-foreground shadow-sm"><p className="text-sm">Sure! Let me save your preference and create an avatar for you.</p></div>
                           {/* Tool calls mid-stream */}
                           <div className="space-y-1.5">
                             {(['memory', 'images'] as BuiltinToolDomain[]).map((domain) => {
@@ -2489,7 +2489,7 @@ export function DesignSystemPage() {
                             })}
                           </div>
                           {/* Continuation */}
-                          <div className="rounded-2xl rounded-tl-md rounded-bl-md bg-bubble-kin px-4 py-2.5 text-bubble-kin-foreground shadow-sm"><p className="text-sm">Your dark mode preference is saved! The avatar is still being generated, I&apos;ll let you know when it&apos;s ready.</p></div>
+                          <div className="rounded-2xl rounded-tl-md rounded-bl-md bg-bubble-agent px-4 py-2.5 text-bubble-agent-foreground shadow-sm"><p className="text-sm">Your dark mode preference is saved! The avatar is still being generated, I&apos;ll let you know when it&apos;s ready.</p></div>
                         </div>
                       </div>
                     </div>
@@ -2542,7 +2542,7 @@ export function DesignSystemPage() {
               {/* ── PROPOSAL C ─────────────────────────────────── */}
               <SubSection title="Proposal C — Compact flat list">
                 <p className="text-sm text-muted-foreground mb-4">
-                  Minimal flat rows grouped in a card. Icon in a colored square. Cleanest density. Tool calls grouped inline within the Kin&apos;s response.
+                  Minimal flat rows grouped in a card. Icon in a colored square. Cleanest density. Tool calls grouped inline within the Agent&apos;s response.
                 </p>
                 <div className="grid gap-6 lg:grid-cols-2">
                   {/* In-conversation */}
@@ -2556,12 +2556,12 @@ export function DesignSystemPage() {
                         </div>
                         <Avatar className="size-8 shrink-0"><AvatarFallback className="bg-secondary text-xs"><User className="size-4" /></AvatarFallback></Avatar>
                       </div>
-                      {/* Kin reply with tool calls embedded */}
+                      {/* Agent reply with tool calls embedded */}
                       <div className="flex gap-2.5">
                         <Avatar className="size-8 shrink-0"><AvatarFallback className="gradient-primary text-white text-xs"><Bot className="size-4" /></AvatarFallback></Avatar>
                         <div className="max-w-[85%] space-y-2">
                           <div className="flex items-center gap-2"><span className="text-xs font-medium">Assistant</span><span className="text-xs text-muted-foreground">14:32</span></div>
-                          <div className="rounded-2xl rounded-bl-md bg-bubble-kin px-4 py-2.5 text-bubble-kin-foreground shadow-sm"><p className="text-sm">I&apos;ll retrieve the key and run the deploy command.</p></div>
+                          <div className="rounded-2xl rounded-bl-md bg-bubble-agent px-4 py-2.5 text-bubble-agent-foreground shadow-sm"><p className="text-sm">I&apos;ll retrieve the key and run the deploy command.</p></div>
                           {/* Tool calls grouped in a card */}
                           <div className="rounded-lg border bg-card overflow-hidden">
                             {(['vault', 'shell'] as BuiltinToolDomain[]).map((domain, i) => {
@@ -2580,7 +2580,7 @@ export function DesignSystemPage() {
                             })}
                           </div>
                           {/* Continuation */}
-                          <div className="rounded-2xl rounded-tl-md rounded-bl-md bg-bubble-kin px-4 py-2.5 text-bubble-kin-foreground shadow-sm"><p className="text-sm">Done! Retrieved the key and ran the deploy command successfully. Everything looks good.</p></div>
+                          <div className="rounded-2xl rounded-tl-md rounded-bl-md bg-bubble-agent px-4 py-2.5 text-bubble-agent-foreground shadow-sm"><p className="text-sm">Done! Retrieved the key and ran the deploy command successfully. Everything looks good.</p></div>
                         </div>
                       </div>
                     </div>
@@ -2594,9 +2594,9 @@ export function DesignSystemPage() {
                         <Button variant="ghost" size="icon-xs"><X className="size-3.5" /></Button>
                       </div>
                       <div>
-                        {(['vault', 'shell', 'inter-kin', 'images'] as BuiltinToolDomain[]).map((domain, i) => {
+                        {(['vault', 'shell', 'inter-agent', 'images'] as BuiltinToolDomain[]).map((domain, i) => {
                           const meta = TOOL_DOMAIN_META[domain]
-                          const names: Record<string, string> = { vault: 'Get Secret', shell: 'Run Shell Command', 'inter-kin': 'Send Message', images: 'Generate Image' }
+                          const names: Record<string, string> = { vault: 'Get Secret', shell: 'Run Shell Command', 'inter-agent': 'Send Message', images: 'Generate Image' }
                           const statuses = ['success', 'success', 'pending', 'error'] as const
                           const statusIcons = { success: CheckCircle, pending: Loader2, error: AlertCircle }
                           const statusClasses: Record<string, string> = { success: 'text-success', pending: 'text-muted-foreground animate-spin', error: 'text-destructive' }
@@ -2689,10 +2689,10 @@ export function DesignSystemPage() {
                     <div className="size-12 rounded-full bg-muted flex items-center justify-center mb-3">
                       <Bot className="size-6 text-muted-foreground" />
                     </div>
-                    <p className="font-medium">No Kins yet</p>
+                    <p className="font-medium">No Agents yet</p>
                     <p className="mt-1 text-sm text-muted-foreground">Create your first AI assistant to get started.</p>
                     <Button size="sm" className="mt-4 gradient-primary border-0 text-white">
-                      <Plus className="size-4" /> Create a Kin
+                      <Plus className="size-4" /> Create an Agent
                     </Button>
                   </div>
                   <div className="flex flex-col items-center justify-center rounded-xl border border-dashed bg-card/50 p-8 text-center">
@@ -2749,7 +2749,7 @@ export function DesignSystemPage() {
             {/* ─── FOOTER ──────────────────────────────────────── */}
             <div className="border-t pt-8 text-center">
               <p className="text-sm text-muted-foreground">
-                <span className="gradient-primary-text font-bold">KinBot</span> &mdash; {currentPalette?.name ?? 'Aurora'} Design System &middot; 32 components &middot; Dev only.
+                <span className="gradient-primary-text font-bold">Hivekeep</span> &mdash; {currentPalette?.name ?? 'Aurora'} Design System &middot; 32 components &middot; Dev only.
               </p>
             </div>
           </main>

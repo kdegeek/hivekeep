@@ -49,7 +49,7 @@ const {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const CTX = { kinId: 'test-kin-platform' } as any
+const CTX = { agentId: 'test-agent-platform' } as any
 
 function createTool(registration: ToolRegistration) {
   return registration.create(CTX)
@@ -117,8 +117,8 @@ describe('getPlatformConfigTool', () => {
   it('returns platform configuration', async () => {
     const result = await execute(getPlatformConfigTool as ToolRegistration, {})
     expect(result.version).toBe('0.23.0')
-    expect(result.publicUrl).toBe('http://localhost:3333')
-    expect(result.port).toBe(3333)
+    expect(result.publicUrl).toBe('http://localhost:3000')
+    expect(result.port).toBe(3000)
     expect(result.installation.type).toBe('systemd-user')
     expect(result.installation.isDocker).toBe(false)
   })
@@ -190,7 +190,7 @@ describe('updatePlatformConfigTool', () => {
     it('provides systemd-system guidance when no env file', async () => {
       mockConfig.environment.installationType = 'systemd-system'
       mockConfig.environment.envFilePath = null
-      mockConfig.environment.serviceFilePath = '/etc/systemd/system/kinbot.service'
+      mockConfig.environment.serviceFilePath = '/etc/systemd/system/hivekeep.service'
       const result = await execute(updatePlatformConfigTool as ToolRegistration, {
         key: 'LOG_LEVEL',
         value: 'debug',
@@ -260,13 +260,13 @@ describe('updatePlatformConfigTool', () => {
     })
 
     it('preserves comments in env file', async () => {
-      writeFileSync(TEST_ENV_FILE, '# KinBot config\nPORT=3000\n# Log level\nLOG_LEVEL=info\n')
+      writeFileSync(TEST_ENV_FILE, '# Hivekeep config\nPORT=3000\n# Log level\nLOG_LEVEL=info\n')
       await execute(updatePlatformConfigTool as ToolRegistration, {
         key: 'LOG_LEVEL',
         value: 'error',
       })
       const content = readFileSync(TEST_ENV_FILE, 'utf-8')
-      expect(content).toContain('# KinBot config')
+      expect(content).toContain('# Hivekeep config')
       expect(content).toContain('# Log level')
       expect(content).toContain('LOG_LEVEL=error')
     })
@@ -329,7 +329,7 @@ describe('updatePlatformConfigTool', () => {
   describe('all updatable keys are accepted', () => {
     const UPDATABLE_KEYS = [
       'PUBLIC_URL', 'TRUSTED_ORIGINS', 'PORT', 'HOST', 'LOG_LEVEL',
-      'KINBOT_DATA_DIR', 'KINBOT_TIMEZONE', 'COMPACTING_MODEL',
+      'HIVEKEEP_DATA_DIR', 'HIVEKEEP_TIMEZONE', 'COMPACTING_MODEL',
       'COMPACTING_MAX_SUMMARIES', 'HISTORY_TOKEN_BUDGET',
       'MEMORY_MAX_RELEVANT', 'MEMORY_SIMILARITY_THRESHOLD',
       'MEMORY_EMBEDDING_MODEL', 'MEMORY_TOKEN_BUDGET',
@@ -370,7 +370,7 @@ describe('listPlatformConfigOptionsTool', () => {
     // The actual .env.example shipped with the repo must be reachable from cwd.
     expect(result.source).toMatch(/\.env\.example$/)
     expect(result.totalOptions).toBeGreaterThan(0)
-    const tz = result.options.find((o: any) => o.key === 'KINBOT_TIMEZONE')
+    const tz = result.options.find((o: any) => o.key === 'HIVEKEEP_TIMEZONE')
     expect(tz).toBeDefined()
     expect(tz.section).toBe('General')
     expect(tz.description).toMatch(/IANA timezone/i)
@@ -386,16 +386,16 @@ describe('listPlatformConfigOptionsTool', () => {
   })
 
   it('filters by exact key', async () => {
-    const result: any = await execute(listPlatformConfigOptionsTool as ToolRegistration, { key: 'KINBOT_TIMEZONE' })
+    const result: any = await execute(listPlatformConfigOptionsTool as ToolRegistration, { key: 'HIVEKEEP_TIMEZONE' })
     expect(result.returned).toBe(1)
-    expect(result.options[0].key).toBe('KINBOT_TIMEZONE')
+    expect(result.options[0].key).toBe('HIVEKEEP_TIMEZONE')
   })
 
   it('marks options as updatable based on UPDATABLE_KEYS', async () => {
     const result: any = await execute(listPlatformConfigOptionsTool as ToolRegistration, {})
     const updatable = result.options.filter((o: any) => o.updatable).map((o: any) => o.key)
     expect(updatable).toContain('PORT')
-    expect(updatable).toContain('KINBOT_TIMEZONE')
+    expect(updatable).toContain('HIVEKEEP_TIMEZONE')
     expect(updatable).toContain('LOG_LEVEL')
   })
 

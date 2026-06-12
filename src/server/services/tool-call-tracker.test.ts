@@ -68,7 +68,7 @@ describe('noteCall', () => {
     expect(noteCall('task-2', 'read_file', sig).previousCallCount).toBe(0)
   })
 
-  it('no-ops when taskId is undefined (main Kin context)', () => {
+  it('no-ops when taskId is undefined (main Agent context)', () => {
     const sig = readFileSignature({ path: 'a.ts' })
     expect(noteCall(undefined, 'read_file', sig).previousCallCount).toBe(0)
     expect(noteCall(undefined, 'read_file', sig).previousCallCount).toBe(0)
@@ -133,9 +133,9 @@ describe('read-before-edit tracking (recordReadPath / hasReadPath)', () => {
     expect(hasReadPath('task-2', 'src/foo.ts')).toBe(false)
   })
 
-  it("returns true when taskId is undefined (main Kin bypasses the guard)", () => {
-    // Main-Kin context has the user in the loop; the read-before-edit
-    // guard is a sub-Kin safeguard only.
+  it("returns true when taskId is undefined (main Agent bypasses the guard)", () => {
+    // Main-Agent context has the user in the loop; the read-before-edit
+    // guard is a sub-Agent safeguard only.
     expect(hasReadPath(undefined, 'anything.ts')).toBe(true)
   })
 
@@ -157,7 +157,7 @@ describe('guard-fire telemetry (recordGuardFire / getTaskStats)', () => {
     expect(getTaskStats('task-1')).toBeNull()
   })
 
-  it('returns null for undefined taskId (main Kin)', () => {
+  it('returns null for undefined taskId (main Agent)', () => {
     expect(getTaskStats(undefined)).toBeNull()
   })
 

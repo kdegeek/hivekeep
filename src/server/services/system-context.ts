@@ -19,7 +19,7 @@ export interface SystemContext {
 
 let cached: SystemContext | null = null
 
-// CLIs commonly needed by sub-Kins for builds, tests, version control and
+// CLIs commonly needed by sub-Agents for builds, tests, version control and
 // language tooling. Probed once per server lifetime. We deliberately probe
 // through several PATH augmentation passes so non-login-shell deployments
 // (systemd user services, Docker, supervisord …) still pick up the runtimes
@@ -49,9 +49,9 @@ interface ProbeResult {
  * (`/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`).
  *
  * Three sources, in priority order:
- *   1. `dirname(process.execPath)` — the binary running KinBot itself. When
+ *   1. `dirname(process.execPath)` — the binary running Hivekeep itself. When
  *      this server is launched by Bun, this is the path to Bun.
- *   2. `KINBOT_AUGMENT_PATH` env var (operator-controlled). Colon-separated
+ *   2. `HIVEKEEP_AUGMENT_PATH` env var (operator-controlled). Colon-separated
  *      list of directories prepended to PATH.
  *   3. A short list of well-known user-local bin dirs that exist on the
  *      filesystem (`~/.bun/bin`, `~/.local/bin`, `~/.nvm/versions/node/*\/bin`).
@@ -80,7 +80,7 @@ function augmentPath(): string[] {
   }
 
   // 2. Operator override.
-  const operatorPaths = process.env.KINBOT_AUGMENT_PATH
+  const operatorPaths = process.env.HIVEKEEP_AUGMENT_PATH
   if (operatorPaths) {
     for (const p of operatorPaths.split(':')) {
       push(p.trim())
@@ -142,7 +142,7 @@ function probe(tool: string): ProbeResult | null {
  * Get the host system context (platform, arch, available CLIs).
  *
  * Side effect on first call: augments `process.env.PATH` with `process.execPath`,
- * operator-defined `KINBOT_AUGMENT_PATH`, and well-known user-local bin
+ * operator-defined `HIVEKEEP_AUGMENT_PATH`, and well-known user-local bin
  * dirs, THEN probes each tool. The augmentation is what fixes the prod
  * scenario observed on ticket #25 task `e6c9d6f1`: the systemd user
  * service started with the default PATH and `bun` lived in `~/.bun/bin`,

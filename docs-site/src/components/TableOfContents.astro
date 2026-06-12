@@ -22,8 +22,8 @@ import Default from '@astrojs/starlight/components/TableOfContents.astro';
 		letter-spacing: 0.06em !important;
 		background: linear-gradient(
 			135deg,
-			oklch(0.60 0.22 300 / 0.9),
-			oklch(0.66 0.24 340 / 0.9)
+			oklch(0.72 0.19 305 / 0.9),
+			oklch(0.72 0.22 342 / 0.9)
 		);
 		-webkit-background-clip: text;
 		-webkit-text-fill-color: transparent;
@@ -40,14 +40,14 @@ import Default from '@astrojs/starlight/components/TableOfContents.astro';
 
 	:global(.kb-toc-wrap a:hover) {
 		color: var(--sl-color-accent-high) !important;
-		background: oklch(0.60 0.22 300 / 0.05) !important;
+		background: oklch(0.72 0.19 305 / 0.05) !important;
 	}
 
 	/* Active indicator: gradient left bar */
 	:global(.kb-toc-wrap a[aria-current='true']) {
 		color: var(--sl-color-accent) !important;
 		font-weight: 600 !important;
-		background: oklch(0.60 0.22 300 / 0.08) !important;
+		background: oklch(0.72 0.19 305 / 0.08) !important;
 	}
 
 	:global(.kb-toc-wrap a[aria-current='true'])::before {
@@ -59,8 +59,8 @@ import Default from '@astrojs/starlight/components/TableOfContents.astro';
 		border-radius: 2px;
 		background: linear-gradient(
 			180deg,
-			oklch(0.60 0.22 300),
-			oklch(0.66 0.24 340)
+			oklch(0.72 0.19 305),
+			oklch(0.72 0.22 342)
 		);
 	}
 
@@ -68,8 +68,8 @@ import Default from '@astrojs/starlight/components/TableOfContents.astro';
 	:root[data-theme='light'] :global(.kb-toc-wrap h2) {
 		background: linear-gradient(
 			135deg,
-			oklch(0.42 0.24 300 / 0.9),
-			oklch(0.48 0.26 340 / 0.9)
+			oklch(0.46 0.22 305 / 0.9),
+			oklch(0.50 0.23 342 / 0.9)
 		);
 		-webkit-background-clip: text;
 		-webkit-text-fill-color: transparent;

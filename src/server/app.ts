@@ -4,18 +4,19 @@ import { count } from 'drizzle-orm'
 import { config } from '@/server/config'
 import { createLogger } from '@/server/logger'
 import { db } from '@/server/db/index'
-import { kins, providers, channels, crons, memories, mcpServers, contacts, user } from '@/server/db/schema'
+import { agents, providers, channels, crons, memories, mcpServers, contacts, user } from '@/server/db/schema'
 import { authMiddleware } from '@/server/auth/middleware'
 import { authRoutes } from '@/server/routes/auth'
 import { meRoutes } from '@/server/routes/me'
 import { onboardingRoutes } from '@/server/routes/onboarding'
 import { providerRoutes } from '@/server/routes/providers'
+import { modelRoutes } from '@/server/routes/models'
 import { emailAccountRoutes } from '@/server/routes/email-accounts'
 import { contactsAccountRoutes } from '@/server/routes/contacts-accounts'
 import { connectedAccountRoutes } from '@/server/routes/connected-accounts'
 import { pendingEmailSendRoutes } from '@/server/routes/pending-email-sends'
 import { sseRoutes } from '@/server/routes/sse'
-import { kinRoutes } from '@/server/routes/kins'
+import { agentRoutes } from '@/server/routes/agents'
 import { toolsRoutes } from '@/server/routes/tools'
 import { toolboxRoutes } from '@/server/routes/toolboxes'
 import { toolDomainRoutes } from '@/server/routes/tool-domains'
@@ -38,12 +39,13 @@ import { memoryRoutes } from '@/server/routes/memories'
 import { sharedRoutes } from '@/server/routes/shared'
 import { webhookRoutes } from '@/server/routes/webhooks'
 import { webhookIncomingRoutes } from '@/server/routes/webhooks-incoming'
+import { accountTriggerRoutes } from '@/server/routes/account-triggers'
 import { channelRoutes } from '@/server/routes/channels'
 import { channelTelegramRoutes } from '@/server/routes/channel-telegram'
 import { channelSlackRoutes } from '@/server/routes/channel-slack'
 import { channelWhatsAppRoutes } from '@/server/routes/channel-whatsapp'
 import { channelSignalRoutes } from '@/server/routes/channel-signal'
-import { quickSessionKinRoutes, quickSessionDetailRoutes } from '@/server/routes/quick-sessions'
+import { quickSessionAgentRoutes, quickSessionDetailRoutes } from '@/server/routes/quick-sessions'
 import { userRoutes } from '@/server/routes/users'
 import { invitationRoutes } from '@/server/routes/invitations'
 import { notificationRoutes } from '@/server/routes/notifications'
@@ -52,7 +54,9 @@ import { miniAppRoutes, miniAppSdkRoutes } from '@/server/routes/mini-apps'
 import { pluginRoutes } from '@/server/routes/plugins'
 import { pluginCardRoutes } from '@/server/routes/plugin-cards'
 import { knowledgeRoutes } from '@/server/routes/knowledge'
+import { workspaceFilesRoutes } from '@/server/routes/workspace-files'
 import { logRoutes } from '@/server/routes/logs'
+import { terminalRoutes } from '@/server/routes/terminal'
 import { usageRoutes } from '@/server/routes/usage'
 import { versionCheckRoutes } from '@/server/routes/version-check'
 
@@ -124,7 +128,7 @@ app.get('/api/changelog', async (c) => {
 const startedAt = Date.now()
 app.get('/api/info', async (c) => {
   const [
-    [kinCount],
+    [agentCount],
     [providerCount],
     [channelCount],
     [cronCount],
@@ -133,7 +137,7 @@ app.get('/api/info', async (c) => {
     [contactCount],
     [userCount],
   ] = await Promise.all([
-    db.select({ value: count() }).from(kins),
+    db.select({ value: count() }).from(agents),
     db.select({ value: count() }).from(providers),
     db.select({ value: count() }).from(channels),
     db.select({ value: count() }).from(crons),
@@ -145,10 +149,13 @@ app.get('/api/info', async (c) => {
   return c.json({
     version: config.version,
     isDocker: config.isDocker,
+    // Surfaced so the client can warn when the browser's origin doesn't match
+    // the configured public URL (invites/webhooks/OAuth callbacks build on it).
+    publicUrl: config.publicUrl,
     startedAt,
     uptimeMs: Date.now() - startedAt,
     stats: {
-      kins: kinCount!.value,
+      agents: agentCount!.value,
       providers: providerCount!.value,
       channels: channelCount!.value,
       crons: cronCount!.value,
@@ -165,18 +172,19 @@ app.route('/api/auth', authRoutes)
 app.route('/api/me', meRoutes)
 app.route('/api/onboarding', onboardingRoutes)
 app.route('/api/providers', providerRoutes)
+app.route('/api/models', modelRoutes)
 app.route('/api/email-accounts', emailAccountRoutes)
 app.route('/api/contacts-accounts', contactsAccountRoutes)
 app.route('/api/connected-accounts', connectedAccountRoutes)
 app.route('/api/pending-email-sends', pendingEmailSendRoutes)
 app.route('/api/sse', sseRoutes)
-app.route('/api/kins', kinRoutes)
+app.route('/api/agents', agentRoutes)
 app.route('/api/tools', toolsRoutes)
 app.route('/api/toolboxes', toolboxRoutes)
 app.route('/api/tool-domains', toolDomainRoutes)
 app.route('/api/custom-tools', customToolRoutes)
-app.route('/api/kins/:kinId/messages', messageRoutes)
-app.route('/api/kins/:kinId/messages/:messageId/reactions', reactionRoutes)
+app.route('/api/agents/:agentId/messages', messageRoutes)
+app.route('/api/agents/:agentId/messages/:messageId/reactions', reactionRoutes)
 app.route('/api/vault', vaultRoutes)
 app.route('/api/users', userRoutes)
 app.route('/api/invitations', invitationRoutes)
@@ -196,19 +204,22 @@ app.route('/api/secret-prompts', secretPromptRoutes)
 app.route('/api/memories', memoryRoutes)
 app.route('/api/webhooks/incoming', webhookIncomingRoutes)
 app.route('/api/webhooks', webhookRoutes)
+app.route('/api/account-triggers', accountTriggerRoutes)
 app.route('/api/channels/telegram', channelTelegramRoutes)
 app.route('/api/channels/slack/webhook', channelSlackRoutes)
 app.route('/api/channels/whatsapp/webhook', channelWhatsAppRoutes)
 app.route('/api/channels/signal/webhook', channelSignalRoutes)
 app.route('/api/channels', channelRoutes)
-app.route('/api/kins/:kinId/knowledge', knowledgeRoutes)
-app.route('/api/kins/:kinId/quick-sessions', quickSessionKinRoutes)
+app.route('/api/agents/:agentId/knowledge', knowledgeRoutes)
+app.route('/api/agents/:agentId/workspace', workspaceFilesRoutes)
+app.route('/api/agents/:agentId/quick-sessions', quickSessionAgentRoutes)
 app.route('/api/quick-sessions', quickSessionDetailRoutes)
 app.route('/api/mini-apps/sdk', miniAppSdkRoutes)
 app.route('/api/mini-apps', miniAppRoutes)
 app.route('/api/plugins', pluginRoutes)
 app.route('/api/plugin-cards', pluginCardRoutes)
 app.route('/api/logs', logRoutes)
+app.route('/api/terminal', terminalRoutes)
 app.route('/api/usage', usageRoutes)
 app.route('/api/version-check', versionCheckRoutes)
 app.route('/s', sharedRoutes)

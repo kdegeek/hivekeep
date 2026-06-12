@@ -8,21 +8,22 @@ import {
   triggerCronManually,
 } from '@/server/services/crons'
 import { fetchPreviousCronRuns } from '@/server/services/tasks'
-import { resolveKinId } from '@/server/services/kin-resolver'
+import { resolveAgentId } from '@/server/services/agent-resolver'
 import { resolveToolboxNamesToIds, getToolbox } from '@/server/services/toolboxes'
 import { createLogger } from '@/server/logger'
 import type { ToolRegistration } from '@/server/tools/types'
-import type { KinThinkingConfig, KinThinkingEffort } from '@/shared/types'
+import type { AgentThinkingConfig, AgentThinkingEffort } from '@/shared/types'
 
 const log = createLogger('tools:cron')
 
-const THINKING_EFFORT_VALUES = ['off', 'low', 'medium', 'high', 'max'] as const
+// Literal tuple (zod enum needs literals) — must stay in sync with THINKING_EFFORTS (shared/constants.ts)
+const THINKING_EFFORT_VALUES = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
 type ThinkingEffortInput = typeof THINKING_EFFORT_VALUES[number]
 
 /** Map the LLM-facing effort string to a stored thinking config. */
-function effortToConfig(effort: ThinkingEffortInput): KinThinkingConfig {
+function effortToConfig(effort: ThinkingEffortInput): AgentThinkingConfig {
   if (effort === 'off') return { enabled: false, effort: null }
-  return { enabled: true, effort: effort as KinThinkingEffort }
+  return { enabled: true, effort: effort as AgentThinkingEffort }
 }
 
 /** Resolve a stored `toolbox_ids` JSON string into human-readable toolbox names
@@ -42,7 +43,7 @@ function toolboxNamesFromJson(raw: string | null): string[] {
 
 /**
  * create_cron — create a new scheduled task.
- * Kin-created crons require user approval before activation.
+ * Agent-created crons require user approval before activation.
  * Available to main agents only.
  */
 export const createCronTool: ToolRegistration = {
@@ -50,17 +51,17 @@ export const createCronTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Create a new scheduled task (cron). Kin-created crons require user approval before activation.',
+        'Create a new scheduled task (cron). Agent-created crons require user approval before activation.',
       inputSchema: z.object({
         name: z.string(),
         schedule: z
           .string()
           .describe('Cron expression (e.g. "0 9 * * *") or ISO 8601 datetime when run_once=true'),
         task_description: z.string(),
-        target_kin_slug: z
+        target_agent_slug: z
           .string()
           .optional()
-          .describe('Target Kin slug. Omit to execute yourself.'),
+          .describe('Target Agent slug. Omit to execute yourself.'),
         model: z
           .string()
           .optional(),
@@ -75,7 +76,7 @@ export const createCronTool: ToolRegistration = {
         trigger_parent_turn: z
           .boolean()
           .optional()
-          .describe('If true, the final report of each execution wakes the parent Kin for an LLM turn. Useful for self-calibrating crons (the Kin re-reads its report and adjusts its behavior). Costly in tokens if the cron is frequent. Default false.'),
+          .describe('If true, the final report of each execution wakes the parent Agent for an LLM turn. Useful for self-calibrating crons (the Agent re-reads its report and adjusts its behavior). Costly in tokens if the cron is frequent. Default false.'),
         thinking_effort: z
           .enum(THINKING_EFFORT_VALUES)
           .optional()
@@ -85,26 +86,26 @@ export const createCronTool: ToolRegistration = {
           .optional()
           .describe('Names of the toolboxes whose tools the tasks spawned by this cron may use. The task\'s native toolset is the mandatory core floor unioned with every chosen toolbox\'s tools. Built-ins: "code", "research", "ops", "scout" (read-only), "all" (full surface). Use list_toolboxes to discover available toolboxes. Omit for the full native surface ("all").'),
       }),
-      execute: async ({ name, schedule, task_description, target_kin_slug, model, provider_id, run_once, trigger_parent_turn, thinking_effort, toolboxes }) => {
-        let targetKinId: string | undefined
-        if (target_kin_slug) {
-          const resolved = resolveKinId(target_kin_slug)
+      execute: async ({ name, schedule, task_description, target_agent_slug, model, provider_id, run_once, trigger_parent_turn, thinking_effort, toolboxes }) => {
+        let targetAgentId: string | undefined
+        if (target_agent_slug) {
+          const resolved = resolveAgentId(target_agent_slug)
           if (!resolved) {
-            return { error: `Kin not found for slug "${target_kin_slug}"` }
+            return { error: `Agent not found for slug "${target_agent_slug}"` }
           }
-          targetKinId = resolved
+          targetAgentId = resolved
         }
-        log.debug({ kinId: ctx.kinId, cronName: name, schedule, toolboxes }, 'Cron creation requested')
+        log.debug({ agentId: ctx.agentId, cronName: name, schedule, toolboxes }, 'Cron creation requested')
         try {
           const cron = await createCron({
-            kinId: ctx.kinId,
+            agentId: ctx.agentId,
             name,
             schedule,
             taskDescription: task_description,
-            targetKinId,
+            targetAgentId,
             model,
             providerId: provider_id,
-            createdBy: 'kin',
+            createdBy: 'agent',
             runOnce: run_once,
             triggerParentTurn: trigger_parent_turn,
             thinkingConfig: effortToConfig(thinking_effort ?? 'medium'),
@@ -134,7 +135,7 @@ export const updateCronTool: ToolRegistration = {
   availability: ['main'],
   create: (ctx) =>
     tool({
-      description: 'Update any field of an existing cron (schedule, description, active state, target Kin, model, provider, thinking, toolboxes, run_once). Omit a field to keep its current value.',
+      description: 'Update any field of an existing cron (schedule, description, active state, target Agent, model, provider, thinking, toolboxes, run_once). Omit a field to keep its current value.',
       inputSchema: z.object({
         cron_id: z.string(),
         name: z.string().optional(),
@@ -142,22 +143,22 @@ export const updateCronTool: ToolRegistration = {
           .describe('New cron expression or ISO 8601 datetime (when run_once)'),
         task_description: z.string().optional(),
         is_active: z.boolean().optional(),
-        target_kin_slug: z.string().nullable().optional()
-          .describe('Re-target the cron to a different Kin (use the slug). Pass null to clear and run on yourself.'),
+        target_agent_slug: z.string().nullable().optional()
+          .describe('Re-target the cron to a different Agent (use the slug). Pass null to clear and run on yourself.'),
         model: z.string().nullable().optional()
-          .describe('Override the model used for spawned tasks. Pass null to clear and inherit from the target Kin.'),
+          .describe('Override the model used for spawned tasks. Pass null to clear and inherit from the target Agent.'),
         provider_id: z.string().nullable().optional()
           .describe('Provider ID for the model override. Pass null to clear.'),
         run_once: z.boolean().optional()
           .describe('Toggle one-shot vs recurring behavior.'),
         trigger_parent_turn: z.boolean().optional()
-          .describe('If true, the final report of each execution wakes the parent Kin for an LLM turn (self-calibration / conditional actions). Costly in tokens if frequent. Omit to keep current.'),
+          .describe('If true, the final report of each execution wakes the parent Agent for an LLM turn (self-calibration / conditional actions). Costly in tokens if frequent. Omit to keep current.'),
         thinking_effort: z.enum(THINKING_EFFORT_VALUES).optional()
           .describe('Change reasoning effort. "off" disables thinking. Omit to keep current.'),
         toolboxes: z.array(z.string()).nullable().optional()
           .describe('Replace the toolboxes the spawned tasks may use (by name). Built-ins: "code", "research", "ops", "scout", "all". Pass null or an empty array to clear and fall back to the full native surface ("all"). Omit to keep current.'),
       }),
-      execute: async ({ cron_id, name, schedule, task_description, is_active, target_kin_slug, model, provider_id, run_once, trigger_parent_turn, thinking_effort, toolboxes }) => {
+      execute: async ({ cron_id, name, schedule, task_description, is_active, target_agent_slug, model, provider_id, run_once, trigger_parent_turn, thinking_effort, toolboxes }) => {
         try {
           const updates: Parameters<typeof updateCron>[1] = {}
           if (name !== undefined) updates.name = name
@@ -169,13 +170,13 @@ export const updateCronTool: ToolRegistration = {
           if (model !== undefined) updates.model = model
           if (provider_id !== undefined) updates.providerId = provider_id
 
-          if (target_kin_slug !== undefined) {
-            if (target_kin_slug === null) {
-              updates.targetKinId = null
+          if (target_agent_slug !== undefined) {
+            if (target_agent_slug === null) {
+              updates.targetAgentId = null
             } else {
-              const resolved = resolveKinId(target_kin_slug)
-              if (!resolved) return { error: `Kin not found for slug "${target_kin_slug}"` }
-              updates.targetKinId = resolved
+              const resolved = resolveAgentId(target_agent_slug)
+              if (!resolved) return { error: `Agent not found for slug "${target_agent_slug}"` }
+              updates.targetAgentId = resolved
             }
           }
 
@@ -198,7 +199,7 @@ export const updateCronTool: ToolRegistration = {
             isActive: updated.isActive,
             runOnce: updated.runOnce,
             triggerParentTurn: updated.triggerParentTurn,
-            targetKinId: updated.targetKinId,
+            targetAgentId: updated.targetAgentId,
             model: updated.model,
             providerId: updated.providerId,
             thinkingConfig: updated.thinkingConfig,
@@ -236,7 +237,7 @@ export const deleteCronTool: ToolRegistration = {
 }
 
 /**
- * list_crons — list all scheduled tasks for this Kin.
+ * list_crons — list all scheduled tasks for this Agent.
  * Available to main agents only.
  */
 export const listCronsTool: ToolRegistration = {
@@ -248,7 +249,7 @@ export const listCronsTool: ToolRegistration = {
       description: 'List all your scheduled tasks (crons) with their full configuration.',
       inputSchema: z.object({}),
       execute: async () => {
-        const allCrons = await listCrons(ctx.kinId)
+        const allCrons = await listCrons(ctx.agentId)
         return {
           crons: allCrons.map((c) => ({
             id: c.id,
@@ -259,7 +260,7 @@ export const listCronsTool: ToolRegistration = {
             runOnce: c.runOnce,
             triggerParentTurn: c.triggerParentTurn,
             requiresApproval: c.requiresApproval,
-            targetKinId: c.targetKinId,
+            targetAgentId: c.targetAgentId,
             model: c.model,
             providerId: c.providerId,
             thinkingConfig: c.thinkingConfig,
@@ -273,7 +274,7 @@ export const listCronsTool: ToolRegistration = {
 
 /**
  * get_cron_journal — retrieve the execution history of a cron.
- * Returns recent run results so the Kin can review what happened.
+ * Returns recent run results so the Agent can review what happened.
  * Available to main agents only.
  */
 export const getCronJournalTool: ToolRegistration = {

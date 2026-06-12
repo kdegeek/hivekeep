@@ -91,8 +91,8 @@ export function CustomToolsSettings() {
               <span className="text-sm font-medium text-foreground">{tool.translations?.[locale]?.name?.trim() || tool.name}</span>
               <code className="text-xs text-muted-foreground">custom_{tool.slug}</code>
               <ToolDomainBadge domain={tool.domainSlug} />
-              {tool.createdBy === 'kin' && (
-                <span className="text-[10px] text-muted-foreground">{t('customTools.byKin')}</span>
+              {tool.createdBy === 'agent' && (
+                <span className="text-[10px] text-muted-foreground">{t('customTools.byAgent')}</span>
               )}
             </div>
             {tool.description && <p className="mt-1 pl-9 text-xs text-muted-foreground">{tool.description}</p>}

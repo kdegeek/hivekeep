@@ -1,9 +1,9 @@
 ---
 title: Signal
-description: Connect your Kin to Signal using signal-cli.
+description: Connect your Agent to Signal using signal-cli.
 ---
 
-Signal integration uses the [signal-cli REST API](https://github.com/bbernhard/signal-cli-rest-api) as a bridge between KinBot and the Signal protocol.
+Signal integration uses the [signal-cli REST API](https://github.com/bbernhard/signal-cli-rest-api) as a bridge between Hivekeep and the Signal protocol.
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@ You need a running instance of **signal-cli-rest-api** with a registered phone n
      bbernhard/signal-cli-rest-api
    ```
 2. **Register a phone number** with signal-cli (see signal-cli docs)
-3. In KinBot, add a Signal channel:
+3. In Hivekeep, add a Signal channel:
    - **API URL:** The URL of your signal-cli REST API instance (e.g., `http://localhost:8080`)
    - **Phone Number:** The registered phone number in E.164 format (e.g., `+1234567890`)
 4. Optionally, restrict to specific group IDs or phone numbers with the allowlist
@@ -34,7 +34,7 @@ You need a running instance of **signal-cli-rest-api** with a registered phone n
 
 ## How It Works
 
-- **Inbound:** KinBot receives messages via signal-cli's webhook/polling mechanism. The adapter extracts text, attachments, and sender info, routing them to the Kin.
+- **Inbound:** Hivekeep receives messages via signal-cli's webhook/polling mechanism. The adapter extracts text, attachments, and sender info, routing them to the Agent.
 - **Outbound:** Messages are sent via the signal-cli REST API. Long messages (>2,000 chars) are split. Attachments are uploaded as base64.
 
 ## Features
@@ -48,4 +48,4 @@ You need a running instance of **signal-cli-rest-api** with a registered phone n
 
 - A running signal-cli REST API instance
 - A registered Signal phone number
-- Network connectivity between KinBot and signal-cli
+- Network connectivity between Hivekeep and signal-cli

@@ -1,0 +1,941 @@
+---
+// Localized home page body. All copy comes from the locale dictionary; pure
+// code (stats wiring, hues, channel slugs, comparison marks) stays here.
+import Base from '../../layouts/Base.astro';
+import Avatar from '../Avatar.astro';
+import Providers from '../Providers.astro';
+import AgentDemo from '../AgentDemo.tsx';
+import QueenieOnboarding from '../QueenieOnboarding.tsx';
+import MiniAppsMarquee from '../MiniAppsMarquee.astro';
+import LangSwitcher from '../LangSwitcher.astro';
+import { Icon } from 'astro-icon/components';
+import agents from '../../agents.json';
+import stats from '../../data/stats.json';
+import { LOCALES, LOCALE_LABELS, getDict, localePath, type Locale } from '../../i18n';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = getDict(lang);
+// Localized agent-directory domains, keyed by agent name (fallback: agents.json).
+const agentDomains: Record<string, string> = t.components.domains;
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const installHref = `${base}${localePath(lang, '/install')}`;
+const pluginsHref = `${base}${localePath(lang, '/plugins')}`;
+// Live GitHub stats baked in at deploy by the pages workflow (site/src/data/stats.json).
+const repoVersion = stats.version;
+const repoStars = stats.stars;
+// Only show the count when it is a positive number. A silent stats-fetch failure
+// in the pages workflow falls back to 0, and rendering "0" next to "Star on GitHub"
+// reads as nobody starred it, so hide the badge entirely in that case.
+const showStars = typeof repoStars === 'number' && repoStars > 0;
+const starLabel = repoStars >= 1000 ? `${(repoStars / 1000).toFixed(1)}k` : String(repoStars);
+
+// ── project health (derived from site/src/data/stats.json at build) ──────────
+// Every value is "show only when meaningful": a silent stats-fetch failure in
+// the pages workflow leaves placeholders (0 / '' / null), and we hide those
+// rather than render a misleading "0 issues / no commits" state.
+const releaseUrl = (stats as any).latestReleaseUrl || 'https://github.com/MarlBurroW/hivekeep/releases';
+const openIssues = typeof (stats as any).openIssues === 'number' ? (stats as any).openIssues : 0;
+const showOpenIssues = openIssues > 0;
+const contributors = typeof (stats as any).contributors === 'number' ? (stats as any).contributors : 0;
+const showContributors = contributors > 0;
+const topContributors: { login: string; avatarUrl: string; htmlUrl: string }[] = Array.isArray((stats as any).topContributors)
+  ? (stats as any).topContributors
+  : [];
+
+// CI status → green/red dot + label. Unknown/missing stays hidden.
+const ciStatus = String((stats as any).ciStatus || '');
+const ciState =
+  ciStatus === 'success' ? { cls: 'ok', label: t.home.health.ciPassing }
+  : ciStatus === 'failure' ? { cls: 'bad', label: t.home.health.ciFailing }
+  : ciStatus ? { cls: 'warn', label: ciStatus }
+  : null;
+
+// "last commit Nd ago", computed at build from the ISO timestamp.
+function relTime(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return null;
+  const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
+  const mins = Math.round(secs / 60);
+  const hrs = Math.round(mins / 60);
+  const days = Math.round(hrs / 24);
+  if (secs < 60) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  if (hrs < 24) return `${hrs}h ago`;
+  if (days < 30) return `${days}d ago`;
+  const months = Math.round(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.round(months / 12)}y ago`;
+}
+const lastCommit = relTime((stats as any).lastCommitISO);
+
+// Show the strip only if at least one tile has real data.
+const showHealth = showStars || showOpenIssues || showContributors || !!ciState || !!lastCommit;
+const HUES = [305, 40, 20, 330, 265, 210, 150, 55, 15, 235, 290, 30, 170, 95, 260, 50, 200, 120];
+const channels = [
+  ['telegram', 'Telegram'], ['whatsapp', 'WhatsApp'], ['slack', 'Slack'],
+  ['discord', 'Discord'], ['signal', 'Signal'], ['matrix', 'Matrix'],
+];
+
+// Honest comparison against the closest self-hosted peers. Marks are best-effort
+// from public docs (Jun 2026). Peers genuinely win/tie on several rows.
+// Row labels live in the dictionary (t.home.why.rows); the marks are data.
+const cmpCols = ['Hivekeep', 'OpenClaw', 'Hermes'];
+const CMP_MARKS = [
+  ['yes', 'yes', 'yes'],
+  ['yes', 'yes', 'yes'],
+  ['yes', 'yes', 'yes'],
+  ['yes', 'no',  'par'],
+  ['yes', 'par', 'yes'],
+  ['yes', 'yes', 'yes'],
+  ['yes', 'no',  'no'],
+  ['yes', 'par', 'par'],
+  ['yes', 'no',  'no'],
+  ['yes', 'no',  'no'],
+  ['yes', 'no',  'no'],
+  ['yes', 'par', 'par'],
+  ['yes', 'no',  'no'],
+];
+const cmpRows = t.home.why.rows.map((label, i) => [label, ...(CMP_MARKS[i] ?? ['no', 'no', 'no'])]);
+const cmpIcon: Record<string, string> = { yes: 'lucide:check', par: 'lucide:minus', no: 'lucide:x' };
+
+// ── "See more features" expandable grid (after section 07) ──────────────────
+// Curated from the docs/spec/code feature inventory — every card maps to a real,
+// shipped capability. Copy lives in the dictionary; icons ride along with it.
+const fxCategories = t.home.morefx.categories;
+const fxCount = fxCategories.reduce((n, c) => n + c.cards.length, 0);
+---
+<Base lang={lang} title={t.meta.home.title} titleSuffix={false} description={t.meta.home.description}>
+  <!-- ===== top bar ===== -->
+  <header class="topbar"><div class="wrap in">
+    <div class="brand"><img class="brand-logo" src={`${base}/logo.svg`} width="28" height="28" alt="" /> Hivekeep</div>
+    <nav id="site-nav">
+      <a href="#memory">{t.nav.features}</a><a href="#household">{t.nav.household}</a>
+      <a href="#why">{t.nav.why}</a><a href={pluginsHref}>{t.nav.plugins}</a><a href={`${base}/docs/`}>{t.nav.docs}</a>
+      <a href="https://github.com/MarlBurroW/hivekeep">{t.nav.github}</a>
+    </nav>
+    <div class="nav-actions">
+      <LangSwitcher lang={lang} path="/" />
+      <a class="btn btn-primary btn-sm" href={installHref}>{t.nav.getStarted}</a>
+      <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><Icon name="lucide:menu" class="ic-menu" /><Icon name="lucide:x" class="ic-x" /></button>
+    </div>
+  </div></header>
+
+  <!-- ===== hero ===== -->
+  <section class="hero"><div class="comb" aria-hidden="true"><span class="comb-dim"></span><span class="comb-lit-clip"><span class="comb-lit"></span></span><canvas class="comb-pulse"></canvas></div><div class="glow a"></div><div class="glow b"></div>
+    <div class="wrap">
+      <span class="meta">Hivekeep v{repoVersion} · {t.home.hero.meta}</span>
+      <div class="hero-grid">
+        <div>
+          <span class="kicker">{t.home.hero.kicker}</span>
+          <h1 class="display">{t.home.hero.h1a}<br><span class="warm">{t.home.hero.h1b}</span></h1>
+          <p class="sub" set:html={t.home.hero.sub} />
+          <dl class="colophon">
+            <div class="row"><span class="k">{t.home.hero.colophon.runsOnK}</span><span class="v">{t.home.hero.colophon.runsOnV}</span></div>
+            <div class="row"><span class="k">{t.home.hero.colophon.infraK}</span><span class="v"><span class="amb">{t.home.hero.colophon.infraV}</span></span></div>
+            <div class="row"><span class="k">{t.home.hero.colophon.setupK}</span><span class="v">{t.home.hero.colophon.setupV}</span></div>
+            <div class="row"><span class="k">{t.home.hero.colophon.channelsK}</span><span class="v">{t.home.hero.colophon.channelsV}</span></div>
+          </dl>
+          <div class="cta">
+            <a class="btn btn-primary" href={installHref}><Icon name="lucide:terminal" /> {t.home.hero.ctaStart}</a>
+            <a class="link-mono" href="#demo">{t.home.hero.ctaDemo} <Icon name="lucide:play" /></a>
+          </div>
+        </div>
+
+        <!-- interactive Agents panel: click a row to replay a scripted demo -->
+        <AgentDemo client:load total={agents.length} labels={t.components.agentDemo} />
+      </div>
+    </div>
+
+    <div class="strip"><div class="wrap strip-in">
+      <span>{t.home.hero.everywhere}</span>
+      {channels.map(([slug, label]) => (
+        <span class="chan"><Icon name={`simple-icons:${slug}`} /> {label}</span>
+      ))}
+      <span class="chan"><Icon name="lucide:monitor-smartphone" /> {t.home.hero.webPwa}</span>
+    </div></div>
+  </section>
+
+  <!-- ===== project health (live GitHub signals, baked at deploy) ===== -->
+  {showHealth && (
+    <section class="health"><div class="wrap">
+      <div class="health-row">
+        <span class="health-kicker"><Icon name="lucide:activity" /> {t.home.health.kicker}</span>
+        <div class="health-tiles">
+          <a class="htile" href={releaseUrl}>
+            <span class="ht-ic"><Icon name="lucide:tag" /></span>
+            <span class="ht-body"><span class="ht-val">v{repoVersion}</span><span class="ht-lab">{t.home.health.latestRelease}</span></span>
+          </a>
+          {ciState && (
+            <span class="htile">
+              <span class={`ht-ci ${ciState.cls}`}><span class="ci-dot"></span></span>
+              <span class="ht-body"><span class="ht-val">{t.home.health.ciPrefix} {ciState.label}</span><span class="ht-lab">{t.home.health.mainBranch}</span></span>
+            </span>
+          )}
+          {showStars && (
+            <a class="htile" href="https://github.com/MarlBurroW/hivekeep">
+              <span class="ht-ic"><Icon name="lucide:star" /></span>
+              <span class="ht-body"><span class="ht-val">{starLabel}</span><span class="ht-lab">{t.home.health.stars}</span></span>
+            </a>
+          )}
+          {showOpenIssues && (
+            <a class="htile" href="https://github.com/MarlBurroW/hivekeep/issues">
+              <span class="ht-ic"><Icon name="lucide:circle-dot" /></span>
+              <span class="ht-body"><span class="ht-val">{openIssues}</span><span class="ht-lab">{openIssues === 1 ? t.home.health.openIssue : t.home.health.openIssues}</span></span>
+            </a>
+          )}
+          {lastCommit && (
+            <a class="htile" href="https://github.com/MarlBurroW/hivekeep/commits/main">
+              <span class="ht-ic"><Icon name="lucide:git-commit-horizontal" /></span>
+              <span class="ht-body"><span class="ht-val">{lastCommit}</span><span class="ht-lab">{t.home.health.lastCommit}</span></span>
+            </a>
+          )}
+          {showContributors && (
+            <a class="htile" href="https://github.com/MarlBurroW/hivekeep/graphs/contributors">
+              {topContributors.length > 0 && (
+                <span class="ht-faces">
+                  {topContributors.map((c) => (
+                    <img class="ht-face" src={c.avatarUrl} width="22" height="22" loading="lazy" alt={c.login} />
+                  ))}
+                </span>
+              )}
+              <span class="ht-body"><span class="ht-val">{contributors}</span><span class="ht-lab">{contributors === 1 ? t.home.health.contributor : t.home.health.contributors}</span></span>
+            </a>
+          )}
+        </div>
+      </div>
+    </div></section>
+  )}
+
+  <!-- ===== install video ===== -->
+  <section class="videoblock" id="demo"><div class="wrap">
+    <div class="sec-head" style="text-align:center;max-width:60ch;margin:0 auto 30px">
+      <span class="kicker" style="justify-content:center">{t.home.video.kicker}</span>
+      <h2 class="display">{t.home.video.heading}</h2>
+      <p style="margin:0 auto">{t.home.video.sub}</p>
+    </div>
+    <div class="videoframe">
+      <video
+        src={`${base}/videos/onboarding.mp4`}
+        poster={`${base}/screenshots/onboarding-poster.jpg`}
+        controls
+        playsinline
+        preload="metadata"
+      ></video>
+    </div>
+  </div></section>
+
+  <!-- ===== 01 memory ===== -->
+  <div class="wrap" id="memory"><section class="section reveal">
+    <div class="num"><div class="hexnum"><span class="n">01</span></div><small>{t.home.s1memory.stage}</small><span class="spine" aria-hidden="true"></span></div>
+    <div class="body">
+      <h2 class="display">{t.home.s1memory.heading}</h2>
+      <div class="split2">
+        <div>
+          <p>{t.home.s1memory.p1}</p>
+          <p>{t.home.s1memory.p2}</p>
+          <div class="taglist"><span class="t"><Icon name="lucide:infinity" /> {t.home.s1memory.tagSession}</span><span class="t"><Icon name="lucide:users" /> {t.home.s1memory.tagHandoff}</span></div>
+        </div>
+        <div class="figure glass">
+          <div class="cap"><span>{t.home.s1memory.figCap}</span><span class="amb">{t.home.s1memory.figTag}</span></div>
+          <div class="figbody">
+            <div class="mcard">
+              <div class="mic"><Icon name="lucide:brain" /></div>
+              <div class="mbody">
+                <div class="mbadges">
+                  <span class="mbadge cat">{t.home.s1memory.card1.cat}</span>
+                  <span class="mbadge">{t.home.s1memory.card1.topic}</span>
+                  <span class="mbadge star"><Icon name="lucide:star" /> 0.8</span>
+                  <span class="mbadge ret"><Icon name="lucide:arrow-up-from-line" /> 4</span>
+                </div>
+                <div class="mtext">{t.home.s1memory.card1.text}</div>
+              </div>
+            </div>
+            <div class="mcard">
+              <div class="mic"><Icon name="lucide:brain" /></div>
+              <div class="mbody">
+                <div class="mbadges">
+                  <span class="mbadge cat">{t.home.s1memory.card2.cat}</span>
+                  <span class="mbadge">{t.home.s1memory.card2.topic}</span>
+                  <span class="mbadge star"><Icon name="lucide:star" /> 0.6</span>
+                </div>
+                <div class="mtext">{t.home.s1memory.card2.text}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section></div>
+  <!-- ===== 02 sovereign ===== -->
+  <div class="wrap band" id="self-host"><section class="section reveal">
+    <div class="num"><div class="hexnum"><span class="n">02</span></div><small>{t.home.s2sovereign.stage}</small><span class="spine" aria-hidden="true"></span></div>
+    <div class="body">
+      <h2 class="display">{t.home.s2sovereign.heading}</h2>
+      <div class="split2">
+        <div>
+          <p>{t.home.s2sovereign.p1}</p>
+          <p set:html={t.home.s2sovereign.p2} />
+          <div class="term mono"><span class="c">$</span> docker run -d -p 3000:3000 -v hivekeep-data:/app/data ghcr.io/marlburrow/hivekeep<br /><span class="cmt">{t.home.s2sovereign.termComment}</span></div>
+        </div>
+        <dl class="specs">
+          <div class="r"><dt>{t.home.s2sovereign.specs.footprintK}</dt><dd>{t.home.s2sovereign.specs.footprintV}</dd></div>
+          <div class="r"><dt>{t.home.s2sovereign.specs.infraK}</dt><dd>{t.home.s2sovereign.specs.infraV}</dd></div>
+          <div class="r"><dt>{t.home.s2sovereign.specs.secretsK}</dt><dd>{t.home.s2sovereign.specs.secretsV}</dd></div>
+          <div class="r"><dt>{t.home.s2sovereign.specs.dataK}</dt><dd>{t.home.s2sovereign.specs.dataV}</dd></div>
+        </dl>
+      </div>
+    </div>
+  </section></div>
+  <!-- ===== 03 self-improving ===== -->
+  <div class="wrap" id="extensible"><section class="section reveal">
+    <div class="num"><div class="hexnum"><span class="n">03</span></div><small>{t.home.s3extensible.stage}</small><span class="spine" aria-hidden="true"></span></div>
+    <div class="body">
+      <h2 class="display">{t.home.s3extensible.heading}</h2>
+      <div class="split2">
+        <div class="shot">
+          <div class="shot-inner">
+            <img src={`${base}/screenshots/tool-rendered.png`} alt={t.home.s3extensible.shotAlt} loading="lazy" />
+          </div>
+        </div>
+        <div>
+          <p set:html={t.home.s3extensible.p1} />
+          <p set:html={t.home.s3extensible.p2} />
+          <div class="taglist">
+            <span class="t"><Icon name="lucide:wrench" /> {t.home.s3extensible.tagCustomTools}</span>
+            <span class="t"><Icon name="lucide:layout-dashboard" /> {t.home.s3extensible.tagMiniApps}</span>
+            <span class="t"><Icon name="lucide:package" /> {t.home.s3extensible.tagNpm}</span>
+            <span class="t"><Icon name="lucide:plug" /> {t.home.s3extensible.tagMcp}</span>
+            <span class="t"><Icon name="lucide:toy-brick" /> {t.home.s3extensible.tagToolboxes}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section></div>
+
+  <!-- ===== mini-apps showcase (marquee) ===== -->
+  <MiniAppsMarquee lang={lang} />
+
+  <!-- ===== 04 everywhere ===== -->
+  <div class="wrap band" id="channels"><section class="section reveal">
+    <div class="num"><div class="hexnum"><span class="n">04</span></div><small>{t.home.s4channels.stage}</small><span class="spine" aria-hidden="true"></span></div>
+    <div class="body">
+      <h2 class="display">{t.home.s4channels.heading}</h2>
+      <div class="split2">
+        <div>
+          <p set:html={t.home.s4channels.p1} />
+          <div class="taglist">
+            {channels.map(([slug, label]) => (
+              <span class="t"><Icon name={`simple-icons:${slug}`} /> {label}</span>
+            ))}
+          </div>
+        </div>
+        <div class="shot">
+          <div class="shot-inner">
+            <img src={`${base}/screenshots/channel-multi-agent.png`} alt={t.home.s4channels.shotAlt} loading="lazy" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </section></div>
+  <!-- ===== 05 in your pocket (PWA) ===== -->
+  <div class="wrap" id="pocket"><section class="section reveal">
+    <div class="num"><div class="hexnum"><span class="n">05</span></div><small>{t.home.s5pocket.stage}</small><span class="spine" aria-hidden="true"></span></div>
+    <div class="body">
+      <h2 class="display">{t.home.s5pocket.heading}</h2>
+      <div class="split2">
+        <div>
+          <p set:html={t.home.s5pocket.p1} />
+          <p set:html={t.home.s5pocket.p2} />
+          <div class="taglist">
+            <span class="t"><Icon name="lucide:smartphone" /> {t.home.s5pocket.tagPwa}</span>
+            <span class="t"><Icon name="lucide:monitor-smartphone" /> {t.home.s5pocket.tagDesktopMobile}</span>
+            <span class="t"><Icon name="lucide:bell" /> {t.home.s5pocket.tagBadges}</span>
+            <span class="t"><Icon name="lucide:mic" /> {t.home.s5pocket.tagVoice}</span>
+          </div>
+        </div>
+        <div class="pocket-stage">
+          <div class="phone" aria-label={t.home.s5pocket.phone.aria}>
+            <div class="ph-screen">
+              <span class="ph-island" aria-hidden="true"></span>
+              <div class="ph-status mono"><span>21:37</span><span class="ph-st-ics"><Icon name="lucide:signal" /><Icon name="lucide:wifi" /><Icon name="lucide:battery-medium" /></span></div>
+              <div class="ph-chat-head">
+                <img src={`${base}/avatars/nest.jpg`} alt="" width="26" height="26" loading="lazy" />
+                <span class="ph-nm">Nest</span>
+                <span class="dm-chip"><span class="pip"></span> {t.home.s5pocket.phone.online}</span>
+              </div>
+              <div class="ph-chat">
+                <div class="dm-row user"><div class="dm-bubble user">{t.home.s5pocket.phone.userBubble}</div></div>
+                <div class="dm-row">
+                  <div class="dm-col">
+                    <div class="dm-tool"><span class="dm-tool-ic dm-t-config"><Icon name="lucide:thermometer" /></span><span class="dm-tool-nm">{t.home.s5pocket.phone.tool1Name}<span class="dm-tool-detail">{t.home.s5pocket.phone.tool1Detail}</span></span><span class="dm-tool-status"><Icon name="lucide:check" class="dm-ok" /></span></div>
+                    <div class="dm-tool"><span class="dm-tool-ic dm-t-email"><Icon name="lucide:lamp" /></span><span class="dm-tool-nm">{t.home.s5pocket.phone.tool2Name}<span class="dm-tool-detail">{t.home.s5pocket.phone.tool2Detail}</span></span><span class="dm-tool-status"><Icon name="lucide:check" class="dm-ok" /></span></div>
+                    <div class="dm-bubble agent" set:html={t.home.s5pocket.phone.agentBubble}></div>
+                  </div>
+                </div>
+              </div>
+              <div class="ph-composer">
+                <div class="dm-input-box"><span class="dm-input-ph">{t.home.s5pocket.phone.inputPlaceholder}</span><span class="ph-mic"><Icon name="lucide:mic" /></span><span class="dm-send"><Icon name="lucide:arrow-up" /></span></div>
+              </div>
+              <span class="ph-homebar" aria-hidden="true"></span>
+            </div>
+          </div>
+          <span class="pk-chip pk-a"><Icon name="lucide:arrow-down-to-line" /> <span><b>{t.home.s5pocket.chipInstallB}</b><i>{t.home.s5pocket.chipInstallI}</i></span></span>
+          <span class="pk-chip pk-b"><span class="pk-app"><img src={`${base}/logo.svg`} alt="" width="22" height="22" /><i class="pk-badge">3</i></span> <span><b>{t.home.s5pocket.chipBadgesB}</b><i>{t.home.s5pocket.chipBadgesI}</i></span></span>
+          <span class="pk-chip pk-c"><Icon name="lucide:zap" /> <span><b>{t.home.s5pocket.chipSyncB}</b><i>{t.home.s5pocket.chipSyncI}</i></span></span>
+        </div>
+      </div>
+    </div>
+  </section></div>
+  <!-- ===== languages (multilingual UI + agents) ===== -->
+  <section class="langs reveal" id="languages"><div class="wrap">
+    <span class="kicker" style="justify-content:center">{t.languages.kicker}</span>
+    <h2 class="display">{t.languages.heading}</h2>
+    <p>{t.languages.p}</p>
+    <div class="taglist">
+      {LOCALES.map((l) => (
+        <span class="t">{LOCALE_LABELS[l]}</span>
+      ))}
+    </div>
+  </div></section>
+  <!-- ===== 06 transparent ===== -->
+  <div class="wrap band" id="transparency"><section class="section reveal">
+    <div class="num"><div class="hexnum"><span class="n">06</span></div><small>{t.home.s6transparency.stage}</small><span class="spine" aria-hidden="true"></span></div>
+    <div class="body">
+      <h2 class="display">{t.home.s6transparency.heading}</h2>
+      <div class="split2">
+        <div>
+          <p set:html={t.home.s6transparency.p1} />
+          <div class="taglist"><span class="t"><Icon name="lucide:gauge" /> {t.home.s6transparency.tagCost}</span><span class="t"><Icon name="lucide:layers" /> {t.home.s6transparency.tagPreview}</span></div>
+        </div>
+        <div class="figure glass">
+          <div class="cap"><span>{t.home.s6transparency.figCap}</span><span class="amb">{t.home.s6transparency.figTag}</span></div>
+          <div class="figbody">
+            <div class="bd">
+              <div class="row"><span class="lab">{t.home.s6transparency.barTools}</span><span class="bar"><i style="width:100%"></i></span><span class="val">8.4k</span></div>
+              <div class="row"><span class="lab">{t.home.s6transparency.barMemory}</span><span class="bar"><i style="width:34%"></i></span><span class="val">2.8k</span></div>
+              <div class="row"><span class="lab">{t.home.s6transparency.barIdentity}</span><span class="bar"><i style="width:16%"></i></span><span class="val">1.3k</span></div>
+              <div class="row"><span class="lab">{t.home.s6transparency.barChannels}</span><span class="bar"><i style="width:8%"></i></span><span class="val">0.6k</span></div>
+            </div>
+            <div class="cachep">
+              <div class="ch"><span class="ttl">{t.home.s6transparency.cacheTitle}</span><span class="hit">{t.home.s6transparency.cacheHit}</span></div>
+              <div class="cbar">
+                <i style="width:72%;background:oklch(0.72 0.22 342 / .7)"></i>
+                <i style="width:9%;background:oklch(0.78 0.15 150 / .7)"></i>
+                <i style="width:19%;background:oklch(0.64 0.23 305 / .7)"></i>
+              </div>
+              <div class="leg">
+                <span><span class="sw" style="background:oklch(0.72 0.22 342)"></span>{t.home.s6transparency.legendRead}</span>
+                <span><span class="sw" style="background:oklch(0.78 0.15 150)"></span>{t.home.s6transparency.legendWrite}</span>
+                <span><span class="sw" style="background:oklch(0.64 0.23 305)"></span>{t.home.s6transparency.legendFresh}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section></div>
+  <!-- ===== 07 setup / queenie ===== -->
+  <div class="wrap" id="setup"><section class="section reveal">
+    <div class="num"><div class="hexnum"><span class="n">07</span></div><small>{t.home.s7setup.stage}</small><span class="spine" aria-hidden="true"></span></div>
+    <div class="body">
+      <h2 class="display">{t.home.s7setup.heading}</h2>
+      <div class="split2">
+        <div>
+          <p>{t.home.s7setup.p1}</p>
+          <div class="taglist"><span class="t"><Icon name="lucide:shield-check" /> {t.home.s7setup.tagSecure}</span><span class="t"><Icon name="lucide:wand-sparkles" /> {t.home.s7setup.tagGenerates}</span></div>
+        </div>
+        <QueenieOnboarding client:visible labels={t.components.queenieDemo} />
+      </div>
+    </div>
+  </section></div>
+  <!-- ===== 08 the household ===== -->
+  <div class="wrap" id="household"><div class="comb" style="--comb-lit:radial-gradient(520px 360px at 16% 22%,#000 0%,transparent 62%),radial-gradient(600px 400px at 78% 82%,#000 0%,transparent 62%)" aria-hidden="true"><span class="comb-dim"></span><span class="comb-lit-clip"><span class="comb-lit"></span></span></div><section class="section reveal">
+    <div class="num"><div class="hexnum"><span class="n">08</span></div><small>{t.home.s8household.stage}</small><span class="spine" aria-hidden="true"></span></div>
+    <div class="body">
+      <h2 class="display">{t.home.s8household.heading}</h2>
+      <p set:html={t.home.s8household.p1} />
+      <p set:html={t.home.s8household.p2} />
+      <p class="examples-note mono">{t.home.s8household.examplesNote}</p>
+      <div class="directory">
+        {agents.map((k, i) => {
+          const builtin = k.name === 'Queenie';
+          return (
+            <div class="dir">
+              <div class="frame"><Avatar name={k.name} avatar={k.avatar} size={52} hue={HUES[i % HUES.length]} /></div>
+              <div class="top"><span class="nm">{k.name}</span>{builtin ? <span class="bi">{t.home.s8household.builtIn}</span> : <span class="no">{t.home.s8household.eg}</span>}</div>
+              <div class="dm">{agentDomains[k.name] ?? k.domain}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  </section></div>
+  <hr class="rule" />
+
+  <!-- ===== more features ===== -->
+  <div class="wrap" id="more-features"><section class="morefx-sec reveal">
+    <span class="kicker">{t.home.morefx.kicker}</span>
+    <h2 class="display" style="margin-top:12px">{t.home.morefx.heading.replace('{count}', String(fxCount))}</h2>
+    <p class="morefx-sub">{t.home.morefx.sub}</p>
+    {fxCategories.map((cat) => (
+      <div class="fx-cat">
+        <h3 class="fx-cat-title"><Icon name={`lucide:${cat.icon}`} /> {cat.label}</h3>
+        <div class="fx-grid">
+          {cat.cards.map((c) => (
+            <div class="fx-card">
+              <span class="fx-ic"><Icon name={`lucide:${c.icon}`} /></span>
+              <div><h4>{c.title}</h4><p set:html={c.blurb}></p></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    ))}
+  </section></div>
+  <hr class="rule" />
+
+  <!-- ===== providers & plugins ===== -->
+  <Providers lang={lang} />
+  <hr class="rule" />
+
+  <!-- ===== why hivekeep (comparison) ===== -->
+  <div class="wrap" id="why"><section class="section" style="grid-template-columns:1fr;">
+    <div class="body">
+      <span class="kicker">{t.home.why.kicker}</span>
+      <h2 class="display" style="margin-top:12px">{t.home.why.heading}</h2>
+      <p set:html={t.home.why.intro} />
+      <div class="cmp-wrap"><table class="cmp">
+        <thead><tr><th></th>{cmpCols.map((c, i) => <th class={'c' + (i === 0 ? ' kb' : '')}>{c}</th>)}</tr></thead>
+        <tbody>
+          {cmpRows.map((r) => (
+            <tr>
+              <td class="k">{r[0]}</td>
+              {[1, 2, 3].map((j) => (
+                <td class={'c ' + (j === 1 ? 'kbcell ' : '') + r[j]}><Icon name={cmpIcon[r[j]]} /></td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table></div>
+      <p class="examples-note">{t.home.why.legend}</p>
+    </div>
+  </section></div>
+  <hr class="rule" />
+
+  <!-- ===== get started ===== -->
+  <section class="getstarted" id="start">
+    <div class="comb" style="--comb-lit:radial-gradient(620px 380px at 50% 44%,#000 0%,transparent 66%)" aria-hidden="true"><span class="comb-dim"></span><span class="comb-lit-clip"><span class="comb-lit"></span></span></div>
+    <div class="glow a" style="left:50%;transform:translateX(-50%);right:auto;top:-170px;"></div>
+    <div class="wrap" style="position:relative;z-index:1">
+      <span class="kicker" style="justify-content:center">{t.home.getstarted.kicker}</span>
+      <h2 class="display">{t.home.getstarted.heading}</h2>
+      <p set:html={t.home.getstarted.p} />
+      <span class="rec-tag"><Icon name="lucide:sparkles" /> {t.home.getstarted.recTag}</span>
+      <div class="cmd"><span><span class="c">$</span> curl -fsSL https://raw.githubusercontent.com/MarlBurroW/hivekeep/main/install.sh | bash</span><span class="cp" aria-label={t.home.getstarted.copyAria}><Icon name="lucide:copy" /></span></div>
+      <p style="margin-top:18px;font-size:.92rem;">{t.home.getstarted.needCustom} <a class="link-mono" href={installHref}>{t.home.getstarted.seeAll} <Icon name="lucide:arrow-right" /></a></p>
+      <div class="btns">
+        <a class="btn btn-primary" href={installHref}><Icon name="lucide:terminal" /> {t.home.getstarted.installBtn}</a>
+        <a class="btn btn-ghost" href="https://github.com/MarlBurroW/hivekeep"><Icon name="lucide:github" /> {t.home.getstarted.starBtn} {showStars && <span class="ghstars"><Icon name="lucide:star" /> {starLabel}</span>}</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== footer ===== -->
+  <footer class="footer"><div class="wrap in">
+    <div class="brand"><img class="brand-logo" src={`${base}/logo.svg`} width="26" height="26" alt="" /> Hivekeep</div>
+    <span class="m">{t.footer.line}</span>
+  </div></footer>
+
+<script>
+  // Wire up click-to-copy on command blocks (`.cmd`). The command text is the
+  // first span (minus the leading "$ "); `.cp` is the copy icon. The localized
+  // aria-label is set in the markup; only fall back to English if it's missing.
+  document.querySelectorAll<HTMLElement>('.cmd').forEach((cmd) => {
+    const btn = cmd.querySelector<HTMLElement>('.cp')
+    const code = cmd.querySelector<HTMLElement>('span:not(.cp)')
+    if (!btn || !code) return
+    btn.setAttribute('role', 'button')
+    if (!btn.getAttribute('aria-label')) btn.setAttribute('aria-label', 'Copy command')
+    btn.addEventListener('click', async () => {
+      const text = (code.textContent || '').replace(/^\s*\$\s*/, '').trim()
+      try {
+        await navigator.clipboard.writeText(text)
+      } catch {
+        return
+      }
+      btn.classList.add('copied')
+      setTimeout(() => btn.classList.remove('copied'), 1500)
+    })
+  })
+</script>
+
+<style>
+  /* project health strip: live GitHub signals under the hero.
+     Reuses the global design tokens (aurora gradient, glass, lines). */
+  .health{border-bottom:1px solid var(--line);background:oklch(0.125 0.026 312);}
+  .health-row{display:flex;align-items:center;gap:22px;padding:16px 0;flex-wrap:wrap;}
+  .health-kicker{display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;font-family:"JetBrains Mono",monospace;font-size:.66rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);}
+  .health-kicker svg{width:1.05em;height:1.05em;color:var(--primary);}
+  .health-tiles{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap;flex:1;}
+
+  .htile{display:inline-flex;align-items:center;gap:10px;padding:.5rem .8rem;border:1px solid var(--line-strong);border-radius:var(--r-pill);background:oklch(1 0 0/.03);transition:border-color .15s ease,transform .15s ease,background .15s ease;}
+  a.htile:hover{border-color:var(--primary);transform:translateY(-2px);background:oklch(1 0 0/.05);}
+  .ht-ic{display:grid;place-items:center;width:26px;height:26px;border-radius:8px;flex:0 0 auto;background:oklch(0.72 0.19 305/.14);color:var(--primary);}
+  .ht-ic svg{width:15px;height:15px;}
+  .ht-body{display:flex;flex-direction:column;line-height:1.1;}
+  .ht-val{font-weight:700;font-size:.92rem;color:var(--ink);}
+  .ht-lab{font-family:"JetBrains Mono",monospace;font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);}
+
+  /* CI status indicator: green / red / amber dot */
+  .ht-ci{display:grid;place-items:center;width:26px;height:26px;border-radius:8px;flex:0 0 auto;background:oklch(1 0 0/.05);}
+  .ht-ci .ci-dot{width:9px;height:9px;border-radius:50%;}
+  .ht-ci.ok .ci-dot{background:var(--green);box-shadow:0 0 9px var(--green);}
+  .ht-ci.bad .ci-dot{background:oklch(0.64 0.24 22);box-shadow:0 0 9px oklch(0.64 0.24 22);}
+  .ht-ci.warn .ci-dot{background:var(--peach);box-shadow:0 0 9px var(--peach);}
+
+  /* contributor avatars, overlapped */
+  .ht-faces{display:inline-flex;flex:0 0 auto;}
+  .ht-face{width:22px;height:22px;border-radius:50%;border:2px solid oklch(0.125 0.026 312);object-fit:cover;margin-left:-7px;background:var(--surface);}
+  .ht-face:first-child{margin-left:0;}
+
+  @media(max-width:860px){
+    .health-row{flex-direction:column;align-items:stretch;gap:12px;}
+    .health-kicker{align-self:flex-start;}
+    .health-tiles{flex-direction:column;align-items:stretch;width:100%;gap:8px;}
+    .htile{width:100%;}
+  }
+
+  /* languages band: a light, centered interlude between sections 05 and 06.
+     Deliberately quieter than the numbered sections (no hexnum, no band fill,
+     no glow): kicker + heading + one line + the locale chips (.taglist). */
+  .langs{padding:58px 0 54px;text-align:center;}
+  .langs .wrap{max-width:820px;}
+  .langs .display{font-size:clamp(1.5rem,3.2vw,2.1rem);letter-spacing:-.025em;margin:14px 0 10px;}
+  .langs p{color:var(--ink-soft);max-width:62ch;margin:0 auto 22px;}
+  .langs .taglist{justify-content:center;margin-top:0;}
+</style>
+
+<script>
+  // Mobile nav: toggle the dropdown, and close it on link tap, outside click,
+  // or resize back to desktop.
+  const tb = document.querySelector('.topbar')
+  const btn = tb?.querySelector('.nav-toggle')
+  if (tb && btn) {
+    const close = () => { tb.classList.remove('open'); btn.setAttribute('aria-expanded', 'false') }
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const open = tb.classList.toggle('open')
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false')
+    })
+    tb.querySelector('nav')?.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('a')) close()
+    })
+    document.addEventListener('click', (e) => {
+      if (!tb.contains(e.target as Node)) close()
+    })
+    window.addEventListener('resize', () => { if (window.innerWidth > 860) close() })
+  }
+</script>
+
+<script>
+  // Hero honeycomb "signal pulses": short luminous trails traveling along the
+  // edges of the hex grid, matching the .comb mask geometry exactly (the mask
+  // tiles comb-thin.svg at 45px × 78px). Theme aurora colors, never blue.
+  // Desktop + motion-safe only; pauses offscreen, on hidden tabs, and on resize
+  // rebuilds the lattice. Pure decoration: the canvas is aria-hidden inside the
+  // comb backdrop (z-index 0, behind the hero content).
+  const cv = document.querySelector<HTMLCanvasElement>('.hero .comb-pulse')
+  const hero = document.querySelector<HTMLElement>('.hero')
+  const ctx = cv?.getContext('2d')
+  if (cv && hero && ctx) {
+    const mqDesk = window.matchMedia('(min-width: 861px)')
+    const mqMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+
+    // Resolve oklch through the browser once so canvas gets exact theme colors.
+    const probe = document.createElement('span')
+    probe.style.display = 'none'
+    document.body.appendChild(probe)
+    const resolveColor = (c: string) => {
+      probe.style.color = c
+      return getComputedStyle(probe).color || c
+    }
+    // The three aurora gradient stops (--grad), slightly brightened for glow.
+    const COLORS = ['oklch(0.74 0.21 305)', 'oklch(0.78 0.2 342)', 'oklch(0.88 0.13 55)'].map(resolveColor)
+    probe.remove()
+
+    // ── hex lattice graph (45 × 78 tile: half-width 22.5, row pitch 39) ──
+    const HW = 22.5
+    const ROW = 39
+    const OFF = [[0, -26], [HW, -13], [HW, 13], [0, 26], [-HW, 13], [-HW, -13]]
+    let verts: { x: number; y: number }[] = []
+    let adj: number[][] = []
+    let W = 0
+    let H = 0
+
+    function buildGraph() {
+      verts = []
+      adj = []
+      const index = new Map<string, number>()
+      const vid = (x: number, y: number) => {
+        const k = `${Math.round(x * 2)}:${Math.round(y * 2)}`
+        let i = index.get(k)
+        if (i === undefined) {
+          i = verts.length
+          verts.push({ x, y })
+          adj.push([])
+          index.set(k, i)
+        }
+        return i
+      }
+      const rows = Math.ceil(H / ROW) + 1
+      const cols = Math.ceil(W / 45) + 1
+      for (let r = -1; r <= rows; r++) {
+        const xoff = r % 2 !== 0 ? HW : 0
+        for (let c = -1; c <= cols; c++) {
+          const cx = c * 45 + xoff
+          const cy = r * ROW
+          let first = -1
+          let prev = -1
+          for (let k = 0; k < 6; k++) {
+            const i = vid(cx + OFF[k][0], cy + OFF[k][1])
+            if (k === 0) first = i
+            if (prev >= 0 && !adj[prev].includes(i)) {
+              adj[prev].push(i)
+              adj[i].push(prev)
+            }
+            prev = i
+          }
+          if (prev >= 0 && first >= 0 && !adj[prev].includes(first)) {
+            adj[prev].push(first)
+            adj[first].push(prev)
+          }
+        }
+      }
+    }
+
+    // ── pulses: a head walking the graph + a fading trail behind it ──
+    interface Pulse {
+      a: number
+      b: number
+      t: number
+      speed: number
+      trail: { x: number; y: number }[]
+      color: string
+      age: number
+      ttl: number
+      /** Idle pause before this pulse appears — keeps the grid mostly calm,
+       *  with often just one or two signals alive at a time. */
+      delay: number
+    }
+    let pulses: Pulse[] = []
+    const rand = (lo: number, hi: number) => lo + Math.random() * (hi - lo)
+
+    function spawn(): Pulse {
+      const a = Math.floor(Math.random() * verts.length)
+      const ns = adj[a]
+      const b = ns[Math.floor(Math.random() * ns.length)]
+      return {
+        a,
+        b,
+        t: 0,
+        speed: rand(240, 400),
+        trail: [verts[a]],
+        color: COLORS[Math.floor(Math.random() * COLORS.length)],
+        age: 0,
+        ttl: rand(3.5, 6.5),
+        delay: rand(1.2, 5),
+      }
+    }
+
+    const MAXTRAIL = 130
+    function step(p: Pulse, dt: number) {
+      if (p.delay > 0) {
+        p.delay -= dt
+        return
+      }
+      p.age += dt
+      let A = verts[p.a]
+      let B = verts[p.b]
+      let seg = Math.hypot(B.x - A.x, B.y - A.y)
+      p.t += (p.speed * dt) / seg
+      while (p.t >= 1) {
+        const carry = (p.t - 1) * seg
+        p.trail.unshift(verts[p.b])
+        if (p.trail.length > 9) p.trail.pop()
+        const ns = adj[p.b].filter((n) => n !== p.a)
+        const next = ns.length ? ns[Math.floor(Math.random() * ns.length)] : p.a
+        p.a = p.b
+        p.b = next
+        A = verts[p.a]
+        B = verts[p.b]
+        seg = Math.hypot(B.x - A.x, B.y - A.y)
+        p.t = carry / seg
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H)
+      ctx.globalCompositeOperation = 'lighter'
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      for (const p of pulses) {
+        if (p.delay > 0) continue
+        const A = verts[p.a]
+        const B = verts[p.b]
+        const head = { x: A.x + (B.x - A.x) * p.t, y: A.y + (B.y - A.y) * p.t }
+        // fade in over 0.35s, fade out over the last 0.6s of the pulse's life
+        const env = Math.max(0, Math.min(1, p.age / 0.35, (p.ttl - p.age) / 0.6))
+        let px = head.x
+        let py = head.y
+        let dist = 0
+        ctx.strokeStyle = p.color
+        ctx.lineWidth = 1.6
+        for (let i = 0; i < p.trail.length && dist < MAXTRAIL; i++) {
+          const q = p.trail[i]
+          const d = Math.hypot(q.x - px, q.y - py)
+          const a0 = 1 - dist / MAXTRAIL
+          const a1 = Math.max(0, 1 - (dist + d) / MAXTRAIL)
+          ctx.globalAlpha = env * 0.38 * ((a0 + a1) / 2)
+          ctx.beginPath()
+          ctx.moveTo(px, py)
+          ctx.lineTo(q.x, q.y)
+          ctx.stroke()
+          px = q.x
+          py = q.y
+          dist += d
+        }
+        ctx.globalAlpha = env * 0.65
+        ctx.shadowColor = p.color
+        ctx.shadowBlur = 6
+        ctx.fillStyle = p.color
+        ctx.beginPath()
+        ctx.arc(head.x, head.y, 1.5, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.shadowBlur = 0
+      }
+      ctx.globalAlpha = 1
+      ctx.globalCompositeOperation = 'source-over'
+    }
+
+    function size() {
+      const r = hero.getBoundingClientRect()
+      W = Math.ceil(r.width)
+      H = Math.ceil(r.height)
+      const dpr = Math.min(2, window.devicePixelRatio || 1)
+      cv.width = W * dpr
+      cv.height = H * dpr
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      buildGraph()
+      // few and calm: 2-3 pulses max, and their spawn delays mean often only
+      // one or two are visible at any moment
+      const n = Math.max(2, Math.min(3, Math.round(W / 550)))
+      pulses = Array.from({ length: n }, spawn)
+      // let the first one appear quickly so the hero isn't dead on load
+      if (pulses[0]) pulses[0].delay = 0.6
+    }
+
+    let raf = 0
+    let last = 0
+    let running = false
+    function frame(t: number) {
+      if (!running) return
+      const dt = Math.min(0.05, (t - last) / 1000 || 0.016)
+      last = t
+      for (let i = 0; i < pulses.length; i++) {
+        step(pulses[i], dt)
+        if (pulses[i].age >= pulses[i].ttl) pulses[i] = spawn()
+      }
+      draw()
+      raf = requestAnimationFrame(frame)
+    }
+
+    let inView = false
+    let tabVisible = !document.hidden
+    const wanted = () => inView && tabVisible && mqDesk.matches && !mqMotion.matches
+    function sync() {
+      const w = wanted()
+      if (w && !running) {
+        running = true
+        size()
+        last = performance.now()
+        raf = requestAnimationFrame(frame)
+      } else if (!w && running) {
+        running = false
+        cancelAnimationFrame(raf)
+        ctx.clearRect(0, 0, W, H)
+      }
+    }
+    new IntersectionObserver((es) => {
+      inView = es[0].isIntersecting
+      sync()
+    }).observe(hero)
+    document.addEventListener('visibilitychange', () => {
+      tabVisible = !document.hidden
+      sync()
+    })
+    mqDesk.addEventListener('change', sync)
+    mqMotion.addEventListener('change', sync)
+    let rz = 0
+    window.addEventListener('resize', () => {
+      clearTimeout(rz)
+      rz = window.setTimeout(() => {
+        if (running) size()
+      }, 180)
+    })
+    sync()
+  }
+</script>
+
+<script>
+  // Scroll-reveal: fade feature sections up as they enter the viewport. Elements
+  // opt in with `.reveal`; `html.js` (set in <head>, before paint) is what makes
+  // them start hidden, so without JS everything stays visible. Reduced-motion is
+  // honored in CSS. We unobserve after the first reveal (one-shot).
+  const reveals = document.querySelectorAll<HTMLElement>('.reveal')
+  if (reveals.length) {
+    if (!('IntersectionObserver' in window)) {
+      reveals.forEach((el) => el.classList.add('in'))
+    } else {
+      const io = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) }
+        }
+      }, { rootMargin: '0px 0px -10% 0px', threshold: 0.08 })
+      reveals.forEach((el) => io.observe(el))
+    }
+  }
+</script>
+
+<!-- Screenshot lightbox: click any .shot-inner img to view it full-size. -->
+<div class="lightbox" id="lightbox" aria-hidden="true" role="dialog" aria-modal="true">
+  <img alt="" />
+</div>
+<script>
+  const lb = document.getElementById('lightbox')
+  const lbImg = lb?.querySelector('img')
+  if (lb && lbImg) {
+    const open = (img: HTMLImageElement) => {
+      lbImg.src = img.src
+      lbImg.alt = img.alt
+      lb.classList.add('open')
+      lb.setAttribute('aria-hidden', 'false')
+      document.body.style.overflow = 'hidden'
+    }
+    const close = () => {
+      lb.classList.remove('open')
+      lb.setAttribute('aria-hidden', 'true')
+      document.body.style.overflow = ''
+    }
+    document.querySelectorAll<HTMLImageElement>('.shot-inner img').forEach((img) => {
+      img.addEventListener('click', () => open(img))
+    })
+    lb.addEventListener('click', close)
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close() })
+  }
+</script>
+</Base>

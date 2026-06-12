@@ -44,9 +44,9 @@ test.describe.serial('Search provider management', () => {
     await mockSearchProviderApis(page)
 
     await page.goto('/')
-    await expect(page.getByText('Sign in to your KinBot workspace')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Sign in to your Hivekeep workspace')).toBeVisible({ timeout: 10_000 })
     await loginAs(page)
-    await expect(page.getByText('Kins', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Agents', { exact: true })).toBeVisible({ timeout: 10_000 })
   })
 
   test('should show empty state when no search providers exist', async ({ page }) => {
@@ -54,7 +54,7 @@ test.describe.serial('Search provider management', () => {
 
     // Empty state message
     await expect(page.getByText('No search providers configured')).toBeVisible({ timeout: 5_000 })
-    await expect(page.getByText('Connect a search provider so your Kins can look things up on the web.')).toBeVisible()
+    await expect(page.getByText('Connect a search provider so your Agents can look things up on the web.')).toBeVisible()
   })
 
   test('should add a Brave Search provider', async ({ page }) => {
@@ -112,7 +112,7 @@ test.describe.serial('Search provider management', () => {
 
     // Default provider section should be visible
     await expect(page.getByText('Default provider')).toBeVisible({ timeout: 5_000 })
-    await expect(page.getByText('Used by all Kins unless they override it individually.')).toBeVisible()
+    await expect(page.getByText('Used by all Agents unless they override it individually.')).toBeVisible()
   })
 
   test('should change default provider', async ({ page }) => {

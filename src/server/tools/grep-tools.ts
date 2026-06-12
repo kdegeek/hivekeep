@@ -228,7 +228,7 @@ async function execCommand(
 // ── grep ──────────────────────────────────────────────────
 
 export const grepTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (ctx) =>
@@ -380,7 +380,7 @@ export const grepTool: ToolRegistration = {
           if (outputMode === 'content') {
             const { matches, truncated } = parseContentOutput(stdout, workspace, maxResults)
             log.info(
-              { kinId: ctx.kinId, pattern, matchCount: matches.length },
+              { agentId: ctx.agentId, pattern, matchCount: matches.length },
               'Grep search completed',
             )
             return { success: true, matches, matchCount: matches.length, truncated, ...dupFields }
@@ -389,7 +389,7 @@ export const grepTool: ToolRegistration = {
           if (outputMode === 'files_with_matches') {
             const files = parseFilesOutput(stdout, workspace)
             log.info(
-              { kinId: ctx.kinId, pattern, fileCount: files.length },
+              { agentId: ctx.agentId, pattern, fileCount: files.length },
               'Grep search completed',
             )
             return { success: true, files, fileCount: files.length, ...dupFields }
@@ -399,12 +399,12 @@ export const grepTool: ToolRegistration = {
           const counts = parseCountOutput(stdout, workspace)
           const totalCount = counts.reduce((sum, e) => sum + e.count, 0)
           log.info(
-            { kinId: ctx.kinId, pattern, totalCount },
+            { agentId: ctx.agentId, pattern, totalCount },
             'Grep search completed',
           )
           return { success: true, counts, totalCount, ...dupFields }
         } catch (err: any) {
-          log.error({ kinId: ctx.kinId, pattern, err }, 'Grep search failed')
+          log.error({ agentId: ctx.agentId, pattern, err }, 'Grep search failed')
           return { success: false, error: err.message }
         }
       },

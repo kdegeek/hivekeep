@@ -4,14 +4,14 @@ import { eq, and, desc, asc, inArray, like, or, sql, gte, lte, isNull, isNotNull
 import { v4 as uuid } from 'uuid'
 import { db, sqlite } from '@/server/db/index'
 import { createLogger } from '@/server/logger'
-import { tasks, kins, messages, tickets, projects } from '@/server/db/schema'
+import { tasks, agents, messages, tickets, projects } from '@/server/db/schema'
 import { enqueueMessage } from '@/server/services/queue'
 import { buildSystemPrompt } from '@/server/services/prompt-builder'
 import { getSystemContext } from '@/server/services/system-context'
 import { buildSegmentedMessages } from '@/server/services/llm-cache-hints'
 import { stringifyToolResultValue } from '@/server/llm/core/vercel-bridge'
-import type { KinbotMessage, KinbotMessageBlock } from '@/server/llm/llm/types'
-import { resolveThinkingConfig, isContextTooLargeError, sanitizePersistedToolCalls, getActiveKinStreamSnapshot } from '@/server/services/kin-engine'
+import type { HivekeepMessage, HivekeepMessageBlock } from '@/server/llm/llm/types'
+import { resolveThinkingConfig, isContextTooLargeError, sanitizePersistedToolCalls, getActiveAgentStreamSnapshot } from '@/server/services/agent-engine'
 import { toolRegistry } from '@/server/tools/index'
 import { sseManager } from '@/server/sse/index'
 import { config } from '@/server/config'
@@ -20,20 +20,20 @@ import { wrapToolsWithSpill } from '@/server/services/tool-output-spill'
 import { executeToolBatch } from '@/server/services/tool-executor'
 import { recordUsage, aggregateUsages, getTaskTotals } from '@/server/services/token-usage'
 import { runStreamStep, type ReasoningSegment } from '@/server/services/stream-runner'
-import type { TaskStatus, TaskMode, KinThinkingConfig } from '@/shared/types'
+import type { TaskStatus, TaskMode, AgentThinkingConfig } from '@/shared/types'
 
 const log = createLogger('tasks')
 
 /**
  * Minimal safety floor of native tools that genuinely cannot run inside a
- * sub-Kin, regardless of the toolboxes a task references. These are removed
+ * sub-Agent, regardless of the toolboxes a task references. These are removed
  * AFTER the toolbox allow-list is computed, so even a toolbox that lists one
  * of them (e.g. the built-in 'all') cannot smuggle it into a task.
  *
  * The list is deliberately minimal — it only covers tools that require the
- * main session (cron admin, MCP admin, Kin management, custom-tool admin, and
+ * main session (cron admin, MCP admin, Agent management, custom-tool admin, and
  * the task-control tools that operate on the parent's task list). Note that
- * `spawn_self` and `spawn_kin` are intentionally NOT here: they become
+ * `spawn_self` and `spawn_agent` are intentionally NOT here: they become
  * includable via a toolbox, unlocking sub-task delegation.
  */
 export const HARD_EXCLUDED_FROM_SUBKIN: readonly string[] = [
@@ -41,7 +41,7 @@ export const HARD_EXCLUDED_FROM_SUBKIN: readonly string[] = [
   'respond_to_task',
   'cancel_task',
   'list_tasks',
-  // Inter-Kin reply protocol (main-session only).
+  // Inter-Agent reply protocol (main-session only).
   'reply',
   // Cron admin.
   'create_cron',
@@ -54,7 +54,7 @@ export const HARD_EXCLUDED_FROM_SUBKIN: readonly string[] = [
   'remove_mcp_server',
   'list_mcp_servers',
   // Custom-tool & tool-domain admin (the resulting custom_<slug> tools stay
-  // callable in sub-Kins when a toolbox grants them).
+  // callable in sub-Agents when a toolbox grants them).
   'create_custom_tool',
   'write_custom_tool_file',
   'run_custom_tool_setup',
@@ -65,11 +65,11 @@ export const HARD_EXCLUDED_FROM_SUBKIN: readonly string[] = [
   'create_tool_domain',
   'update_tool_domain',
   'delete_tool_domain',
-  // Kin management.
-  'create_kin',
-  'update_kin',
-  'delete_kin',
-  'get_kin_details',
+  // Agent management.
+  'create_agent',
+  'update_agent',
+  'delete_agent',
+  'get_agent_details',
 ]
 
 /** Parse a `tasks.toolbox_ids` JSON column into a clean string[] (or undefined
@@ -178,7 +178,7 @@ export interface ActiveTaskStreamSnapshot {
   reasoning: ReasoningSegment[]
   /** Running sum of output tokens reported so far this turn (one increment per
    *  completed step). Drives the live token counter in the thinking bubble,
-   *  mirroring ActiveKinStreamSnapshot.outputTokens on the main thread. */
+   *  mirroring ActiveAgentStreamSnapshot.outputTokens on the main thread. */
   outputTokens: number
   /** Epoch (ms) when this streaming turn started. Lets a client mounting
    *  mid-stream resume the thinking-bubble chrono from the real start instead
@@ -189,17 +189,17 @@ export interface ActiveTaskStreamSnapshot {
 const activeTaskStreams = new Map<string, ActiveTaskStreamSnapshot>()
 
 /** Read-only access to an in-flight task's accumulated content/tool-calls/reasoning.
- *  The returned arrays are live references held by `executeSubKin` — callers must not mutate them. */
+ *  The returned arrays are live references held by `executeSubAgent` — callers must not mutate them. */
 export function getActiveTaskSnapshot(taskId: string): ActiveTaskStreamSnapshot | undefined {
   return activeTaskStreams.get(taskId)
 }
 
-/** Build a public avatar URL from a Kin's stored avatar path */
-function kinAvatarUrl(kinId: string, avatarPath: string | null, updatedAt?: Date | null): string | null {
+/** Build a public avatar URL from an Agent's stored avatar path */
+function agentAvatarUrl(agentId: string, avatarPath: string | null, updatedAt?: Date | null): string | null {
   if (!avatarPath) return null
   const ext = avatarPath.split('.').pop() ?? 'png'
   const v = updatedAt ? updatedAt.getTime() : Date.now()
-  return `/api/uploads/kins/${kinId}/avatar.${ext}?v=${v}`
+  return `/api/uploads/agents/${agentId}/avatar.${ext}?v=${v}`
 }
 
 // ─── Startup Recovery ────────────────────────────────────────────────────────
@@ -211,16 +211,16 @@ function kinAvatarUrl(kinId: string, avatarPath: string | null, updatedAt?: Date
  */
 export function recoverStaleTasks() {
   // Note: 'awaiting_human_input' is NOT recovered — the human can still respond after restart
-  // Note: 'awaiting_kin_response' IS recovered — the timeout timer is lost on restart
+  // Note: 'awaiting_agent_response' IS recovered — the timeout timer is lost on restart
   // Note: 'awaiting_subtask' IS recovered — the in-memory resume linkage is lost on restart
   //       (a parent waiting on a child that's also force-failed here is acceptable for v1)
   // Note: 'queued' is NOT recovered — global-queue tasks survive a restart and are
   //       re-driven by promoteGlobalQueue() at startup (see startQueueWorker). A
   //       fresh-start queued task runs from scratch; a resuming queued task already
-  //       has its reply/digest injected in history, so executeSubKin picks up cleanly.
+  //       has its reply/digest injected in history, so executeSubAgent picks up cleanly.
   // Note: 'paused' IS recovered — the user context is lost on restart
   const result = sqlite.run(
-    `UPDATE tasks SET status = 'failed', error = 'Interrupted by server restart', ended_at = COALESCE(ended_at, ?), updated_at = ? WHERE status IN ('pending', 'in_progress', 'paused', 'awaiting_kin_response', 'awaiting_subtask')`,
+    `UPDATE tasks SET status = 'failed', error = 'Interrupted by server restart', ended_at = COALESCE(ended_at, ?), updated_at = ? WHERE status IN ('pending', 'in_progress', 'paused', 'awaiting_agent_response', 'awaiting_subtask')`,
     [Date.now(), Date.now()],
   )
   if (result.changes > 0) {
@@ -230,7 +230,7 @@ export function recoverStaleTasks() {
 
 // ─── Concurrency Group Helpers ───────────────────────────────────────────────
 
-const ACTIVE_STATUSES: TaskStatus[] = ['pending', 'in_progress', 'paused', 'awaiting_human_input', 'awaiting_kin_response', 'awaiting_subtask']
+const ACTIVE_STATUSES: TaskStatus[] = ['pending', 'in_progress', 'paused', 'awaiting_human_input', 'awaiting_agent_response', 'awaiting_subtask']
 
 async function countActiveTasksInGroup(group: string, excludeTaskId?: string): Promise<number> {
   const base = and(eq(tasks.concurrencyGroup, group), inArray(tasks.status, ACTIVE_STATUSES))
@@ -253,9 +253,9 @@ async function countActiveTasksInGroup(group: string, excludeTaskId?: string): P
 //
 // A task occupies a global slot ONLY while it is scheduled-to-run or actively
 // in an LLM turn / running a tool. The suspended states (awaiting_human_input,
-// awaiting_kin_response, awaiting_subtask, paused) are IDLE — they release the
+// awaiting_agent_response, awaiting_subtask, paused) are IDLE — they release the
 // global slot so a waiting task can run while another sits blocked on a human,
-// a sibling Kin, a child sub-task, or a manual pause. (This is the opposite of
+// a sibling Agent, a child sub-task, or a manual pause. (This is the opposite of
 // the per-group constraint, where a suspended run still blocks its group.)
 const EXECUTING_STATUSES: TaskStatus[] = ['pending', 'in_progress']
 
@@ -290,7 +290,7 @@ async function countExecutingTasks(excludeTaskId?: string): Promise<number> {
  *     it to in_progress), AND
  *   - its group is under cap (no group, or countActiveTasksInGroup < max).
  *
- * If both hold → run executeSubKin (the row is already in_progress, so this is a
+ * If both hold → run executeSubAgent (the row is already in_progress, so this is a
  * direct re-entry). Otherwise → demote to 'queued' (queued_at = now) WITHOUT
  * running; promoteGlobalQueue() will start it later off the already-injected
  * history. Returns true when the task was actually (re-)entered into execution.
@@ -316,8 +316,8 @@ export async function runOrQueueResumedTask(taskId: string): Promise<boolean> {
   }
 
   if (globalHasSlot && groupHasSlot) {
-    executeSubKin(taskId).catch((err) =>
-      log.error({ taskId, err }, 'Sub-Kin resume execution error'),
+    executeSubAgent(taskId).catch((err) =>
+      log.error({ taskId, err }, 'Sub-Agent resume execution error'),
     )
     return true
   }
@@ -333,18 +333,18 @@ export async function runOrQueueResumedTask(taskId: string): Promise<boolean> {
     return false
   }
 
-  const executingKinId = task.sourceKinId ?? task.parentKinId
-  const executingKin = await db.select().from(kins).where(eq(kins.id, executingKinId)).get()
-  sseManager.sendToKin(task.parentKinId, {
+  const executingAgentId = task.sourceAgentId ?? task.parentAgentId
+  const executingAgent = await db.select().from(agents).where(eq(agents.id, executingAgentId)).get()
+  sseManager.sendToAgent(task.parentAgentId, {
     type: 'task:status',
-    kinId: task.parentKinId,
+    agentId: task.parentAgentId,
     data: {
       taskId,
-      kinId: task.parentKinId,
+      agentId: task.parentAgentId,
       status: 'queued',
       title: task.title ?? task.description,
-      senderName: executingKin?.name ?? null,
-      senderAvatarUrl: kinAvatarUrl(executingKinId, executingKin?.avatarPath ?? null, executingKin?.updatedAt),
+      senderName: executingAgent?.name ?? null,
+      senderAvatarUrl: agentAvatarUrl(executingAgentId, executingAgent?.avatarPath ?? null, executingAgent?.updatedAt),
       concurrencyGroup: task.concurrencyGroup,
     },
   })
@@ -363,20 +363,20 @@ export async function runOrQueueResumedTask(taskId: string): Promise<boolean> {
  * we try the next-oldest queued task (the global slot stays free for a
  * group-clear candidate behind it).
  *
- * Promotion = set 'pending' + kick off executeSubKin in the background, exactly
- * like spawnTask's fresh-start path. For resumes, the reply/kin-response/
+ * Promotion = set 'pending' + kick off executeSubAgent in the background, exactly
+ * like spawnTask's fresh-start path. For resumes, the reply/agent-response/
  * scout-digest was already injected into the task history before the task was
- * queued, so "promote = run executeSubKin" works uniformly (executeSubKin reads
+ * queued, so "promote = run executeSubAgent" works uniformly (executeSubAgent reads
  * the full history on (re-)entry).
  *
  * Concurrency-safe: each promotion claims the row with an atomic conditional
  * UPDATE (status = 'pending' WHERE id = ? AND status = 'queued'). If two
- * releases race, only one claim sees changes > 0 and runs executeSubKin; the
+ * releases race, only one claim sees changes > 0 and runs executeSubAgent; the
  * loser skips that row. The claimed id is also tracked in-process so the same
  * invocation never re-counts a just-promoted row before the DB write lands.
  */
 export async function promoteGlobalQueue(): Promise<void> {
-  // Guard against an unbounded loop if executeSubKin's status flip lags: cap
+  // Guard against an unbounded loop if executeSubAgent's status flip lags: cap
   // the number of promotions per call to the number of currently-queued tasks.
   const queuedTotal = await db
     .select({ count: sql<number>`count(*)` })
@@ -426,40 +426,40 @@ export async function promoteGlobalQueue(): Promise<void> {
       continue
     }
 
-    // Resolve executing Kin info for SSE.
-    const executingKinId = next.sourceKinId ?? next.parentKinId
-    const executingKin = await db.select().from(kins).where(eq(kins.id, executingKinId)).get()
+    // Resolve executing Agent info for SSE.
+    const executingAgentId = next.sourceAgentId ?? next.parentAgentId
+    const executingAgent = await db.select().from(agents).where(eq(agents.id, executingAgentId)).get()
 
-    sseManager.sendToKin(next.parentKinId, {
+    sseManager.sendToAgent(next.parentAgentId, {
       type: 'task:status',
-      kinId: next.parentKinId,
+      agentId: next.parentAgentId,
       data: {
         taskId: next.id,
-        kinId: next.parentKinId,
+        agentId: next.parentAgentId,
         status: 'pending',
         title: next.title ?? next.description,
-        senderName: executingKin?.name ?? null,
-        senderAvatarUrl: kinAvatarUrl(executingKinId, executingKin?.avatarPath ?? null, executingKin?.updatedAt),
+        senderName: executingAgent?.name ?? null,
+        senderAvatarUrl: agentAvatarUrl(executingAgentId, executingAgent?.avatarPath ?? null, executingAgent?.updatedAt),
         concurrencyGroup: next.concurrencyGroup,
       },
     })
 
     log.info({ taskId: next.id, group: next.concurrencyGroup }, 'Queued task promoted to pending (global queue)')
 
-    // Notify source Kin (for spawn_type = 'other'), mirroring spawnTask.
-    if (next.spawnType === 'other' && next.sourceKinId) {
+    // Notify source Agent (for spawn_type = 'other'), mirroring spawnTask.
+    if (next.spawnType === 'other' && next.sourceAgentId) {
       const taskLabel = next.title ?? next.description
       const briefDesc = next.description.length > 200
         ? next.description.slice(0, 200) + '...'
         : next.description
-      notifySourceKin(next.sourceKinId, next.parentKinId, `[Task assigned: ${taskLabel}] ${briefDesc}`, next.id)
-        .catch((err) => log.warn({ taskId: next.id, sourceKinId: next.sourceKinId, err }, 'Failed to notify source Kin on global promote'))
+      notifySourceAgent(next.sourceAgentId, next.parentAgentId, `[Task assigned: ${taskLabel}] ${briefDesc}`, next.id)
+        .catch((err) => log.warn({ taskId: next.id, sourceAgentId: next.sourceAgentId, err }, 'Failed to notify source Agent on global promote'))
     }
 
-    // Promote = actually run the sub-Kin (fresh start OR resume — executeSubKin
+    // Promote = actually run the sub-Agent (fresh start OR resume — executeSubAgent
     // reads the full history either way).
-    executeSubKin(next.id).catch((err) =>
-      log.error({ taskId: next.id, err }, 'Sub-Kin execution error after global promotion'),
+    executeSubAgent(next.id).catch((err) =>
+      log.error({ taskId: next.id, err }, 'Sub-Agent execution error after global promotion'),
     )
   }
 }
@@ -485,38 +485,38 @@ export async function promoteNextQueuedTask(group: string, maxConcurrent: number
     .set({ status: 'pending', queuedAt: null, updatedAt: new Date() })
     .where(eq(tasks.id, next.id))
 
-  // Resolve executing Kin info for SSE
-  const executingKinId = next.sourceKinId ?? next.parentKinId
-  const executingKin = await db.select().from(kins).where(eq(kins.id, executingKinId)).get()
+  // Resolve executing Agent info for SSE
+  const executingAgentId = next.sourceAgentId ?? next.parentAgentId
+  const executingAgent = await db.select().from(agents).where(eq(agents.id, executingAgentId)).get()
 
-  sseManager.sendToKin(next.parentKinId, {
+  sseManager.sendToAgent(next.parentAgentId, {
     type: 'task:status',
-    kinId: next.parentKinId,
+    agentId: next.parentAgentId,
     data: {
       taskId: next.id,
-      kinId: next.parentKinId,
+      agentId: next.parentAgentId,
       status: 'pending',
       title: next.title ?? next.description,
-      senderName: executingKin?.name ?? null,
-      senderAvatarUrl: kinAvatarUrl(executingKinId, executingKin?.avatarPath ?? null, executingKin?.updatedAt),
+      senderName: executingAgent?.name ?? null,
+      senderAvatarUrl: agentAvatarUrl(executingAgentId, executingAgent?.avatarPath ?? null, executingAgent?.updatedAt),
     },
   })
 
   log.info({ taskId: next.id, group }, 'Queued task promoted to pending')
 
-  // Notify source Kin (for spawn_type = 'other')
-  if (next.spawnType === 'other' && next.sourceKinId) {
+  // Notify source Agent (for spawn_type = 'other')
+  if (next.spawnType === 'other' && next.sourceAgentId) {
     const taskLabel = next.title ?? next.description
     const briefDesc = next.description.length > 200
       ? next.description.slice(0, 200) + '...'
       : next.description
-    notifySourceKin(next.sourceKinId, next.parentKinId, `[Task assigned: ${taskLabel}] ${briefDesc}`, next.id)
-      .catch((err) => log.warn({ taskId: next.id, sourceKinId: next.sourceKinId, err }, 'Failed to notify source Kin on promote'))
+    notifySourceAgent(next.sourceAgentId, next.parentAgentId, `[Task assigned: ${taskLabel}] ${briefDesc}`, next.id)
+      .catch((err) => log.warn({ taskId: next.id, sourceAgentId: next.sourceAgentId, err }, 'Failed to notify source Agent on promote'))
   }
 
-  // Execute the sub-Kin
-  executeSubKin(next.id).catch((err) =>
-    log.error({ taskId: next.id, err }, 'Sub-Kin execution error after promotion'),
+  // Execute the sub-Agent
+  executeSubAgent(next.id).catch((err) =>
+    log.error({ taskId: next.id, err }, 'Sub-Agent execution error after promotion'),
   )
 }
 
@@ -529,84 +529,84 @@ export async function forcePromoteTask(taskId: string): Promise<boolean> {
     .set({ status: 'pending', queuedAt: null, updatedAt: new Date() })
     .where(eq(tasks.id, taskId))
 
-  const executingKinId = task.sourceKinId ?? task.parentKinId
-  const executingKin = await db.select().from(kins).where(eq(kins.id, executingKinId)).get()
+  const executingAgentId = task.sourceAgentId ?? task.parentAgentId
+  const executingAgent = await db.select().from(agents).where(eq(agents.id, executingAgentId)).get()
 
-  sseManager.sendToKin(task.parentKinId, {
+  sseManager.sendToAgent(task.parentAgentId, {
     type: 'task:status',
-    kinId: task.parentKinId,
+    agentId: task.parentAgentId,
     data: {
       taskId: task.id,
-      kinId: task.parentKinId,
+      agentId: task.parentAgentId,
       status: 'pending',
       title: task.title ?? task.description,
-      senderName: executingKin?.name ?? null,
-      senderAvatarUrl: kinAvatarUrl(executingKinId, executingKin?.avatarPath ?? null, executingKin?.updatedAt),
+      senderName: executingAgent?.name ?? null,
+      senderAvatarUrl: agentAvatarUrl(executingAgentId, executingAgent?.avatarPath ?? null, executingAgent?.updatedAt),
     },
   })
 
   log.info({ taskId, group: task.concurrencyGroup }, 'Task force-promoted')
 
-  if (task.spawnType === 'other' && task.sourceKinId) {
+  if (task.spawnType === 'other' && task.sourceAgentId) {
     const taskLabel = task.title ?? task.description
     const briefDesc = task.description.length > 200 ? task.description.slice(0, 200) + '...' : task.description
-    notifySourceKin(task.sourceKinId, task.parentKinId, `[Task assigned: ${taskLabel}] ${briefDesc}`, task.id)
-      .catch((err) => log.warn({ taskId, sourceKinId: task.sourceKinId, err }, 'Failed to notify source Kin on force-promote'))
+    notifySourceAgent(task.sourceAgentId, task.parentAgentId, `[Task assigned: ${taskLabel}] ${briefDesc}`, task.id)
+      .catch((err) => log.warn({ taskId, sourceAgentId: task.sourceAgentId, err }, 'Failed to notify source Agent on force-promote'))
   }
 
-  executeSubKin(taskId).catch((err) =>
-    log.error({ taskId, err }, 'Sub-Kin execution error after force-promote'),
+  executeSubAgent(taskId).catch((err) =>
+    log.error({ taskId, err }, 'Sub-Agent execution error after force-promote'),
   )
 
   return true
 }
 
-// ─── Source Kin Notification ─────────────────────────────────────────────────
+// ─── Source Agent Notification ─────────────────────────────────────────────────
 
 /**
- * Deposit an informational message in the source Kin's main session.
+ * Deposit an informational message in the source Agent's main session.
  * No queue entry → no LLM turn triggered.
- * Follows the same pattern as inter-kin 'inform' messages.
+ * Follows the same pattern as inter-agent 'inform' messages.
  * Only used for spawn_type = 'other' tasks.
  */
-async function notifySourceKin(
-  sourceKinId: string,
-  parentKinId: string,
+async function notifySourceAgent(
+  sourceAgentId: string,
+  parentAgentId: string,
   content: string,
   taskId: string,
 ) {
-  // Guard: source Kin must still exist
-  const sourceKin = await db.select({ id: kins.id }).from(kins).where(eq(kins.id, sourceKinId)).get()
-  if (!sourceKin) return
+  // Guard: source Agent must still exist
+  const sourceAgent = await db.select({ id: agents.id }).from(agents).where(eq(agents.id, sourceAgentId)).get()
+  if (!sourceAgent) return
 
-  const parentKin = await db
-    .select({ name: kins.name })
-    .from(kins)
-    .where(eq(kins.id, parentKinId))
+  const parentAgent = await db
+    .select({ name: agents.name })
+    .from(agents)
+    .where(eq(agents.id, parentAgentId))
     .get()
 
   const msgId = uuid()
   await db.insert(messages).values({
     id: msgId,
-    kinId: sourceKinId,
+    agentId: sourceAgentId,
     role: 'user',
     content,
     sourceType: 'task',
-    sourceId: parentKinId,
-    metadata: JSON.stringify({ relatedTaskId: taskId, fromParentKinId: parentKinId }),
+    sourceId: parentAgentId,
+    metadata: JSON.stringify({ relatedTaskId: taskId, fromParentAgentId: parentAgentId }),
     createdAt: new Date(),
   })
 
-  sseManager.sendToKin(sourceKinId, {
+  sseManager.sendToAgent(sourceAgentId, {
     type: 'chat:message',
-    kinId: sourceKinId,
+    agentId: sourceAgentId,
     data: {
       id: msgId,
       role: 'user',
       content,
       sourceType: 'task',
-      sourceId: parentKinId,
-      sourceName: parentKin?.name ?? null,
+      sourceId: parentAgentId,
+      sourceName: parentAgent?.name ?? null,
       resolvedTaskId: taskId,
       createdAt: Date.now(),
     },
@@ -616,12 +616,12 @@ async function notifySourceKin(
 // ─── Spawn ───────────────────────────────────────────────────────────────────
 
 interface SpawnParams {
-  parentKinId: string
+  parentAgentId: string
   title?: string
   description: string
   mode: TaskMode
   spawnType: 'self' | 'other'
-  sourceKinId?: string
+  sourceAgentId?: string
   model?: string
   providerId?: string
   parentTaskId?: string
@@ -633,10 +633,10 @@ interface SpawnParams {
   ticketId?: string
   /** Specialized task variant — see schema. Defaults to 'execute'. */
   kind?: 'execute' | 'enrich'
-  thinkingConfig?: KinThinkingConfig
+  thinkingConfig?: AgentThinkingConfig
   concurrencyGroup?: string
   concurrencyMax?: number
-  /** Optional sub-Kin tool preset override (DEPRECATED — superseded by
+  /** Optional sub-Agent tool preset override (DEPRECATED — superseded by
    *  `toolboxIds`). When set and `toolboxIds` is absent, it is mapped to the
    *  built-in toolbox of the same name at execution time. Use 'all' to
    *  explicitly disable filtering on a ticket task. */
@@ -650,7 +650,7 @@ interface SpawnParams {
   /** Optional run-specific sur-prompt persisted on the task row and injected
    *  into the ticket-assignment block at prompt-build time. Ticket tasks only. */
   runPrompt?: string | null
-  /** When true, insert the task row but do NOT kick off `executeSubKin`. The
+  /** When true, insert the task row but do NOT kick off `executeSubAgent`. The
    *  caller is responsible for starting execution (e.g. after seeding cloned
    *  messages). Used by `retryTask`. */
   skipExecute?: boolean
@@ -659,12 +659,12 @@ interface SpawnParams {
 /**
  * Frozen-at-spawn snapshot of every piece of stable prompt context for a task.
  * Together with `tasks.ticket_assignment_snapshot`, this captures *all* the
- * sources of the sub-Kin's stable system prefix so that re-entries (request_input
+ * sources of the sub-Agent's stable system prefix so that re-entries (request_input
  * replies, sub-sub-task completions, human_prompt answers, parent replies,
  * nudges) reuse a byte-identical prefix → the Anthropic prompt cache stays
  * warm across the entire lifetime of the task. External DB edits made during
- * execution (renaming the Kin, editing its character, adding cron learnings,
- * tweaking the global prompt, registering a new Kin) deliberately do NOT reach
+ * execution (renaming the Agent, editing its character, adding cron learnings,
+ * tweaking the global prompt, registering a new Agent) deliberately do NOT reach
  * a running task — they will only take effect on subsequent spawns.
  *
  * Dates are serialized as ISO strings so the JSON survives a round-trip through
@@ -672,7 +672,7 @@ interface SpawnParams {
  * expects them.
  */
 export interface TaskPromptContextSnapshot {
-  kin: {
+  agent: {
     name: string
     slug: string | null
     role: string
@@ -684,7 +684,7 @@ export interface TaskPromptContextSnapshot {
     thinkingConfig: string | null
   }
   globalPrompt: string | null
-  kinDirectory: Array<{ id: string; slug: string | null; name: string; role: string }>
+  agentDirectory: Array<{ id: string; slug: string | null; name: string; role: string }>
   previousCronRuns?: Array<{
     status: string
     result: string | null
@@ -699,40 +699,40 @@ export interface TaskPromptContextSnapshot {
   }>
 }
 
-/** Build the prompt-context snapshot at spawn time. Resolves the identity Kin
- *  using the same rule as `executeSubKin` (parent unless `spawn_type='other'`
- *  with a `sourceKinId`). Throws if the identity Kin is missing. */
+/** Build the prompt-context snapshot at spawn time. Resolves the identity Agent
+ *  using the same rule as `executeSubAgent` (parent unless `spawn_type='other'`
+ *  with a `sourceAgentId`). Throws if the identity Agent is missing. */
 async function captureTaskPromptContextSnapshot(params: {
-  parentKinId: string
-  sourceKinId?: string | null
+  parentAgentId: string
+  sourceAgentId?: string | null
   spawnType: 'self' | 'other'
   cronId?: string | null
 }): Promise<TaskPromptContextSnapshot> {
-  const identityKinId = params.spawnType === 'other' && params.sourceKinId
-    ? params.sourceKinId
-    : params.parentKinId
-  const identityKin = await db.select().from(kins).where(eq(kins.id, identityKinId)).get()
-  if (!identityKin) throw new Error('IDENTITY_KIN_NOT_FOUND')
+  const identityAgentId = params.spawnType === 'other' && params.sourceAgentId
+    ? params.sourceAgentId
+    : params.parentAgentId
+  const identityAgent = await db.select().from(agents).where(eq(agents.id, identityAgentId)).get()
+  if (!identityAgent) throw new Error('IDENTITY_KIN_NOT_FOUND')
 
-  const [globalPrompt, kinDirectory] = await Promise.all([
+  const [globalPrompt, agentDirectory] = await Promise.all([
     getGlobalPrompt(),
-    (await import('@/server/services/inter-kin')).listAvailableKins(identityKin.id),
+    (await import('@/server/services/inter-agent')).listAvailableAgents(identityAgent.id),
   ])
 
   const snapshot: TaskPromptContextSnapshot = {
-    kin: {
-      name: identityKin.name,
-      slug: identityKin.slug,
-      role: identityKin.role,
-      character: identityKin.character,
-      expertise: identityKin.expertise,
-      workspacePath: identityKin.workspacePath,
-      model: identityKin.model,
-      providerId: identityKin.providerId,
-      thinkingConfig: identityKin.thinkingConfig,
+    agent: {
+      name: identityAgent.name,
+      slug: identityAgent.slug,
+      role: identityAgent.role,
+      character: identityAgent.character,
+      expertise: identityAgent.expertise,
+      workspacePath: identityAgent.workspacePath,
+      model: identityAgent.model,
+      providerId: identityAgent.providerId,
+      thinkingConfig: identityAgent.thinkingConfig,
     },
     globalPrompt,
-    kinDirectory,
+    agentDirectory,
   }
 
   if (params.cronId) {
@@ -813,7 +813,7 @@ export async function spawnTask(params: SpawnParams) {
     throw new Error('TICKET_TASK_REQUIRES_AWAIT')
   }
 
-  // Freeze the ticket assignment context at spawn time so the sub-Kin's stable
+  // Freeze the ticket assignment context at spawn time so the sub-Agent's stable
   // system prefix doesn't change for the lifetime of this task. Without the
   // freeze, every re-entry (request_input reply, sub-sub-task completion,
   // human_prompt answer, nudge) rebuilt the block live — and any change to
@@ -823,7 +823,7 @@ export async function spawnTask(params: SpawnParams) {
   if (params.ticketId) {
     const { buildTicketAssignmentInfo } = await import('@/server/services/tickets')
     // Pass the spawn-time runPrompt so the per-run sur-prompt block is baked
-    // into the frozen snapshot. Without this, the sub-Kin would see the run
+    // into the frozen snapshot. Without this, the sub-Agent would see the run
     // prompt only on the first turn (via the live-fetch path that no longer
     // runs once the snapshot is present).
     const info = await buildTicketAssignmentInfo(params.ticketId, {
@@ -833,14 +833,14 @@ export async function spawnTask(params: SpawnParams) {
     if (info) ticketAssignmentSnapshot = JSON.stringify(info)
   }
 
-  // Freeze the rest of the stable system context (Kin identity, global prompt,
-  // Kin directory, cron context). Same motivation as the ticket snapshot above:
-  // make the sub-Kin's stable prefix byte-identical across re-entries so the
+  // Freeze the rest of the stable system context (Agent identity, global prompt,
+  // Agent directory, cron context). Same motivation as the ticket snapshot above:
+  // make the sub-Agent's stable prefix byte-identical across re-entries so the
   // Anthropic prompt cache survives.
   const promptContextSnapshot = JSON.stringify(
     await captureTaskPromptContextSnapshot({
-      parentKinId: params.parentKinId,
-      sourceKinId: params.sourceKinId ?? null,
+      parentAgentId: params.parentAgentId,
+      sourceAgentId: params.sourceAgentId ?? null,
       spawnType: params.spawnType,
       cronId: params.cronId ?? null,
     }),
@@ -851,11 +851,11 @@ export async function spawnTask(params: SpawnParams) {
   // Frozen at spawn so the task keeps the same config across all re-entries
   // (same motivation as the ticket assignment snapshot above — keep Anthropic
   // prompt cache warm).
-  // Priority chain (per field): params > project > kin (kin fallback happens
+  // Priority chain (per field): params > project > agent (agent fallback happens
   // at execution time when the task column stays null).
   let effectiveModel = params.model ?? null
   let effectiveProviderId = params.providerId ?? null
-  let effectiveThinkingConfig: KinThinkingConfig | null = params.thinkingConfig ?? null
+  let effectiveThinkingConfig: AgentThinkingConfig | null = params.thinkingConfig ?? null
   // Toolbox selection resolution chain: explicit spawn param > project
   // default > runtime default ('code' for tickets / 'all' otherwise, resolved
   // lazily by resolveTaskToolboxIds when this stays null). Freeze the project
@@ -880,9 +880,9 @@ export async function spawnTask(params: SpawnParams) {
     }
     if (!effectiveThinkingConfig && projectRow?.thinkingConfig) {
       try {
-        effectiveThinkingConfig = JSON.parse(projectRow.thinkingConfig) as KinThinkingConfig
+        effectiveThinkingConfig = JSON.parse(projectRow.thinkingConfig) as AgentThinkingConfig
       } catch {
-        // Malformed JSON on the project row — ignore and fall back to the Kin.
+        // Malformed JSON on the project row — ignore and fall back to the Agent.
         effectiveThinkingConfig = null
       }
     }
@@ -903,8 +903,8 @@ export async function spawnTask(params: SpawnParams) {
 
   await db.insert(tasks).values({
     id: taskId,
-    parentKinId: params.parentKinId,
-    sourceKinId: params.sourceKinId ?? null,
+    parentAgentId: params.parentAgentId,
+    sourceAgentId: params.sourceAgentId ?? null,
     spawnType: params.spawnType,
     kind: params.kind ?? 'execute',
     mode: params.mode,
@@ -933,64 +933,64 @@ export async function spawnTask(params: SpawnParams) {
     updatedAt: now,
   })
 
-  // Resolve executing Kin info for SSE metadata
-  const executingKinId = params.sourceKinId ?? params.parentKinId
-  const executingKin = await db.select().from(kins).where(eq(kins.id, executingKinId)).get()
+  // Resolve executing Agent info for SSE metadata
+  const executingAgentId = params.sourceAgentId ?? params.parentAgentId
+  const executingAgent = await db.select().from(agents).where(eq(agents.id, executingAgentId)).get()
 
   // Anchor the live task card to the assistant message that triggered the
-  // spawn. When spawn_self / spawn_kin fire mid-turn, the parent Kin still has
+  // spawn. When spawn_self / spawn_agent fire mid-turn, the parent Agent still has
   // an in-flight main-thread stream whose messageId IS the spawning assistant
   // message (the same id is reused as the persisted DB row at chat:done). The
   // client uses this to render the card directly under that message instead of
   // sorting it by createdAt (which lands before the message, since the row is
   // only persisted at end-of-turn). Null for tasks spawned outside a main-thread
-  // turn (webhooks, crons, retries, sub-Kin spawns) — those fall back to the
+  // turn (webhooks, crons, retries, sub-Agent spawns) — those fall back to the
   // createdAt-based placement.
-  const triggerMessageId = getActiveKinStreamSnapshot(params.parentKinId)?.messageId ?? null
+  const triggerMessageId = getActiveAgentStreamSnapshot(params.parentAgentId)?.messageId ?? null
 
   // Emit SSE event with metadata for live task card
-  sseManager.sendToKin(params.parentKinId, {
+  sseManager.sendToAgent(params.parentAgentId, {
     type: 'task:status',
-    kinId: params.parentKinId,
+    agentId: params.parentAgentId,
     data: {
       taskId,
-      kinId: params.parentKinId,
+      agentId: params.parentAgentId,
       status: initialStatus,
       title: params.title ?? params.description,
-      senderName: executingKin?.name ?? null,
-      senderAvatarUrl: kinAvatarUrl(executingKinId, executingKin?.avatarPath ?? null, executingKin?.updatedAt),
+      senderName: executingAgent?.name ?? null,
+      senderAvatarUrl: agentAvatarUrl(executingAgentId, executingAgent?.avatarPath ?? null, executingAgent?.updatedAt),
       concurrencyGroup,
       triggerMessageId,
     },
   })
 
-  log.info({ taskId, parentKinId: params.parentKinId, mode: params.mode, spawnType: params.spawnType, depth, queued: initialStatus === 'queued' }, 'Task spawned')
+  log.info({ taskId, parentAgentId: params.parentAgentId, mode: params.mode, spawnType: params.spawnType, depth, queued: initialStatus === 'queued' }, 'Task spawned')
 
   // If queued, don't execute yet — will be promoted when a slot opens
   if (initialStatus === 'queued') {
     return { taskId, queued: true }
   }
 
-  // Notify source Kin about being spawned (only for spawn_type = 'other')
-  if (params.spawnType === 'other' && params.sourceKinId) {
+  // Notify source Agent about being spawned (only for spawn_type = 'other')
+  if (params.spawnType === 'other' && params.sourceAgentId) {
     const taskLabel = params.title ?? params.description
     // Truncate description to avoid leaking raw prompts into the conversation UI
     const briefDesc = params.description.length > 200
       ? params.description.slice(0, 200) + '...'
       : params.description
-    notifySourceKin(
-      params.sourceKinId,
-      params.parentKinId,
+    notifySourceAgent(
+      params.sourceAgentId,
+      params.parentAgentId,
       `[Task assigned: ${taskLabel}] ${briefDesc}`,
       taskId,
-    ).catch((err) => log.warn({ taskId, sourceKinId: params.sourceKinId, err }, 'Failed to notify source Kin on spawn'))
+    ).catch((err) => log.warn({ taskId, sourceAgentId: params.sourceAgentId, err }, 'Failed to notify source Agent on spawn'))
   }
 
-  // Execute the sub-Kin in the background (unless the caller wants to seed
+  // Execute the sub-Agent in the background (unless the caller wants to seed
   // state first — see `skipExecute`, used by `retryTask`).
   if (!params.skipExecute) {
-    executeSubKin(taskId).catch((err) =>
-      log.error({ taskId, err }, 'Sub-Kin execution error'),
+    executeSubAgent(taskId).catch((err) =>
+      log.error({ taskId, err }, 'Sub-Agent execution error'),
     )
   }
 
@@ -1001,7 +1001,7 @@ export async function spawnTask(params: SpawnParams) {
 
 export interface StartOrphanTaskResult {
   taskId: string
-  parentKinId: string
+  parentAgentId: string
   status: string
   mode: TaskMode
   queued: boolean
@@ -1009,38 +1009,38 @@ export interface StartOrphanTaskResult {
 }
 
 /**
- * Spawn a human-initiated standalone task on a Kin with NO project/ticket
- * binding. The Kin runs the given prompt in an ephemeral sub-Kin and its
- * result is deposited back as an informational message in the Kin's main
+ * Spawn a human-initiated standalone task on an Agent with NO project/ticket
+ * binding. The Agent runs the given prompt in an ephemeral sub-Agent and its
+ * result is deposited back as an informational message in the Agent's main
  * session (async mode — same shape as cron/webhook orphan tasks).
  *
  * Resolution chains (all "inherit when unset"):
- *   - model/provider: explicit override → Kin's own model (no project to
+ *   - model/provider: explicit override → Agent's own model (no project to
  *     consult, since there is no ticket). model+providerId are coupled.
- *   - thinking/effort: explicit override → Kin's own config.
+ *   - thinking/effort: explicit override → Agent's own config.
  *   - toolboxes: explicit selection → runtime default 'all' (non-ticket) via
  *     resolveTaskToolboxIds when left null.
  *
  * Throws 'KIN_NOT_FOUND' / 'MODEL_AND_PROVIDER_MUST_BOTH_BE_SET' / 'EMPTY_PROMPT'.
  */
 export async function startOrphanTask(
-  parentKinId: string,
+  parentAgentId: string,
   input: {
     prompt: string
     title?: string | null
     model?: string | null
     providerId?: string | null
-    thinkingConfig?: KinThinkingConfig | null
+    thinkingConfig?: AgentThinkingConfig | null
     toolboxIds?: string[] | null
   },
 ): Promise<StartOrphanTaskResult> {
-  const kin = db.select({ id: kins.id }).from(kins).where(eq(kins.id, parentKinId)).get()
-  if (!kin) throw new Error('KIN_NOT_FOUND')
+  const agent = db.select({ id: agents.id }).from(agents).where(eq(agents.id, parentAgentId)).get()
+  if (!agent) throw new Error('KIN_NOT_FOUND')
 
   const prompt = input.prompt?.trim() ?? ''
   if (!prompt) throw new Error('EMPTY_PROMPT')
 
-  // model + providerId are coupled — both set or both absent (inherit from Kin).
+  // model + providerId are coupled — both set or both absent (inherit from Agent).
   const modelSet = !!(input.model && input.model.trim())
   const providerSet = !!(input.providerId && input.providerId.trim())
   if (modelSet !== providerSet) throw new Error('MODEL_AND_PROVIDER_MUST_BOTH_BE_SET')
@@ -1048,7 +1048,7 @@ export async function startOrphanTask(
   const title = input.title?.trim() || null
 
   const result = await spawnTask({
-    parentKinId,
+    parentAgentId,
     description: prompt,
     title: title ?? undefined,
     // No parent queue to re-enter and no ticket gate → async, like crons.
@@ -1065,7 +1065,7 @@ export async function startOrphanTask(
 
   return {
     taskId: row.id,
-    parentKinId,
+    parentAgentId,
     status: row.status,
     mode: row.mode as TaskMode,
     queued: result.queued === true,
@@ -1073,29 +1073,29 @@ export async function startOrphanTask(
   }
 }
 
-// ─── Sub-Kin Execution ───────────────────────────────────────────────────────
+// ─── Sub-Agent Execution ───────────────────────────────────────────────────────
 
 /**
- * Re-trigger sub-Kin execution after pause (e.g., human prompt response).
+ * Re-trigger sub-Agent execution after pause (e.g., human prompt response).
  * Reads accumulated message history from DB and starts a new LLM stream.
  */
-export const resumeSubKin = executeSubKin
+export const resumeSubAgent = executeSubAgent
 
-async function executeSubKin(taskId: string, isNudge = false) {
+async function executeSubAgent(taskId: string, isNudge = false) {
   const task = await db.select().from(tasks).where(eq(tasks.id, taskId)).get()
   if (!task) return
 
-  const parentKin = await db.select().from(kins).where(eq(kins.id, task.parentKinId)).get()
-  if (!parentKin) return
+  const parentAgent = await db.select().from(agents).where(eq(agents.id, task.parentAgentId)).get()
+  if (!parentAgent) return
 
-  // Determine which Kin's identity to use. The DB row gives us the still-live
+  // Determine which Agent's identity to use. The DB row gives us the still-live
   // fields we need outside the prompt (id, avatarPath/updatedAt for SSE). The
   // prompt-affecting fields are overlaid from the frozen snapshot below so
-  // mid-task edits to the Kin don't reach a running task.
-  let kinIdentity = parentKin
-  if (task.spawnType === 'other' && task.sourceKinId) {
-    const sourceKin = await db.select().from(kins).where(eq(kins.id, task.sourceKinId)).get()
-    if (sourceKin) kinIdentity = sourceKin
+  // mid-task edits to the Agent don't reach a running task.
+  let agentIdentity = parentAgent
+  if (task.spawnType === 'other' && task.sourceAgentId) {
+    const sourceAgent = await db.select().from(agents).where(eq(agents.id, task.sourceAgentId)).get()
+    if (sourceAgent) agentIdentity = sourceAgent
   }
 
   // Parse the spawn-time prompt-context snapshot. Legacy tasks (rows created
@@ -1113,11 +1113,11 @@ async function executeSubKin(taskId: string, isNudge = false) {
     // Overlay frozen identity fields onto the live row. Spread keeps the live
     // id, avatarPath, updatedAt (used for SSE) while the prompt-facing and
     // model-selection fields come from the snapshot.
-    kinIdentity = { ...kinIdentity, ...promptSnapshot.kin }
+    agentIdentity = { ...agentIdentity, ...promptSnapshot.agent }
   }
 
   // Update status to in_progress. `started_at` is set once via COALESCE so
-  // re-entries (resume, request_input replies, inter-Kin replies, nudges)
+  // re-entries (resume, request_input replies, inter-Agent replies, nudges)
   // never reset the original execution start used for the run duration.
   sqlite.run(
     `UPDATE tasks SET status = 'in_progress', started_at = COALESCE(started_at, ?), updated_at = ? WHERE id = ?`,
@@ -1127,29 +1127,29 @@ async function executeSubKin(taskId: string, isNudge = false) {
     .query(`SELECT started_at AS startedAt FROM tasks WHERE id = ?`)
     .get(taskId) as { startedAt: number | null } | null
 
-  sseManager.sendToKin(task.parentKinId, {
+  sseManager.sendToAgent(task.parentAgentId, {
     type: 'task:status',
-    kinId: task.parentKinId,
+    agentId: task.parentAgentId,
     data: {
       taskId,
-      kinId: task.parentKinId,
+      agentId: task.parentAgentId,
       status: 'in_progress',
       title: task.title ?? task.description,
       startedAt: startedRow?.startedAt ?? null,
-      senderName: kinIdentity.name,
-      senderAvatarUrl: kinAvatarUrl(kinIdentity.id, kinIdentity.avatarPath, kinIdentity.updatedAt),
+      senderName: agentIdentity.name,
+      senderAvatarUrl: agentAvatarUrl(agentIdentity.id, agentIdentity.avatarPath, agentIdentity.updatedAt),
     },
   })
 
   try {
     // ─── Sub-task worktree setup ──────────────────────────────────────────
     // For ticket tasks against a project with a ready GitHub clone, give the
-    // sub-Kin its own git worktree so concurrent sub-tasks can edit/commit/
+    // sub-Agent its own git worktree so concurrent sub-tasks can edit/commit/
     // push without trampling each other (see worktree.ts). `effective*` are
-    // the values the rest of executeSubKin uses — they fall through to the
-    // Kin's static workspace when there's no clone (legacy / non-code work).
+    // the values the rest of executeSubAgent uses — they fall through to the
+    // Agent's static workspace when there's no clone (legacy / non-code work).
     let workspaceOverride: { path: string; env?: Record<string, string> } | undefined
-    let effectiveWorkspacePath: string | null = kinIdentity.workspacePath
+    let effectiveWorkspacePath: string | null = agentIdentity.workspacePath
     if (task.ticketId) {
       const ticketRow = await db
         .select()
@@ -1175,7 +1175,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
           })
           workspaceOverride = {
             path: wt.path,
-            env: { KINBOT_GH_TOKEN: wt.pat },
+            env: { HIVEKEEP_GH_TOKEN: wt.pat },
           }
           effectiveWorkspacePath = wt.path
           log.info(
@@ -1211,16 +1211,16 @@ async function executeSubKin(taskId: string, isNudge = false) {
           : (await import('@/server/services/cron-learnings')).fetchCronLearnings(task.cronId))
       : undefined
 
-    // Global prompt + Kin directory — frozen snapshot or live fallback.
+    // Global prompt + Agent directory — frozen snapshot or live fallback.
     const globalPrompt = promptSnapshot?.globalPrompt !== undefined
       ? promptSnapshot.globalPrompt
       : await getGlobalPrompt()
-    const kinDirectory = promptSnapshot?.kinDirectory
-      ? promptSnapshot.kinDirectory
-      : await (await import('@/server/services/inter-kin')).listAvailableKins(kinIdentity.id)
+    const agentDirectory = promptSnapshot?.agentDirectory
+      ? promptSnapshot.agentDirectory
+      : await (await import('@/server/services/inter-agent')).listAvailableAgents(agentIdentity.id)
 
     // Ticket assignment context — read the snapshot frozen at spawn time so
-    // the sub-Kin's stable system prefix doesn't change across re-entries
+    // the sub-Agent's stable system prefix doesn't change across re-entries
     // (which would bust the Anthropic prompt cache). Legacy ticket tasks
     // without a snapshot fall back to a live fetch.
     let ticketAssignment: import('@/server/services/prompt-builder').TicketAssignmentInfo | null = null
@@ -1243,17 +1243,17 @@ async function executeSubKin(taskId: string, isNudge = false) {
 
     const { getTodosForTask } = await import('@/server/services/task-todos')
     const systemSegments = buildSystemPrompt({
-      kin: {
-        name: kinIdentity.name,
-        slug: kinIdentity.slug,
-        role: kinIdentity.role,
-        character: kinIdentity.character,
-        expertise: kinIdentity.expertise,
+      agent: {
+        name: agentIdentity.name,
+        slug: agentIdentity.slug,
+        role: agentIdentity.role,
+        character: agentIdentity.character,
+        expertise: agentIdentity.expertise,
       },
       contacts: [],
       relevantMemories: [],
-      kinDirectory,
-      isSubKin: true,
+      agentDirectory,
+      isSubAgent: true,
       taskDescription: task.description,
       previousCronRuns,
       cronLearnings,
@@ -1265,9 +1265,9 @@ async function executeSubKin(taskId: string, isNudge = false) {
       taskTodos: getTodosForTask(taskId),
     })
 
-    // Resolve LLM — use task's provider if stored, else Kin's provider when using Kin's own model
-    const modelId = task.model ?? kinIdentity.model
-    const preferredProvider = task.providerId ?? (task.model ? null : kinIdentity.providerId)
+    // Resolve LLM — use task's provider if stored, else Agent's provider when using Agent's own model
+    const modelId = task.model ?? agentIdentity.model
+    const preferredProvider = task.providerId ?? (task.model ? null : agentIdentity.providerId)
     const { resolveLLM } = await import('@/server/llm/core/resolve')
     let taskResolved
     try {
@@ -1276,22 +1276,22 @@ async function executeSubKin(taskId: string, isNudge = false) {
       throw new Error(`No LLM provider available for task ${taskId}: ${err instanceof Error ? err.message : String(err)}`)
     }
 
-    // Resolve thinking config: task-level override takes precedence over parent Kin.
+    // Resolve thinking config: task-level override takes precedence over parent Agent.
     // Defaults to enabled (interleaved thinking reduces tool-result hallucinations).
     const taskThinkingConfig = resolveThinkingConfig(
-      (task.thinkingConfig as string | null) ?? (kinIdentity.thinkingConfig as string | null),
+      (task.thinkingConfig as string | null) ?? (agentIdentity.thinkingConfig as string | null),
     )
     const taskProviderType = taskResolved.providerRow.type
 
     // Unified toolset resolution. The toolbox is the sole tool-grant primitive
-    // across native + plugin + MCP + custom for the spawned Kin. We resolve the
-    // spawned Kin's MAIN surface (isSubKin: false) intersected with the task's
-    // toolboxes, then subtract the hard sub-Kin floor, then layer on the
-    // sub-Kin-only comms tools (which are infrastructure, never toolbox-gated).
+    // across native + plugin + MCP + custom for the spawned Agent. We resolve the
+    // spawned Agent's MAIN surface (isSubAgent: false) intersected with the task's
+    // toolboxes, then subtract the hard sub-Agent floor, then layer on the
+    // sub-Agent-only comms tools (which are infrastructure, never toolbox-gated).
     //
     // `workspaceOverride` (set above for ticket-on-a-cloned-project tasks)
     // scopes every filesystem + shell tool to the per-task worktree and injects
-    // KINBOT_GH_TOKEN into spawned subprocesses for git auth.
+    // HIVEKEEP_GH_TOKEN into spawned subprocesses for git auth.
     const taskToolboxIds = await resolveTaskToolboxIds({
       toolboxIds: task.toolboxIds as string | null,
       toolPreset: task.toolPreset as string | null,
@@ -1300,12 +1300,12 @@ async function executeSubKin(taskId: string, isNudge = false) {
 
     const { resolveToolset } = await import('@/server/services/toolset-resolver')
     const mainSurface = await resolveToolset({
-      kinId: kinIdentity.id,
+      agentId: agentIdentity.id,
       toolboxIds: taskToolboxIds,
-      // isSubKin:false → resolve the spawned Kin's MAIN tool surface. The hard
-      // sub-Kin floor is subtracted explicitly below (so an 'all' toolbox can't
+      // isSubAgent:false → resolve the spawned Agent's MAIN tool surface. The hard
+      // sub-Agent floor is subtracted explicitly below (so an 'all' toolbox can't
       // smuggle a main-session-only tool through).
-      isSubKin: false,
+      isSubAgent: false,
       taskId,
       taskDepth: task.depth,
       channelOriginId: task.channelOriginId ?? undefined,
@@ -1314,34 +1314,34 @@ async function executeSubKin(taskId: string, isNudge = false) {
       workspaceOverride,
     })
 
-    // Hard sub-Kin floor: removed AFTER the toolbox allow-list.
+    // Hard sub-Agent floor: removed AFTER the toolbox allow-list.
     for (const name of HARD_EXCLUDED_FROM_SUBKIN) {
       delete mainSurface[name]
     }
 
-    // Sub-Kin-specific tools (scoped to parent for communication back).
+    // Sub-Agent-specific tools (scoped to parent for communication back).
     // Same workspace override applies — these tools are mostly comms-only
     // but `record_findings` and friends still write into the worktree. These
     // are NOT toolbox-filtered (infrastructure for the task protocol).
-    const subKinTools = toolRegistry.resolve({
-      kinId: task.parentKinId,
+    const subAgentTools = toolRegistry.resolve({
+      agentId: task.parentAgentId,
       taskId,
       taskDepth: task.depth,
-      isSubKin: true,
+      isSubAgent: true,
       channelOriginId: task.channelOriginId ?? undefined,
       cronId: task.cronId ?? undefined,
       workspaceOverride,
     })
 
-    // On ticket sub-Kins the parent Kin has nothing actionable to do with
+    // On ticket sub-Agents the parent Agent has nothing actionable to do with
     // intermediate progress reports — the user reads the ticket UI instead.
-    // Remove `report_to_parent` so the sub-Kin doesn't waste calls on it.
+    // Remove `report_to_parent` so the sub-Agent doesn't waste calls on it.
     if (task.ticketId) {
-      delete subKinTools['report_to_parent']
+      delete subAgentTools['report_to_parent']
     }
 
     const tools = wrapToolsWithSpill(
-      { ...mainSurface, ...subKinTools },
+      { ...mainSurface, ...subAgentTools },
       effectiveWorkspacePath,
     )
 
@@ -1350,31 +1350,31 @@ async function executeSubKin(taskId: string, isNudge = false) {
         taskId,
         toolboxIds: taskToolboxIds,
         mainSurfaceCount: Object.keys(mainSurface).length,
-        subKinCount: Object.keys(subKinTools).length,
+        subAgentCount: Object.keys(subAgentTools).length,
       },
-      'Sub-Kin toolbox surface resolved',
+      'Sub-Agent toolbox surface resolved',
     )
 
     // Build task message history (only messages for this task)
     const taskMessages = await db
       .select()
       .from(messages)
-      .where(and(eq(messages.kinId, task.parentKinId), eq(messages.taskId, taskId)))
+      .where(and(eq(messages.agentId, task.parentAgentId), eq(messages.taskId, taskId)))
       .orderBy(asc(messages.createdAt))
       .all()
 
-    // Reconstruct KinbotMessage[] from persisted rows. Mirrors the
-    // quick-session path in kin-engine.ts (~L2150): assistant rows with
+    // Reconstruct HivekeepMessage[] from persisted rows. Mirrors the
+    // quick-session path in agent-engine.ts (~L2150): assistant rows with
     // persisted tool calls are expanded into an assistant message carrying
     // tool-use blocks plus a paired user-role message with the tool-result
     // blocks, so the LLM sees the same shape on resume that it saw
     // mid-turn. We also skip empty-content rows so they don't reach
     // `buildSegmentedMessages` and get picked as a cache anchor (Anthropic
     // rejects `cache_control` on empty text blocks). Observed when a
-    // sub-Kin called `request_input` (only a tool call, no text) and the
+    // sub-Agent called `request_input` (only a tool call, no text) and the
     // response message arrived: the in-between assistant row had empty
     // content and was picked as the cross-turn cache anchor.
-    const messageHistory: KinbotMessage[] = []
+    const messageHistory: HivekeepMessage[] = []
     for (const msg of taskMessages) {
       if (msg.role === 'user') {
         const text = msg.content ?? ''
@@ -1385,9 +1385,9 @@ async function executeSubKin(taskId: string, isNudge = false) {
         if (msg.toolCalls) {
           try { parsedToolCalls = JSON.parse(msg.toolCalls as string) } catch { parsedToolCalls = null }
         }
-        const validToolCalls = parsedToolCalls ? sanitizePersistedToolCalls(parsedToolCalls, task.parentKinId) : []
+        const validToolCalls = parsedToolCalls ? sanitizePersistedToolCalls(parsedToolCalls, task.parentAgentId) : []
         if (validToolCalls.length > 0) {
-          const assistantBlocks: KinbotMessageBlock[] = []
+          const assistantBlocks: HivekeepMessageBlock[] = []
           if (msg.content) assistantBlocks.push({ type: 'text', text: msg.content })
           for (const tc of validToolCalls) {
             assistantBlocks.push({ type: 'tool-use', id: tc.id, name: tc.name, args: tc.args })
@@ -1422,7 +1422,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
       const initialMsgCreatedAt = new Date()
       await db.insert(messages).values({
         id: initialMsgId,
-        kinId: task.parentKinId,
+        agentId: task.parentAgentId,
         taskId,
         role: 'user',
         content: task.description,
@@ -1432,9 +1432,9 @@ async function executeSubKin(taskId: string, isNudge = false) {
 
       // Notify the frontend so the task detail modal can show this message
       // immediately instead of waiting for the next fetchDetail() call.
-      sseManager.sendToKin(task.parentKinId, {
+      sseManager.sendToAgent(task.parentAgentId, {
         type: 'chat:message',
-        kinId: task.parentKinId,
+        agentId: task.parentAgentId,
         data: {
           id: initialMsgId,
           taskId,
@@ -1448,7 +1448,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
 
     const hasTools = Object.keys(tools).length > 0
 
-    // Execute LLM with streaming (same pattern as kin-engine)
+    // Execute LLM with streaming (same pattern as agent-engine)
     const assistantMessageId = uuid()
     let fullContent = ''
     const reasoningSegments: ReasoningSegment[] = []
@@ -1472,25 +1472,25 @@ async function executeSubKin(taskId: string, isNudge = false) {
     const assistantMsgCreatedAt = new Date()
     await db.insert(messages).values({
       id: assistantMessageId,
-      kinId: task.parentKinId,
+      agentId: task.parentAgentId,
       taskId,
       role: 'assistant',
       content: '',
-      sourceType: 'kin',
-      sourceId: kinIdentity.id,
+      sourceType: 'agent',
+      sourceId: agentIdentity.id,
       createdAt: assistantMsgCreatedAt,
     })
 
-    sseManager.sendToKin(task.parentKinId, {
+    sseManager.sendToAgent(task.parentAgentId, {
       type: 'chat:message',
-      kinId: task.parentKinId,
+      agentId: task.parentAgentId,
       data: {
         id: assistantMessageId,
         taskId,
         role: 'assistant',
         content: '',
-        sourceType: 'kin',
-        sourceId: kinIdentity.id,
+        sourceType: 'agent',
+        sourceId: agentIdentity.id,
         createdAt: assistantMsgCreatedAt.getTime(),
       },
     })
@@ -1499,11 +1499,11 @@ async function executeSubKin(taskId: string, isNudge = false) {
     const abortController = new AbortController()
     activeTaskAbortControllers.set(taskId, abortController)
 
-    // Convert tools to kinbot shape once.
-    const { vercelToolsToKinbot: taskVercelToolsToKinbot, markLastKinbotToolCacheable: taskMarkLastKinbotToolCacheable } =
+    // Convert tools to hivekeep shape once.
+    const { vercelToolsToHivekeep: taskVercelToolsToHivekeep, markLastHivekeepToolCacheable: taskMarkLastHivekeepToolCacheable } =
       await import('@/server/llm/core/vercel-bridge')
-    const taskKinbotTools = hasTools
-      ? taskMarkLastKinbotToolCacheable(await taskVercelToolsToKinbot(stripToolExecute(tools)))
+    const taskHivekeepTools = hasTools
+      ? taskMarkLastHivekeepToolCacheable(await taskVercelToolsToHivekeep(stripToolExecute(tools)))
       : undefined
 
     const maxSteps = hasTools ? (config.tools.maxSteps > 0 ? config.tools.maxSteps : Infinity) : 1
@@ -1515,7 +1515,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
       reasoningTokens?: number
     }> = []
     let silentStopAfterTools = false
-    // See processNextMessage in kin-engine.ts for rationale.
+    // See processNextMessage in agent-engine.ts for rationale.
     const stepFinishReasons: string[] = []
 
     const taskThinkingEffort = taskThinkingConfig?.enabled ? taskThinkingConfig.effort ?? undefined : undefined
@@ -1531,7 +1531,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
         {
           messages: taskMessages,
           ...(taskSystem ? { system: taskSystem } : {}),
-          ...(taskKinbotTools ? { tools: taskKinbotTools } : {}),
+          ...(taskHivekeepTools ? { tools: taskHivekeepTools } : {}),
           ...(taskThinkingEffort ? { thinkingEffort: taskThinkingEffort } : {}),
           signal: abortController.signal,
         },
@@ -1543,7 +1543,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
       // now driven by `ctx.checkpoint` and persists only *committed* content
       // (the in-flight buffer is never written to DB).
       const outcome = await runStreamStep(stream, {
-        kinId: task.parentKinId,
+        agentId: task.parentAgentId,
         assistantMessageId,
         abortController,
         extraSseFields: { taskId },
@@ -1551,8 +1551,8 @@ async function executeSubKin(taskId: string, isNudge = false) {
         contentSnapshot: streamSnapshot,
         onCommittedText: (delta) => { fullContent += delta },
         onDroppedText: (txt, idx) => log.debug(
-          { taskId, kinId: task.parentKinId, assistantMessageId, step: idx, droppedChars: txt.length, preview: txt.slice(0, 200) },
-          'Dropped pre-narration from intermediate step (sub-Kin)',
+          { taskId, agentId: task.parentAgentId, assistantMessageId, step: idx, droppedChars: txt.length, preview: txt.slice(0, 200) },
+          'Dropped pre-narration from intermediate step (sub-Agent)',
         ),
         checkpoint: {
           intervalMs: 500,
@@ -1571,13 +1571,13 @@ async function executeSubKin(taskId: string, isNudge = false) {
         stepUsages.push(outcome.usage)
         // Push the running output-token total over SSE so the task panel's
         // thinking bubble shows real tokens accumulating across steps, exactly
-        // like the main thread (see kin-engine.ts). Usage is only known at each
+        // like the main thread (see agent-engine.ts). Usage is only known at each
         // step's `finish` chunk, so this increments per step (not per token).
         if (outcome.usage.outputTokens) {
           streamSnapshot.outputTokens += outcome.usage.outputTokens
-          sseManager.sendToKin(task.parentKinId, {
+          sseManager.sendToAgent(task.parentAgentId, {
             type: 'chat:token-usage',
-            kinId: task.parentKinId,
+            agentId: task.parentAgentId,
             data: { taskId, messageId: assistantMessageId, outputTokens: streamSnapshot.outputTokens },
           })
         }
@@ -1586,7 +1586,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
       if (outcome.error) {
         streamError = outcome.error
       } else if (outcome.wasAborted) {
-        log.info({ taskId }, 'Sub-Kin stream aborted by cancellation')
+        log.info({ taskId }, 'Sub-Agent stream aborted by cancellation')
       }
       if (outcome.finishReason !== undefined) stepFinishReasons.push(outcome.finishReason)
       const stepText = outcome.stepText
@@ -1618,7 +1618,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
       // precedes tool_use (tool results are external — the model can't reason
       // past a tool_use until the next step). Unsigned blocks are skipped: the
       // API drops them anyway, and non-Anthropic providers ignore them.
-      const assistantBlocks: KinbotMessageBlock[] = []
+      const assistantBlocks: HivekeepMessageBlock[] = []
       for (const tb of outcome.stepThinking) {
         if (tb.signature) assistantBlocks.push({ type: 'thinking', text: tb.text, signature: tb.signature })
       }
@@ -1632,7 +1632,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
         stepToolCalls,
         tools,
         abortController,
-        kinId: task.parentKinId,
+        agentId: task.parentAgentId,
         assistantMessageId,
         sseExtra: { taskId },
       })
@@ -1655,8 +1655,8 @@ async function executeSubKin(taskId: string, isNudge = false) {
       // a terminal or awaiting state. Stop the multi-step loop NOW so the LLM
       // doesn't run another step on a task that's already done or paused.
       //   - awaiting_* (request_input → awaiting_human_input, send_message
-      //     request → awaiting_kin_response, scout → awaiting_subtask): the
-      //     sub-Kin resumes via resumeSubKin() once the response arrives.
+      //     request → awaiting_agent_response, scout → awaiting_subtask): the
+      //     sub-Agent resumes via resumeSubAgent() once the response arrives.
       //     Without this the LLM kept emitting tool calls — observed on prod
       //     task `4e4f1760` (ticket #22): 40+ calls after request_input,
       //     incl. a `git commit --no-verify` only stopped by the hook guard.
@@ -1672,7 +1672,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
         .get()
       if (
         statusCheck?.status === 'awaiting_human_input' ||
-        statusCheck?.status === 'awaiting_kin_response' ||
+        statusCheck?.status === 'awaiting_agent_response' ||
         statusCheck?.status === 'awaiting_subtask' ||
         statusCheck?.status === 'completed' ||
         statusCheck?.status === 'failed' ||
@@ -1680,7 +1680,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
       ) {
         log.info(
           { taskId, status: statusCheck.status },
-          'Sub-Kin step reached terminal/awaiting status — breaking multi-step loop',
+          'Sub-Agent step reached terminal/awaiting status — breaking multi-step loop',
         )
         break
       }
@@ -1696,7 +1696,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
       }
 
       // Append assistant message (with tool calls) + tool results to history
-      // for next step. Tool results live as a user-role message in kinbot's
+      // for next step. Tool results live as a user-role message in hivekeep's
       // shape (Anthropic-style).
       messageHistory.push({ role: 'assistant', content: assistantBlocks })
       messageHistory.push({
@@ -1724,7 +1724,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
       wasAborted: abortController.signal.aborted,
       streamError: streamError ? streamError.message : null,
       silentStopAfterTools,
-    }, 'Sub-Kin LLM turn completed')
+    }, 'Sub-Agent LLM turn completed')
 
     // Aggregate token usage (synchronous: already collected from each step).
     const tokenUsage = aggregateUsages(stepUsages)
@@ -1737,7 +1737,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
         providerType: taskResolved.providerRow.type,
         providerId: taskResolved.providerRow.id,
         modelId: taskResolved.model.id,
-        kinId: task.parentKinId,
+        agentId: task.parentAgentId,
         taskId,
         cronId: task.cronId ?? null,
         usage: {
@@ -1764,9 +1764,9 @@ async function executeSubKin(taskId: string, isNudge = false) {
       // is included in the roll-up.
       const totals = getTaskTotals(taskId)
       if (totals) {
-        sseManager.sendToKin(task.parentKinId, {
+        sseManager.sendToAgent(task.parentAgentId, {
           type: 'task:token-usage',
-          kinId: task.parentKinId,
+          agentId: task.parentAgentId,
           data: { taskId, tokenUsage: totals },
         })
       }
@@ -1788,9 +1788,9 @@ async function executeSubKin(taskId: string, isNudge = false) {
         await db.delete(messages).where(eq(messages.id, assistantMessageId))
       }
 
-      sseManager.sendToKin(task.parentKinId, {
+      sseManager.sendToAgent(task.parentAgentId, {
         type: 'chat:done',
-        kinId: task.parentKinId,
+        agentId: task.parentAgentId,
         data: { messageId: assistantMessageId, content: fullContent, taskId },
       })
       return
@@ -1798,7 +1798,7 @@ async function executeSubKin(taskId: string, isNudge = false) {
 
     // If the stream errored, fail the task immediately
     if (streamError) {
-      log.error({ taskId, error: streamError.message }, 'Sub-Kin stream error')
+      log.error({ taskId, error: streamError.message }, 'Sub-Agent stream error')
 
       // Update pre-inserted assistant message with partial content from the error
       await db.update(messages)
@@ -1808,9 +1808,9 @@ async function executeSubKin(taskId: string, isNudge = false) {
         })
         .where(eq(messages.id, assistantMessageId))
 
-      sseManager.sendToKin(task.parentKinId, {
+      sseManager.sendToAgent(task.parentAgentId, {
         type: 'chat:done',
-        kinId: task.parentKinId,
+        agentId: task.parentAgentId,
         data: { messageId: assistantMessageId, content: fullContent, taskId },
       })
 
@@ -1828,24 +1828,24 @@ async function executeSubKin(taskId: string, isNudge = false) {
     if (silentStopAfterTools) {
       log.warn(
         { taskId, messageId: assistantMessageId, toolCalls: toolCallsLog.length, step },
-        'Sub-Kin: LLM closed stream with no text after tool execution (silent stop)',
+        'Sub-Agent: LLM closed stream with no text after tool execution (silent stop)',
       )
-      fullContent = `*(This task executed ${toolCallsLog.length} tool call${toolCallsLog.length > 1 ? 's' : ''} but the model did not produce a final response. This can happen on very large contexts. Retry with a tighter scope or ask the Kin to continue.)*`
+      fullContent = `*(This task executed ${toolCallsLog.length} tool call${toolCallsLog.length > 1 ? 's' : ''} but the model did not produce a final response. This can happen on very large contexts. Retry with a tighter scope or ask the Agent to continue.)*`
       streamSnapshot.content = fullContent
-      sseManager.sendToKin(task.parentKinId, {
+      sseManager.sendToAgent(task.parentAgentId, {
         type: 'chat:token',
-        kinId: task.parentKinId,
+        agentId: task.parentAgentId,
         data: { messageId: assistantMessageId, token: fullContent, taskId, contentLength: fullContent.length },
       })
     }
 
     // Detect silent provider failures: stream completed but produced no output at all
     if (!fullContent && toolCallsLog.length === 0) {
-      log.warn({ taskId }, 'Sub-Kin stream produced no output — treating as failure')
+      log.warn({ taskId }, 'Sub-Agent stream produced no output — treating as failure')
 
-      sseManager.sendToKin(task.parentKinId, {
+      sseManager.sendToAgent(task.parentAgentId, {
         type: 'chat:done',
-        kinId: task.parentKinId,
+        agentId: task.parentAgentId,
         data: { messageId: assistantMessageId, content: '', taskId },
       })
 
@@ -1869,36 +1869,36 @@ async function executeSubKin(taskId: string, isNudge = false) {
       .where(eq(messages.id, assistantMessageId))
 
     // Emit chat:done so the frontend knows streaming is over
-    sseManager.sendToKin(task.parentKinId, {
+    sseManager.sendToAgent(task.parentAgentId, {
       type: 'chat:done',
-      kinId: task.parentKinId,
+      agentId: task.parentAgentId,
       data: { messageId: assistantMessageId, content: responseText, taskId, ...(tokenUsage ? { tokenUsage } : {}) },
     })
 
-    // If the task was suspended for an inter-Kin response or a human prompt,
-    // don't nudge — just return. The runner resumes via resumeSubKin() when
-    // the response arrives (respondToHumanPrompt / interKin reply handler).
+    // If the task was suspended for an inter-Agent response or a human prompt,
+    // don't nudge — just return. The runner resumes via resumeSubAgent() when
+    // the response arrives (respondToHumanPrompt / interAgent reply handler).
     const currentTask = await db.select().from(tasks).where(eq(tasks.id, taskId)).get()
     if (
       currentTask &&
-      (currentTask.status === 'awaiting_kin_response' ||
+      (currentTask.status === 'awaiting_agent_response' ||
         currentTask.status === 'awaiting_human_input' ||
         currentTask.status === 'awaiting_subtask')
     ) {
-      log.info({ taskId, status: currentTask.status }, 'Sub-Kin suspended — exiting without nudge')
+      log.info({ taskId, status: currentTask.status }, 'Sub-Agent suspended — exiting without nudge')
       return
     }
 
-    // If the Kin didn't explicitly resolve the task via update_task_status(),
+    // If the Agent didn't explicitly resolve the task via update_task_status(),
     // give it one more chance (nudge turn) before marking as failed.
     if (currentTask && currentTask.status === 'in_progress') {
       if (!isNudge) {
         // First attempt — inject a reminder and re-run one more LLM turn
-        log.info({ taskId }, 'Sub-Kin finished without calling update_task_status — sending nudge turn')
+        log.info({ taskId }, 'Sub-Agent finished without calling update_task_status — sending nudge turn')
 
         await db.insert(messages).values({
           id: uuid(),
-          kinId: task.parentKinId,
+          agentId: task.parentAgentId,
           taskId,
           role: 'user',
           content:
@@ -1911,18 +1911,18 @@ async function executeSubKin(taskId: string, isNudge = false) {
           createdAt: new Date(),
         })
 
-        await executeSubKin(taskId, true)
+        await executeSubAgent(taskId, true)
       } else {
         // Already nudged once — now fail for real
-        log.warn({ taskId }, 'Sub-Kin still did not call update_task_status after nudge — marking as failed')
+        log.warn({ taskId }, 'Sub-Agent still did not call update_task_status after nudge — marking as failed')
         await resolveTask(taskId, 'failed', undefined, 'Task did not explicitly report completion')
       }
     }
   } catch (err) {
     activeTaskStreams.delete(taskId)
     const errorMsg = err instanceof Error ? err.message : 'Unknown error'
-    log.error({ taskId, error: errorMsg }, 'Sub-Kin execution failed')
-    // Sub-Kins / tasks have their own ephemeral message stream and don't
+    log.error({ taskId, error: errorMsg }, 'Sub-Agent execution failed')
+    // Sub-Agents / tasks have their own ephemeral message stream and don't
     // share the parent's compacting summaries — there's no automatic
     // recovery path here, so override the generic "compaction triggered"
     // friendly message (which would lie) with task-specific guidance.
@@ -1956,8 +1956,8 @@ export async function resolveTask(
   const task = await db.select().from(tasks).where(eq(tasks.id, taskId)).get()
   if (!task) return
 
-  // The Kin that actually executed the task (target Kin for 'other', parent for 'self')
-  const executingKinId = task.sourceKinId ?? task.parentKinId
+  // The Agent that actually executed the task (target Agent for 'other', parent for 'self')
+  const executingAgentId = task.sourceAgentId ?? task.parentAgentId
 
   log.info({ taskId, status, mode: task.mode }, 'Task resolved')
 
@@ -1994,11 +1994,11 @@ export async function resolveTask(
     })
     .where(eq(tasks.id, taskId))
 
-  // Resolve executing Kin info for SSE metadata
-  const executingKin = await db.select().from(kins).where(eq(kins.id, executingKinId)).get()
+  // Resolve executing Agent info for SSE metadata
+  const executingAgent = await db.select().from(agents).where(eq(agents.id, executingAgentId)).get()
 
   // Auto-comment on the linked ticket (if any) so the ticket UI shows the
-  // final report or failure reason without the sub-Kin having to post it
+  // final report or failure reason without the sub-Agent having to post it
   // manually. We do this best-effort so a comment service hiccup never blocks
   // task resolution.
   if (task.ticketId) {
@@ -2033,7 +2033,7 @@ export async function resolveTask(
         : `**Task failed.**\n\n${error ?? 'Unknown error'}`
       await createTicketComment({
         ticketId: task.ticketId,
-        author: { type: 'kin', id: executingKinId },
+        author: { type: 'agent', id: executingAgentId },
         content: `${base}${suffix}`,
         metadata: { fromTaskId: taskId, autoGenerated: true },
       })
@@ -2043,47 +2043,47 @@ export async function resolveTask(
   }
 
   // Emit SSE
-  sseManager.sendToKin(task.parentKinId, {
+  sseManager.sendToAgent(task.parentAgentId, {
     type: 'task:done',
-    kinId: task.parentKinId,
+    agentId: task.parentAgentId,
     data: {
       taskId,
-      kinId: task.parentKinId,
+      agentId: task.parentAgentId,
       status,
       result: result ?? null,
       error: error ?? null,
       title: task.title ?? task.description,
       startedAt: task.startedAt ? task.startedAt.getTime() : null,
       endedAt: endedAt.getTime(),
-      senderName: executingKin?.name ?? null,
-      senderAvatarUrl: kinAvatarUrl(executingKinId, executingKin?.avatarPath ?? null, executingKin?.updatedAt),
+      senderName: executingAgent?.name ?? null,
+      senderAvatarUrl: agentAvatarUrl(executingAgentId, executingAgent?.avatarPath ?? null, executingAgent?.updatedAt),
     },
   })
 
   // Use title for UI display, fall back to description
   const taskLabel = task.title ?? task.description
 
-  // Notify source Kin about task completion/failure (only for spawn_type = 'other')
-  if (task.spawnType === 'other' && task.sourceKinId) {
+  // Notify source Agent about task completion/failure (only for spawn_type = 'other')
+  if (task.spawnType === 'other' && task.sourceAgentId) {
     const sourceMsg = status === 'completed'
       ? `[Task completed: ${taskLabel}] ${result ?? ''}`
       : `[Task failed: ${taskLabel}] Error: ${error ?? 'Unknown error'}`
-    notifySourceKin(task.sourceKinId, task.parentKinId, sourceMsg, taskId)
-      .catch((err) => log.warn({ taskId, sourceKinId: task.sourceKinId, err }, 'Failed to notify source Kin on resolve'))
+    notifySourceAgent(task.sourceAgentId, task.parentAgentId, sourceMsg, taskId)
+      .catch((err) => log.warn({ taskId, sourceAgentId: task.sourceAgentId, err }, 'Failed to notify source Agent on resolve'))
   }
 
   const taskMetadata = JSON.stringify({ resolvedTaskId: taskId })
 
   // Build optional ticket-linked reminder appended after the result.
-  // The reminder nudges the Kin to update the ticket status via update_ticket()
+  // The reminder nudges the Agent to update the ticket status via update_ticket()
   // since ticket statuses are not auto-managed on task lifecycle (projects.md § 5).
   const ticketReminder = task.ticketId ? (await buildTicketLinkedReminder(task.ticketId)) ?? '' : ''
 
   // Scout / sub-task parent resume: when this finishing task is the `await`
   // child of a TASK parent that suspended itself into 'awaiting_subtask'
   // waiting on THIS child (the scout primitive), deliver the result by
-  // resuming the parent task — NOT by enqueueing into the executing Kin's
-  // main queue (which would wrongly give the MAIN Kin a turn). The atomic
+  // resuming the parent task — NOT by enqueueing into the executing Agent's
+  // main queue (which would wrongly give the MAIN Agent a turn). The atomic
   // claim inside resumeTaskFromChildResult guarantees we only do this for a
   // parent still genuinely waiting on this child. When it fires, we skip the
   // normal await/async parent-delivery block below.
@@ -2112,22 +2112,22 @@ export async function resolveTask(
     // not also enqueue/deposit into the main session.
   } else if (task.mode === 'await' && status === 'completed' && result) {
     await enqueueMessage({
-      kinId: task.parentKinId,
+      agentId: task.parentAgentId,
       messageType: 'task_result',
       content: `[Task: ${taskLabel}] Result: ${result}${ticketReminder}`,
       sourceType: 'task',
-      sourceId: executingKinId,
+      sourceId: executingAgentId,
       priority: config.queue.taskPriority,
-      taskId, // Used by kin-engine to set metadata.resolvedTaskId on the message
+      taskId, // Used by agent-engine to set metadata.resolvedTaskId on the message
       channelOriginId: task.channelOriginId ?? undefined,
     })
   } else if (task.mode === 'await' && status === 'failed') {
     await enqueueMessage({
-      kinId: task.parentKinId,
+      agentId: task.parentAgentId,
       messageType: 'task_result',
       content: `[Task failed: ${taskLabel}] Error: ${error ?? 'Unknown error'}${ticketReminder}`,
       sourceType: 'task',
-      sourceId: executingKinId,
+      sourceId: executingAgentId,
       priority: config.queue.taskPriority,
       taskId,
       channelOriginId: task.channelOriginId ?? undefined,
@@ -2137,25 +2137,25 @@ export async function resolveTask(
     const msgId = uuid()
     await db.insert(messages).values({
       id: msgId,
-      kinId: task.parentKinId,
+      agentId: task.parentAgentId,
       role: 'user',
       content: `[Task completed: ${taskLabel}] ${result}`,
       sourceType: 'task',
-      sourceId: executingKinId,
+      sourceId: executingAgentId,
       metadata: taskMetadata,
       createdAt: new Date(),
     })
 
     // Notify via SSE
-    sseManager.sendToKin(task.parentKinId, {
+    sseManager.sendToAgent(task.parentAgentId, {
       type: 'chat:message',
-      kinId: task.parentKinId,
+      agentId: task.parentAgentId,
       data: {
         id: msgId,
         role: 'user',
         content: `[Task completed: ${taskLabel}] ${result}`,
         sourceType: 'task',
-        sourceId: executingKinId,
+        sourceId: executingAgentId,
         resolvedTaskId: taskId,
         createdAt: Date.now(),
       },
@@ -2164,13 +2164,13 @@ export async function resolveTask(
     const failureContent = `[Task failed: ${taskLabel}] Error: ${error ?? 'Unknown error'}`
 
     if (task.cronId) {
-      // Cron-triggered failures are actionable — enqueue so the owner Kin reacts
+      // Cron-triggered failures are actionable — enqueue so the owner Agent reacts
       await enqueueMessage({
-        kinId: task.parentKinId,
+        agentId: task.parentAgentId,
         messageType: 'task_result',
         content: failureContent,
         sourceType: 'task',
-        sourceId: executingKinId,
+        sourceId: executingAgentId,
         priority: config.queue.taskPriority,
         taskId,
         channelOriginId: task.channelOriginId ?? undefined,
@@ -2180,24 +2180,24 @@ export async function resolveTask(
       const msgId = uuid()
       await db.insert(messages).values({
         id: msgId,
-        kinId: task.parentKinId,
+        agentId: task.parentAgentId,
         role: 'user',
         content: failureContent,
         sourceType: 'task',
-        sourceId: executingKinId,
+        sourceId: executingAgentId,
         metadata: taskMetadata,
         createdAt: new Date(),
       })
 
-      sseManager.sendToKin(task.parentKinId, {
+      sseManager.sendToAgent(task.parentAgentId, {
         type: 'chat:message',
-        kinId: task.parentKinId,
+        agentId: task.parentAgentId,
         data: {
           id: msgId,
           role: 'user',
           content: failureContent,
           sourceType: 'task',
-          sourceId: executingKinId,
+          sourceId: executingAgentId,
           resolvedTaskId: taskId,
           createdAt: Date.now(),
         },
@@ -2221,11 +2221,11 @@ export async function resolveTask(
 
 // ─── Task Operations ─────────────────────────────────────────────────────────
 
-export async function cancelTask(taskId: string, kinId: string) {
+export async function cancelTask(taskId: string, agentId: string) {
   const task = await db
     .select()
     .from(tasks)
-    .where(and(eq(tasks.id, taskId), eq(tasks.parentKinId, kinId)))
+    .where(and(eq(tasks.id, taskId), eq(tasks.parentAgentId, agentId)))
     .get()
 
   if (!task) return false
@@ -2252,11 +2252,11 @@ export async function cancelTask(taskId: string, kinId: string) {
   const { forgetTaskTodos: forgetTodosCancel } = await import('@/server/services/task-todos')
   forgetTodosCancel(taskId)
 
-  // Clear any pending inter-Kin timeout timer
-  const interKinTimer = interKinTimeouts.get(taskId)
-  if (interKinTimer) {
-    clearTimeout(interKinTimer)
-    interKinTimeouts.delete(taskId)
+  // Clear any pending inter-Agent timeout timer
+  const interAgentTimer = interAgentTimeouts.get(taskId)
+  if (interAgentTimer) {
+    clearTimeout(interAgentTimer)
+    interAgentTimeouts.delete(taskId)
   }
 
   const cancelledAt = new Date()
@@ -2265,12 +2265,12 @@ export async function cancelTask(taskId: string, kinId: string) {
     .set({ status: 'cancelled', pendingRequestId: null, pendingChildTaskId: null, endedAt: cancelledAt, updatedAt: cancelledAt })
     .where(eq(tasks.id, taskId))
 
-  sseManager.sendToKin(kinId, {
+  sseManager.sendToAgent(agentId, {
     type: 'task:status',
-    kinId,
+    agentId,
     data: {
       taskId,
-      kinId,
+      agentId,
       status: 'cancelled',
       title: task.title ?? task.description,
       startedAt: task.startedAt ? task.startedAt.getTime() : null,
@@ -2278,15 +2278,15 @@ export async function cancelTask(taskId: string, kinId: string) {
     },
   })
 
-  // Notify source Kin about cancellation (only for spawn_type = 'other')
-  if (task.spawnType === 'other' && task.sourceKinId) {
+  // Notify source Agent about cancellation (only for spawn_type = 'other')
+  if (task.spawnType === 'other' && task.sourceAgentId) {
     const taskLabel = task.title ?? task.description
-    notifySourceKin(
-      task.sourceKinId,
-      kinId,
+    notifySourceAgent(
+      task.sourceAgentId,
+      agentId,
       `[Task cancelled: ${taskLabel}]`,
       task.id,
-    ).catch((err) => log.warn({ taskId: task.id, sourceKinId: task.sourceKinId, err }, 'Failed to notify source Kin on cancel'))
+    ).catch((err) => log.warn({ taskId: task.id, sourceAgentId: task.sourceAgentId, err }, 'Failed to notify source Agent on cancel'))
   }
 
   // Promote next queued task in the same concurrency group
@@ -2328,7 +2328,7 @@ export class TaskNotRetryableError extends Error {
  *     are cloned onto the new task (new message ids, same content). The
  *     model picks up whatever context was preserved in DB (note: tool
  *     results are NOT reconstructed into ModelMessage blocks by the current
- *     sub-Kin runner — only text content survives across reload).
+ *     sub-Agent runner — only text content survives across reload).
  *
  * The original failed task is left intact for audit. The new task carries
  * the same parent/source/ticket/cron/webhook/concurrency wiring as the
@@ -2345,18 +2345,18 @@ export async function retryTask(
     throw new TaskNotRetryableError(original.status)
   }
 
-  let thinkingConfig: KinThinkingConfig | undefined
+  let thinkingConfig: AgentThinkingConfig | undefined
   if (original.thinkingConfig) {
     try {
-      thinkingConfig = JSON.parse(original.thinkingConfig) as KinThinkingConfig
+      thinkingConfig = JSON.parse(original.thinkingConfig) as AgentThinkingConfig
     } catch {
       thinkingConfig = undefined
     }
   }
 
   const spawned = await spawnTask({
-    parentKinId: original.parentKinId,
-    sourceKinId: original.sourceKinId ?? undefined,
+    parentAgentId: original.parentAgentId,
+    sourceAgentId: original.sourceAgentId ?? undefined,
     spawnType: original.spawnType as 'self' | 'other',
     mode: original.mode as 'await' | 'async',
     title: original.title ?? undefined,
@@ -2409,19 +2409,19 @@ export async function retryTask(
   )
 
   // Kick the runner now that any seeded history is in place. Queued tasks
-  // wait for promotion — the promoter will call executeSubKin when a slot
+  // wait for promotion — the promoter will call executeSubAgent when a slot
   // opens, same as a normal spawn.
   if (!spawned.queued) {
-    executeSubKin(spawned.taskId).catch((err) =>
-      log.error({ taskId: spawned.taskId, err }, 'Sub-Kin retry execution error'),
+    executeSubAgent(spawned.taskId).catch((err) =>
+      log.error({ taskId: spawned.taskId, err }, 'Sub-Agent retry execution error'),
     )
   }
 
   return spawned
 }
 
-export async function listKinTasks(kinId: string, statusFilter?: TaskStatus) {
-  const conditions = [eq(tasks.parentKinId, kinId)]
+export async function listAgentTasks(agentId: string, statusFilter?: TaskStatus) {
+  const conditions = [eq(tasks.parentAgentId, agentId)]
   if (statusFilter) conditions.push(eq(tasks.status, statusFilter))
 
   return db
@@ -2432,12 +2432,12 @@ export async function listKinTasks(kinId: string, statusFilter?: TaskStatus) {
     .all()
 }
 
-/** List tasks where this Kin was the executing source (spawned by another Kin). */
-export async function listSourceKinTasks(kinId: string) {
+/** List tasks where this Agent was the executing source (spawned by another Agent). */
+export async function listSourceAgentTasks(agentId: string) {
   return db
     .select()
     .from(tasks)
-    .where(and(eq(tasks.sourceKinId, kinId), eq(tasks.spawnType, 'other')))
+    .where(and(eq(tasks.sourceAgentId, agentId), eq(tasks.spawnType, 'other')))
     .orderBy(desc(tasks.createdAt))
     .all()
 }
@@ -2455,7 +2455,7 @@ export async function listAllTasks(statusFilter?: TaskStatus) {
 
 interface ListTasksPaginatedParams {
   status?: TaskStatus
-  kinId?: string
+  agentId?: string
   cronId?: string
   search?: string
   limit: number
@@ -2463,11 +2463,11 @@ interface ListTasksPaginatedParams {
 }
 
 export async function listTasksPaginated(params: ListTasksPaginatedParams) {
-  const { status, kinId, cronId, search, limit, offset } = params
+  const { status, agentId, cronId, search, limit, offset } = params
   const conditions: ReturnType<typeof eq>[] = []
 
   if (status) conditions.push(eq(tasks.status, status))
-  if (kinId) conditions.push(eq(tasks.parentKinId, kinId))
+  if (agentId) conditions.push(eq(tasks.parentAgentId, agentId))
   if (cronId) conditions.push(eq(tasks.cronId, cronId))
   if (search) {
     const pattern = `%${search}%`
@@ -2498,16 +2498,16 @@ export async function listTasksPaginated(params: ListTasksPaginatedParams) {
 
 // ─── Filtered + paginated listing (for tools) ────────────────────────────────
 
-export type TaskKind = 'spawn_self' | 'spawn_kin' | 'webhook' | 'cron' | 'unknown'
+export type TaskKind = 'spawn_self' | 'spawn_agent' | 'webhook' | 'cron' | 'unknown'
 
 export interface ListTasksFilters {
   status?: TaskStatus | 'all'
-  parentKinSlug?: string
-  childKinSlug?: string
+  parentAgentSlug?: string
+  childAgentSlug?: string
   kind?: TaskKind | 'all'
   since?: number
   until?: number
-  relatedToKinId?: string
+  relatedToAgentId?: string
   limit?: number
   offset?: number
 }
@@ -2517,8 +2517,8 @@ export interface ListTasksRow {
   title: string | null
   status: string
   kind: TaskKind
-  parentKinSlug: string | null
-  childKinSlug: string | null
+  parentAgentSlug: string | null
+  childAgentSlug: string | null
   depth: number
   createdAt: number
   updatedAt: number
@@ -2544,7 +2544,7 @@ export function computeTaskKind(row: {
   if (row.cronId) return 'cron'
   if (row.webhookId) return 'webhook'
   if (row.spawnType === 'self') return 'spawn_self'
-  if (row.spawnType === 'other') return 'spawn_kin'
+  if (row.spawnType === 'other') return 'spawn_agent'
   return 'unknown'
 }
 
@@ -2577,11 +2577,11 @@ function clampOffset(offset: number | undefined): number {
   return Math.floor(offset)
 }
 
-async function resolveKinIdBySlug(slug: string): Promise<string | null> {
+async function resolveAgentIdBySlug(slug: string): Promise<string | null> {
   const row = await db
-    .select({ id: kins.id })
-    .from(kins)
-    .where(eq(kins.slug, slug))
+    .select({ id: agents.id })
+    .from(agents)
+    .where(eq(agents.slug, slug))
     .get()
   return row?.id ?? null
 }
@@ -2590,17 +2590,17 @@ export async function listTasksFiltered(filters: ListTasksFilters): Promise<List
   const limit = clampLimit(filters.limit)
   const offset = clampOffset(filters.offset)
 
-  let parentKinId: string | undefined
-  let childKinId: string | undefined
-  if (filters.parentKinSlug) {
-    const resolved = await resolveKinIdBySlug(filters.parentKinSlug)
+  let parentAgentId: string | undefined
+  let childAgentId: string | undefined
+  if (filters.parentAgentSlug) {
+    const resolved = await resolveAgentIdBySlug(filters.parentAgentSlug)
     if (!resolved) return { tasks: [], total: 0 }
-    parentKinId = resolved
+    parentAgentId = resolved
   }
-  if (filters.childKinSlug) {
-    const resolved = await resolveKinIdBySlug(filters.childKinSlug)
+  if (filters.childAgentSlug) {
+    const resolved = await resolveAgentIdBySlug(filters.childAgentSlug)
     if (!resolved) return { tasks: [], total: 0 }
-    childKinId = resolved
+    childAgentId = resolved
   }
 
   const conditions: ReturnType<typeof eq>[] = []
@@ -2608,8 +2608,8 @@ export async function listTasksFiltered(filters: ListTasksFilters): Promise<List
   if (filters.status && filters.status !== 'all') {
     conditions.push(eq(tasks.status, filters.status))
   }
-  if (parentKinId) conditions.push(eq(tasks.parentKinId, parentKinId))
-  if (childKinId) conditions.push(eq(tasks.sourceKinId, childKinId))
+  if (parentAgentId) conditions.push(eq(tasks.parentAgentId, parentAgentId))
+  if (childAgentId) conditions.push(eq(tasks.sourceAgentId, childAgentId))
 
   if (filters.kind && filters.kind !== 'all') {
     switch (filters.kind) {
@@ -2618,7 +2618,7 @@ export async function listTasksFiltered(filters: ListTasksFilters): Promise<List
         conditions.push(isNull(tasks.webhookId))
         conditions.push(isNull(tasks.cronId))
         break
-      case 'spawn_kin':
+      case 'spawn_agent':
         conditions.push(eq(tasks.spawnType, 'other'))
         conditions.push(isNull(tasks.webhookId))
         conditions.push(isNull(tasks.cronId))
@@ -2639,11 +2639,11 @@ export async function listTasksFiltered(filters: ListTasksFilters): Promise<List
     conditions.push(lte(tasks.createdAt, new Date(filters.until)))
   }
 
-  if (filters.relatedToKinId) {
+  if (filters.relatedToAgentId) {
     conditions.push(
       or(
-        eq(tasks.parentKinId, filters.relatedToKinId),
-        eq(tasks.sourceKinId, filters.relatedToKinId),
+        eq(tasks.parentAgentId, filters.relatedToAgentId),
+        eq(tasks.sourceAgentId, filters.relatedToAgentId),
       )!,
     )
   }
@@ -2668,19 +2668,19 @@ export async function listTasksFiltered(filters: ListTasksFilters): Promise<List
     .offset(offset)
     .all()
 
-  const relatedKinIds = Array.from(
+  const relatedAgentIds = Array.from(
     new Set(
-      rows.flatMap((r) => [r.parentKinId, r.sourceKinId].filter((id): id is string => !!id)),
+      rows.flatMap((r) => [r.parentAgentId, r.sourceAgentId].filter((id): id is string => !!id)),
     ),
   )
   const slugMap = new Map<string, string>()
-  if (relatedKinIds.length > 0) {
-    const kinRows = await db
-      .select({ id: kins.id, slug: kins.slug, name: kins.name })
-      .from(kins)
-      .where(inArray(kins.id, relatedKinIds))
+  if (relatedAgentIds.length > 0) {
+    const agentRows = await db
+      .select({ id: agents.id, slug: agents.slug, name: agents.name })
+      .from(agents)
+      .where(inArray(agents.id, relatedAgentIds))
       .all()
-    for (const k of kinRows) slugMap.set(k.id, k.slug ?? k.name)
+    for (const k of agentRows) slugMap.set(k.id, k.slug ?? k.name)
   }
 
   return {
@@ -2690,8 +2690,8 @@ export async function listTasksFiltered(filters: ListTasksFilters): Promise<List
       title: r.title,
       status: r.status,
       kind: computeTaskKind(r),
-      parentKinSlug: slugMap.get(r.parentKinId) ?? null,
-      childKinSlug: r.sourceKinId ? slugMap.get(r.sourceKinId) ?? null : null,
+      parentAgentSlug: slugMap.get(r.parentAgentId) ?? null,
+      childAgentSlug: r.sourceAgentId ? slugMap.get(r.sourceAgentId) ?? null : null,
       depth: r.depth,
       createdAt: r.createdAt.getTime(),
       updatedAt: r.updatedAt.getTime(),
@@ -2761,7 +2761,7 @@ export async function getTaskMessages(
   order: 'asc' | 'desc' = 'desc',
 ): Promise<GetTaskMessagesResult> {
   const task = await db
-    .select({ id: tasks.id, title: tasks.title, status: tasks.status, parentKinId: tasks.parentKinId })
+    .select({ id: tasks.id, title: tasks.title, status: tasks.status, parentAgentId: tasks.parentAgentId })
     .from(tasks)
     .where(eq(tasks.id, taskId))
     .get()
@@ -2865,7 +2865,7 @@ export async function fetchPreviousCronRuns(cronId: string, limit = 5) {
     .all()
 }
 
-// ─── Sub-Kin Operations ──────────────────────────────────────────────────────
+// ─── Sub-Agent Operations ──────────────────────────────────────────────────────
 
 export async function reportToParent(taskId: string, message: string) {
   const task = await db.select().from(tasks).where(eq(tasks.id, taskId)).get()
@@ -2874,7 +2874,7 @@ export async function reportToParent(taskId: string, message: string) {
   // Save the report as a message in the task's message history
   await db.insert(messages).values({
     id: uuid(),
-    kinId: task.parentKinId,
+    agentId: task.parentAgentId,
     taskId,
     role: 'assistant',
     content: message,
@@ -2903,10 +2903,10 @@ export async function updateTaskStatus(
       .set({ status, updatedAt: new Date() })
       .where(eq(tasks.id, taskId))
 
-    sseManager.sendToKin(task.parentKinId, {
+    sseManager.sendToAgent(task.parentAgentId, {
       type: 'task:status',
-      kinId: task.parentKinId,
-      data: { taskId, kinId: task.parentKinId, status, title: task.title ?? task.description },
+      agentId: task.parentAgentId,
+      data: { taskId, agentId: task.parentAgentId, status, title: task.title ?? task.description },
     })
   }
 
@@ -2929,15 +2929,15 @@ export async function requestInput(taskId: string, question: string) {
     .set({ requestInputCount: task.requestInputCount + 1, updatedAt: new Date() })
     .where(eq(tasks.id, taskId))
 
-  // Ticket sub-Kins ask the user directly: route through the human-prompt
+  // Ticket sub-Agents ask the user directly: route through the human-prompt
   // pipeline so the task is suspended with `awaiting_human_input`, a
-  // notification is created, and the answer resumes the sub-Kin. Without this
-  // routing the question would be silently enqueued into the parent Kin's
+  // notification is created, and the answer resumes the sub-Agent. Without this
+  // routing the question would be silently enqueued into the parent Agent's
   // queue, which has no visible effect on the ticket and frustrated users.
   if (task.ticketId) {
     const { createHumanPrompt } = await import('@/server/services/human-prompts')
     await createHumanPrompt({
-      kinId: task.parentKinId,
+      agentId: task.parentAgentId,
       taskId,
       promptType: 'text',
       question,
@@ -2946,10 +2946,10 @@ export async function requestInput(taskId: string, question: string) {
     return { success: true }
   }
 
-  // Non-ticket sub-Kins ask their parent Kin: deposit the question in the
+  // Non-ticket sub-Agents ask their parent Agent: deposit the question in the
   // parent's queue, where it's processed as a normal task_input message.
   await enqueueMessage({
-    kinId: task.parentKinId,
+    agentId: task.parentAgentId,
     messageType: 'task_input',
     content: `[Task "${task.description}" asks]: ${question}`,
     sourceType: 'task',
@@ -2965,10 +2965,10 @@ export async function respondToTask(taskId: string, answer: string) {
   const task = await db.select().from(tasks).where(eq(tasks.id, taskId)).get()
   if (!task || task.status !== 'in_progress') return false
 
-  // Inject answer into sub-Kin's message history
+  // Inject answer into sub-Agent's message history
   await db.insert(messages).values({
     id: uuid(),
-    kinId: task.parentKinId,
+    agentId: task.parentAgentId,
     taskId,
     role: 'user',
     content: `[Parent response]: ${answer}`,
@@ -2976,9 +2976,9 @@ export async function respondToTask(taskId: string, answer: string) {
     createdAt: new Date(),
   })
 
-  // Re-trigger sub-Kin execution
-  executeSubKin(taskId).catch((err) =>
-    log.error({ taskId, err }, 'Sub-Kin re-execution error'),
+  // Re-trigger sub-Agent execution
+  executeSubAgent(taskId).catch((err) =>
+    log.error({ taskId, err }, 'Sub-Agent re-execution error'),
   )
 
   return true
@@ -2987,17 +2987,17 @@ export async function respondToTask(taskId: string, answer: string) {
 // ─── Sub-task (scout) Suspension ────────────────────────────────────────────
 
 /**
- * Suspend a TASK (sub-Kin) parent while it blocks on an `await` child it just
+ * Suspend a TASK (sub-Agent) parent while it blocks on an `await` child it just
  * spawned (the `scout` tool's primitive). This is the task-parent equivalent of
- * the MAIN-Kin await flow: a main Kin enqueues `task_result` → processNextMessage
- * gives it a new turn, but a sub-Kin has no main queue to re-enter, so instead it
+ * the MAIN-Agent await flow: a main Agent enqueues `task_result` → processNextMessage
+ * gives it a new turn, but a sub-Agent has no main queue to re-enter, so instead it
  * suspends here (mirroring request_input → awaiting_human_input and send_message
- * → awaiting_kin_response) and the runner ENDS the current run WITHOUT resolving
+ * → awaiting_agent_response) and the runner ENDS the current run WITHOUT resolving
  * the parent. When the child resolveTask()s, `resumeTaskFromChildResult` finds
  * the waiting parent via `pendingChildTaskId`, injects the child's digest, and
- * re-enters executeSubKin.
+ * re-enters executeSubAgent.
  *
- * Called from the `scout` tool when running inside a sub-Kin task. Returns
+ * Called from the `scout` tool when running inside a sub-Agent task. Returns
  * `{ success:false }` (so the tool can surface an error result and the parent
  * keeps going) when the task is no longer active.
  */
@@ -3017,19 +3017,19 @@ export async function suspendTaskForChild(
 
   const task = await db.select().from(tasks).where(eq(tasks.id, taskId)).get()
   if (task) {
-    sseManager.sendToKin(task.parentKinId, {
+    sseManager.sendToAgent(task.parentAgentId, {
       type: 'task:status',
-      kinId: task.parentKinId,
+      agentId: task.parentAgentId,
       data: {
         taskId,
-        kinId: task.parentKinId,
+        agentId: task.parentAgentId,
         status: 'awaiting_subtask',
         title: task.title ?? task.description,
       },
     })
   }
 
-  log.info({ taskId, childTaskId }, 'Sub-Kin suspended — awaiting scout child')
+  log.info({ taskId, childTaskId }, 'Sub-Agent suspended — awaiting scout child')
 
   // The parent left the executing set (awaiting_subtask is idle) → a global slot
   // just freed. Drive the global queue so a waiting task can run while the parent
@@ -3045,8 +3045,8 @@ export async function suspendTaskForChild(
  * Resume a TASK parent that was suspended (`awaiting_subtask`) on a child that
  * has now reached a terminal state. Injects the child's result (digest on
  * success, an error note on failure) into the parent's task message history as a
- * user-role message — exactly like `resumeTaskFromKinResponse` does for an
- * inter-Kin reply — then re-enters executeSubKin so the parent picks up where it
+ * user-role message — exactly like `resumeTaskFromAgentResponse` does for an
+ * inter-Agent reply — then re-enters executeSubAgent so the parent picks up where it
  * left off (the scout tool-call's placeholder result is already persisted, and
  * this injected message carries the actual findings).
  *
@@ -3074,7 +3074,7 @@ export async function resumeTaskFromChildResult(
   if (!parent) return false
 
   // Inject the child outcome as a user-role message in the parent's task
-  // history. On resume, executeSubKin reads this back as the latest user turn,
+  // history. On resume, executeSubAgent reads this back as the latest user turn,
   // so the parent reacts to the scout's findings without us having to rewrite
   // the already-persisted scout tool-result block.
   const injected =
@@ -3084,7 +3084,7 @@ export async function resumeTaskFromChildResult(
 
   await db.insert(messages).values({
     id: uuid(),
-    kinId: parent.parentKinId,
+    agentId: parent.parentAgentId,
     taskId: parentTaskId,
     role: 'user',
     content: injected,
@@ -3093,12 +3093,12 @@ export async function resumeTaskFromChildResult(
     createdAt: new Date(),
   })
 
-  sseManager.sendToKin(parent.parentKinId, {
+  sseManager.sendToAgent(parent.parentAgentId, {
     type: 'task:status',
-    kinId: parent.parentKinId,
+    agentId: parent.parentAgentId,
     data: {
       taskId: parentTaskId,
-      kinId: parent.parentKinId,
+      agentId: parent.parentAgentId,
       status: 'in_progress',
       title: parent.title ?? parent.description,
     },
@@ -3106,7 +3106,7 @@ export async function resumeTaskFromChildResult(
 
   log.info(
     { parentTaskId, childTaskId, childStatus },
-    'Sub-Kin parent resumed after scout child finished',
+    'Sub-Agent parent resumed after scout child finished',
   )
 
   // Gate the resume on a global slot. The atomic claim above already flipped the
@@ -3119,13 +3119,13 @@ export async function resumeTaskFromChildResult(
   return true
 }
 
-// ─── Inter-Kin Request Suspension ───────────────────────────────────────────
+// ─── Inter-Agent Request Suspension ───────────────────────────────────────────
 
 /**
- * Suspend a sub-Kin task while it waits for another Kin to reply.
- * Called from the `send_message` tool when `type === 'request'` in sub-Kin context.
+ * Suspend a sub-Agent task while it waits for another Agent to reply.
+ * Called from the `send_message` tool when `type === 'request'` in sub-Agent context.
  */
-export async function suspendTaskForKinResponse(
+export async function suspendTaskForAgentResponse(
   taskId: string,
   requestId: string,
 ) {
@@ -3134,58 +3134,58 @@ export async function suspendTaskForKinResponse(
     return { success: false as const, error: 'Task not active' }
   }
 
-  if (task.interKinRequestCount >= config.tasks.maxInterKinRequests) {
+  if (task.interAgentRequestCount >= config.tasks.maxInterAgentRequests) {
     return {
       success: false as const,
-      error: `Max inter-Kin request limit (${config.tasks.maxInterKinRequests}) reached for this task`,
+      error: `Max inter-Agent request limit (${config.tasks.maxInterAgentRequests}) reached for this task`,
     }
   }
 
   await db
     .update(tasks)
     .set({
-      status: 'awaiting_kin_response',
+      status: 'awaiting_agent_response',
       pendingRequestId: requestId,
-      interKinRequestCount: task.interKinRequestCount + 1,
+      interAgentRequestCount: task.interAgentRequestCount + 1,
       updatedAt: new Date(),
     })
     .where(eq(tasks.id, taskId))
 
-  sseManager.sendToKin(task.parentKinId, {
+  sseManager.sendToAgent(task.parentAgentId, {
     type: 'task:status',
-    kinId: task.parentKinId,
+    agentId: task.parentAgentId,
     data: {
       taskId,
-      kinId: task.parentKinId,
-      status: 'awaiting_kin_response',
+      agentId: task.parentAgentId,
+      status: 'awaiting_agent_response',
       title: task.title ?? task.description,
     },
   })
 
-  scheduleInterKinTimeout(taskId, requestId)
+  scheduleInterAgentTimeout(taskId, requestId)
 
-  // The task left the executing set (awaiting_kin_response is idle) → a global
+  // The task left the executing set (awaiting_agent_response is idle) → a global
   // slot just freed. Drive the global queue so a waiting task can run.
   promoteGlobalQueue().catch((err) =>
-    log.error({ taskId, err }, 'Failed to promote global queue after inter-Kin suspend'),
+    log.error({ taskId, err }, 'Failed to promote global queue after inter-Agent suspend'),
   )
 
   return { success: true as const }
 }
 
-/** Active timeout timers for inter-Kin requests, keyed by taskId */
-const interKinTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
+/** Active timeout timers for inter-Agent requests, keyed by taskId */
+const interAgentTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 
 /**
- * Schedule a timeout that resumes the task if no inter-Kin reply arrives in time.
+ * Schedule a timeout that resumes the task if no inter-Agent reply arrives in time.
  */
-function scheduleInterKinTimeout(taskId: string, requestId: string) {
+function scheduleInterAgentTimeout(taskId: string, requestId: string) {
   const timer = setTimeout(async () => {
-    interKinTimeouts.delete(taskId)
+    interAgentTimeouts.delete(taskId)
     try {
       // Atomic claim: only one path (timeout or reply) can transition the task
       const result = sqlite.run(
-        `UPDATE tasks SET status = 'in_progress', pending_request_id = NULL, updated_at = ? WHERE id = ? AND status = 'awaiting_kin_response' AND pending_request_id = ?`,
+        `UPDATE tasks SET status = 'in_progress', pending_request_id = NULL, updated_at = ? WHERE id = ? AND status = 'awaiting_agent_response' AND pending_request_id = ?`,
         [Date.now(), taskId, requestId],
       )
       if (result.changes === 0) return // Already resumed, cancelled, or different request
@@ -3193,62 +3193,62 @@ function scheduleInterKinTimeout(taskId: string, requestId: string) {
       const task = await db.select().from(tasks).where(eq(tasks.id, taskId)).get()
       if (!task) return
 
-      log.info({ taskId, requestId }, 'Inter-Kin response timeout — resuming task')
+      log.info({ taskId, requestId }, 'Inter-Agent response timeout — resuming task')
 
       await db.insert(messages).values({
         id: uuid(),
-        kinId: task.parentKinId,
+        agentId: task.parentAgentId,
         taskId,
         role: 'user',
-        content: '[System] The inter-Kin request timed out — no response was received. Continue your task without this information or try an alternative approach.',
+        content: '[System] The inter-Agent request timed out — no response was received. Continue your task without this information or try an alternative approach.',
         sourceType: 'system',
         createdAt: new Date(),
       })
 
-      sseManager.sendToKin(task.parentKinId, {
+      sseManager.sendToAgent(task.parentAgentId, {
         type: 'task:status',
-        kinId: task.parentKinId,
+        agentId: task.parentAgentId,
         data: {
           taskId,
-          kinId: task.parentKinId,
+          agentId: task.parentAgentId,
           status: 'in_progress',
           title: task.title ?? task.description,
         },
       })
 
       // Gate on a global slot (the timeout note was already injected above) —
-      // awaiting_kin_response released the slot, so the timeout-resume may need
+      // awaiting_agent_response released the slot, so the timeout-resume may need
       // to re-queue if the cap is now full.
       await runOrQueueResumedTask(taskId)
     } catch (err) {
-      log.error({ taskId, err }, 'Inter-Kin timeout handler error')
+      log.error({ taskId, err }, 'Inter-Agent timeout handler error')
     }
-  }, config.tasks.interKinResponseTimeoutMs)
-  interKinTimeouts.set(taskId, timer)
+  }, config.tasks.interAgentResponseTimeoutMs)
+  interAgentTimeouts.set(taskId, timer)
 }
 
 /**
- * Resume a sub-Kin task after receiving an inter-Kin reply.
- * Called from the inter-Kin service when a reply matches a suspended task.
+ * Resume a sub-Agent task after receiving an inter-Agent reply.
+ * Called from the inter-Agent service when a reply matches a suspended task.
  */
-export async function resumeTaskFromKinResponse(
+export async function resumeTaskFromAgentResponse(
   taskId: string,
-  senderKinId: string,
+  senderAgentId: string,
   senderName: string,
   replyMessage: string,
 ) {
   // Atomic claim: only one path (timeout or reply) can transition the task
   const result = sqlite.run(
-    `UPDATE tasks SET status = 'in_progress', pending_request_id = NULL, updated_at = ? WHERE id = ? AND status = 'awaiting_kin_response'`,
+    `UPDATE tasks SET status = 'in_progress', pending_request_id = NULL, updated_at = ? WHERE id = ? AND status = 'awaiting_agent_response'`,
     [Date.now(), taskId],
   )
   if (result.changes === 0) return false
 
   // Clear the timeout timer since we got the reply
-  const timer = interKinTimeouts.get(taskId)
+  const timer = interAgentTimeouts.get(taskId)
   if (timer) {
     clearTimeout(timer)
-    interKinTimeouts.delete(taskId)
+    interAgentTimeouts.delete(taskId)
   }
 
   const task = await db.select().from(tasks).where(eq(tasks.id, taskId)).get()
@@ -3257,21 +3257,21 @@ export async function resumeTaskFromKinResponse(
   // Inject reply into task's message history
   await db.insert(messages).values({
     id: uuid(),
-    kinId: task.parentKinId,
+    agentId: task.parentAgentId,
     taskId,
     role: 'user',
-    content: `[Inter-Kin response from ${senderName}]: ${replyMessage}`,
-    sourceType: 'kin',
-    sourceId: senderKinId,
+    content: `[Inter-Agent response from ${senderName}]: ${replyMessage}`,
+    sourceType: 'agent',
+    sourceId: senderAgentId,
     createdAt: new Date(),
   })
 
-  sseManager.sendToKin(task.parentKinId, {
+  sseManager.sendToAgent(task.parentAgentId, {
     type: 'task:status',
-    kinId: task.parentKinId,
+    agentId: task.parentAgentId,
     data: {
       taskId,
-      kinId: task.parentKinId,
+      agentId: task.parentAgentId,
       status: 'in_progress',
       title: task.title ?? task.description,
     },
@@ -3305,12 +3305,12 @@ export async function pauseTask(taskId: string): Promise<boolean> {
   // Fetch task for SSE notification
   const task = await db.select().from(tasks).where(eq(tasks.id, taskId)).get()
   if (task) {
-    sseManager.sendToKin(task.parentKinId, {
+    sseManager.sendToAgent(task.parentAgentId, {
       type: 'task:status',
-      kinId: task.parentKinId,
+      agentId: task.parentAgentId,
       data: {
         taskId,
-        kinId: task.parentKinId,
+        agentId: task.parentAgentId,
         status: 'paused',
         title: task.title ?? task.description,
       },
@@ -3353,7 +3353,7 @@ export async function resumeTask(taskId: string, message?: string): Promise<bool
 
   await db.insert(messages).values({
     id: msgId,
-    kinId: task.parentKinId,
+    agentId: task.parentAgentId,
     taskId,
     role: 'user',
     content: userContent,
@@ -3362,9 +3362,9 @@ export async function resumeTask(taskId: string, message?: string): Promise<bool
   })
 
   if (displayContent) {
-    sseManager.sendToKin(task.parentKinId, {
+    sseManager.sendToAgent(task.parentAgentId, {
       type: 'chat:message',
-      kinId: task.parentKinId,
+      agentId: task.parentAgentId,
       data: {
         id: msgId,
         role: 'user',
@@ -3376,12 +3376,12 @@ export async function resumeTask(taskId: string, message?: string): Promise<bool
     })
   }
 
-  sseManager.sendToKin(task.parentKinId, {
+  sseManager.sendToAgent(task.parentAgentId, {
     type: 'task:status',
-    kinId: task.parentKinId,
+    agentId: task.parentAgentId,
     data: {
       taskId,
-      kinId: task.parentKinId,
+      agentId: task.parentAgentId,
       status: 'in_progress',
       title: task.title ?? task.description,
     },
@@ -3413,7 +3413,7 @@ export async function injectIntoTask(taskId: string, content: string): Promise<{
   const msgId = uuid()
   await db.insert(messages).values({
     id: msgId,
-    kinId: task.parentKinId,
+    agentId: task.parentAgentId,
     taskId,
     role: 'user',
     content: content + '\n\n[The user sent this additional context while you were in the middle of working. Take it into account and continue.]',
@@ -3421,9 +3421,9 @@ export async function injectIntoTask(taskId: string, content: string): Promise<{
     createdAt: new Date(),
   })
 
-  sseManager.sendToKin(task.parentKinId, {
+  sseManager.sendToAgent(task.parentAgentId, {
     type: 'chat:message',
-    kinId: task.parentKinId,
+    agentId: task.parentAgentId,
     data: {
       id: msgId,
       role: 'user',
@@ -3435,8 +3435,8 @@ export async function injectIntoTask(taskId: string, content: string): Promise<{
   })
 
   // Restart execution with the new context
-  executeSubKin(taskId).catch((err) =>
-    log.error({ taskId, err }, 'Sub-Kin resume error after inject'),
+  executeSubAgent(taskId).catch((err) =>
+    log.error({ taskId, err }, 'Sub-Agent resume error after inject'),
   )
 
   log.info({ taskId, wasStreaming }, 'Message injected into task by user')

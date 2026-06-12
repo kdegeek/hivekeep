@@ -38,3 +38,28 @@ docker/docker-compose.yml
 
 # Misc
 scripts/
+
+# Local-only secrets / tokens / exported context (never belong in any layer)
+npm_token
+.npmrc
+.mcp.json
+agent-context.json
+agent-context.json.*
+
+# Local agent / tooling state and worktrees (huge: .claude holds full-repo
+# worktree copies). None are build inputs; they'd only bloat the build context
+# sent to the daemon.
+.claude/
+.vscode/
+.idea/
+opencode/
+claude-code-sourcemap/
+# Stray Windows-path-named dir accidentally created at repo root (junk).
+C:*
+
+# Launch/marketing media + generated assets (not needed to build the app)
+design-preview/
+hivekeep-specialist-avatars/
+hivekeep-video/
+install.sh
+logo.svg

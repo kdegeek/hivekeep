@@ -15,7 +15,7 @@ type UrlSafety =
 /**
  * Check whether a URL is safe for http_request.
  *
- * The TOOLBOX is the sole tool-grant primitive: there is no per-Kin network
+ * The TOOLBOX is the sole tool-grant primitive: there is no per-Agent network
  * flag. When `http_request` is granted (by listing it in a toolbox), it may
  * reach private / local hosts — to block that, simply don't grant the tool.
  *
@@ -55,12 +55,12 @@ function checkUrlSafety(urlStr: string): UrlSafety {
 
 /**
  * http_request - Make HTTP requests to external APIs.
- * Available to main Kins and sub-Kins. Granting the tool (via a toolbox) is the
- * only gate — there is no per-Kin network flag; private/local hosts are
+ * Available to main Agents and sub-Agents. Granting the tool (via a toolbox) is the
+ * only gate — there is no per-Agent network flag; private/local hosts are
  * reachable when the tool is granted (loopback + cloud-metadata stay blocked).
  */
 export const httpRequestTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: (_ctx: ToolExecutionContext) => {
     return tool({
       description:

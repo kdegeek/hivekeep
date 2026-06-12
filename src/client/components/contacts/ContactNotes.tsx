@@ -10,37 +10,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/client/components/ui/select'
-import { KinSelector } from '@/client/components/common/KinSelector'
+import { AgentSelector } from '@/client/components/common/AgentSelector'
 import { ConfirmDeleteButton } from '@/client/components/common/ConfirmDeleteButton'
 import { Pencil, Bot, Globe, Lock, Plus, Check, X, User } from 'lucide-react'
 import { api, toastError } from '@/client/lib/api'
-import type { ContactNoteData, KinInfo } from './ContactCard'
+import type { ContactNoteData, AgentInfo } from './ContactCard'
 
 interface ContactNotesProps {
   contactId: string
   notes: ContactNoteData[]
-  kinInfo?: Map<string, KinInfo>
+  agentInfo?: Map<string, AgentInfo>
   onRefresh?: () => void
 }
 
-export function ContactNotes({ contactId, notes, kinInfo, onRefresh }: ContactNotesProps) {
+export function ContactNotes({ contactId, notes, agentInfo, onRefresh }: ContactNotesProps) {
   const { t } = useTranslation()
 
   const userNote = notes.find((n) => n.userId !== null)
-  const kinNotes = notes.filter((n) => n.userId === null)
+  const agentNotes = notes.filter((n) => n.userId === null)
 
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
   const [addingNote, setAddingNote] = useState(false)
-  const [newNoteKinId, setNewNoteKinId] = useState('')
+  const [newNoteAgentId, setNewNoteAgentId] = useState('')
   const [newNoteScope, setNewNoteScope] = useState<'global' | 'private'>('global')
   const [newNoteContent, setNewNoteContent] = useState('')
 
   const [editingUserNote, setEditingUserNote] = useState(false)
   const [userNoteDraft, setUserNoteDraft] = useState('')
 
-  const kinEntries = kinInfo ? [...kinInfo.entries()] : []
-  const kinOptions = kinEntries.map(([id, info]) => ({ id, name: info.name, avatarUrl: info.avatarUrl }))
+  const agentEntries = agentInfo ? [...agentInfo.entries()] : []
+  const agentOptions = agentEntries.map(([id, info]) => ({ id, name: info.name, avatarUrl: info.avatarUrl }))
 
   const startEdit = (note: ContactNoteData) => {
     setEditingNoteId(note.id)
@@ -75,8 +75,8 @@ export function ContactNotes({ contactId, notes, kinInfo, onRefresh }: ContactNo
   }
 
   const startAddNote = () => {
-    const firstKinId = kinInfo ? [...kinInfo.keys()][0] ?? '' : ''
-    setNewNoteKinId(firstKinId)
+    const firstAgentId = agentInfo ? [...agentInfo.keys()][0] ?? '' : ''
+    setNewNoteAgentId(firstAgentId)
     setNewNoteScope('global')
     setNewNoteContent('')
     setAddingNote(true)
@@ -87,10 +87,10 @@ export function ContactNotes({ contactId, notes, kinInfo, onRefresh }: ContactNo
   }
 
   const saveNewNote = async () => {
-    if (!newNoteKinId || !newNoteContent.trim()) return
+    if (!newNoteAgentId || !newNoteContent.trim()) return
     try {
       await api.post(`/contacts/${contactId}/notes`, {
-        kinId: newNoteKinId,
+        agentId: newNoteAgentId,
         scope: newNoteScope,
         content: newNoteContent.trim(),
       })
@@ -134,7 +134,7 @@ export function ContactNotes({ contactId, notes, kinInfo, onRefresh }: ContactNo
     }
   }
 
-  const hasAnything = kinNotes.length > 0 || userNote || addingNote || editingUserNote
+  const hasAnything = agentNotes.length > 0 || userNote || addingNote || editingUserNote
 
   if (!hasAnything) {
     return (
@@ -143,7 +143,7 @@ export function ContactNotes({ contactId, notes, kinInfo, onRefresh }: ContactNo
           <Plus className="size-3 mr-1" />
           {t('settings.contacts.addUserNote')}
         </Button>
-        {kinEntries.length > 0 && (
+        {agentEntries.length > 0 && (
           <Button variant="ghost" size="sm" className="text-xs text-muted-foreground h-6 px-2" onClick={startAddNote}>
             <Plus className="size-3 mr-1" />
             {t('settings.contacts.addNote')}
@@ -215,32 +215,32 @@ export function ContactNotes({ contactId, notes, kinInfo, onRefresh }: ContactNo
         ) : null}
       </div>
 
-      {/* ─── Kin notes section ─── */}
-      {(kinNotes.length > 0 || addingNote) && (
+      {/* ─── Agent notes section ─── */}
+      {(agentNotes.length > 0 || addingNote) && (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
               {t('settings.contacts.notes')}
             </p>
-            {!addingNote && kinEntries.length > 0 && (
+            {!addingNote && agentEntries.length > 0 && (
               <Button variant="ghost" size="icon-xs" onClick={startAddNote}>
                 <Plus className="size-3" />
               </Button>
             )}
           </div>
-          {kinNotes.map((note) => {
-            const kin = note.kinId ? kinInfo?.get(note.kinId) : undefined
-            const kinName = kin?.name ?? '?'
+          {agentNotes.map((note) => {
+            const agent = note.agentId ? agentInfo?.get(note.agentId) : undefined
+            const agentName = agent?.name ?? '?'
             const isPrivate = note.scope === 'private'
             const ScopeIcon = isPrivate ? Lock : Globe
             const isEditing = editingNoteId === note.id
 
             return (
               <div key={note.id} className="group flex items-start gap-2 text-xs">
-                {kin?.avatarUrl ? (
+                {agent?.avatarUrl ? (
                   <img
-                    src={kin.avatarUrl}
-                    alt={kinName}
+                    src={agent.avatarUrl}
+                    alt={agentName}
                     className="size-5 rounded-full object-cover shrink-0 mt-0.5"
                   />
                 ) : (
@@ -248,7 +248,7 @@ export function ContactNotes({ contactId, notes, kinInfo, onRefresh }: ContactNo
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="font-medium text-muted-foreground">{kinName}</span>
+                    <span className="font-medium text-muted-foreground">{agentName}</span>
                     <ScopeIcon className="size-3 text-muted-foreground/60" />
                     {isPrivate && (
                       <span className="text-[10px] text-muted-foreground/60">
@@ -301,11 +301,11 @@ export function ContactNotes({ contactId, notes, kinInfo, onRefresh }: ContactNo
           {addingNote && (
             <div className="space-y-2 rounded-lg border border-dashed p-2">
               <div className="flex items-center gap-2">
-                <KinSelector
-                  value={newNoteKinId}
-                  onValueChange={setNewNoteKinId}
-                  kins={kinOptions}
-                  placeholder={t('settings.contacts.noteKinPlaceholder')}
+                <AgentSelector
+                  value={newNoteAgentId}
+                  onValueChange={setNewNoteAgentId}
+                  agents={agentOptions}
+                  placeholder={t('settings.contacts.noteAgentPlaceholder')}
                   triggerClassName="h-7 w-36 text-xs"
                   autoHeight={false}
                 />
@@ -338,7 +338,7 @@ export function ContactNotes({ contactId, notes, kinInfo, onRefresh }: ContactNo
                   variant="ghost"
                   size="icon-xs"
                   onClick={saveNewNote}
-                  disabled={!newNoteKinId || !newNoteContent.trim()}
+                  disabled={!newNoteAgentId || !newNoteContent.trim()}
                 >
                   <Check className="size-3" />
                 </Button>
@@ -348,8 +348,8 @@ export function ContactNotes({ contactId, notes, kinInfo, onRefresh }: ContactNo
         </div>
       )}
 
-      {/* Quick "add Kin note" if section is hidden and we have a user note */}
-      {kinNotes.length === 0 && !addingNote && kinEntries.length > 0 && (
+      {/* Quick "add Agent note" if section is hidden and we have a user note */}
+      {agentNotes.length === 0 && !addingNote && agentEntries.length > 0 && (
         <Button variant="ghost" size="sm" className="text-xs text-muted-foreground h-6 px-2" onClick={startAddNote}>
           <Plus className="size-3 mr-1" />
           {t('settings.contacts.addNote')}

@@ -18,13 +18,20 @@ import { MessageBubble } from '@/client/components/chat/MessageBubble'
 import { MessageInput } from '@/client/components/chat/MessageInput'
 import { TypingIndicator } from '@/client/components/chat/TypingIndicator'
 import { useQuickChat } from '@/client/hooks/useQuickChat'
+import { WorkspacePathProvider } from '@/client/contexts/WorkspacePathContext'
 import { useToolCalls } from '@/client/hooks/useToolCalls'
 import { useDraftMessage } from '@/client/hooks/useDraftMessage'
 import { useFileUpload } from '@/client/hooks/useFileUpload'
 import { useAuth } from '@/client/hooks/useAuth'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/client/components/ui/tooltip'
-// ModelPicker removed from quick chat to avoid changing Kin model globally (#71)
+// The composer's model/effort pickers here write PER-SESSION overrides (PATCH
+// /quick-sessions/:id) — never the Agent's own configuration. (The original
+// ModelPicker was removed in #71 precisely because it mutated the Agent
+// globally; this is the session-scoped replacement.)
 import { X, Zap, MessageSquare, LogOut, History, Pin, PinOff } from 'lucide-react'
+import type { AgentThinkingEffort } from '@/shared/types'
+import { AgentToolsModal } from '@/client/components/agent/AgentToolsModal'
+import { useAgentTools } from '@/client/hooks/useAgentTools'
 import { useAutoScroll } from '@/client/hooks/useAutoScroll'
 import { cn } from '@/client/lib/utils'
 import { ContextBar } from '@/client/components/chat/ContextBar'
@@ -40,26 +47,34 @@ interface LLMModel {
 }
 
 interface QuickChatPanelProps {
-  kinId: string
-  kinName: string
-  kinAvatarUrl: string | null
-  kinModel?: string
+  agentId: string
+  agentName: string
+  agentAvatarUrl: string | null
+  agentModel?: string
   llmModels?: LLMModel[]
   sessionId: string
   expiresAt?: number | null
   onHide: () => void
   onEnd: (saveMemory?: boolean, memorySummary?: string) => void
-  onModelChange?: (modelId: string, providerId: string) => void
   onShowHistory?: () => void
+  /** The agent's thinking defaults — shown until the session overrides them. */
+  agentThinkingEnabled?: boolean
+  agentThinkingEffort?: AgentThinkingEffort | null
+  /** Opens the agent's tools management (forwarded to the tools modal). */
+  onEditTools?: () => void
 }
 
-export function QuickChatPanel({ kinId, kinName, kinAvatarUrl, sessionId, expiresAt, onHide, onEnd, onShowHistory }: QuickChatPanelProps) {
+export function QuickChatPanel({ agentId, agentName, agentAvatarUrl, agentModel, llmModels, sessionId, expiresAt, onHide, onEnd, onShowHistory, agentThinkingEnabled, agentThinkingEffort, onEditTools }: QuickChatPanelProps) {
   const { t } = useTranslation()
   const { user } = useAuth()
-  const { messages, streamingMessage, isProcessing, isStreaming, sendMessage, stopStreaming } = useQuickChat(sessionId, kinId)
-  const { toolCallsByMessage } = useToolCalls(kinId, messages)
+  const { messages, session, streamingMessage, isProcessing, isStreaming, sendMessage, stopStreaming, updateSessionOverrides } = useQuickChat(sessionId, agentId)
+  // Tools badge: the quick-session variant of the resolved toolset (the
+  // session-excluded tools — tasks, crons, inter-agent… — are not counted).
+  const { tools: quickTools, count: quickToolCount, refetch: refetchQuickTools } = useAgentTools(agentId, { quick: true })
+  const [toolsModalOpen, setToolsModalOpen] = useState(false)
+  const { toolCallsByMessage } = useToolCalls(agentId, messages)
   const { content: draftContent, setContent: setDraftContent, clearDraft } = useDraftMessage(`quick-${sessionId}`)
-  const { pendingFiles, addFiles, removeFile, clearFiles, isUploading } = useFileUpload(kinId)
+  const { pendingFiles, addFiles, removeFile, clearFiles, isUploading } = useFileUpload(agentId)
   const [showCloseDialog, setShowCloseDialog] = useState(false)
   const [saveAsMemory, setSaveAsMemory] = useState(false)
   const [memorySummary, setMemorySummary] = useState('')
@@ -72,7 +87,7 @@ export function QuickChatPanel({ kinId, kinName, kinAvatarUrl, sessionId, expire
     apiContextTokens?: number
   } | null>(null)
   useEffect(() => {
-    fetch(`/api/kins/${kinId}/context-preview?sessionId=${sessionId}`)
+    fetch(`/api/agents/${agentId}/context-preview?sessionId=${sessionId}`)
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
         if (data?.tokenEstimate) {
@@ -84,7 +99,7 @@ export function QuickChatPanel({ kinId, kinName, kinAvatarUrl, sessionId, expire
         }
       })
       .catch(() => {})
-  }, [kinId, sessionId])
+  }, [agentId, sessionId])
 
   // Update remaining time display
   useEffect(() => {
@@ -142,13 +157,14 @@ export function QuickChatPanel({ kinId, kinName, kinAvatarUrl, sessionId, expire
   }, [onEnd, saveAsMemory, memorySummary])
 
   return (
+    <WorkspacePathProvider agentId={agentId}>
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2.5">
           <ChatAvatar
-            avatarUrl={kinAvatarUrl}
-            name={kinName}
+            avatarUrl={agentAvatarUrl}
+            name={agentName}
             className="size-8"
             fallbackClassName="bg-primary/10 text-primary text-xs"
             fallbackIcon={<Zap className="size-3.5" />}
@@ -156,13 +172,13 @@ export function QuickChatPanel({ kinId, kinName, kinAvatarUrl, sessionId, expire
           <div className="min-w-0">
             <p className="text-sm font-semibold leading-tight">{t('quickChat.title')}</p>
             <p className="text-xs text-muted-foreground truncate">
-              {kinName}
+              {agentName}
               {timeLeft && <span className="ml-1.5 opacity-60">· {timeLeft}</span>}
             </p>
           </div>
           {contextData && (
             <ContextBar
-              kinId={kinId}
+              agentId={agentId}
               sessionId={sessionId}
               estimatedTokens={contextData.tokenEstimate.total}
               maxTokens={contextData.contextWindow}
@@ -220,12 +236,15 @@ export function QuickChatPanel({ kinId, kinName, kinAvatarUrl, sessionId, expire
                     content={msg.content}
                     sourceType={msg.sourceType}
                     files={msg.files}
-                    avatarUrl={isFromUser ? user?.avatarUrl : kinAvatarUrl}
-                    senderName={isFromUser ? (user?.pseudonym ?? user?.firstName) : kinName}
+                    avatarUrl={isFromUser ? user?.avatarUrl : agentAvatarUrl}
+                    senderName={isFromUser ? (user?.pseudonym ?? user?.firstName) : agentName}
                     timestamp={msg.createdAt}
                     toolCalls={toolCallsByMessage.get(msg.id)}
                     injectedMemories={msg.injectedMemories}
                     stepLimitReached={msg.stepLimitReached}
+                    emptyTurn={msg.emptyTurn}
+                    finishReason={msg.finishReason}
+                    silentStop={msg.silentStop}
                     tokenUsage={msg.tokenUsage}
                     reasoning={msg.reasoning ?? undefined}
                   />
@@ -237,13 +256,13 @@ export function QuickChatPanel({ kinId, kinName, kinAvatarUrl, sessionId, expire
                   role={streamingMessage.role}
                   content={streamingMessage.content}
                   sourceType={streamingMessage.sourceType}
-                  avatarUrl={kinAvatarUrl}
-                  senderName={kinName}
+                  avatarUrl={agentAvatarUrl}
+                  senderName={agentName}
                   timestamp={streamingMessage.createdAt}
                   toolCalls={toolCallsByMessage.get(streamingMessage.id)}
                 />
               )}
-              {(isProcessing || isStreaming) && !streamingMessage && <TypingIndicator kinName={kinName} kinAvatarUrl={kinAvatarUrl} />}
+              {(isProcessing || isStreaming) && !streamingMessage && <TypingIndicator agentName={agentName} agentAvatarUrl={agentAvatarUrl} />}
             </div>
           )}
           <div ref={bottomRef} />
@@ -274,8 +293,30 @@ export function QuickChatPanel({ kinId, kinName, kinAvatarUrl, sessionId, expire
         isUploading={isUploading}
         onAddFiles={addFiles}
         onRemoveFile={removeFile}
-        kinId={kinId}
+        agentId={agentId}
+        llmModels={llmModels}
+        model={session?.model ?? agentModel}
+        providerId={session?.providerId ?? null}
+        onModelChange={(modelId, providerId) => void updateSessionOverrides({ model: modelId, providerId })}
+        thinkingEnabled={session?.thinkingEnabled ?? agentThinkingEnabled ?? false}
+        thinkingEffort={session?.thinkingEffort ?? agentThinkingEffort ?? null}
+        onChangeThinking={(next) => void updateSessionOverrides({ thinkingEnabled: next.enabled, thinkingEffort: next.effort })}
+        toolCount={quickToolCount}
+        onShowTools={() => { void refetchQuickTools(); setToolsModalOpen(true) }}
       />
+
+      {/* Tools listing modal (composer tools badge — quick-session variant) */}
+      {toolsModalOpen && (
+        <AgentToolsModal
+          open={toolsModalOpen}
+          onOpenChange={setToolsModalOpen}
+          agentId={agentId}
+          agentName={agentName}
+          tools={quickTools}
+          isQuickSession
+          onEditTools={onEditTools}
+        />
+      )}
 
       {/* Close confirmation dialog */}
       <AlertDialog open={showCloseDialog} onOpenChange={(open) => {
@@ -327,5 +368,6 @@ export function QuickChatPanel({ kinId, kinName, kinAvatarUrl, sessionId, expire
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </WorkspacePathProvider>
   )
 }

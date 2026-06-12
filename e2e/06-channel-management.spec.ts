@@ -9,7 +9,7 @@ async function openChannelSettings(page: Page) {
   await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 })
 
   await page.getByRole('dialog').getByText('Channels', { exact: true }).click()
-  await expect(page.getByText('Connect your Kins to external messaging platforms')).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByText('Connect your Agents to external messaging platforms')).toBeVisible({ timeout: 5_000 })
 }
 
 /**
@@ -33,10 +33,10 @@ async function createChannel(page: Page, name: string, token: string, platform?:
   // Fill name
   await page.getByPlaceholder('My Telegram bot').fill(name)
 
-  // Select Kin
-  const kinCombobox = page.locator('[role="combobox"]').filter({ hasText: /select a kin/i })
-  if (await kinCombobox.isVisible({ timeout: 1_000 }).catch(() => false)) {
-    await kinCombobox.click()
+  // Select Agent
+  const agentCombobox = page.locator('[role="combobox"]').filter({ hasText: /select an agent/i })
+  if (await agentCombobox.isVisible({ timeout: 1_000 }).catch(() => false)) {
+    await agentCombobox.click()
     await page.getByRole('option').first().click()
   }
 
@@ -81,13 +81,13 @@ test.describe.serial('Channel management', () => {
     await page.goto('/')
     await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible({ timeout: 10_000 })
     await loginAs(page)
-    await expect(page.getByText('Kins', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Agents', { exact: true })).toBeVisible({ timeout: 10_000 })
   })
 
   test('should open settings and see Channels section', async ({ page }) => {
     await openChannelSettings(page)
 
-    await expect(page.getByText('Connect your Kins to external messaging platforms')).toBeVisible()
+    await expect(page.getByText('Connect your Agents to external messaging platforms')).toBeVisible()
   })
 
   test('should create a new Telegram channel', async ({ page }) => {

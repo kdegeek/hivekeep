@@ -1,32 +1,32 @@
 ---
 title: Hooks
-description: React hooks for mini-app state, storage, theming, and KinBot integration.
+description: React hooks for mini-app state, storage, theming, and Hivekeep integration.
 ---
 
-All hooks are imported from `@kinbot/react`:
+All hooks are imported from `@hivekeep/react`:
 
 ```jsx
-import { useKinBot, useStorage, useTheme, ... } from "@kinbot/react";
+import { useHivekeep, useStorage, useTheme, ... } from "@hivekeep/react";
 ```
 
 ## Core Hooks
 
-### useKinBot()
+### useHivekeep()
 
 The primary hook. Provides the full SDK instance with reactive theme and app updates.
 
 ```jsx
-const { kinbot, app, theme, ready } = useKinBot();
+const { hivekeep, app, theme, ready } = useHivekeep();
 ```
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `kinbot` | `KinBot` | The full SDK instance (access `.api`, `.storage`, `.locale`, etc.) |
-| `app` | `KinBotAppMeta \| null` | Reactive app metadata (id, name, slug, kinId, locale, user) |
+| `hivekeep` | `Hivekeep` | The full SDK instance (access `.api`, `.storage`, `.locale`, etc.) |
+| `app` | `HivekeepAppMeta \| null` | Reactive app metadata (id, name, slug, agentId, locale, user) |
 | `theme` | `{ mode, palette }` | Reactive theme (light/dark) |
 | `ready` | `() => void` | Call this to signal your app has finished loading |
 
-**Call `ready()`** once your app is mounted to dismiss the loading state. Access other SDK features via `kinbot` (e.g. `kinbot.api`, `kinbot.storage`, `kinbot.locale`).
+**Call `ready()`** once your app is mounted to dismiss the loading state. Access other SDK features via `hivekeep` (e.g. `hivekeep.api`, `hivekeep.storage`, `hivekeep.locale`).
 
 ### useStorage(key, defaultValue)
 
@@ -40,24 +40,24 @@ const [value, setValue, { loading, error, remove }] = useStorage("myKey", defaul
 - `loading` is `true` while fetching the initial value
 - `error` contains any storage error (or `null`)
 - `remove()` deletes the key from storage
-- Data is stored in KinBot's server-side storage
+- Data is stored in Hivekeep's server-side storage
 
 ### useTheme()
 
-Lighter alternative to `useKinBot` when you only need theme info.
+Lighter alternative to `useHivekeep` when you only need theme info.
 
 ```jsx
 const { mode, palette } = useTheme();
 // mode: "light" | "dark"
 ```
 
-### useKin()
+### useAgent()
 
-Access parent Kin information.
+Access parent Agent information.
 
 ```jsx
-const { kin, loading } = useKin();
-// kin: { id, name, avatarUrl }
+const { agent, loading } = useAgent();
+// agent: { id, name, avatarUrl }
 ```
 
 ### useUser()
@@ -83,7 +83,7 @@ Options: `{ method, body, enabled }`. Auto-fetches on mount and when `path` chan
 
 ### useFetch(url, options?)
 
-Fetch external data via KinBot's HTTP proxy.
+Fetch external data via Hivekeep's HTTP proxy.
 
 ```jsx
 const { data, loading, error, refetch, status } = useFetch("https://api.example.com/data");
@@ -110,7 +110,8 @@ Subscribe to SSE events from the backend.
 
 ```jsx
 // Accumulate messages:
-const { messages, connected, clear } = useEventStream("update");
+const { messages, connected, clear, send } = useEventStream("update");
+// send("eventName", data) reaches the backend's onClientEvent export
 
 // Or use a callback (no accumulation):
 useEventStream("update", (data) => {
@@ -154,7 +155,7 @@ Options: `source`, `pageSize`, `pageParam`, `limitParam`, `getItems`, `getTotal`
 
 ### useMemory()
 
-Search and store Kin memories from a mini-app.
+Search and store Agent memories from a mini-app.
 
 ```jsx
 const { search, store, results, loading } = useMemory();
@@ -165,7 +166,7 @@ await store("User prefers dark mode", { category: "preference" });
 
 ### useConversation()
 
-Interact with the Kin's conversation.
+Interact with the Agent's conversation.
 
 ```jsx
 const { history, send, messages, loading } = useConversation();
@@ -177,7 +178,7 @@ await send("Remind me about this task");
 
 ### useLocalStorage(key, defaultValue)
 
-Browser-side localStorage (not synced via KinBot). Good for UI preferences.
+Browser-side localStorage (not synced via Hivekeep). Good for UI preferences.
 
 ```jsx
 const [sortOrder, setSortOrder, remove] = useLocalStorage("sortOrder", "asc");
@@ -286,7 +287,7 @@ await download("report.csv", csvString, "text/csv");
 
 ### useApps()
 
-List other mini-apps from the same Kin.
+List other mini-apps from the same Agent.
 
 ```jsx
 const { apps, loading, refresh } = useApps();
@@ -294,7 +295,7 @@ const { apps, loading, refresh } = useApps();
 
 ### useSharedData(onData?)
 
-Listen for data shared from another app via `KinBot.share()`.
+Listen for data shared from another app via `Hivekeep.share()`.
 
 ```jsx
 const { data, clear } = useSharedData((payload) => {
@@ -318,4 +319,4 @@ Hash-based routing for multi-page apps.
 const { path, params, navigate, back } = useHashRouter("/");
 ```
 
-See also the `Router`, `Route`, `Link`, and `NavLink` components in [@kinbot/components](/kinbot/docs/mini-apps/components/#routing).
+See also the `Router`, `Route`, `Link`, and `NavLink` components in [@hivekeep/components](/docs/mini-apps/components/#routing).

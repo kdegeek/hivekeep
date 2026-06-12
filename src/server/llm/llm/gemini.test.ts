@@ -6,8 +6,8 @@
  */
 
 import { describe, it, expect } from 'bun:test'
-import { geminiProvider } from '@/server/llm/llm/gemini'
-import type { ChatRequest, KinbotMessage } from '@/server/llm/llm/types'
+import { geminiProvider, sanitizeGeminiSchema } from '@/server/llm/llm/gemini'
+import type { ChatRequest, HivekeepMessage } from '@/server/llm/llm/types'
 
 // We test the provider through its public surface — for the
 // conversion logic we exercise a chat() call against a fetch that
@@ -233,7 +233,7 @@ describe('geminiProvider.chat — request shape', () => {
     expect(body.contents).toEqual([{ role: 'user', parts: [{ text: 'hi' }] }])
   })
 
-  it('maps KinbotTool[] into a single tools entry with functionDeclarations', async () => {
+  it('maps HivekeepTool[] into a single tools entry with functionDeclarations', async () => {
     const request: ChatRequest = {
       messages: [{ role: 'user', content: [{ type: 'text', text: 'q' }] }],
       tools: [
@@ -292,7 +292,7 @@ describe('geminiProvider.chat — request shape', () => {
   })
 
   it('round-trips tool-use → tool-result with the original tool name patched in', async () => {
-    const messages: KinbotMessage[] = [
+    const messages: HivekeepMessage[] = [
       { role: 'user', content: [{ type: 'text', text: 'what is the weather?' }] },
       {
         role: 'assistant',
@@ -353,7 +353,7 @@ describe('geminiProvider.chat — request shape', () => {
   })
 
   it('drops thinking blocks from the message history (input-only would 400)', async () => {
-    const messages: KinbotMessage[] = [
+    const messages: HivekeepMessage[] = [
       {
         role: 'assistant',
         content: [
@@ -491,5 +491,202 @@ describe('geminiProvider.chat — SSE stream parsing', () => {
     const chunks = await chunksFrom(body)
     const finish = chunks[chunks.length - 1] as { usage: { inputTokenDetails?: { cacheReadTokens?: number } } }
     expect(finish.usage.inputTokenDetails?.cacheReadTokens).toBe(80)
+  })
+})
+
+// ─── sanitizeGeminiSchema: JSON-Schema → Gemini OpenAPI subset ───────────────
+
+describe('sanitizeGeminiSchema', () => {
+  it('strips every JSON-Schema keyword Gemini rejects, keeping only the whitelist', () => {
+    // A realistic zod v4 `z.toJSONSchema()` output exercising each
+    // construct Gemini's function-declaration parser cannot handle.
+    const input = {
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      type: 'object',
+      additionalProperties: false,
+      propertyNames: { pattern: '^[a-z]+$' },
+      title: 'Args',
+      properties: {
+        // const literal → single-value enum
+        kind: { type: 'string', const: 'weather' },
+        // string with a Gemini-unsupported format → format dropped
+        email: { type: 'string', format: 'email' },
+        // .nullable() idiom → nullable:true + the non-null schema
+        nickname: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+        // numeric bounds → dropped
+        count: { type: 'number', minimum: 0, maximum: 100 },
+        // nested object: recurses into its properties
+        location: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            city: { type: 'string', pattern: '^[A-Z]' },
+            lat: { type: 'number', format: 'double' },
+          },
+          required: ['city'],
+        },
+        // array whose items schema must be recursively cleaned
+        tags: {
+          type: 'array',
+          minItems: 1,
+          items: { type: 'string', format: 'uuid', default: 'x' },
+        },
+      },
+      required: ['kind'],
+    }
+
+    const out = sanitizeGeminiSchema(input) as Record<string, any>
+
+    // Top level: only whitelisted keys survive.
+    expect(Object.keys(out).sort()).toEqual(['properties', 'required', 'type'])
+    expect(out.type).toBe('object')
+    expect(out.required).toEqual(['kind'])
+    expect(out.$schema).toBeUndefined()
+    expect(out.additionalProperties).toBeUndefined()
+    expect(out.propertyNames).toBeUndefined()
+    expect(out.title).toBeUndefined()
+
+    // const → single-value enum.
+    expect(out.properties.kind).toEqual({ type: 'string', enum: ['weather'] })
+
+    // Unsupported format dropped, type retained.
+    expect(out.properties.email).toEqual({ type: 'string' })
+
+    // .nullable() idiom collapsed.
+    expect(out.properties.nickname).toEqual({ type: 'string', nullable: true })
+
+    // Numeric bounds dropped.
+    expect(out.properties.count).toEqual({ type: 'number' })
+
+    // Nested object recursively cleaned.
+    expect(out.properties.location).toEqual({
+      type: 'object',
+      properties: {
+        city: { type: 'string' },
+        lat: { type: 'number', format: 'double' },
+      },
+      required: ['city'],
+    })
+
+    // Array items recursively cleaned (uuid format + default dropped).
+    expect(out.properties.tags).toEqual({
+      type: 'array',
+      items: { type: 'string' },
+    })
+  })
+
+  it('keeps the Gemini-supported formats (date-time, int32/int64/float/double)', () => {
+    expect(sanitizeGeminiSchema({ type: 'string', format: 'date-time' }))
+      .toEqual({ type: 'string', format: 'date-time' })
+    expect(sanitizeGeminiSchema({ type: 'integer', format: 'int64' }))
+      .toEqual({ type: 'integer', format: 'int64' })
+    expect(sanitizeGeminiSchema({ type: 'number', format: 'float' }))
+      .toEqual({ type: 'number', format: 'float' })
+    // int53 is NOT in the supported set.
+    expect(sanitizeGeminiSchema({ type: 'integer', format: 'int53' }))
+      .toEqual({ type: 'integer' })
+  })
+
+  it('collapses the nullable idiom regardless of branch order, preserving description', () => {
+    const flipped = sanitizeGeminiSchema({
+      description: 'maybe a name',
+      anyOf: [{ type: 'null' }, { type: 'string', format: 'email' }],
+    })
+    expect(flipped).toEqual({ type: 'string', nullable: true, description: 'maybe a name' })
+  })
+
+  it('collapses type: ["string","null"] arrays to a nullable string', () => {
+    expect(sanitizeGeminiSchema({ type: ['string', 'null'] }))
+      .toEqual({ type: 'string', nullable: true })
+  })
+
+  it('degrades a multi-branch union to its first branch', () => {
+    const out = sanitizeGeminiSchema({
+      anyOf: [
+        { type: 'string', pattern: '^x' },
+        { type: 'number', minimum: 0 },
+      ],
+    })
+    expect(out).toEqual({ type: 'string' })
+  })
+
+  it('passes a simple object schema through unchanged', () => {
+    const schema = {
+      type: 'object',
+      properties: { city: { type: 'string' } },
+      required: ['city'],
+    }
+    expect(sanitizeGeminiSchema(schema)).toEqual(schema)
+  })
+
+  it('returns non-objects as-is and maps arrays element-wise', () => {
+    expect(sanitizeGeminiSchema('x')).toBe('x')
+    expect(sanitizeGeminiSchema(42)).toBe(42)
+    expect(sanitizeGeminiSchema(null)).toBe(null)
+    expect(sanitizeGeminiSchema([{ type: 'string', pattern: 'x' }]))
+      .toEqual([{ type: 'string' }])
+  })
+})
+
+// ─── toolsToGemini: top-level object defaulting ──────────────────────────────
+
+describe('geminiProvider.chat — tool parameter sanitization', () => {
+  const baseModel = { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' }
+  const baseConfig = { apiKey: 'AIza-test' }
+
+  it('sanitizes a rich JSON-Schema tool param down to the Gemini subset', async () => {
+    const request: ChatRequest = {
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'q' }] }],
+      tools: [
+        {
+          name: 'lookup',
+          description: 'Look something up.',
+          inputSchema: {
+            $schema: 'https://json-schema.org/draft/2020-12/schema',
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              note: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+            },
+            required: ['id'],
+          } as Record<string, unknown>,
+        },
+      ],
+    }
+    const captured = await captureRequestBody(() =>
+      geminiProvider.chat(baseModel, request, baseConfig),
+    )
+    const body = JSON.parse(captured.init.body as string)
+    expect(body.tools[0].functionDeclarations[0].parameters).toEqual({
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        note: { type: 'string', nullable: true },
+      },
+      required: ['id'],
+    })
+  })
+
+  it('defaults to an empty object schema when sanitizing leaves no type', async () => {
+    const request: ChatRequest = {
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'q' }] }],
+      tools: [
+        {
+          name: 'noargs',
+          description: 'No real schema.',
+          // Only-dropped keys → sanitizer yields {} (no type).
+          inputSchema: { $schema: 'x', additionalProperties: false } as Record<string, unknown>,
+        },
+      ],
+    }
+    const captured = await captureRequestBody(() =>
+      geminiProvider.chat(baseModel, request, baseConfig),
+    )
+    const body = JSON.parse(captured.init.body as string)
+    expect(body.tools[0].functionDeclarations[0].parameters).toEqual({
+      type: 'object',
+      properties: {},
+    })
   })
 })

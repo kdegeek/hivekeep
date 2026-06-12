@@ -13,14 +13,14 @@
 /** Complete config object matching src/server/config.ts shape */
 export const fullMockConfig = {
   version: '0.0.0-test',
-  port: 3333,
-  dataDir: '/tmp/kinbot-test',
+  port: 3000,
+  dataDir: '/tmp/hivekeep-test',
   encryptionKey: 'test-key-0000000000000000000000000000000000000000000000000000000000000000',
   logLevel: 'error' as const,
   isDocker: false,
-  publicUrl: 'http://localhost:3333',
+  publicUrl: 'http://localhost:3000',
 
-  db: { path: '/tmp/kinbot-test/kinbot.db' },
+  db: { path: '/tmp/hivekeep-test/hivekeep.db' },
 
   compacting: {
     model: undefined,
@@ -28,7 +28,7 @@ export const fullMockConfig = {
     keepPercent: 40,
     summaryBudgetPercent: 20,
     maxSummaries: 10,
-    maxSummariesPerKin: 50,
+    maxSummariesPerAgent: 50,
   },
 
   historyTokenBudget: 0,
@@ -64,7 +64,7 @@ export const fullMockConfig = {
 
   queue: {
     userPriority: 100,
-    kinPriority: 50,
+    agentPriority: 50,
     taskPriority: 50,
     pollIntervalMs: 500,
   },
@@ -73,34 +73,42 @@ export const fullMockConfig = {
   crons: { maxActive: 50, maxConcurrentExecutions: 5 },
   tools: { maxSteps: 0 },
   shell: { defaultTimeoutMs: 30_000, maxTimeoutMs: 600_000 },
-  humanPrompts: { maxPendingPerKin: 5 },
-  interKin: { maxChainDepth: 5, rateLimitPerMinute: 20 },
+  humanPrompts: { maxPendingPerAgent: 5 },
+  interAgent: { maxChainDepth: 5, rateLimitPerMinute: 20 },
   mcp: { requireApproval: true },
 
   vault: {
     algorithm: 'aes-256-gcm' as const,
-    attachmentDir: '/tmp/kinbot-test/vault',
+    attachmentDir: '/tmp/hivekeep-test/vault',
     maxAttachmentSizeMb: 50,
     maxAttachmentsPerEntry: 10,
   },
 
-  workspace: { baseDir: '/tmp/kinbot-test/workspaces' },
+  workspace: { baseDir: '/tmp/hivekeep-test/workspaces' },
+  workspaceFiles: {
+    maxEditableSizeMb: 5,
+    maxUploadSizeMb: 100,
+    maxCopySizeMb: 500,
+    maxCopyEntries: 5000,
+    searchMaxResults: 50,
+    searchMaxEntries: 20000,
+  },
 
   upload: {
-    dir: '/tmp/kinbot-test/uploads',
+    dir: '/tmp/hivekeep-test/uploads',
     maxFileSizeMb: 50,
     channelFileRetentionDays: 30,
     channelFileCleanupIntervalMin: 60,
   },
 
   fileStorage: {
-    dir: '/tmp/kinbot-test/storage',
+    dir: '/tmp/hivekeep-test/storage',
     maxFileSizeMb: 100,
     cleanupIntervalMin: 60,
   },
 
   webhooks: {
-    maxPerKin: 20,
+    maxPerAgent: 20,
     maxPayloadBytes: 1_048_576,
     logRetentionDays: 30,
     maxLogsPerWebhook: 500,
@@ -108,13 +116,13 @@ export const fullMockConfig = {
   },
 
   channels: {
-    maxPerKin: 5,
+    maxPerAgent: 5,
     telegramWebhookPath: '/api/channels/telegram',
   },
 
   quickSessions: {
     defaultExpirationHours: 24,
-    maxActivePerUserPerKin: 1,
+    maxActivePerUserPerAgent: 1,
     retentionDays: 7,
     cleanupIntervalMinutes: 60,
   },
@@ -123,7 +131,7 @@ export const fullMockConfig = {
     pageTimeout: 30_000,
     maxContentLength: 100_000,
     maxConcurrentFetches: 5,
-    userAgent: 'Mozilla/5.0 (compatible; KinBot/test)',
+    userAgent: 'Mozilla/5.0 (compatible; Hivekeep/test)',
     blockedDomains: [] as string[],
     proxy: undefined,
     headless: {
@@ -147,14 +155,14 @@ export const fullMockConfig = {
   },
 
   wakeups: {
-    maxPendingPerKin: 20,
+    maxPendingPerAgent: 20,
     minDelaySeconds: 10,
     maxDelaySeconds: 2_592_000,
   },
 
   miniApps: {
-    dir: '/tmp/kinbot-test/mini-apps',
-    maxAppsPerKin: 20,
+    dir: '/tmp/hivekeep-test/mini-apps',
+    maxAppsPerAgent: 20,
     maxFileSizeMb: 5,
     maxTotalSizeMbPerApp: 50,
     backendEnabled: true,
@@ -162,7 +170,7 @@ export const fullMockConfig = {
 
   versionCheck: {
     enabled: false,
-    repo: 'MarlBurroW/kinbot',
+    repo: 'MarlBurroW/hivekeep',
     intervalHours: 12,
   },
 
@@ -170,7 +178,7 @@ export const fullMockConfig = {
     installationType: 'manual' as const,
     envFilePath: null,
     serviceFilePath: null,
-    workingDir: '/tmp/kinbot-test',
+    workingDir: '/tmp/hivekeep-test',
     user: 'test-user',
   },
 } as const
@@ -206,9 +214,9 @@ export const fullMockSchema = {
   verification: {},
   userProfiles: {},
   providers: {},
-  kins: {},
+  agents: {},
   mcpServers: {},
-  kinMcpServers: {},
+  agentMcpServers: {},
   messages: {},
   compactingSnapshots: {},
   compactingSummaries: {},
@@ -256,6 +264,15 @@ export const fullMockSchema = {
   ticketTags: {},
   ticketComments: {},
   ticketAttachments: {},
+  agentReadState: {},
+  pendingEmailSends: {},
+  projectKnowledge: {},
+  secretPrompts: {},
+  toolDomains: {},
+  toolboxes: {},
+  accountTriggers: {},
+  accountSyncState: {},
+  triggerLogs: {},
 }
 
 /**

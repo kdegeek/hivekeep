@@ -27,9 +27,9 @@ describe('MENTION_REGEX', () => {
   })
 
   it('captures alphanumeric handles with hyphens and underscores', () => {
-    const matches = [...'@my-kin_2 @test'.matchAll(new RegExp(MENTION_REGEX.source, 'g'))]
+    const matches = [...'@my-agent_2 @test'.matchAll(new RegExp(MENTION_REGEX.source, 'g'))]
     expect(matches).toHaveLength(2)
-    expect(matches[0]![1]).toBe('my-kin_2')
+    expect(matches[0]![1]).toBe('my-agent_2')
     expect(matches[1]![1]).toBe('test')
   })
 
@@ -77,7 +77,7 @@ describe('NOTIFICATION_TYPES', () => {
 
   it('contains expected types', () => {
     expect(NOTIFICATION_TYPES).toContain('prompt:pending')
-    expect(NOTIFICATION_TYPES).toContain('kin:error')
+    expect(NOTIFICATION_TYPES).toContain('agent:error')
     expect(NOTIFICATION_TYPES).toContain('mention')
   })
 
@@ -98,7 +98,7 @@ describe('NOTIFICATION_TYPES', () => {
 describe('MESSAGE_SOURCES', () => {
   it('contains core sources', () => {
     expect(MESSAGE_SOURCES).toContain('user')
-    expect(MESSAGE_SOURCES).toContain('kin')
+    expect(MESSAGE_SOURCES).toContain('agent')
     expect(MESSAGE_SOURCES).toContain('system')
     expect(MESSAGE_SOURCES).toContain('channel')
   })

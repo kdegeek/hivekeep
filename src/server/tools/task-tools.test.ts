@@ -8,8 +8,8 @@ const mockTasks = {
   spawnTask: mock(() => Promise.resolve({ taskId: 'task-123' })),
   respondToTask: mock(() => Promise.resolve(true)),
   cancelTask: mock(() => Promise.resolve(true)),
-  listKinTasks: mock(() => Promise.resolve([] as any[])),
-  listSourceKinTasks: mock(() => Promise.resolve([] as any[])),
+  listAgentTasks: mock(() => Promise.resolve([] as any[])),
+  listSourceAgentTasks: mock(() => Promise.resolve([] as any[])),
   listTasksFiltered: mock(() => Promise.resolve({ tasks: [] as any[], total: 0 })),
   getTaskMessages: mock(() => Promise.resolve({ taskId: '', taskTitle: null as string | null, taskStatus: '', total: 0, messages: [] as any[] })),
   getTask: mock(() => Promise.resolve(null as any)),
@@ -17,7 +17,7 @@ const mockTasks = {
   listAllTasks: mock(() => Promise.resolve([])),
   listTasksPaginated: mock(() => Promise.resolve({ tasks: [], total: 0 })),
   recoverStaleTasks: mock(() => {}),
-  resumeSubKin: mock(() => Promise.resolve()),
+  resumeSubAgent: mock(() => Promise.resolve()),
   resolveTask: mock(() => Promise.resolve()),
   reportToParent: mock(() => Promise.resolve()),
   updateTaskStatus: mock(() => Promise.resolve()),
@@ -46,8 +46,8 @@ const mockTasksExports = {
   TaskNotFoundError: FakeTaskNotFoundError,
 }
 
-const mockKinResolver = {
-  resolveKinId: mock(() => null as string | null),
+const mockAgentResolver = {
+  resolveAgentId: mock(() => null as string | null),
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -61,12 +61,12 @@ const mockDbChain: any = {
 }
 
 mock.module('@/server/services/tasks', () => mockTasksExports)
-mock.module('@/server/services/kin-resolver', () => mockKinResolver)
+mock.module('@/server/services/agent-resolver', () => mockAgentResolver)
 mock.module('@/server/db/index', () => ({ db: mockDbChain }))
 mock.module('@/server/db/schema', () => ({
   ...fullMockSchema,
-  kins: { id: 'id', slug: 'slug', name: 'name' },
-  messages: { role: 'role', content: 'content', sourceType: 'sourceType', createdAt: 'createdAt', kinId: 'kinId', taskId: 'taskId' },
+  agents: { id: 'id', slug: 'slug', name: 'name' },
+  messages: { role: 'role', content: 'content', sourceType: 'sourceType', createdAt: 'createdAt', agentId: 'agentId', taskId: 'taskId' },
 }))
 mock.module('@/server/logger', () => ({
   createLogger: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }),
@@ -84,14 +84,14 @@ mock.module('drizzle-orm', () => ({
 // known issue #325. Wrap in try/catch and degrade tests to it.skip rather
 // than crashing the whole file with a SyntaxError on module load.)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let spawnSelfTool: any, spawnKinTool: any, respondToTaskTool: any, cancelTaskTool: any,
+let spawnSelfTool: any, spawnAgentTool: any, respondToTaskTool: any, cancelTaskTool: any,
   listTasksTool: any, listActiveQueuesTool: any, getTaskDetailTool: any,
   getTaskMessagesTool: any
 let _mocksWorking = false
 try {
   const mod = await import('@/server/tools/task-tools')
   spawnSelfTool = mod.spawnSelfTool
-  spawnKinTool = mod.spawnKinTool
+  spawnAgentTool = mod.spawnAgentTool
   respondToTaskTool = mod.respondToTaskTool
   cancelTaskTool = mod.cancelTaskTool
   listTasksTool = mod.listTasksTool
@@ -107,7 +107,7 @@ const itMocked = _mocksWorking ? it : it.skip
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const ctx: ToolExecutionContext = { kinId: 'kin-abc', isSubKin: false }
+const ctx: ToolExecutionContext = { agentId: 'agent-abc', isSubAgent: false }
 
 function execute(registration: any, args: any) {
   const t = registration.create(ctx)
@@ -116,7 +116,7 @@ function execute(registration: any, args: any) {
 
 function resetMocks() {
   Object.values(mockTasks).forEach((m) => m.mockReset())
-  Object.values(mockKinResolver).forEach((m) => m.mockReset())
+  Object.values(mockAgentResolver).forEach((m) => m.mockReset())
   mockDbChain.select.mockReturnValue(mockDbChain)
   mockDbChain.from.mockReturnValue(mockDbChain)
   mockDbChain.where.mockReturnValue(mockDbChain)
@@ -136,10 +136,10 @@ describe('task-tools', () => {
   // ── Availability ──────────────────────────────────────────────────────────
 
   describe('availability', () => {
-    itMocked('spawn and query tools are available to main and sub-kin', () => {
-      const subKinTools = [spawnSelfTool, spawnKinTool, listTasksTool, listActiveQueuesTool, getTaskDetailTool]
-      for (const t of subKinTools) {
-        expect(t.availability).toEqual(['main', 'sub-kin'])
+    itMocked('spawn and query tools are available to main and sub-agent', () => {
+      const subAgentTools = [spawnSelfTool, spawnAgentTool, listTasksTool, listActiveQueuesTool, getTaskDetailTool]
+      for (const t of subAgentTools) {
+        expect(t.availability).toEqual(['main', 'sub-agent'])
       }
     })
 
@@ -166,7 +166,7 @@ describe('task-tools', () => {
       expect(result).toEqual({ taskId: 'task-456', status: 'pending' })
       expect(mockTasks.spawnTask).toHaveBeenCalledTimes(1)
       expect(mockTasks.spawnTask).toHaveBeenCalledWith({
-        parentKinId: 'kin-abc',
+        parentAgentId: 'agent-abc',
         title: 'Research topic',
         description: 'Research quantum computing',
         mode: 'await',
@@ -217,29 +217,29 @@ describe('task-tools', () => {
     })
   })
 
-  // ── spawnKinTool ──────────────────────────────────────────────────────────
+  // ── spawnAgentTool ──────────────────────────────────────────────────────────
 
-  describe('spawnKinTool', () => {
-    itMocked('returns error when kin slug not found', async () => {
-      mockKinResolver.resolveKinId.mockReturnValue(null)
+  describe('spawnAgentTool', () => {
+    itMocked('returns error when agent slug not found', async () => {
+      mockAgentResolver.resolveAgentId.mockReturnValue(null)
 
-      const result = await execute(spawnKinTool, {
-        kin_slug: 'nonexistent',
+      const result = await execute(spawnAgentTool, {
+        agent_slug: 'nonexistent',
         title: 'Task',
         task_description: 'Do something',
         mode: 'await',
       })
 
-      expect(result).toEqual({ error: 'Kin not found for slug "nonexistent"' })
+      expect(result).toEqual({ error: 'Agent not found for slug "nonexistent"' })
       expect(mockTasks.spawnTask).not.toHaveBeenCalled()
     })
 
-    itMocked('spawns task when kin slug resolves', async () => {
-      mockKinResolver.resolveKinId.mockReturnValue('kin-target-123')
+    itMocked('spawns task when agent slug resolves', async () => {
+      mockAgentResolver.resolveAgentId.mockReturnValue('agent-target-123')
       mockTasks.spawnTask.mockResolvedValue({ taskId: 'task-new' })
 
-      const result = await execute(spawnKinTool, {
-        kin_slug: 'researcher-ai',
+      const result = await execute(spawnAgentTool, {
+        agent_slug: 'researcher-ai',
         title: 'Research',
         task_description: 'Find papers',
         mode: 'async',
@@ -248,19 +248,19 @@ describe('task-tools', () => {
       expect(result).toEqual({ taskId: 'task-new', status: 'pending' })
       expect(mockTasks.spawnTask).toHaveBeenCalledWith(
         expect.objectContaining({
-          parentKinId: 'kin-abc',
+          parentAgentId: 'agent-abc',
           spawnType: 'other',
-          sourceKinId: 'kin-target-123',
+          sourceAgentId: 'agent-target-123',
         }),
       )
     })
 
-    itMocked('passes optional model to spawned kin', async () => {
-      mockKinResolver.resolveKinId.mockReturnValue('kin-target')
+    itMocked('passes optional model to spawned agent', async () => {
+      mockAgentResolver.resolveAgentId.mockReturnValue('agent-target')
       mockTasks.spawnTask.mockResolvedValue({ taskId: 'task-m' })
 
-      await execute(spawnKinTool, {
-        kin_slug: 'helper',
+      await execute(spawnAgentTool, {
+        agent_slug: 'helper',
         title: 'Help',
         task_description: 'Help me',
         mode: 'await',
@@ -274,8 +274,8 @@ describe('task-tools', () => {
     })
 
     itMocked('returns error when model is set without provider_id', async () => {
-      const result = await execute(spawnKinTool, {
-        kin_slug: 'helper',
+      const result = await execute(spawnAgentTool, {
+        agent_slug: 'helper',
         title: 'Help',
         task_description: 'Help me',
         mode: 'await',
@@ -321,7 +321,7 @@ describe('task-tools', () => {
       const result = await execute(cancelTaskTool, { task_id: 'task-cancel' })
 
       expect(result).toEqual({ success: true })
-      expect(mockTasks.cancelTask).toHaveBeenCalledWith('task-cancel', 'kin-abc')
+      expect(mockTasks.cancelTask).toHaveBeenCalledWith('task-cancel', 'agent-abc')
     })
 
     itMocked('returns error when task cannot be cancelled', async () => {
@@ -355,8 +355,8 @@ describe('task-tools', () => {
             title: 'Research',
             status: 'completed',
             kind: 'spawn_self',
-            parentKinSlug: 'me',
-            childKinSlug: null,
+            parentAgentSlug: 'me',
+            childAgentSlug: null,
             depth: 0,
             createdAt: 1735689600000,
             updatedAt: 1735776000000,
@@ -395,7 +395,7 @@ describe('task-tools', () => {
           kind: 'spawn_self',
           limit: 10,
           offset: 5,
-          relatedToKinId: 'kin-abc',
+          relatedToAgentId: 'agent-abc',
         }),
       )
     })
@@ -407,8 +407,8 @@ describe('task-tools', () => {
           title: 't',
           status: 'completed',
           kind: 'spawn_self' as const,
-          parentKinSlug: 'me',
-          childKinSlug: null,
+          parentAgentSlug: 'me',
+          childAgentSlug: null,
           depth: 0,
           createdAt: 100,
           updatedAt: 200,
@@ -436,11 +436,11 @@ describe('task-tools', () => {
       expect(result).toEqual({ error: 'Task not found' })
     })
 
-    itMocked('returns error when kin has no access', async () => {
+    itMocked('returns error when agent has no access', async () => {
       mockTasks.getTask.mockResolvedValue({
         id: 'task-private',
-        parentKinId: 'kin-other',
-        sourceKinId: 'kin-another',
+        parentAgentId: 'agent-other',
+        sourceAgentId: 'agent-another',
       })
 
       const result = await execute(getTaskDetailTool, { task_id: 'task-private' })
@@ -448,7 +448,7 @@ describe('task-tools', () => {
       expect(result).toEqual({ error: 'Access denied — you are not related to this task' })
     })
 
-    itMocked('allows access as parent kin', async () => {
+    itMocked('allows access as parent agent', async () => {
       mockTasks.getTask.mockResolvedValue({
         id: 'task-mine',
         title: 'My task',
@@ -456,8 +456,8 @@ describe('task-tools', () => {
         status: 'completed',
         mode: 'await',
         spawnType: 'self',
-        parentKinId: 'kin-abc',
-        sourceKinId: null,
+        parentAgentId: 'agent-abc',
+        sourceAgentId: null,
         result: 'Done!',
         error: null,
         depth: 0,
@@ -476,7 +476,7 @@ describe('task-tools', () => {
       expect(result.messages[0].role).toBe('user')
     })
 
-    itMocked('allows access as source kin', async () => {
+    itMocked('allows access as source agent', async () => {
       mockTasks.getTask.mockResolvedValue({
         id: 'task-assigned',
         title: 'Assigned',
@@ -484,8 +484,8 @@ describe('task-tools', () => {
         status: 'pending',
         mode: 'await',
         spawnType: 'other',
-        parentKinId: 'kin-boss',
-        sourceKinId: 'kin-abc',
+        parentAgentId: 'agent-boss',
+        sourceAgentId: 'agent-abc',
         result: null,
         error: null,
         depth: 1,
@@ -505,7 +505,7 @@ describe('task-tools', () => {
 
   describe('getTaskMessagesTool', () => {
     itMocked('availability and flags', () => {
-      expect(getTaskMessagesTool.availability).toEqual(['main', 'sub-kin'])
+      expect(getTaskMessagesTool.availability).toEqual(['main', 'sub-agent'])
       expect(getTaskMessagesTool.readOnly).toBe(true)
       expect(getTaskMessagesTool.concurrencySafe).toBe(true)
     })
@@ -513,8 +513,8 @@ describe('task-tools', () => {
     itMocked('returns access denied when caller is not related to the task', async () => {
       mockTasks.getTask.mockResolvedValue({
         id: 'task-x',
-        parentKinId: 'kin-other',
-        sourceKinId: 'kin-another',
+        parentAgentId: 'agent-other',
+        sourceAgentId: 'agent-another',
       })
 
       const result = await execute(getTaskMessagesTool, {
@@ -530,8 +530,8 @@ describe('task-tools', () => {
     itMocked('returns paginated previews when caller is parent', async () => {
       mockTasks.getTask.mockResolvedValue({
         id: 'task-y',
-        parentKinId: 'kin-abc',
-        sourceKinId: null,
+        parentAgentId: 'agent-abc',
+        sourceAgentId: null,
       })
       mockTasks.getTaskMessages.mockResolvedValue({
         taskId: 'task-y',

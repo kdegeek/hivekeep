@@ -18,7 +18,7 @@ function makeMockTool(name: string): Tool<any, any> {
 }
 
 function makeMockRegistration(
-  availability: ('main' | 'sub-kin')[],
+  availability: ('main' | 'sub-agent')[],
   opts?: { defaultDisabled?: boolean },
 ): ToolRegistration {
   return {
@@ -30,9 +30,9 @@ function makeMockRegistration(
 
 function makeCtx(overrides?: Partial<ToolExecutionContext>): ToolExecutionContext {
   return {
-    kinId: 'test-kin-id',
+    agentId: 'test-agent-id',
     userId: 'test-user-id',
-    isSubKin: false,
+    isSubAgent: false,
     ...overrides,
   }
 }
@@ -67,7 +67,7 @@ class TestToolRegistry {
   }
 
   resolve(ctx: ToolExecutionContext): Record<string, Tool<any, any>> {
-    const target = ctx.isSubKin ? 'sub-kin' : 'main'
+    const target = ctx.isSubAgent ? 'sub-agent' : 'main'
     const resolved: Record<string, Tool<any, any>> = {}
     for (const [name, reg] of this.tools) {
       if (reg.availability.includes(target)) {
@@ -77,7 +77,7 @@ class TestToolRegistry {
     return resolved
   }
 
-  list(): Array<{ name: string; availability: ('main' | 'sub-kin')[]; defaultDisabled: boolean }> {
+  list(): Array<{ name: string; availability: ('main' | 'sub-agent')[]; defaultDisabled: boolean }> {
     return Array.from(this.tools.entries()).map(([name, reg]) => ({
       name,
       availability: reg.availability,
@@ -111,16 +111,16 @@ describe('ToolRegistry', () => {
 
   it('overwrites a tool with the same name', () => {
     registry.register('dup', makeMockRegistration(['main']))
-    registry.register('dup', makeMockRegistration(['sub-kin']))
+    registry.register('dup', makeMockRegistration(['sub-agent']))
     expect(registry.registeredCount).toBe(1)
     const listed = registry.list()
-    expect(listed[0]!.availability).toEqual(['sub-kin'])
+    expect(listed[0]!.availability).toEqual(['sub-agent'])
   })
 
   it('registers multiple tools', () => {
     registry.register('a', makeMockRegistration(['main']))
-    registry.register('b', makeMockRegistration(['sub-kin']))
-    registry.register('c', makeMockRegistration(['main', 'sub-kin']))
+    registry.register('b', makeMockRegistration(['sub-agent']))
+    registry.register('c', makeMockRegistration(['main', 'sub-agent']))
     expect(registry.registeredCount).toBe(3)
   })
 
@@ -128,7 +128,7 @@ describe('ToolRegistry', () => {
 
   it('list returns correct metadata', () => {
     registry.register('tool_a', makeMockRegistration(['main'], { defaultDisabled: true }))
-    registry.register('tool_b', makeMockRegistration(['main', 'sub-kin']))
+    registry.register('tool_b', makeMockRegistration(['main', 'sub-agent']))
 
     const list = registry.list()
     expect(list).toHaveLength(2)
@@ -138,7 +138,7 @@ describe('ToolRegistry', () => {
     expect(a.defaultDisabled).toBe(true)
 
     const b = list.find((t) => t.name === 'tool_b')!
-    expect(b.availability).toEqual(['main', 'sub-kin'])
+    expect(b.availability).toEqual(['main', 'sub-agent'])
     expect(b.defaultDisabled).toBe(false)
   })
 
@@ -155,29 +155,29 @@ describe('ToolRegistry', () => {
 
   it('resolve returns only main-available tools for main context', () => {
     registry.register('main_only', makeMockRegistration(['main']))
-    registry.register('sub_only', makeMockRegistration(['sub-kin']))
-    registry.register('both', makeMockRegistration(['main', 'sub-kin']))
+    registry.register('sub_only', makeMockRegistration(['sub-agent']))
+    registry.register('both', makeMockRegistration(['main', 'sub-agent']))
 
-    const resolved = registry.resolve(makeCtx({ isSubKin: false }))
+    const resolved = registry.resolve(makeCtx({ isSubAgent: false }))
     expect(Object.keys(resolved)).toContain('main_only')
     expect(Object.keys(resolved)).not.toContain('sub_only')
     expect(Object.keys(resolved)).toContain('both')
   })
 
-  it('resolve returns only sub-kin-available tools for sub-kin context', () => {
+  it('resolve returns only sub-agent-available tools for sub-agent context', () => {
     registry.register('main_only', makeMockRegistration(['main']))
-    registry.register('sub_only', makeMockRegistration(['sub-kin']))
-    registry.register('both', makeMockRegistration(['main', 'sub-kin']))
+    registry.register('sub_only', makeMockRegistration(['sub-agent']))
+    registry.register('both', makeMockRegistration(['main', 'sub-agent']))
 
-    const resolved = registry.resolve(makeCtx({ isSubKin: true }))
+    const resolved = registry.resolve(makeCtx({ isSubAgent: true }))
     expect(Object.keys(resolved)).not.toContain('main_only')
     expect(Object.keys(resolved)).toContain('sub_only')
     expect(Object.keys(resolved)).toContain('both')
   })
 
   it('resolve returns empty object when no tools match', () => {
-    registry.register('sub_only', makeMockRegistration(['sub-kin']))
-    const resolved = registry.resolve(makeCtx({ isSubKin: false }))
+    registry.register('sub_only', makeMockRegistration(['sub-agent']))
+    const resolved = registry.resolve(makeCtx({ isSubAgent: false }))
     expect(Object.keys(resolved)).toHaveLength(0)
   })
 
@@ -191,11 +191,11 @@ describe('ToolRegistry', () => {
       availability: ['main'],
     })
 
-    const ctx = makeCtx({ kinId: 'custom-kin', userId: 'custom-user' })
+    const ctx = makeCtx({ agentId: 'custom-agent', userId: 'custom-user' })
     registry.resolve(ctx)
 
     expect(capturedCtx).not.toBeNull()
-    expect(capturedCtx!.kinId).toBe('custom-kin')
+    expect(capturedCtx!.agentId).toBe('custom-agent')
     expect(capturedCtx!.userId).toBe('custom-user')
   })
 
@@ -225,8 +225,8 @@ describe('ToolRegistry', () => {
     registry.register('ghost', makeMockRegistration([]))
     expect(registry.registeredCount).toBe(1)
 
-    const mainResolved = registry.resolve(makeCtx({ isSubKin: false }))
-    const subResolved = registry.resolve(makeCtx({ isSubKin: true }))
+    const mainResolved = registry.resolve(makeCtx({ isSubAgent: false }))
+    const subResolved = registry.resolve(makeCtx({ isSubAgent: true }))
     expect(Object.keys(mainResolved)).toHaveLength(0)
     expect(Object.keys(subResolved)).toHaveLength(0)
   })

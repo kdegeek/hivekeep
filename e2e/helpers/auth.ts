@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test'
 export const TEST_USER = {
   firstName: 'Test',
   lastName: 'User',
-  email: 'test@kinbot.local',
+  email: 'test@hivekeep.local',
   pseudonym: 'Tester',
   password: 'TestPassword123!',
 }

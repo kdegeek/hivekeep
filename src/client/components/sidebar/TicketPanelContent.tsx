@@ -79,7 +79,7 @@ export function TicketPanelContent({ ticketId }: TicketPanelContentProps) {
     'in_progress',
     'paused',
     'awaiting_human_input',
-    'awaiting_kin_response',
+    'awaiting_agent_response',
     'awaiting_subtask',
   ])
   const enrichmentRunning = !!ticket?.tasks?.some(
@@ -100,7 +100,7 @@ export function TicketPanelContent({ ticketId }: TicketPanelContentProps) {
     : null
   const ticketRunningDuration = ticketRunningMs != null ? formatDurationMs(ticketRunningMs) : null
 
-  // Qualified ticket ref (e.g. kinbot#42) surfaced next to the title so the
+  // Qualified ticket ref (e.g. hivekeep#42) surfaced next to the title so the
   // number is visible in the detail view, not just on the kanban card.
   const ticketRef = formatTicketRef(ticket?.number, project?.slug)
 
@@ -126,8 +126,8 @@ export function TicketPanelContent({ ticketId }: TicketPanelContentProps) {
   function handleTaskClick(task: TicketTaskSummary) {
     openTask({
       taskId: task.id,
-      kinName: task.parentKinName,
-      kinAvatarUrl: task.parentKinAvatarUrl,
+      agentName: task.parentAgentName,
+      agentAvatarUrl: task.parentAgentAvatarUrl,
       parent: { type: 'ticket', id: ticket!.id },
     })
   }
@@ -353,8 +353,8 @@ export function TicketPanelContent({ ticketId }: TicketPanelContentProps) {
                       id: task.id,
                       status: task.status,
                       title: t(`projects.ticket.panel.taskKind.${task.kind}`),
-                      kinName: task.parentKinName,
-                      avatarUrl: task.parentKinAvatarUrl,
+                      agentName: task.parentAgentName,
+                      avatarUrl: task.parentAgentAvatarUrl,
                       startedMs: task.startedAt,
                       endedMs: task.endedAt,
                       createdMs: task.createdAt,

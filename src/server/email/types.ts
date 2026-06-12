@@ -11,9 +11,10 @@ export type {
   EmailSearchQuery,
   EmailListOptions,
   EmailListResult,
+  EmailFolder,
   OutgoingAttachment,
   SendEmailParams,
   SendEmailResult,
   OAuthProfile,
   EmailProvider,
-} from '@kinbot-developer/sdk'
+} from '@hivekeep/sdk'

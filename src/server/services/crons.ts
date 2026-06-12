@@ -3,7 +3,7 @@ import { eq, and } from 'drizzle-orm'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/server/db/index'
 import { createLogger } from '@/server/logger'
-import { crons, kins, messages, tasks } from '@/server/db/schema'
+import { crons, agents, messages, tasks } from '@/server/db/schema'
 import { spawnTask } from '@/server/services/tasks'
 import { sseManager } from '@/server/sse/index'
 import { config } from '@/server/config'
@@ -17,14 +17,14 @@ const scheduledJobs = new Map<string, Cron>()
 // ─── CRUD ────────────────────────────────────────────────────────────────────
 
 interface CreateCronParams {
-  kinId: string
+  agentId: string
   name: string
   schedule: string
   taskDescription: string
-  targetKinId?: string
+  targetAgentId?: string
   model?: string
   providerId?: string
-  createdBy: 'user' | 'kin'
+  createdBy: 'user' | 'agent'
   runOnce?: boolean
   triggerParentTurn?: boolean
   thinkingConfig?: { enabled: boolean; budgetTokens?: number | null }
@@ -78,22 +78,22 @@ export async function createCron(params: CreateCronParams) {
   const id = uuid()
   const now = new Date()
 
-  // Kin-created crons require approval before activation
-  const isKinCreated = params.createdBy === 'kin'
+  // Agent-created crons require approval before activation
+  const isAgentCreated = params.createdBy === 'agent'
 
   await db.insert(crons).values({
     id,
-    kinId: params.kinId,
+    agentId: params.agentId,
     name: params.name,
     schedule: params.schedule,
     taskDescription: params.taskDescription,
-    targetKinId: params.targetKinId ?? null,
+    targetAgentId: params.targetAgentId ?? null,
     model: params.model ?? null,
     providerId: params.providerId ?? null,
     thinkingConfig: params.thinkingConfig ? JSON.stringify(params.thinkingConfig) : null,
     toolboxIds: params.toolboxIds && params.toolboxIds.length > 0 ? JSON.stringify(params.toolboxIds) : null,
-    isActive: !isKinCreated,
-    requiresApproval: isKinCreated,
+    isActive: !isAgentCreated,
+    requiresApproval: isAgentCreated,
     runOnce: params.runOnce ?? false,
     triggerParentTurn: params.triggerParentTurn ?? false,
     createdBy: params.createdBy,
@@ -108,22 +108,22 @@ export async function createCron(params: CreateCronParams) {
     scheduleJob(created)
   }
 
-  // Emit SSE so sidebar picks up kin-created crons in real-time
+  // Emit SSE so sidebar picks up agent-created crons in real-time
   if (created) {
     sseManager.broadcast({
       type: 'cron:created',
-      kinId: created.kinId,
-      data: { cronId: created.id, kinId: created.kinId },
+      agentId: created.agentId,
+      data: { cronId: created.id, agentId: created.agentId },
     })
 
-    // Persistent notification for Kin-created crons requiring approval
-    if (isKinCreated) {
+    // Persistent notification for Agent-created crons requiring approval
+    if (isAgentCreated) {
       const { createNotification } = await import('@/server/services/notifications')
       createNotification({
         type: 'cron:pending-approval',
         title: 'Cron needs approval',
         body: params.name,
-        kinId: params.kinId,
+        agentId: params.agentId,
         relatedId: id,
         relatedType: 'cron',
       }).catch(() => {})
@@ -139,7 +139,7 @@ export async function updateCron(
     name: string
     schedule: string
     taskDescription: string
-    targetKinId: string | null
+    targetAgentId: string | null
     model: string | null
     providerId: string | null
     thinkingConfig: string | null
@@ -181,8 +181,8 @@ export async function updateCron(
 
   sseManager.broadcast({
     type: 'cron:updated',
-    kinId: updated.kinId,
-    data: { cronId: updated.id, kinId: updated.kinId },
+    agentId: updated.agentId,
+    data: { cronId: updated.id, agentId: updated.agentId },
   })
 
   return updated
@@ -203,8 +203,8 @@ export async function deleteCron(cronId: string) {
   if (existing) {
     sseManager.broadcast({
       type: 'cron:deleted',
-      kinId: existing.kinId,
-      data: { cronId, kinId: existing.kinId },
+      agentId: existing.agentId,
+      data: { cronId, agentId: existing.agentId },
     })
   }
 }
@@ -213,9 +213,9 @@ export async function getCron(cronId: string) {
   return db.select().from(crons).where(eq(crons.id, cronId)).get()
 }
 
-export async function listCrons(kinId?: string) {
-  if (kinId) {
-    return db.select().from(crons).where(eq(crons.kinId, kinId)).all()
+export async function listCrons(agentId?: string) {
+  if (agentId) {
+    return db.select().from(crons).where(eq(crons.agentId, agentId)).all()
   }
   return db.select().from(crons).all()
 }
@@ -231,8 +231,8 @@ export async function approveCron(cronId: string) {
     scheduleJob(approved)
     sseManager.broadcast({
       type: 'cron:updated',
-      kinId: approved.kinId,
-      data: { cronId: approved.id, kinId: approved.kinId },
+      agentId: approved.agentId,
+      data: { cronId: approved.id, agentId: approved.agentId },
     })
   }
 
@@ -308,8 +308,8 @@ function scheduleJob(cron: typeof crons.$inferSelect) {
         stopJob(cron.id)
         sseManager.broadcast({
           type: 'cron:updated',
-          kinId: cron.kinId,
-          data: { cronId: cron.id, kinId: cron.kinId },
+          agentId: cron.agentId,
+          data: { cronId: cron.id, agentId: cron.agentId },
         })
         log.info({ cronId: cron.id, name: cron.name }, 'One-shot cron fired and deactivated')
       }
@@ -344,15 +344,15 @@ export async function triggerCronManually(cronId: string): Promise<{ taskId: str
     .set({ lastTriggeredAt: new Date(), updatedAt: new Date() })
     .where(eq(crons.id, cronId))
 
-  // 'await' wakes the parent Kin for an LLM turn when the task ends; 'async' is
+  // 'await' wakes the parent Agent for an LLM turn when the task ends; 'async' is
   // silent (report injected, no turn). Controlled by the triggerParentTurn flag.
   const { taskId } = await spawnTask({
-    parentKinId: cron.kinId,
+    parentAgentId: cron.agentId,
     title: cron.name,
     description: cron.taskDescription,
     mode: cron.triggerParentTurn ? 'await' : 'async',
-    spawnType: cron.targetKinId ? 'other' : 'self',
-    sourceKinId: cron.targetKinId ?? undefined,
+    spawnType: cron.targetAgentId ? 'other' : 'self',
+    sourceAgentId: cron.targetAgentId ?? undefined,
     model: cron.model ?? undefined,
     providerId: cron.providerId ?? undefined,
     cronId: cron.id,
@@ -361,10 +361,10 @@ export async function triggerCronManually(cronId: string): Promise<{ taskId: str
   })
 
   const lastTriggeredAt = new Date().getTime()
-  sseManager.sendToKin(cron.kinId, {
+  sseManager.sendToAgent(cron.agentId, {
     type: 'cron:triggered',
-    kinId: cron.kinId,
-    data: { cronId: cron.id, kinId: cron.kinId, taskId, lastTriggeredAt },
+    agentId: cron.agentId,
+    data: { cronId: cron.id, agentId: cron.agentId, taskId, lastTriggeredAt },
   })
 
   log.info({ cronId: cron.id, cronName: cron.name, taskId }, 'Cron triggered manually')
@@ -381,17 +381,17 @@ async function triggerCron(cronId: string) {
     .set({ lastTriggeredAt: new Date(), updatedAt: new Date() })
     .where(eq(crons.id, cronId))
 
-  // Spawn sub-Kin task. Default 'async' mode is silent (report injected, no LLM
+  // Spawn sub-Agent task. Default 'async' mode is silent (report injected, no LLM
   // turn). When triggerParentTurn is set, use 'await' so the final report wakes
-  // the parent Kin for a turn (enables auto-calibration / conditional actions).
+  // the parent Agent for a turn (enables auto-calibration / conditional actions).
   // Uses concurrency groups to queue tasks instead of dropping when max is reached
   const { taskId } = await spawnTask({
-    parentKinId: cron.kinId,
+    parentAgentId: cron.agentId,
     title: cron.name,
     description: cron.taskDescription,
     mode: cron.triggerParentTurn ? 'await' : 'async',
-    spawnType: cron.targetKinId ? 'other' : 'self',
-    sourceKinId: cron.targetKinId ?? undefined,
+    spawnType: cron.targetAgentId ? 'other' : 'self',
+    sourceAgentId: cron.targetAgentId ?? undefined,
     model: cron.model ?? undefined,
     providerId: cron.providerId ?? undefined,
     cronId: cron.id,
@@ -403,10 +403,10 @@ async function triggerCron(cronId: string) {
 
   // Emit SSE event
   const lastTriggeredAt = new Date().getTime()
-  sseManager.sendToKin(cron.kinId, {
+  sseManager.sendToAgent(cron.agentId, {
     type: 'cron:triggered',
-    kinId: cron.kinId,
-    data: { cronId: cron.id, kinId: cron.kinId, taskId, lastTriggeredAt },
+    agentId: cron.agentId,
+    data: { cronId: cron.id, agentId: cron.agentId, taskId, lastTriggeredAt },
   })
 
   log.info({ cronId: cron.id, cronName: cron.name, taskId }, 'Cron triggered')

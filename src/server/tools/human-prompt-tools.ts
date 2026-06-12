@@ -20,10 +20,10 @@ const optionSchema = z.object({
 
 /**
  * prompt_human — present a structured interactive question to the human user.
- * Available in main conversation and sub-Kin tasks (but NOT cron-spawned tasks).
+ * Available in main conversation and sub-Agent tasks (but NOT cron-spawned tasks).
  */
 export const promptHumanTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: (ctx) => {
     let promptCalledThisTurn = false
     return tool({
@@ -46,7 +46,7 @@ export const promptHumanTool: ToolRegistration = {
           .describe('Required for confirm/select/multi_select (min 2). Omit for text.'),
       }),
       execute: async ({ prompt_type, question, description, options }) => {
-        log.debug({ kinId: ctx.kinId, taskId: ctx.taskId, promptType: prompt_type }, 'prompt_human invoked')
+        log.debug({ agentId: ctx.agentId, taskId: ctx.taskId, promptType: prompt_type }, 'prompt_human invoked')
 
         // Limit to 1 prompt_human call per LLM turn
         if (promptCalledThisTurn) {
@@ -78,7 +78,7 @@ export const promptHumanTool: ToolRegistration = {
         }
 
         const { promptId } = await createHumanPrompt({
-          kinId: ctx.kinId,
+          agentId: ctx.agentId,
           taskId: ctx.taskId,
           promptType: prompt_type,
           question,

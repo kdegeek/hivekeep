@@ -9,20 +9,20 @@ import { HelpPanel } from '@/client/components/common/HelpPanel'
 import { SettingsListSkeleton } from '@/client/components/common/SettingsListSkeleton'
 import { api, toastError } from '@/client/lib/api'
 import { useSSE } from '@/client/hooks/useSSE'
-import { useKinList } from '@/client/hooks/useKinList'
+import { useAgentList } from '@/client/hooks/useAgentList'
 import { ChannelCard } from '@/client/components/channel/ChannelCard'
 import { ChannelFormDialog } from '@/client/components/channel/ChannelFormDialog'
 import { ChannelUserMappings } from '@/client/components/channel/ChannelUserMappings'
 import { ChannelWebhookField } from '@/client/components/channel/ChannelWebhookField'
 import type { ChannelSummary } from '@/shared/types'
-import type { KinOption } from '@/client/components/common/KinSelectItem'
+import type { AgentOption } from '@/client/components/common/AgentSelectItem'
 
 export function ChannelsSettings() {
   const { t } = useTranslation()
   const [channels, setChannels] = useState<ChannelSummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const { kins: kinList } = useKinList()
-  const kins: KinOption[] = kinList.map((k) => ({ id: k.id, name: k.name, role: k.role ?? '', avatarUrl: k.avatarUrl }))
+  const { agents: agentList } = useAgentList()
+  const agents: AgentOption[] = agentList.map((k) => ({ id: k.id, name: k.name, role: k.role ?? '', avatarUrl: k.avatarUrl }))
   const [modalOpen, setModalOpen] = useState(false)
   const [editingChannel, setEditingChannel] = useState<ChannelSummary | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
@@ -65,7 +65,7 @@ export function ChannelsSettings() {
   }, [channels]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCreate = async (data: {
-    kinId: string
+    agentId: string
     name: string
     platform: string
     platformConfig: Record<string, unknown>
@@ -83,24 +83,24 @@ export function ChannelsSettings() {
 
   const handleTransfer = async (
     channelId: string,
-    data: { targetKinId: string; reason?: string },
+    data: { targetAgentId: string; reason?: string },
   ) => {
     const result = await api.post<{
       ok: boolean
       noop?: boolean
-      toKinName?: string
-      newKinSlug?: string
+      toAgentName?: string
+      newAgentSlug?: string
     }>(`/channels/${channelId}/transfer`, data)
     // SSE 'channel:transferred' will refetch the list independently, but
     // call fetchChannels() too for the rare case where the SSE is delayed
     // (e.g. tab in background). Both paths are idempotent.
     await fetchChannels()
     if (result.noop) {
-      toast.info(t('settings.channels.transferNoop', 'Channel is already bound to this Kin.'))
+      toast.info(t('settings.channels.transferNoop', 'Channel is already bound to this Agent.'))
     } else {
       toast.success(
-        t('settings.channels.transferred', 'Channel transferred to {{kinName}}.', {
-          kinName: result.toKinName ?? result.newKinSlug ?? '',
+        t('settings.channels.transferred', 'Channel transferred to {{agentName}}.', {
+          agentName: result.toAgentName ?? result.newAgentSlug ?? '',
         }),
       )
     }
@@ -248,7 +248,7 @@ export function ChannelsSettings() {
         onUpdate={handleUpdate}
         onTransfer={handleTransfer}
         channel={editingChannel}
-        kins={kins}
+        agents={agents}
       />
 
     </div>

@@ -1,31 +1,31 @@
 import { describe, it, expect } from 'bun:test'
-import { applyKinNamePrefix } from '@/server/services/channel-prefix'
+import { applyAgentNamePrefix } from '@/server/services/channel-prefix'
 
 // Pure identity-prefix logic shared by deliverChannelResponse (transfer fallback)
-// and sendToChannelAs (cross-Kin send). No DB / module mocks needed.
-describe('applyKinNamePrefix', () => {
+// and sendToChannelAs (cross-Agent send). No DB / module mocks needed.
+describe('applyAgentNamePrefix', () => {
   it('prepends "[Name] " to plain content', () => {
-    expect(applyKinNamePrefix('Hello world', 'VeilleurIA')).toBe('[VeilleurIA] Hello world')
+    expect(applyAgentNamePrefix('Hello world', 'VeilleurIA')).toBe('[VeilleurIA] Hello world')
   })
 
   it('is idempotent when the exact prefix is already present', () => {
-    expect(applyKinNamePrefix('[VeilleurIA] Hello', 'VeilleurIA')).toBe('[VeilleurIA] Hello')
+    expect(applyAgentNamePrefix('[VeilleurIA] Hello', 'VeilleurIA')).toBe('[VeilleurIA] Hello')
   })
 
   it('does not duplicate when content already starts with [Name] (no trailing space)', () => {
-    expect(applyKinNamePrefix('[VeilleurIA]Hello', 'VeilleurIA')).toBe('[VeilleurIA]Hello')
+    expect(applyAgentNamePrefix('[VeilleurIA]Hello', 'VeilleurIA')).toBe('[VeilleurIA]Hello')
   })
 
-  it('still prefixes when a DIFFERENT kin name bracket is present', () => {
-    expect(applyKinNamePrefix('[OtherKin] Hi', 'VeilleurIA')).toBe('[VeilleurIA] [OtherKin] Hi')
+  it('still prefixes when a DIFFERENT agent name bracket is present', () => {
+    expect(applyAgentNamePrefix('[OtherAgent] Hi', 'VeilleurIA')).toBe('[VeilleurIA] [OtherAgent] Hi')
   })
 
   it('returns empty / whitespace-only content untouched', () => {
-    expect(applyKinNamePrefix('', 'VeilleurIA')).toBe('')
-    expect(applyKinNamePrefix('   ', 'VeilleurIA')).toBe('   ')
+    expect(applyAgentNamePrefix('', 'VeilleurIA')).toBe('')
+    expect(applyAgentNamePrefix('   ', 'VeilleurIA')).toBe('   ')
   })
 
-  it('returns content untouched when kin name is empty', () => {
-    expect(applyKinNamePrefix('Hello', '')).toBe('Hello')
+  it('returns content untouched when agent name is empty', () => {
+    expect(applyAgentNamePrefix('Hello', '')).toBe('Hello')
   })
 })

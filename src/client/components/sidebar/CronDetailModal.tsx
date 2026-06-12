@@ -95,8 +95,8 @@ export function CronDetailModal({
   const [isApproving, setIsApproving] = useState(false)
   const [isTriggering, setIsTriggering] = useState(false)
 
-  const kinName = cron.kinName
-  const initials = kinName.slice(0, 2).toUpperCase()
+  const agentName = cron.agentName
+  const initials = agentName.slice(0, 2).toUpperCase()
 
   const fetchExecutions = useCallback(async () => {
     setIsLoadingHistory(true)
@@ -172,11 +172,11 @@ export function CronDetailModal({
   const handleOpenTask = useCallback((task: TaskSummary) => {
     openTask({
       taskId: task.id,
-      kinName: task.sourceKinName ?? task.parentKinName ?? cron.kinName,
-      kinAvatarUrl: task.sourceKinAvatarUrl ?? task.parentKinAvatarUrl ?? cron.kinAvatarUrl,
+      agentName: task.sourceAgentName ?? task.parentAgentName ?? cron.agentName,
+      agentAvatarUrl: task.sourceAgentAvatarUrl ?? task.parentAgentAvatarUrl ?? cron.agentAvatarUrl,
     })
     onOpenChange(false)
-  }, [openTask, onOpenChange, cron.kinName, cron.kinAvatarUrl])
+  }, [openTask, onOpenChange, cron.agentName, cron.agentAvatarUrl])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -185,13 +185,13 @@ export function CronDetailModal({
           <DialogHeader>
             <div className="flex items-center gap-3">
               <Avatar className="size-9 shrink-0">
-                {cron.kinAvatarUrl && <AvatarImage src={cron.kinAvatarUrl} alt={kinName} />}
+                {cron.agentAvatarUrl && <AvatarImage src={cron.agentAvatarUrl} alt={agentName} />}
                 <AvatarFallback className="text-xs bg-secondary">{initials}</AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
                 <DialogTitle className="text-base truncate">{cron.name}</DialogTitle>
                 <DialogDescription className="sr-only">{cron.name}</DialogDescription>
-                <p className="text-xs text-muted-foreground truncate">{kinName}</p>
+                <p className="text-xs text-muted-foreground truncate">{agentName}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {cron.requiresApproval ? (
@@ -262,19 +262,19 @@ export function CronDetailModal({
                 </div>
               </div>
 
-              {/* Target Kin */}
-              {cron.targetKinId && (
+              {/* Target Agent */}
+              {cron.targetAgentId && (
                 <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground">{t('cron.detail.targetKin')}</p>
+                  <p className="text-xs font-medium text-muted-foreground">{t('cron.detail.targetAgent')}</p>
                   <div className="flex items-center gap-2">
                     <ArrowRight className="size-3.5 text-muted-foreground shrink-0" />
                     <Avatar className="size-5 shrink-0">
-                      {cron.targetKinAvatarUrl && <AvatarImage src={cron.targetKinAvatarUrl} alt={cron.targetKinName ?? ''} />}
+                      {cron.targetAgentAvatarUrl && <AvatarImage src={cron.targetAgentAvatarUrl} alt={cron.targetAgentName ?? ''} />}
                       <AvatarFallback className="text-[10px] bg-secondary">
-                        {(cron.targetKinName ?? '?').slice(0, 2).toUpperCase()}
+                        {(cron.targetAgentName ?? '?').slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="text-sm">{cron.targetKinName ?? cron.targetKinId}</span>
+                    <span className="text-sm">{cron.targetAgentName ?? cron.targetAgentId}</span>
                   </div>
                 </div>
               )}

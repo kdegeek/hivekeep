@@ -13,7 +13,7 @@ interface MemoriesResponse {
 
 interface MemoryFilters {
   category?: MemoryCategory
-  kinId?: string
+  agentId?: string
   scope?: MemoryScope
 }
 
@@ -31,7 +31,7 @@ interface UpdateMemoryData {
   scope?: MemoryScope
 }
 
-export function useMemories(kinId?: string | null) {
+export function useMemories(agentId?: string | null) {
   const [memories, setMemories] = useState<MemorySummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [filters, setFilters] = useState<MemoryFilters>({})
@@ -49,14 +49,14 @@ export function useMemories(kinId?: string | null) {
       params.set('limit', String(PAGE_SIZE))
       params.set('offset', String(page * PAGE_SIZE))
 
-      if (kinId) {
+      if (agentId) {
         const qs = params.toString() ? `?${params.toString()}` : ''
-        const data = await api.get<MemoriesResponse>(`/kins/${kinId}/memories${qs}`)
-        setMemories(data.memories.map((m) => ({ ...m, kinId })))
+        const data = await api.get<MemoriesResponse>(`/agents/${agentId}/memories${qs}`)
+        setMemories(data.memories.map((m) => ({ ...m, agentId })))
         setTotal(data.total)
         setHasMore(data.hasMore)
       } else {
-        if (f.kinId) params.set('kinId', f.kinId)
+        if (f.agentId) params.set('agentId', f.agentId)
         const qs = params.toString() ? `?${params.toString()}` : ''
         const data = await api.get<MemoriesResponse>(`/memories${qs}`)
         setMemories(data.memories)
@@ -68,27 +68,27 @@ export function useMemories(kinId?: string | null) {
     } finally {
       setIsLoading(false)
     }
-  }, [kinId, filters, page])
+  }, [agentId, filters, page])
 
   useEffect(() => {
     fetchMemories()
   }, [fetchMemories])
 
-  const createMemory = useCallback(async (targetKinId: string, data: CreateMemoryData) => {
-    const result = await api.post<{ memory: MemorySummary }>(`/kins/${targetKinId}/memories`, data)
-    setMemories((prev) => [{ ...result.memory, kinId: targetKinId }, ...prev])
+  const createMemory = useCallback(async (targetAgentId: string, data: CreateMemoryData) => {
+    const result = await api.post<{ memory: MemorySummary }>(`/agents/${targetAgentId}/memories`, data)
+    setMemories((prev) => [{ ...result.memory, agentId: targetAgentId }, ...prev])
     setTotal((prev) => prev + 1)
     return result.memory
   }, [])
 
-  const updateMemory = useCallback(async (memoryId: string, targetKinId: string, updates: UpdateMemoryData) => {
-    const result = await api.patch<{ memory: MemorySummary }>(`/kins/${targetKinId}/memories/${memoryId}`, updates)
-    setMemories((prev) => prev.map((m) => (m.id === memoryId ? { ...result.memory, kinId: targetKinId } : m)))
+  const updateMemory = useCallback(async (memoryId: string, targetAgentId: string, updates: UpdateMemoryData) => {
+    const result = await api.patch<{ memory: MemorySummary }>(`/agents/${targetAgentId}/memories/${memoryId}`, updates)
+    setMemories((prev) => prev.map((m) => (m.id === memoryId ? { ...result.memory, agentId: targetAgentId } : m)))
     return result.memory
   }, [])
 
-  const deleteMemory = useCallback(async (memoryId: string, targetKinId: string) => {
-    await api.delete(`/kins/${targetKinId}/memories/${memoryId}`)
+  const deleteMemory = useCallback(async (memoryId: string, targetAgentId: string) => {
+    await api.delete(`/agents/${targetAgentId}/memories/${memoryId}`)
     setMemories((prev) => prev.filter((m) => m.id !== memoryId))
     setTotal((prev) => Math.max(prev - 1, 0))
   }, [])
@@ -104,19 +104,19 @@ export function useMemories(kinId?: string | null) {
   // SSE: real-time memory updates
   useSSE({
     'memory:created': (data) => {
-      const memKinId = data.kinId as string
-      if (kinId && memKinId !== kinId) return
+      const memAgentId = data.agentId as string
+      if (agentId && memAgentId !== agentId) return
       fetchMemories()
     },
     'memory:updated': (data) => {
-      const memKinId = data.kinId as string
-      if (kinId && memKinId !== kinId) return
+      const memAgentId = data.agentId as string
+      if (agentId && memAgentId !== agentId) return
       fetchMemories()
     },
     'memory:deleted': (data) => {
       const memoryId = data.memoryId as string
-      const memKinId = data.kinId as string
-      if (kinId && memKinId !== kinId) return
+      const memAgentId = data.agentId as string
+      if (agentId && memAgentId !== agentId) return
       setMemories((prev) => prev.filter((m) => m.id !== memoryId))
       setTotal((prev) => Math.max(prev - 1, 0))
     },

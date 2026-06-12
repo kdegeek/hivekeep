@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, getErrorMessage } from '@/client/lib/api'
 import { useProviders } from '@/client/hooks/useProviders'
-import { useKins } from '@/client/hooks/useKins'
+import { useAgents } from '@/client/hooks/useAgents'
 import { useSSE } from '@/client/hooks/useSSE'
 
 /**
@@ -11,7 +11,7 @@ import { useSSE } from '@/client/hooks/useSSE'
  *  - configured providers (capability availability)
  *  - default-models settings (which provider/model is the default for
  *    each family)
- *  - existing kins count
+ *  - existing agents count
  *
  * Combined with the persisted `dismissed_setup_items` list from
  * app_settings, this produces a flat array of items the UI can render
@@ -31,7 +31,7 @@ export type SetupItemId =
   | 'add_image_provider'
   | 'add_search_provider'
   | 'add_voice_provider'
-  | 'create_first_kin'
+  | 'create_first_agent'
 
 export type SetupItemSeverity = 'required' | 'recommended' | 'optional'
 
@@ -39,8 +39,8 @@ export type SetupItemSeverity = 'required' | 'recommended' | 'optional'
 export interface SetupItemTarget {
   /** Settings section id (e.g. 'providers', 'models'). */
   section?: string
-  /** True when the action is 'create a Kin' rather than 'open settings'. */
-  createKin?: boolean
+  /** True when the action is 'create an Agent' rather than 'open settings'. */
+  createAgent?: boolean
 }
 
 export interface SetupItem {
@@ -69,7 +69,7 @@ const ITEM_DEFINITIONS: Array<{
   isDone: (state: {
     providers: Array<{ capabilities: string[]; isValid: boolean }>
     defaults: DefaultModelsResponse | null
-    kinCount: number
+    agentCount: number
   }) => boolean
 }> = [
   {
@@ -116,10 +116,10 @@ const ITEM_DEFINITIONS: Array<{
       ),
   },
   {
-    id: 'create_first_kin',
+    id: 'create_first_agent',
     severity: 'recommended',
-    target: { createKin: true },
-    isDone: ({ kinCount }) => kinCount > 0,
+    target: { createAgent: true },
+    isDone: ({ agentCount }) => agentCount > 0,
   },
 ]
 
@@ -142,7 +142,7 @@ interface UseSetupChecklistResult {
 
 export function useSetupChecklist(): UseSetupChecklistResult {
   const { allProviders } = useProviders()
-  const { kins } = useKins()
+  const { agents } = useAgents()
   const [defaults, setDefaults] = useState<DefaultModelsResponse | null>(null)
   const [dismissed, setDismissed] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -196,10 +196,10 @@ export function useSetupChecklist(): UseSetupChecklistResult {
       id: def.id,
       severity: def.severity,
       target: def.target,
-      isDone: def.isDone({ providers: validProviders, defaults, kinCount: kins.length }),
+      isDone: def.isDone({ providers: validProviders, defaults, agentCount: agents.length }),
       isDismissed: dismissedSet.has(def.id),
     }))
-  }, [allProviders, defaults, dismissed, kins.length])
+  }, [allProviders, defaults, dismissed, agents.length])
 
   const pendingCount = items.filter((i) => !i.isDone && !i.isDismissed).length
   const isComplete = items.every((i) => i.isDone || i.isDismissed)

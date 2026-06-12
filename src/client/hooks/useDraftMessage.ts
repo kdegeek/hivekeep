@@ -1,17 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 
-const DRAFT_PREFIX = 'kinbot:draft:'
+const DRAFT_PREFIX = 'hivekeep:draft:'
 const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const SAVE_DEBOUNCE_MS = 300
 
 /** Read a draft from localStorage */
-function loadDraft(kinId: string): string {
+function loadDraft(agentId: string): string {
   try {
-    const raw = localStorage.getItem(DRAFT_PREFIX + kinId)
+    const raw = localStorage.getItem(DRAFT_PREFIX + agentId)
     if (!raw) return ''
     const parsed = JSON.parse(raw) as { text: string; ts: number }
     if (Date.now() - parsed.ts > DRAFT_MAX_AGE_MS) {
-      localStorage.removeItem(DRAFT_PREFIX + kinId)
+      localStorage.removeItem(DRAFT_PREFIX + agentId)
       return ''
     }
     return parsed.text
@@ -21,12 +21,12 @@ function loadDraft(kinId: string): string {
 }
 
 /** Save a draft to localStorage (with timestamp for expiry) */
-function saveDraft(kinId: string, text: string) {
+function saveDraft(agentId: string, text: string) {
   try {
     if (!text) {
-      localStorage.removeItem(DRAFT_PREFIX + kinId)
+      localStorage.removeItem(DRAFT_PREFIX + agentId)
     } else {
-      localStorage.setItem(DRAFT_PREFIX + kinId, JSON.stringify({ text, ts: Date.now() }))
+      localStorage.setItem(DRAFT_PREFIX + agentId, JSON.stringify({ text, ts: Date.now() }))
     }
   } catch {
     // Storage full or unavailable
@@ -59,19 +59,31 @@ function cleanupOldDrafts() {
 cleanupOldDrafts()
 
 /**
- * Persists draft message content per Kin across component unmounts
+ * Append text to an agent's persisted draft from OUTSIDE the composer (e.g.
+ * the Files tree "Insert in chat" action, files.md § 5.3). Writing the draft
+ * BEFORE navigating avoids any mount race: MessageInput picks it up naturally
+ * when the conversation opens.
+ */
+export function appendToDraft(agentId: string, text: string) {
+  const current = loadDraft(agentId)
+  const glue = current && !current.endsWith(' ') ? ' ' : ''
+  saveDraft(agentId, `${current}${glue}${text} `)
+}
+
+/**
+ * Persists draft message content per Agent across component unmounts
  * and page reloads via localStorage.
  */
-export function useDraftMessage(kinId: string | null) {
+export function useDraftMessage(agentId: string | null) {
   const [content, setContentState] = useState(() =>
-    kinId ? loadDraft(kinId) : '',
+    agentId ? loadDraft(agentId) : '',
   )
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Sync from storage when kinId changes
+  // Sync from storage when agentId changes
   useEffect(() => {
-    setContentState(kinId ? loadDraft(kinId) : '')
-  }, [kinId])
+    setContentState(agentId ? loadDraft(agentId) : '')
+  }, [agentId])
 
   // Cleanup debounce on unmount
   useEffect(() => {
@@ -83,21 +95,21 @@ export function useDraftMessage(kinId: string | null) {
   const setContent = useCallback(
     (value: string) => {
       setContentState(value)
-      if (kinId) {
+      if (agentId) {
         if (debounceRef.current) clearTimeout(debounceRef.current)
-        debounceRef.current = setTimeout(() => saveDraft(kinId, value), SAVE_DEBOUNCE_MS)
+        debounceRef.current = setTimeout(() => saveDraft(agentId, value), SAVE_DEBOUNCE_MS)
       }
     },
-    [kinId],
+    [agentId],
   )
 
   const clearDraft = useCallback(() => {
-    if (kinId) {
-      saveDraft(kinId, '')
+    if (agentId) {
+      saveDraft(agentId, '')
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
     setContentState('')
-  }, [kinId])
+  }, [agentId])
 
   return { content, setContent, clearDraft }
 }

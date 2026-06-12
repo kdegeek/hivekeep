@@ -6,10 +6,10 @@ import { multiEditTool } from './multi-edit-tools'
 // ── helpers ──────────────────────────────────────────────
 
 // We need to mock config.workspace.baseDir so resolveAndValidate works
-// The tool uses `resolve(config.workspace.baseDir, ctx.kinId)` as workspace root
+// The tool uses `resolve(config.workspace.baseDir, ctx.agentId)` as workspace root
 
 const TEST_DIR = resolve(import.meta.dir, '__test-multi-edit-tmp__')
-const KIN_ID = 'test-kin'
+const KIN_ID = 'test-agent'
 const WORKSPACE = resolve(TEST_DIR, KIN_ID)
 
 // Mock config to point to our test dir
@@ -69,7 +69,7 @@ describe('EXTENSION_LANGUAGES map', () => {
 
 describe('multiEditTool', () => {
   it('has correct availability', () => {
-    expect(multiEditTool.availability).toEqual(['main', 'sub-kin'])
+    expect(multiEditTool.availability).toEqual(['main', 'sub-agent'])
   })
 
   it('has a create function', () => {

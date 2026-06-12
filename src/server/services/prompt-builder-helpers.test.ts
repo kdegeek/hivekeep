@@ -284,7 +284,7 @@ function buildConversationStateBlock(state: ConversationState | undefined): stri
   if (state.hasCompactedHistory) {
     const compactedCount = state.totalMessageCount - state.visibleMessageCount
     lines.push(
-      `This is a long-running conversation. ${compactedCount} older message${compactedCount !== 1 ? 's have' : ' has'} been summarized (see "Previous conversation summary" above).`,
+      `This is a long-running conversation. ${compactedCount} older message${compactedCount !== 1 ? 's have' : ' has'} been summarized (see the "Conversation history summaries" section).`,
     )
     lines.push(`You can see the ${state.visibleMessageCount} most recent message${state.visibleMessageCount !== 1 ? 's' : ''} in full detail.`)
   } else {

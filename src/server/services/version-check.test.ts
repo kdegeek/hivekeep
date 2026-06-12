@@ -1,26 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-
-// version-check.ts has unexported pure functions, so we recreate them here
-// for isolated testing (same approach as consolidation.test.ts).
-
-// ─── Recreated pure functions from version-check.ts ──────────────────────────
-
-/**
- * Compare two semver strings (major.minor.patch).
- * Returns -1 if a < b, 0 if equal, 1 if a > b.
- */
-function compareSemver(a: string, b: string): -1 | 0 | 1 {
-  const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number)
-  const pa = parse(a)
-  const pb = parse(b)
-  for (let i = 0; i < 3; i++) {
-    const na = pa[i] ?? 0
-    const nb = pb[i] ?? 0
-    if (na < nb) return -1
-    if (na > nb) return 1
-  }
-  return 0
-}
+import { compareSemver } from '@/server/update/semver'
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
@@ -83,7 +62,7 @@ describe('compareSemver', () => {
     expect(compareSemver('999.999.999', '999.999.999')).toBe(0)
   })
 
-  it('works with realistic KinBot version strings', () => {
+  it('works with realistic Hivekeep version strings', () => {
     expect(compareSemver('v0.28.0', 'v0.29.0')).toBe(-1)
     expect(compareSemver('v0.29.0', 'v0.28.0')).toBe(1)
     expect(compareSemver('v1.0.0', 'v0.99.99')).toBe(1)

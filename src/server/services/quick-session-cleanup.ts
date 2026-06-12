@@ -26,7 +26,7 @@ export function startQuickSessionCleanup() {
 
       // 1. Close expired sessions
       const expired = await db
-        .select({ id: quickSessions.id, kinId: quickSessions.kinId })
+        .select({ id: quickSessions.id, agentId: quickSessions.agentId })
         .from(quickSessions)
         .where(and(
           eq(quickSessions.status, 'active'),
@@ -42,9 +42,9 @@ export function startQuickSessionCleanup() {
           }).where(eq(quickSessions.id, s.id))
 
           // Notify connected clients so the UI updates
-          sseManager.sendToKin(s.kinId, {
+          sseManager.sendToAgent(s.agentId, {
             type: 'quick-session:closed',
-            kinId: s.kinId,
+            agentId: s.agentId,
             data: { sessionId: s.id },
           })
         }

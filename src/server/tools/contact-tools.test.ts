@@ -28,7 +28,7 @@ const mockContacts = {
   listContactsForPrompt: mock(() => Promise.resolve([])),
   ensureUserContactsExist: mock(() => Promise.resolve()),
   deleteContactNote: mock(() => {}),
-  deleteNotesByKin: mock(() => {}),
+  deleteNotesByAgent: mock(() => {}),
   getVisibleNotes: mock(() => []),
   updateContactNote: mock(() => null as any),
   listContactsWithDetails: mock(() => Promise.resolve([])),
@@ -52,7 +52,7 @@ const {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const ctx: ToolExecutionContext = { kinId: 'kin-test', isSubKin: false }
+const ctx: ToolExecutionContext = { agentId: 'agent-test', isSubAgent: false }
 
 function execute(registration: any, args: any) {
   const t = registration.create(ctx)
@@ -104,7 +104,7 @@ describe('contact-tools', () => {
       mockContacts.getContactWithDetails.mockResolvedValue(null)
       const result = await execute(getContactTool, { contact_id: 'nonexistent' })
       expect(result).toEqual({ error: 'Contact not found' })
-      expect(mockContacts.getContactWithDetails).toHaveBeenCalledWith('nonexistent', 'kin-test')
+      expect(mockContacts.getContactWithDetails).toHaveBeenCalledWith('nonexistent', 'agent-test')
     })
 
     it('returns formatted contact with nicknames, identifiers and notes', async () => {
@@ -116,8 +116,8 @@ describe('contact-tools', () => {
         nicknames: [{ id: 'nk1', nickname: 'ali' }, { id: 'nk2', nickname: 'lily' }],
         identifiers: [{ label: 'email', value: 'alice@example.com' }],
         notes: [
-          { kinId: 'kin-test', scope: 'private', content: 'My friend' },
-          { kinId: 'kin-other', scope: 'global', content: 'VIP customer' },
+          { agentId: 'agent-test', scope: 'private', content: 'My friend' },
+          { agentId: 'agent-other', scope: 'global', content: 'VIP customer' },
         ],
         linkedUserId: null,
         createdAt: new Date('2026-01-01'),
@@ -168,7 +168,7 @@ describe('contact-tools', () => {
       mockContacts.searchContacts.mockResolvedValue([])
       const result = await execute(searchContactsTool, { query: 'nobody' })
       expect(result.contacts).toEqual([])
-      expect(mockContacts.searchContacts).toHaveBeenCalledWith('nobody', 'kin-test')
+      expect(mockContacts.searchContacts).toHaveBeenCalledWith('nobody', 'agent-test')
     })
 
     it('returns formatted search results', async () => {
@@ -180,7 +180,7 @@ describe('contact-tools', () => {
           displayName: 'Alice',
           nicknames: [{ id: 'nk1', nickname: 'ali' }],
           identifiers: [{ label: 'phone', value: '+33612345678' }],
-          notes: [{ kinId: 'kin-test', scope: 'global', content: 'Friend' }],
+          notes: [{ agentId: 'agent-test', scope: 'global', content: 'Friend' }],
         },
         {
           id: 'c-2',
@@ -320,7 +320,7 @@ describe('contact-tools', () => {
         scope: 'private',
         content: 'secret stuff',
       })
-      expect(mockContacts.setContactNote).toHaveBeenCalledWith('c-1', 'kin-test', 'private', 'secret stuff')
+      expect(mockContacts.setContactNote).toHaveBeenCalledWith('c-1', 'agent-test', 'private', 'secret stuff')
     })
 
     it('sets a global note', async () => {
@@ -335,7 +335,7 @@ describe('contact-tools', () => {
         content: 'public info',
       })
       expect(result.scope).toBe('global')
-      expect(mockContacts.setContactNote).toHaveBeenCalledWith('c-1', 'kin-test', 'global', 'public info')
+      expect(mockContacts.setContactNote).toHaveBeenCalledWith('c-1', 'agent-test', 'global', 'public info')
     })
   })
 

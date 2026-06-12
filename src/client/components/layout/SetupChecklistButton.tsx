@@ -40,12 +40,12 @@ export function SetupChecklistButton({ onOpenSettings }: SetupChecklistButtonPro
   const { pendingCount, isComplete, items } = useSetupChecklist()
   const [open, setOpen] = useState(false)
 
-  // 'Create Kin' lives in ChatPage's modal state. Navbar can't open it
+  // 'Create Agent' lives in ChatPage's modal state. Navbar can't open it
   // directly without lifting state up to App.tsx (out of scope for this
   // phase); instead we route the user to the chat empty state, where
   // the inline checklist surfaces the same item with a CTA that opens
   // the modal locally. One extra click, much less restructure.
-  const handleCreateKin = () => navigate('/')
+  const handleCreateAgent = () => navigate('/')
 
   // Hide the button entirely when there's nothing to do AND nothing
   // dismissed worth surfacing. The user can always re-open the
@@ -97,7 +97,7 @@ export function SetupChecklistButton({ onOpenSettings }: SetupChecklistButtonPro
         <SetupChecklist
           variant="compact"
           onOpenSettings={onOpenSettings}
-          onCreateKin={handleCreateKin}
+          onCreateAgent={handleCreateAgent}
           onAction={() => setOpen(false)}
         />
       </PopoverContent>

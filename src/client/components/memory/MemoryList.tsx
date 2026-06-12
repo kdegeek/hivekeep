@@ -27,17 +27,17 @@ import { useMemories } from '@/client/hooks/useMemories'
 import { useHasCapability } from '@/client/hooks/useHasCapability'
 import { MemoryCard } from '@/client/components/memory/MemoryCard'
 import { MemoryFormDialog } from '@/client/components/memory/MemoryFormDialog'
-import { KinSelector } from '@/client/components/common/KinSelector'
-import type { KinOption } from '@/client/components/common/KinSelectItem'
+import { AgentSelector } from '@/client/components/common/AgentSelector'
+import type { AgentOption } from '@/client/components/common/AgentSelectItem'
 import { MEMORY_CATEGORIES } from '@/shared/constants'
 import type { MemorySummary, MemoryCategory, MemoryScope } from '@/shared/types'
 
 interface MemoryListProps {
-  kinId?: string | null
+  agentId?: string | null
   compact?: boolean
 }
 
-export function MemoryList({ kinId, compact }: MemoryListProps) {
+export function MemoryList({ agentId, compact }: MemoryListProps) {
   const { t } = useTranslation()
   const hasEmbedding = useHasCapability('embedding')
   const {
@@ -52,44 +52,44 @@ export function MemoryList({ kinId, compact }: MemoryListProps) {
     createMemory,
     updateMemory,
     deleteMemory,
-  } = useMemories(kinId)
+  } = useMemories(agentId)
 
   // Local UI state
   const [searchQuery, setSearchQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [scopeFilter, setScopeFilter] = useState<string>('all')
-  const [kinFilter, setKinFilter] = useState<string>('all')
-  const [kinNames, setKinNames] = useState<Map<string, string>>(new Map())
-  const [kinAvatars, setKinAvatars] = useState<Map<string, string | null>>(new Map())
-  const [kins, setKins] = useState<KinOption[]>([])
+  const [agentFilter, setAgentFilter] = useState<string>('all')
+  const [agentNames, setAgentNames] = useState<Map<string, string>>(new Map())
+  const [agentAvatars, setAgentAvatars] = useState<Map<string, string | null>>(new Map())
+  const [agents, setAgents] = useState<AgentOption[]>([])
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editingMemory, setEditingMemory] = useState<MemorySummary | null>(null)
   const [deletingMemory, setDeletingMemory] = useState<MemorySummary | null>(null)
   const deletingMemoryRef = useRef<MemorySummary | null>(null)
 
-  // Fetch Kins for global mode (filter + form dialog + card kin name)
+  // Fetch Agents for global mode (filter + form dialog + card agent name)
   useEffect(() => {
-    if (!kinId) {
+    if (!agentId) {
       api
-        .get<{ kins: { id: string; name: string; role: string; avatarUrl: string | null }[] }>('/kins')
+        .get<{ agents: { id: string; name: string; role: string; avatarUrl: string | null }[] }>('/agents')
         .then((data) => {
-          setKins(data.kins)
-          setKinNames(new Map(data.kins.map((k) => [k.id, k.name])))
-          setKinAvatars(new Map(data.kins.map((k) => [k.id, k.avatarUrl])))
+          setAgents(data.agents)
+          setAgentNames(new Map(data.agents.map((k) => [k.id, k.name])))
+          setAgentAvatars(new Map(data.agents.map((k) => [k.id, k.avatarUrl])))
         })
         .catch(() => {})
     }
-  }, [kinId])
+  }, [agentId])
 
   // Apply server-side filters when dropdowns change
   useEffect(() => {
-    const newFilters: { category?: MemoryCategory; kinId?: string; scope?: MemoryScope } = {}
+    const newFilters: { category?: MemoryCategory; agentId?: string; scope?: MemoryScope } = {}
     if (categoryFilter !== 'all') newFilters.category = categoryFilter as MemoryCategory
     if (scopeFilter !== 'all') newFilters.scope = scopeFilter as MemoryScope
-    if (!kinId && kinFilter !== 'all') newFilters.kinId = kinFilter
+    if (!agentId && agentFilter !== 'all') newFilters.agentId = agentFilter
     applyFilters(newFilters)
-  }, [categoryFilter, scopeFilter, kinFilter, applyFilters, kinId])
+  }, [categoryFilter, scopeFilter, agentFilter, applyFilters, agentId])
 
   // Client-side text search
   const filteredMemories = useMemo(() => {
@@ -103,13 +103,13 @@ export function MemoryList({ kinId, compact }: MemoryListProps) {
   }, [memories, searchQuery])
 
   // CRUD handlers
-  const handleSave = async (targetKinId: string, data: { content: string; category: MemoryCategory; subject?: string; scope?: MemoryScope }) => {
-    await createMemory(targetKinId, data)
+  const handleSave = async (targetAgentId: string, data: { content: string; category: MemoryCategory; subject?: string; scope?: MemoryScope }) => {
+    await createMemory(targetAgentId, data)
     toast.success(t('settings.memories.added'))
   }
 
-  const handleUpdate = async (memoryId: string, targetKinId: string, updates: { content?: string; category?: MemoryCategory; subject?: string | null; scope?: MemoryScope }) => {
-    await updateMemory(memoryId, targetKinId, updates)
+  const handleUpdate = async (memoryId: string, targetAgentId: string, updates: { content?: string; category?: MemoryCategory; subject?: string | null; scope?: MemoryScope }) => {
+    await updateMemory(memoryId, targetAgentId, updates)
     toast.success(t('settings.memories.saved'))
   }
 
@@ -119,7 +119,7 @@ export function MemoryList({ kinId, compact }: MemoryListProps) {
     deletingMemoryRef.current = null
     setDeletingMemory(null)
     try {
-      await deleteMemory(target.id, target.kinId)
+      await deleteMemory(target.id, target.agentId)
       toast.success(t('settings.memories.deleted'))
     } catch (err: unknown) {
       toastError(err)
@@ -188,13 +188,13 @@ export function MemoryList({ kinId, compact }: MemoryListProps) {
             <SelectItem value="shared">{t('settings.memories.scopeShared')}</SelectItem>
           </SelectContent>
         </Select>
-        {!kinId && (
-          <KinSelector
-            value={kinFilter}
-            onValueChange={setKinFilter}
-            kins={kins}
-            placeholder={t('settings.memories.filterAllKins')}
-            noneLabel={t('settings.memories.filterAllKins')}
+        {!agentId && (
+          <AgentSelector
+            value={agentFilter}
+            onValueChange={setAgentFilter}
+            agents={agents}
+            placeholder={t('settings.memories.filterAllAgents')}
+            noneLabel={t('settings.memories.filterAllAgents')}
             noneValue="all"
             triggerClassName="w-[200px] h-auto min-h-9"
           />
@@ -214,7 +214,7 @@ export function MemoryList({ kinId, compact }: MemoryListProps) {
       {isLoading ? (
         <EmptyState minimal title={t('common.loading')} />
       ) : filteredMemories.length === 0 ? (
-        searchQuery || categoryFilter !== 'all' || scopeFilter !== 'all' || kinFilter !== 'all' ? (
+        searchQuery || categoryFilter !== 'all' || scopeFilter !== 'all' || agentFilter !== 'all' ? (
           <EmptyState minimal title={t('settings.memories.noResults')} />
         ) : (
           <EmptyState
@@ -231,9 +231,9 @@ export function MemoryList({ kinId, compact }: MemoryListProps) {
             <MemoryCard
               key={memory.id}
               memory={memory}
-              kinName={kinNames.get(memory.kinId)}
-              kinAvatarUrl={kinAvatars.get(memory.kinId)}
-              showKinName={!kinId}
+              agentName={agentNames.get(memory.agentId)}
+              agentAvatarUrl={agentAvatars.get(memory.agentId)}
+              showAgentName={!agentId}
               onEdit={() => openEdit(memory)}
               onDelete={() => { deletingMemoryRef.current = memory; setDeletingMemory(memory) }}
             />
@@ -289,8 +289,8 @@ export function MemoryList({ kinId, compact }: MemoryListProps) {
         onSave={handleSave}
         onUpdate={handleUpdate}
         memory={editingMemory}
-        kinId={kinId}
-        kins={kins}
+        agentId={agentId}
+        agents={agents}
       />
 
       {/* Delete confirmation */}

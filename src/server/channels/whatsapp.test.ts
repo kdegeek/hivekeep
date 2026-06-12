@@ -152,7 +152,7 @@ describe('WhatsApp webhook payload parsing', () => {
               from: '33612345678',
               id: 'wamid.abc123',
               type: 'text',
-              text: { body: 'Hello KinBot!' },
+              text: { body: 'Hello Hivekeep!' },
             }],
             contacts: [{
               wa_id: '33612345678',
@@ -168,7 +168,7 @@ describe('WhatsApp webhook payload parsing', () => {
     expect(msgs[0]).toEqual({
       from: '33612345678',
       messageId: 'wamid.abc123',
-      text: 'Hello KinBot!',
+      text: 'Hello Hivekeep!',
       displayName: 'Nicolas',
     })
   })

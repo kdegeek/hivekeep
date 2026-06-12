@@ -91,13 +91,13 @@ body:
     id: logs
     attributes:
       label: Relevant logs
-      description: Any error logs from the KinBot console or browser dev tools.
+      description: Any error logs from the Hivekeep console or browser dev tools.
       render: shell
 
   - type: input
     id: version
     attributes:
-      label: KinBot version
+      label: Hivekeep version
       placeholder: e.g. v0.34.0
     validations:
       required: true

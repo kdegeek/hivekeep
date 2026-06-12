@@ -28,12 +28,12 @@ function guessMimeType(filename: string): string {
   return map[ext] ?? 'application/octet-stream'
 }
 
-function appDir(kinId: string, appId: string): string {
-  return join('/data/mini-apps', kinId, appId)
+function appDir(agentId: string, appId: string): string {
+  return join('/data/mini-apps', agentId, appId)
 }
 
-function snapshotDir(kinId: string, appId: string, version: number): string {
-  return join('/data/mini-apps', kinId, appId, '.snapshots', String(version))
+function snapshotDir(agentId: string, appId: string, version: number): string {
+  return join('/data/mini-apps', agentId, appId, '.snapshots', String(version))
 }
 
 // ─── validatePath ───────────────────────────────────────────────────────────
@@ -61,7 +61,7 @@ describe('validatePath', () => {
   })
 
   it('blocks path traversal with ../ that escapes base', () => {
-    expect(() => validatePath(base, '../../other-kin/app/secret.html')).toThrow('path traversal')
+    expect(() => validatePath(base, '../../other-agent/app/secret.html')).toThrow('path traversal')
   })
 
   it('blocks absolute paths that escape base', () => {
@@ -233,8 +233,8 @@ describe('guessMimeType', () => {
 // ─── appDir ─────────────────────────────────────────────────────────────────
 
 describe('appDir', () => {
-  it('constructs correct path from kinId and appId', () => {
-    expect(appDir('kin-123', 'app-456')).toBe('/data/mini-apps/kin-123/app-456')
+  it('constructs correct path from agentId and appId', () => {
+    expect(appDir('agent-123', 'app-456')).toBe('/data/mini-apps/agent-123/app-456')
   })
 
   it('handles UUID-style IDs', () => {
@@ -248,13 +248,13 @@ describe('appDir', () => {
 
 describe('snapshotDir', () => {
   it('constructs correct snapshot path', () => {
-    const result = snapshotDir('kin-1', 'app-1', 1)
-    expect(result).toBe('/data/mini-apps/kin-1/app-1/.snapshots/1')
+    const result = snapshotDir('agent-1', 'app-1', 1)
+    expect(result).toBe('/data/mini-apps/agent-1/app-1/.snapshots/1')
   })
 
   it('increments version in path', () => {
-    const v1 = snapshotDir('kin-1', 'app-1', 1)
-    const v5 = snapshotDir('kin-1', 'app-1', 5)
+    const v1 = snapshotDir('agent-1', 'app-1', 1)
+    const v5 = snapshotDir('agent-1', 'app-1', 5)
     expect(v1).not.toBe(v5)
     expect(v5).toContain('/5')
   })
@@ -269,7 +269,7 @@ describe('serializeApp (logic)', () => {
   function serializeApp(
     row: {
       id: string
-      kinId: string
+      agentId: string
       name: string
       slug: string
       description: string | null
@@ -281,14 +281,14 @@ describe('serializeApp (logic)', () => {
       createdAt: Date
       updatedAt: Date
     },
-    kinName: string,
-    kinAvatarUrl: string | null,
+    agentName: string,
+    agentAvatarUrl: string | null,
   ) {
     return {
       id: row.id,
-      kinId: row.kinId,
-      kinName,
-      kinAvatarUrl,
+      agentId: row.agentId,
+      agentName,
+      agentAvatarUrl,
       name: row.name,
       slug: row.slug,
       description: row.description,
@@ -307,7 +307,7 @@ describe('serializeApp (logic)', () => {
     const result = serializeApp(
       {
         id: 'app-1',
-        kinId: 'kin-1',
+        agentId: 'agent-1',
         name: 'My App',
         slug: 'my-app',
         description: 'A test app',
@@ -319,7 +319,7 @@ describe('serializeApp (logic)', () => {
         createdAt: now,
         updatedAt: now,
       },
-      'TestKin',
+      'TestAgent',
       null,
     )
 
@@ -333,7 +333,7 @@ describe('serializeApp (logic)', () => {
     const result = serializeApp(
       {
         id: 'app-id',
-        kinId: 'kin-id',
+        agentId: 'agent-id',
         name: 'Test',
         slug: 'test',
         description: null,
@@ -345,14 +345,14 @@ describe('serializeApp (logic)', () => {
         createdAt: now,
         updatedAt: now,
       },
-      'KinName',
+      'AgentName',
       'https://example.com/avatar.png',
     )
 
     expect(result.id).toBe('app-id')
-    expect(result.kinId).toBe('kin-id')
-    expect(result.kinName).toBe('KinName')
-    expect(result.kinAvatarUrl).toBe('https://example.com/avatar.png')
+    expect(result.agentId).toBe('agent-id')
+    expect(result.agentName).toBe('AgentName')
+    expect(result.agentAvatarUrl).toBe('https://example.com/avatar.png')
     expect(result.name).toBe('Test')
     expect(result.slug).toBe('test')
     expect(result.description).toBeNull()
@@ -363,18 +363,18 @@ describe('serializeApp (logic)', () => {
     expect(result.version).toBe(3)
   })
 
-  it('handles null kinAvatarUrl', () => {
+  it('handles null agentAvatarUrl', () => {
     const now = new Date()
     const result = serializeApp(
       {
-        id: 'a', kinId: 'k', name: 'N', slug: 's',
+        id: 'a', agentId: 'k', name: 'N', slug: 's',
         description: null, icon: null, entryFile: 'index.html',
         hasBackend: false, isActive: true, version: 1,
         createdAt: now, updatedAt: now,
       },
-      'Kin',
+      'Agent',
       null,
     )
-    expect(result.kinAvatarUrl).toBeNull()
+    expect(result.agentAvatarUrl).toBeNull()
   })
 })

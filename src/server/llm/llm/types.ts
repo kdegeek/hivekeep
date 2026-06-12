@@ -2,20 +2,21 @@
  * LLM provider types — re-exports from the SDK. Single source of truth in
  * `packages/sdk/src/index.ts`.
  */
+export { THINKING_EFFORT_ORDER, downgradeEffort } from '@hivekeep/sdk'
 export type {
   ThinkingEffort,
   LLMModel,
-  KinbotTool,
-  KinbotRole,
+  HivekeepTool,
+  HivekeepRole,
   TextBlock,
   ImageBlock,
   ToolUseBlock,
   ToolResultBlock,
   ThinkingBlock,
-  KinbotMessageBlock,
-  KinbotMessage,
+  HivekeepMessageBlock,
+  HivekeepMessage,
   SystemPrompt,
   ChatRequest,
   ChatChunk,
   LLMProvider,
-} from '@kinbot-developer/sdk'
+} from '@hivekeep/sdk'

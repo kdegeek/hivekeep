@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { db } from '@/server/db/index'
-import { user, userProfiles, session, account, contacts, kins } from '@/server/db/schema'
+import { user, userProfiles, session, account, contacts, agents } from '@/server/db/schema'
 import { eq } from 'drizzle-orm'
 import type { AppVariables } from '@/server/app'
 import { createLogger } from '@/server/logger'
@@ -9,9 +9,9 @@ const log = createLogger('routes:users')
 
 const userRoutes = new Hono<{ Variables: AppVariables }>()
 
-// GET /api/users/mentionables — combined list of users + kins for @mention autocomplete
+// GET /api/users/mentionables — combined list of users + agents for @mention autocomplete
 userRoutes.get('/mentionables', async (c) => {
-  const [users, kinList] = await Promise.all([
+  const [users, agentList] = await Promise.all([
     db.select({
       id: user.id,
       pseudonym: userProfiles.pseudonym,
@@ -22,12 +22,12 @@ userRoutes.get('/mentionables', async (c) => {
     .innerJoin(userProfiles, eq(user.id, userProfiles.userId))
     .all(),
     db.select({
-      id: kins.id,
-      slug: kins.slug,
-      name: kins.name,
-      avatarPath: kins.avatarPath,
+      id: agents.id,
+      slug: agents.slug,
+      name: agents.name,
+      avatarPath: agents.avatarPath,
     })
-    .from(kins)
+    .from(agents)
     .all(),
   ])
 
@@ -38,12 +38,12 @@ userRoutes.get('/mentionables', async (c) => {
       firstName: u.firstName,
       avatarUrl: u.avatarUrl,
     })),
-    kins: kinList.map((k) => ({
+    agents: agentList.map((k) => ({
       id: k.id,
       slug: k.slug,
       name: k.name,
       avatarUrl: k.avatarPath
-        ? `/api/uploads/kins/${k.id}/avatar.${k.avatarPath.split('.').pop() ?? 'png'}`
+        ? `/api/uploads/agents/${k.id}/avatar.${k.avatarPath.split('.').pop() ?? 'png'}`
         : null,
     })),
   })
@@ -112,7 +112,7 @@ userRoutes.delete('/:id', async (c) => {
   db.delete(session).where(eq(session.userId, targetId)).run()
   // 2. Delete accounts
   db.delete(account).where(eq(account.userId, targetId)).run()
-  // 3. Unlink contacts (don't delete them — Kins still know this person)
+  // 3. Unlink contacts (don't delete them — Agents still know this person)
   db.update(contacts).set({ linkedUserId: null }).where(eq(contacts.linkedUserId, targetId)).run()
   // 4. Delete user profile
   db.delete(userProfiles).where(eq(userProfiles.userId, targetId)).run()

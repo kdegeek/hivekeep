@@ -1,13 +1,13 @@
 /**
  * Tool types — SDK re-exports plus a host-side extension to the
  * execution context so native tools (`http_request`, etc.) can read
- * per-Kin authorization fields without dropping into `unknown` casts.
+ * per-Agent authorization fields without dropping into `unknown` casts.
  *
  * The SDK's `ToolExecutionContext` is the public plugin contract and
  * stays minimal on purpose — plugins receive the same context shape
  * at runtime but don't get typed access to host-internal fields they
  * shouldn't be reading. Server-internal tool files import from this
- * module instead of `@kinbot-developer/sdk` directly so they get the
+ * module instead of `@hivekeep/sdk` directly so they get the
  * widened context.
  */
 
@@ -16,22 +16,22 @@ import type {
   ToolFactory as SdkToolFactory,
   ToolRegistration as SdkToolRegistration,
   Tool,
-} from '@kinbot-developer/sdk'
+} from '@hivekeep/sdk'
 
-export type { ToolAvailability } from '@kinbot-developer/sdk'
+export type { ToolAvailability } from '@hivekeep/sdk'
 
 /**
  * Server-side widened execution context. Same as the SDK's shape plus a
  * per-task `workspaceOverride`. Tool grants are resolved entirely through
- * toolboxes now (see services/toolset-resolver.ts) — there is no per-Kin tool
+ * toolboxes now (see services/toolset-resolver.ts) — there is no per-Agent tool
  * config threaded through the context anymore.
  */
 export interface ToolExecutionContext extends SdkToolExecutionContext {
   /** Per-task workspace override. Set by the sub-task runner when the
    *  ticket's project has a ready clone — every filesystem + shell tool
-   *  scopes its cwd to `path` instead of the Kin's static workspace, and
+   *  scopes its cwd to `path` instead of the Agent's static workspace, and
    *  `env` is merged into the env of any subprocess the tool spawns
-   *  (used to inject `KINBOT_GH_TOKEN` for git network ops without ever
+   *  (used to inject `HIVEKEEP_GH_TOKEN` for git network ops without ever
    *  writing the PAT to disk). */
   workspaceOverride?: {
     path: string

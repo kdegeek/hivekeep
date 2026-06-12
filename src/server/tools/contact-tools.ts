@@ -32,7 +32,7 @@ export const getContactTool: ToolRegistration = {
         contact_id: z.string(),
       }),
       execute: async ({ contact_id }) => {
-        const contact = await getContactWithDetails(contact_id, ctx.kinId)
+        const contact = await getContactWithDetails(contact_id, ctx.agentId)
         if (!contact) {
           return { error: 'Contact not found' }
         }
@@ -44,8 +44,8 @@ export const getContactTool: ToolRegistration = {
           nicknames: contact.nicknames.map((n) => n.nickname),
           identifiers: contact.identifiers,
           notes: contact.notes.map((n) => ({
-            source: n.userId ? 'user' : 'kin',
-            kinId: n.kinId,
+            source: n.userId ? 'user' : 'agent',
+            agentId: n.agentId,
             userId: n.userId,
             scope: n.scope,
             content: n.content,
@@ -73,7 +73,7 @@ export const searchContactsTool: ToolRegistration = {
         query: z.string(),
       }),
       execute: async ({ query }) => {
-        const results = await searchContacts(query, ctx.kinId)
+        const results = await searchContacts(query, ctx.agentId)
         return {
           contacts: results.map((c) => ({
             id: c.id,
@@ -83,8 +83,8 @@ export const searchContactsTool: ToolRegistration = {
             nicknames: c.nicknames.map((n) => n.nickname),
             identifiers: c.identifiers,
             notes: c.notes.map((n) => ({
-              source: n.userId ? 'user' : 'kin',
-              kinId: n.kinId,
+              source: n.userId ? 'user' : 'agent',
+              agentId: n.agentId,
               userId: n.userId,
               scope: n.scope,
               content: n.content,
@@ -103,7 +103,7 @@ export const createContactTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Create a new contact in the shared registry. All Kins will see this contact. ' +
+        'Create a new contact in the shared registry. All Agents will see this contact. ' +
         'At least one of firstName, lastName, or a nickname must be provided.',
       inputSchema: z.object({
         firstName: z.string().optional().describe('Given name'),
@@ -122,7 +122,7 @@ export const createContactTool: ToolRegistration = {
           .optional(),
       }),
       execute: async ({ firstName, lastName, nicknames, identifiers }) => {
-        log.debug({ kinId: ctx.kinId, firstName, lastName }, 'Contact creation requested')
+        log.debug({ agentId: ctx.agentId, firstName, lastName }, 'Contact creation requested')
         const result = await createContact({ firstName, lastName, nicknames, identifiers })
         if ('error' in result) {
           return { error: `User is already linked to contact "${result.linkedContactName}"` }
@@ -213,7 +213,7 @@ export const deleteContactTool: ToolRegistration = {
         contact_id: z.string(),
       }),
       execute: async ({ contact_id }) => {
-        log.debug({ kinId: ctx.kinId, contactId: contact_id }, 'Contact deletion requested')
+        log.debug({ agentId: ctx.agentId, contactId: contact_id }, 'Contact deletion requested')
         const deleted = await deleteContact(contact_id)
         if (!deleted) {
           return { error: 'Contact not found' }
@@ -231,15 +231,15 @@ export const setContactNoteTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Write or replace a note on a contact. One private and one global note per Kin per contact.',
+        'Write or replace a note on a contact. One private and one global note per Agent per contact.',
       inputSchema: z.object({
         contact_id: z.string(),
-        scope: z.enum(['private', 'global']).describe('"private" = only you; "global" = all Kins'),
+        scope: z.enum(['private', 'global']).describe('"private" = only you; "global" = all Agents'),
         content: z.string().describe('Replaces any existing note of the same scope'),
       }),
       execute: async ({ contact_id, scope, content }) => {
-        log.debug({ kinId: ctx.kinId, contactId: contact_id, scope }, 'Contact note set')
-        const note = setContactNote(contact_id, ctx.kinId, scope, content)
+        log.debug({ agentId: ctx.agentId, contactId: contact_id, scope }, 'Contact note set')
+        const note = setContactNote(contact_id, ctx.agentId, scope, content)
         return {
           contactId: note.contactId,
           scope: note.scope,

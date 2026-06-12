@@ -10,7 +10,7 @@ async function openWebhookSettings(page: Page) {
 
   await page.getByRole('dialog').getByText('Webhooks', { exact: true }).click()
   await expect(
-    page.getByText('Manage incoming webhooks that allow external services to notify your Kins.')
+    page.getByText('Manage incoming webhooks that allow external services to notify your Agents.')
   ).toBeVisible({ timeout: 5_000 })
 }
 
@@ -42,10 +42,10 @@ async function createWebhook(page: Page, name: string, description?: string) {
   // Wait for dialog
   await expect(page.getByRole('heading', { name: 'Add webhook' })).toBeVisible({ timeout: 5_000 })
 
-  // Select a Kin (Radix Select)
-  const kinSelect = page.locator('[data-slot="select-trigger"]').filter({ hasText: /select a kin/i })
-  if (await kinSelect.isVisible({ timeout: 2_000 }).catch(() => false)) {
-    await kinSelect.click()
+  // Select an Agent (Radix Select)
+  const agentSelect = page.locator('[data-slot="select-trigger"]').filter({ hasText: /select an agent/i })
+  if (await agentSelect.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    await agentSelect.click()
     await page.locator('[data-slot="select-item"]').first().click({ timeout: 5_000 })
   }
 
@@ -69,25 +69,25 @@ async function createWebhook(page: Page, name: string, description?: string) {
 }
 
 /**
- * Create a Kin via the sidebar "+" button if none exists (needed for webhook creation).
+ * Create an Agent via the sidebar "+" button if none exists (needed for webhook creation).
  */
-async function ensureKinExists(page: Page) {
-  const noKins = page.getByText('No Kins yet')
-  if (await noKins.isVisible({ timeout: 2_000 }).catch(() => false)) {
-    await page.getByTitle('New Kin').click()
+async function ensureAgentExists(page: Page) {
+  const noAgents = page.getByText('No Agents yet')
+  if (await noAgents.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    await page.getByTitle('New Agent').click()
     await expect(page.getByRole('dialog')).toBeVisible()
     await page.getByRole('button', { name: 'Create manually' }).click()
-    await page.fill('#kinFormName', 'Webhook Test Kin')
-    await page.fill('#kinFormRole', 'Test kin for webhook E2E')
+    await page.fill('#agentFormName', 'Webhook Test Agent')
+    await page.fill('#agentFormRole', 'Test agent for webhook E2E')
 
     // Select model
     const modelPicker = page.getByRole('combobox').first()
     await modelPicker.click()
     await page.getByRole('option', { name: /GPT-4o/i }).click()
-    await page.locator('#kinFormName').click()
+    await page.locator('#agentFormName').click()
 
-    await page.getByRole('button', { name: 'Create Kin' }).click()
-    await expect(page.getByText('Webhook Test Kin').first()).toBeVisible({ timeout: 15_000 })
+    await page.getByRole('button', { name: 'Create Agent' }).click()
+    await expect(page.getByText('Webhook Test Agent').first()).toBeVisible({ timeout: 15_000 })
   }
 }
 
@@ -99,11 +99,11 @@ test.describe.serial('Webhook management', () => {
     await page.goto('/')
     await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible({ timeout: 10_000 })
     await loginAs(page)
-    await expect(page.getByText('Kins', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Agents', { exact: true })).toBeVisible({ timeout: 10_000 })
   })
 
-  test('should ensure a Kin exists for webhook tests', async ({ page }) => {
-    await ensureKinExists(page)
+  test('should ensure an Agent exists for webhook tests', async ({ page }) => {
+    await ensureAgentExists(page)
   })
 
   test('should open settings and see Webhooks section', async ({ page }) => {
@@ -111,7 +111,7 @@ test.describe.serial('Webhook management', () => {
 
     // Should show the description text
     await expect(
-      page.getByText('Manage incoming webhooks that allow external services to notify your Kins.')
+      page.getByText('Manage incoming webhooks that allow external services to notify your Agents.')
     ).toBeVisible()
   })
 
@@ -138,9 +138,9 @@ test.describe.serial('Webhook management', () => {
 
     await expect(page.getByRole('heading', { name: 'Add webhook' })).toBeVisible({ timeout: 5_000 })
 
-    const kinSelect = page.locator('[data-slot="select-trigger"]').filter({ hasText: /select a kin/i })
-    if (await kinSelect.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await kinSelect.click()
+    const agentSelect = page.locator('[data-slot="select-trigger"]').filter({ hasText: /select an agent/i })
+    if (await agentSelect.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await agentSelect.click()
       await page.locator('[data-slot="select-item"]').first().click({ timeout: 5_000 })
     }
 

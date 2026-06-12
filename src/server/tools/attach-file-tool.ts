@@ -29,35 +29,35 @@ function guessMimeType(filename: string): string {
 
 const log = createLogger('tools:attach-file')
 
-// ─── Pending attachments store (per Kin, cleared after response delivery) ───
+// ─── Pending attachments store (per Agent, cleared after response delivery) ───
 
 const pendingAttachments = new Map<string, OutboundAttachment[]>()
 
 /**
- * Stage an attachment for the current Kin response.
+ * Stage an attachment for the current Agent response.
  * Called by the attach_file tool during a turn.
  */
-export function stageAttachment(kinId: string, att: OutboundAttachment): void {
-  const existing = pendingAttachments.get(kinId) ?? []
+export function stageAttachment(agentId: string, att: OutboundAttachment): void {
+  const existing = pendingAttachments.get(agentId) ?? []
   existing.push(att)
-  pendingAttachments.set(kinId, existing)
+  pendingAttachments.set(agentId, existing)
 }
 
 /**
- * Pop all staged attachments for a Kin (consumes them).
+ * Pop all staged attachments for an Agent (consumes them).
  * Called by deliverChannelResponse after the turn completes.
  */
-export function popStagedAttachments(kinId: string): OutboundAttachment[] {
-  const atts = pendingAttachments.get(kinId) ?? []
-  pendingAttachments.delete(kinId)
+export function popStagedAttachments(agentId: string): OutboundAttachment[] {
+  const atts = pendingAttachments.get(agentId) ?? []
+  pendingAttachments.delete(agentId)
   return atts
 }
 
 /**
  * Clear staged attachments without returning them (e.g. on error/abort).
  */
-export function clearStagedAttachments(kinId: string): void {
-  pendingAttachments.delete(kinId)
+export function clearStagedAttachments(agentId: string): void {
+  pendingAttachments.delete(agentId)
 }
 
 // ─── attach_file tool ───────────────────────────────────────────────────────
@@ -76,7 +76,7 @@ export const attachFileTool: ToolRegistration = {
         fileName: z.string().optional().describe('Auto-derived if omitted'),
       }),
       execute: async ({ source, mimeType, fileName }) => {
-        log.debug({ kinId: ctx.kinId, source }, 'attach_file invoked')
+        log.debug({ agentId: ctx.agentId, source }, 'attach_file invoked')
 
         let resolvedSource = source
         let resolvedMime = mimeType
@@ -99,8 +99,8 @@ export const attachFileTool: ToolRegistration = {
           // External URL — pass through as-is
           resolvedSource = source
         } else {
-          // Treat as workspace path — resolve relative to Kin workspace
-          const localPath = resolve('data/workspaces', ctx.kinId, source)
+          // Treat as workspace path — resolve relative to Agent workspace
+          const localPath = resolve('data/workspaces', ctx.agentId, source)
           if (!existsSync(localPath)) {
             return { error: `File not found in workspace: ${source}` }
           }
@@ -119,9 +119,9 @@ export const attachFileTool: ToolRegistration = {
           fileName: fileName || basename(resolvedSource),
         }
 
-        stageAttachment(ctx.kinId, attachment)
+        stageAttachment(ctx.agentId, attachment)
 
-        log.info({ kinId: ctx.kinId, fileName: attachment.fileName, mimeType: resolvedMime }, 'File staged for response')
+        log.info({ agentId: ctx.agentId, fileName: attachment.fileName, mimeType: resolvedMime }, 'File staged for response')
 
         return {
           success: true,

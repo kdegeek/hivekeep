@@ -5,55 +5,55 @@ import { getContactDisplayName } from '@/shared/contact-display'
 // ─── Re-implement private helpers from contacts.ts for isolated testing ─────
 // These mirror the exact logic in the source. No DB mocking needed.
 
-// ─── kinAvatarUrl (shared helper used in notifications.ts, tasks.ts, contacts UI) ──
+// ─── agentAvatarUrl (shared helper used in notifications.ts, tasks.ts, contacts UI) ──
 
-function kinAvatarUrl(kinId: string, avatarPath: string | null, updatedAt?: Date | null): string | null {
+function agentAvatarUrl(agentId: string, avatarPath: string | null, updatedAt?: Date | null): string | null {
   if (!avatarPath) return null
   const ext = avatarPath.split('.').pop() ?? 'png'
   const v = updatedAt ? updatedAt.getTime() : Date.now()
-  return `/api/uploads/kins/${kinId}/avatar.${ext}?v=${v}`
+  return `/api/uploads/agents/${agentId}/avatar.${ext}?v=${v}`
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe('contacts service — pure helpers', () => {
 
-  // ── kinAvatarUrl ──
+  // ── agentAvatarUrl ──
 
-  describe('kinAvatarUrl', () => {
+  describe('agentAvatarUrl', () => {
     it('returns null when avatarPath is null', () => {
-      expect(kinAvatarUrl('kin-1', null)).toBeNull()
+      expect(agentAvatarUrl('agent-1', null)).toBeNull()
     })
 
     it('returns null when avatarPath is empty string (falsy)', () => {
-      expect(kinAvatarUrl('kin-1', '')).toBeNull()
+      expect(agentAvatarUrl('agent-1', '')).toBeNull()
     })
 
     it('builds correct URL for png avatar', () => {
-      const result = kinAvatarUrl('kin-123', 'avatars/photo.png', new Date(1700000000000))
-      expect(result).toBe('/api/uploads/kins/kin-123/avatar.png?v=1700000000000')
+      const result = agentAvatarUrl('agent-123', 'avatars/photo.png', new Date(1700000000000))
+      expect(result).toBe('/api/uploads/agents/agent-123/avatar.png?v=1700000000000')
     })
 
     it('builds correct URL for jpg avatar', () => {
-      const result = kinAvatarUrl('kin-456', 'some/path/avatar.jpg', new Date(1600000000000))
-      expect(result).toBe('/api/uploads/kins/kin-456/avatar.jpg?v=1600000000000')
+      const result = agentAvatarUrl('agent-456', 'some/path/avatar.jpg', new Date(1600000000000))
+      expect(result).toBe('/api/uploads/agents/agent-456/avatar.jpg?v=1600000000000')
     })
 
     it('extracts extension from complex paths', () => {
-      const result = kinAvatarUrl('kin-1', 'a/b/c.webp', new Date(1000))
-      expect(result).toBe('/api/uploads/kins/kin-1/avatar.webp?v=1000')
+      const result = agentAvatarUrl('agent-1', 'a/b/c.webp', new Date(1000))
+      expect(result).toBe('/api/uploads/agents/agent-1/avatar.webp?v=1000')
     })
 
     it('defaults to png when path has no extension', () => {
-      const result = kinAvatarUrl('kin-1', 'noext', new Date(500))
+      const result = agentAvatarUrl('agent-1', 'noext', new Date(500))
       // 'noext'.split('.').pop() === 'noext', so ext is 'noext' not 'png'
       // Actually: 'noext'.split('.') => ['noext'], pop() => 'noext'
-      expect(result).toBe('/api/uploads/kins/kin-1/avatar.noext?v=500')
+      expect(result).toBe('/api/uploads/agents/agent-1/avatar.noext?v=500')
     })
 
     it('uses Date.now() when updatedAt is null', () => {
       const before = Date.now()
-      const result = kinAvatarUrl('kin-1', 'avatar.png', null)!
+      const result = agentAvatarUrl('agent-1', 'avatar.png', null)!
       const after = Date.now()
       // Extract the v= param
       const v = parseInt(result.split('?v=')[1]!)
@@ -63,7 +63,7 @@ describe('contacts service — pure helpers', () => {
 
     it('uses Date.now() when updatedAt is undefined', () => {
       const before = Date.now()
-      const result = kinAvatarUrl('kin-1', 'avatar.png')!
+      const result = agentAvatarUrl('agent-1', 'avatar.png')!
       const after = Date.now()
       const v = parseInt(result.split('?v=')[1]!)
       expect(v).toBeGreaterThanOrEqual(before)
@@ -117,14 +117,14 @@ describe('contacts service — data contracts', () => {
     it('notes have correct shape', () => {
       const note = {
         id: 'n1',
-        kinId: 'kin-1',
+        agentId: 'agent-1',
         scope: 'global',
         content: 'Some note',
         createdAt: new Date(),
         updatedAt: new Date(),
       }
       expect(note).toHaveProperty('id')
-      expect(note).toHaveProperty('kinId')
+      expect(note).toHaveProperty('agentId')
       expect(note).toHaveProperty('scope')
       expect(note).toHaveProperty('content')
       expect(['global', 'private']).toContain(note.scope)
@@ -182,26 +182,26 @@ describe('contacts service — data contracts', () => {
       expect(validScopes).toContain('global')
     })
 
-    it('private notes are only visible to the owning kin', () => {
-      // Contract: when fetching notes with kinId filter,
-      // private notes from OTHER kins should not be returned
+    it('private notes are only visible to the owning agent', () => {
+      // Contract: when fetching notes with agentId filter,
+      // private notes from OTHER agents should not be returned
       const allNotes = [
-        { kinId: 'kin-1', scope: 'global', content: 'Visible to all' },
-        { kinId: 'kin-1', scope: 'private', content: 'Only kin-1 sees this' },
-        { kinId: 'kin-2', scope: 'private', content: 'Only kin-2 sees this' },
-        { kinId: 'kin-2', scope: 'global', content: 'Also visible to all' },
+        { agentId: 'agent-1', scope: 'global', content: 'Visible to all' },
+        { agentId: 'agent-1', scope: 'private', content: 'Only agent-1 sees this' },
+        { agentId: 'agent-2', scope: 'private', content: 'Only agent-2 sees this' },
+        { agentId: 'agent-2', scope: 'global', content: 'Also visible to all' },
       ]
 
-      const requestingKinId = 'kin-1'
+      const requestingAgentId = 'agent-1'
       const visible = allNotes.filter(
-        (n) => n.scope === 'global' || n.kinId === requestingKinId,
+        (n) => n.scope === 'global' || n.agentId === requestingAgentId,
       )
 
-      expect(visible).toHaveLength(3) // both globals + kin-1's private
+      expect(visible).toHaveLength(3) // both globals + agent-1's private
       expect(visible.map((n) => n.content)).toContain('Visible to all')
-      expect(visible.map((n) => n.content)).toContain('Only kin-1 sees this')
+      expect(visible.map((n) => n.content)).toContain('Only agent-1 sees this')
       expect(visible.map((n) => n.content)).toContain('Also visible to all')
-      expect(visible.map((n) => n.content)).not.toContain('Only kin-2 sees this')
+      expect(visible.map((n) => n.content)).not.toContain('Only agent-2 sees this')
     })
   })
 

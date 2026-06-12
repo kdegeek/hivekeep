@@ -1,6 +1,6 @@
 {
-  "name": "KinBot",
-  "short_name": "KinBot",
+  "name": "Hivekeep",
+  "short_name": "Hivekeep",
   "description": "AI-powered chatbot management platform",
   "start_url": "/",
   "display": "standalone",
@@ -8,23 +8,23 @@
   "theme_color": "#7c3aed",
   "icons": [
     {
-      "src": "/kinbot-192.png",
+      "src": "/hivekeep-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/kinbot-512.png",
+      "src": "/hivekeep-512.png",
       "sizes": "512x512",
       "type": "image/png"
     },
     {
-      "src": "/kinbot-512.png",
+      "src": "/hivekeep-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/kinbot.svg",
+      "src": "/hivekeep.svg",
       "sizes": "any",
       "type": "image/svg+xml"
     }

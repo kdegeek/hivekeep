@@ -13,16 +13,16 @@ import type { AppVariables } from '@/server/app'
 
 const knowledgeRoutes = new Hono<{ Variables: AppVariables }>()
 
-// GET /api/kins/:kinId/knowledge — list sources
+// GET /api/agents/:agentId/knowledge — list sources
 knowledgeRoutes.get('/', async (c) => {
-  const kinId = c.req.param('kinId') as string
-  const sources = await listSources(kinId)
+  const agentId = c.req.param('agentId') as string
+  const sources = await listSources(agentId)
   return c.json({ sources })
 })
 
-// POST /api/kins/:kinId/knowledge — create source
+// POST /api/agents/:agentId/knowledge — create source
 knowledgeRoutes.post('/', async (c) => {
-  const kinId = c.req.param('kinId') as string
+  const agentId = c.req.param('agentId') as string
   const body = await c.req.json<{
     name: string
     type: 'file' | 'text' | 'url'
@@ -36,7 +36,7 @@ knowledgeRoutes.post('/', async (c) => {
     return c.json({ error: { code: 'INVALID_INPUT', message: 'name and type are required' } }, 400)
   }
 
-  const source = await createSource(kinId, {
+  const source = await createSource(agentId, {
     name: body.name,
     type: body.type,
     content: body.content ?? null,
@@ -53,9 +53,9 @@ knowledgeRoutes.post('/', async (c) => {
   return c.json({ source }, 201)
 })
 
-// GET /api/kins/:kinId/knowledge/search — search knowledge
+// GET /api/agents/:agentId/knowledge/search — search knowledge
 knowledgeRoutes.get('/search', async (c) => {
-  const kinId = c.req.param('kinId') as string
+  const agentId = c.req.param('agentId') as string
   const query = c.req.query('q')
   const limit = c.req.query('limit') ? Number(c.req.query('limit')) : undefined
 
@@ -63,16 +63,16 @@ knowledgeRoutes.get('/search', async (c) => {
     return c.json({ error: { code: 'INVALID_INPUT', message: 'q query parameter is required' } }, 400)
   }
 
-  const results = await searchKnowledge(kinId, query, limit)
+  const results = await searchKnowledge(agentId, query, limit)
   return c.json({ results })
 })
 
-// GET /api/kins/:kinId/knowledge/:sourceId — get source with chunks
+// GET /api/agents/:agentId/knowledge/:sourceId — get source with chunks
 knowledgeRoutes.get('/:sourceId', async (c) => {
-  const kinId = c.req.param('kinId') as string
+  const agentId = c.req.param('agentId') as string
   const sourceId = c.req.param('sourceId') as string
 
-  const source = await getSource(sourceId, kinId)
+  const source = await getSource(sourceId, agentId)
   if (!source) {
     return c.json({ error: { code: 'NOT_FOUND', message: 'Knowledge source not found' } }, 404)
   }
@@ -81,12 +81,12 @@ knowledgeRoutes.get('/:sourceId', async (c) => {
   return c.json({ source, chunks })
 })
 
-// DELETE /api/kins/:kinId/knowledge/:sourceId — delete source
+// DELETE /api/agents/:agentId/knowledge/:sourceId — delete source
 knowledgeRoutes.delete('/:sourceId', async (c) => {
-  const kinId = c.req.param('kinId') as string
+  const agentId = c.req.param('agentId') as string
   const sourceId = c.req.param('sourceId') as string
 
-  const deleted = await deleteSource(sourceId, kinId)
+  const deleted = await deleteSource(sourceId, agentId)
   if (!deleted) {
     return c.json({ error: { code: 'NOT_FOUND', message: 'Knowledge source not found' } }, 404)
   }
@@ -94,12 +94,12 @@ knowledgeRoutes.delete('/:sourceId', async (c) => {
   return c.json({ success: true })
 })
 
-// POST /api/kins/:kinId/knowledge/:sourceId/reprocess — re-process source
+// POST /api/agents/:agentId/knowledge/:sourceId/reprocess — re-process source
 knowledgeRoutes.post('/:sourceId/reprocess', async (c) => {
-  const kinId = c.req.param('kinId') as string
+  const agentId = c.req.param('agentId') as string
   const sourceId = c.req.param('sourceId') as string
 
-  const source = await getSource(sourceId, kinId)
+  const source = await getSource(sourceId, agentId)
   if (!source) {
     return c.json({ error: { code: 'NOT_FOUND', message: 'Knowledge source not found' } }, 404)
   }

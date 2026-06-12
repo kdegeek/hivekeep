@@ -14,14 +14,14 @@
  *   - empty query returns the most recent tickets (limit honoured)
  */
 import { describe, it, expect, mock, beforeEach } from 'bun:test'
-import { fullMockSchema, fullMockDrizzleOrm } from '../../test-helpers'
+import { fullMockSchema, fullMockDrizzleOrm, fullMockConfig } from '../../test-helpers'
 
 mock.module('@/server/logger', () => ({
   createLogger: () => ({ info: () => {}, warn: () => {}, debug: () => {}, error: () => {} }),
 }))
 
 mock.module('@/server/sse/index', () => ({ sseManager: { broadcast: () => {} } }))
-mock.module('@/server/config', () => ({ config: {} }))
+mock.module('@/server/config', () => ({ config: { ...fullMockConfig } }))
 mock.module('@/server/services/tasks', () => ({ spawnTask: async () => ({ id: 'stub' }) }))
 
 interface FakeProjectRow { id: string; slug: string | null; title: string }
@@ -65,7 +65,7 @@ mock.module('@/server/db/schema', () => ({
   ticketTags: { __name: 'ticketTags' as const, ticketId: 'ticketId', tagId: 'tagId' },
   projectTags: { __name: 'projectTags' as const, id: 'id', projectId: 'projectId', label: 'label', color: 'color' },
   tasks: { __name: 'tasks' as const },
-  kins: { __name: 'kins' as const },
+  agents: { __name: 'agents' as const },
   user: { __name: 'user' as const },
   userProfiles: { __name: 'userProfiles' as const },
 }))
@@ -232,19 +232,19 @@ describe('searchTickets', () => {
   })
 
   it('returns all tickets in the project when query is empty', async () => {
-    seedProject('p1', 'kinbot', 'KinBot')
+    seedProject('p1', 'hivekeep', 'Hivekeep')
     seedTicket({ id: 't1', projectId: 'p1', number: 1, title: 'First' })
     seedTicket({ id: 't2', projectId: 'p1', number: 2, title: 'Second' })
 
     const hits = await searchTickets({ query: '', projectId: 'p1' })
     expect(hits.map((h) => h.number).sort()).toEqual([1, 2])
     // Projection: project slug and name come through.
-    expect(hits[0]!.projectSlug).toBe('kinbot')
-    expect(hits[0]!.projectName).toBe('KinBot')
+    expect(hits[0]!.projectSlug).toBe('hivekeep')
+    expect(hits[0]!.projectName).toBe('Hivekeep')
   })
 
   it('filters by text substring on the title (case-insensitive)', async () => {
-    seedProject('p1', 'kinbot', 'KinBot')
+    seedProject('p1', 'hivekeep', 'Hivekeep')
     seedTicket({ id: 't1', projectId: 'p1', number: 1, title: 'Login bug' })
     seedTicket({ id: 't2', projectId: 'p1', number: 2, title: 'Logout flow' })
     seedTicket({ id: 't3', projectId: 'p1', number: 3, title: 'Dashboard' })
@@ -255,7 +255,7 @@ describe('searchTickets', () => {
   })
 
   it('matches by number prefix when query is numeric', async () => {
-    seedProject('p1', 'kinbot', 'KinBot')
+    seedProject('p1', 'hivekeep', 'Hivekeep')
     seedTicket({ id: 't1', projectId: 'p1', number: 1, title: 'one' })
     seedTicket({ id: 't2', projectId: 'p1', number: 10, title: 'ten' })
     seedTicket({ id: 't3', projectId: 'p1', number: 11, title: 'eleven' })
@@ -268,7 +268,7 @@ describe('searchTickets', () => {
   })
 
   it('tolerates a leading `#` in the numeric query', async () => {
-    seedProject('p1', 'kinbot', 'KinBot')
+    seedProject('p1', 'hivekeep', 'Hivekeep')
     seedTicket({ id: 't1', projectId: 'p1', number: 42, title: 'forty-two' })
     seedTicket({ id: 't2', projectId: 'p1', number: 43, title: 'forty-three' })
 
@@ -277,7 +277,7 @@ describe('searchTickets', () => {
   })
 
   it('excludes done tickets when includeDone is false', async () => {
-    seedProject('p1', 'kinbot', 'KinBot')
+    seedProject('p1', 'hivekeep', 'Hivekeep')
     seedTicket({ id: 't1', projectId: 'p1', number: 1, title: 'open', status: 'todo' })
     seedTicket({ id: 't2', projectId: 'p1', number: 2, title: 'done one', status: 'done' })
 
@@ -286,7 +286,7 @@ describe('searchTickets', () => {
   })
 
   it('includes done tickets by default', async () => {
-    seedProject('p1', 'kinbot', 'KinBot')
+    seedProject('p1', 'hivekeep', 'Hivekeep')
     seedTicket({ id: 't1', projectId: 'p1', number: 1, title: 'open', status: 'todo' })
     seedTicket({ id: 't2', projectId: 'p1', number: 2, title: 'done one', status: 'done' })
 
@@ -295,7 +295,7 @@ describe('searchTickets', () => {
   })
 
   it('skips tickets without an assigned number (pre-backfill rows)', async () => {
-    seedProject('p1', 'kinbot', 'KinBot')
+    seedProject('p1', 'hivekeep', 'Hivekeep')
     seedTicket({ id: 't1', projectId: 'p1', number: 1, title: 'has number' })
     fakeTickets.push({
       id: 't2',
@@ -312,7 +312,7 @@ describe('searchTickets', () => {
   })
 
   it('caps the result set at TICKET_SEARCH_MAX_RESULTS', async () => {
-    seedProject('p1', 'kinbot', 'KinBot')
+    seedProject('p1', 'hivekeep', 'Hivekeep')
     for (let i = 1; i <= TICKET_SEARCH_MAX_RESULTS + 5; i++) {
       seedTicket({ id: `t${i}`, projectId: 'p1', number: i, title: `t-${i}` })
     }
@@ -322,7 +322,7 @@ describe('searchTickets', () => {
   })
 
   it('honours an explicit limit smaller than the cap', async () => {
-    seedProject('p1', 'kinbot', 'KinBot')
+    seedProject('p1', 'hivekeep', 'Hivekeep')
     for (let i = 1; i <= 10; i++) {
       seedTicket({ id: `t${i}`, projectId: 'p1', number: i, title: `t-${i}` })
     }
@@ -332,17 +332,17 @@ describe('searchTickets', () => {
   })
 
   it('returns only tickets from the requested project', async () => {
-    seedProject('p1', 'kinbot', 'KinBot')
+    seedProject('p1', 'hivekeep', 'Hivekeep')
     seedProject('p2', 'soupcon', 'Soupcon')
-    seedTicket({ id: 't1', projectId: 'p1', number: 1, title: 'kinbot one' })
+    seedTicket({ id: 't1', projectId: 'p1', number: 1, title: 'hivekeep one' })
     seedTicket({ id: 't2', projectId: 'p2', number: 1, title: 'soupcon one' })
 
     const hits = await searchTickets({ query: '', projectId: 'p1' })
-    expect(hits.map((h) => h.title)).toEqual(['kinbot one'])
+    expect(hits.map((h) => h.title)).toEqual(['hivekeep one'])
   })
 
   it('attaches the primary tag when one is present', async () => {
-    seedProject('p1', 'kinbot', 'KinBot')
+    seedProject('p1', 'hivekeep', 'Hivekeep')
     seedTicket({ id: 't1', projectId: 'p1', number: 1, title: 'tagged' })
     fakeProjectTags.push({ id: 'tag1', projectId: 'p1', label: 'bug', color: '#ef4444' })
     fakeTicketTags.push({ ticketId: 't1', tagId: 'tag1' })
@@ -352,7 +352,7 @@ describe('searchTickets', () => {
   })
 
   it('leaves primaryTag null when the ticket has no tags', async () => {
-    seedProject('p1', 'kinbot', 'KinBot')
+    seedProject('p1', 'hivekeep', 'Hivekeep')
     seedTicket({ id: 't1', projectId: 'p1', number: 1, title: 'plain' })
 
     const hits = await searchTickets({ query: '', projectId: 'p1' })

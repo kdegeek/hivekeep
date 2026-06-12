@@ -96,12 +96,12 @@ toolsRoutes.get('/custom-tool-names', (c) => {
   }
 })
 
-// GET /api/tools/catalog — Kin-agnostic catalog of every grantable tool across
+// GET /api/tools/catalog — Agent-agnostic catalog of every grantable tool across
 // all four sources (native / plugin / MCP / custom), used to populate the
-// toolbox editor. Unlike GET /api/kins/:id/tools this carries no per-Kin
+// toolbox editor. Unlike GET /api/agents/:id/tools this carries no per-Agent
 // enabled state — it is a pure metadata listing of what a toolbox can reference
 // by name. Nothing is filtered out (it is a catalog); each entry instead
-// carries `hardExcludedFromSubKin` so the UI can warn that the tool can never
+// carries `hardExcludedFromSubAgent` so the UI can warn that the tool can never
 // run inside a task even if a toolbox lists it (see HARD_EXCLUDED_FROM_SUBKIN
 // in services/tasks.ts). `label` is the author-supplied (possibly locale-keyed)
 // display label; `description` is the LLM-facing description, best-effort
@@ -110,9 +110,9 @@ toolsRoutes.get('/custom-tool-names', (c) => {
 // Sources:
 //   - native : registry tools whose name has no `plugin_` prefix.
 //   - plugin : registry tools registered under the `plugin_<plugin>_*` prefix.
-//   - mcp    : every tool from ALL global active MCP servers (no per-Kin gate),
+//   - mcp    : every tool from ALL global active MCP servers (no per-Agent gate),
 //              named `mcp_<sanitizeName(server)>_<sanitizeName(tool)>`.
-//   - custom : GLOBAL scripts (no per-Kin gate), named `custom_<slug>`, each
+//   - custom : GLOBAL scripts (no per-Agent gate), named `custom_<slug>`, each
 //              carrying its own (possibly custom) domain + an `enabled` flag.
 const HARD_EXCLUDED_SET = new Set<string>(HARD_EXCLUDED_FROM_SUBKIN)
 
@@ -134,10 +134,10 @@ toolsRoutes.get('/catalog', async (c) => {
     defaultDisabled: t.defaultDisabled,
     readOnly: t.readOnly,
     destructive: t.destructive,
-    hardExcludedFromSubKin: HARD_EXCLUDED_SET.has(t.name),
+    hardExcludedFromSubAgent: HARD_EXCLUDED_SET.has(t.name),
   }))
 
-  // ── MCP (all global active servers, no per-Kin gate) ─────────────────────────
+  // ── MCP (all global active servers, no per-Agent gate) ─────────────────────────
   let mcpEntries: ToolCatalogEntry[] = []
   try {
     const mcp = await listAllMCPCatalogTools()
@@ -151,7 +151,7 @@ toolsRoutes.get('/catalog', async (c) => {
       defaultDisabled: false,
       readOnly: false,
       destructive: false,
-      hardExcludedFromSubKin: false,
+      hardExcludedFromSubAgent: false,
       mcpServerName: m.serverName,
     }))
   } catch (err) {
@@ -160,7 +160,7 @@ toolsRoutes.get('/catalog', async (c) => {
     log.warn({ err }, 'tools/catalog: failed to enumerate MCP tools')
   }
 
-  // ── custom (GLOBAL — no per-Kin gate) ────────────────────────────────────────
+  // ── custom (GLOBAL — no per-Agent gate) ────────────────────────────────────────
   // `label`/`description` are localized for the current user's UI language so the
   // toolbox editor shows a human name instead of the raw custom_<slug>. This is
   // UI metadata only — the LLM still receives the base description + raw schema.
@@ -178,7 +178,7 @@ toolsRoutes.get('/catalog', async (c) => {
         defaultDisabled: false,
         readOnly: false,
         destructive: false,
-        hardExcludedFromSubKin: false,
+        hardExcludedFromSubAgent: false,
         enabled: ct.enabled,
       }
     })

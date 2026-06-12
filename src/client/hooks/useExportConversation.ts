@@ -21,9 +21,9 @@ function roleLabel(role: string): string {
   }
 }
 
-function messagesToMarkdown(messages: ChatMessage[], kinName: string): string {
+function messagesToMarkdown(messages: ChatMessage[], agentName: string): string {
   const lines: string[] = []
-  lines.push(`# ${kinName} — Conversation Export`)
+  lines.push(`# ${agentName} — Conversation Export`)
   lines.push(``)
   lines.push(`*Exported on ${new Date().toLocaleString()}*`)
   lines.push(`*${messages.length} messages*`)
@@ -69,9 +69,9 @@ function messagesToMarkdown(messages: ChatMessage[], kinName: string): string {
   return lines.join('\n')
 }
 
-function messagesToJSON(messages: ChatMessage[], kinName: string): string {
+function messagesToJSON(messages: ChatMessage[], agentName: string): string {
   const exportData = {
-    kinName,
+    agentName,
     exportedAt: new Date().toISOString(),
     messageCount: messages.length,
     messages: messages
@@ -109,7 +109,7 @@ function slugify(name: string): string {
     .replace(/^-|-$/g, '')
 }
 
-export function useExportConversation(messages: ChatMessage[], kinName: string) {
+export function useExportConversation(messages: ChatMessage[], agentName: string) {
   const { t } = useTranslation()
 
   const exportAsMarkdown = useCallback(() => {
@@ -117,22 +117,22 @@ export function useExportConversation(messages: ChatMessage[], kinName: string) 
       toast.info(t('chat.export.empty'))
       return
     }
-    const md = messagesToMarkdown(messages, kinName)
-    const filename = `${slugify(kinName)}-conversation-${new Date().toISOString().slice(0, 10)}.md`
+    const md = messagesToMarkdown(messages, agentName)
+    const filename = `${slugify(agentName)}-conversation-${new Date().toISOString().slice(0, 10)}.md`
     downloadFile(md, filename, 'text/markdown')
     toast.success(t('chat.export.success'))
-  }, [messages, kinName, t])
+  }, [messages, agentName, t])
 
   const exportAsJSON = useCallback(() => {
     if (messages.length === 0) {
       toast.info(t('chat.export.empty'))
       return
     }
-    const json = messagesToJSON(messages, kinName)
-    const filename = `${slugify(kinName)}-conversation-${new Date().toISOString().slice(0, 10)}.json`
+    const json = messagesToJSON(messages, agentName)
+    const filename = `${slugify(agentName)}-conversation-${new Date().toISOString().slice(0, 10)}.json`
     downloadFile(json, filename, 'application/json')
     toast.success(t('chat.export.success'))
-  }, [messages, kinName, t])
+  }, [messages, agentName, t])
 
   return { exportAsMarkdown, exportAsJSON }
 }

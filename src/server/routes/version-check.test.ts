@@ -25,39 +25,58 @@ mock.module('@/server/db/schema', () => ({
   userProfiles: { userId: 'userId', role: 'role' },
 }))
 
-const mockCheckForUpdates = mock(() =>
-  Promise.resolve({
-    currentVersion: '1.0.0',
-    latestVersion: '1.1.0',
-    isUpdateAvailable: true,
-    releaseUrl: 'https://github.com/MarlBurroW/kinbot/releases/tag/v1.1.0',
-    releaseNotes: 'Bug fixes',
-    publishedAt: '2026-01-01T00:00:00Z',
-    lastCheckedAt: new Date().toISOString(),
-  }),
-)
+const sampleInfo = {
+  currentVersion: '1.0.0',
+  currentSha: 'abc1234',
+  channel: 'stable',
+  installationType: 'systemd-system',
+  latestVersion: '1.1.0',
+  isUpdateAvailable: true,
+  canSelfUpdate: true,
+  selfUpdateBlockedReason: null,
+  releaseUrl: 'https://github.com/MarlBurroW/hivekeep/releases/tag/v1.1.0',
+  changelog: [
+    { version: '1.1.0', title: 'Hivekeep v1.1.0', notes: 'Bug fixes', url: null, publishedAt: 1 },
+  ],
+  publishedAt: 1,
+  lastCheckedAt: Date.now(),
+}
 
+const mockCheckForUpdates = mock(() => Promise.resolve(sampleInfo))
 const mockGetCachedVersionInfo = mock(() =>
-  Promise.resolve({
-    currentVersion: '1.0.0',
-    latestVersion: '1.0.0',
-    isUpdateAvailable: false,
-    releaseUrl: null,
-    releaseNotes: null,
-    publishedAt: null,
-    lastCheckedAt: new Date().toISOString(),
-  }),
+  Promise.resolve({ ...sampleInfo, isUpdateAvailable: false, latestVersion: '1.0.0' }),
 )
-
-const testConfig: Record<string, any> = { ...fullMockConfig, versionCheck: { ...fullMockConfig.versionCheck } }
-
-mock.module('@/server/config', () => ({
-  config: testConfig,
-}))
+const mockGetUpdateChannel = mock(() => Promise.resolve('stable'))
+const mockSetUpdateChannel = mock(() => Promise.resolve())
 
 mock.module('@/server/services/version-check', () => ({
   checkForUpdates: mockCheckForUpdates,
   getCachedVersionInfo: mockGetCachedVersionInfo,
+  getUpdateChannel: mockGetUpdateChannel,
+  setUpdateChannel: mockSetUpdateChannel,
+}))
+
+let mockStartResult: { ok: boolean; runId?: string; error?: { code: string; message: string } } = {
+  ok: true,
+  runId: 'run-1234',
+}
+const mockStartSelfUpdate = mock(() => Promise.resolve(mockStartResult))
+let mockLastRun: unknown = null
+const mockGetLastUpdateRun = mock(() => mockLastRun)
+
+mock.module('@/server/services/self-update', () => ({
+  startSelfUpdate: mockStartSelfUpdate,
+  getLastUpdateRun: mockGetLastUpdateRun,
+}))
+
+const testConfig: Record<string, any> = {
+  ...fullMockConfig,
+  versionCheck: { ...fullMockConfig.versionCheck },
+  environment: { ...(fullMockConfig as any).environment, installationType: 'systemd-system' },
+}
+
+mock.module('@/server/config', () => ({
+  config: testConfig,
 }))
 
 // ─── App setup ──────────────────────────────────────────────────────────────
@@ -74,16 +93,22 @@ async function createApp() {
   return app
 }
 
+function resetMocks() {
+  mockCheckForUpdates.mockClear()
+  mockGetCachedVersionInfo.mockClear()
+  mockSetUpdateChannel.mockClear()
+  mockStartSelfUpdate.mockClear()
+  mockDbSelectGetResult = undefined
+  mockStartResult = { ok: true, runId: 'run-1234' }
+  mockLastRun = null
+  testConfig.versionCheck = { ...fullMockConfig.versionCheck }
+  testConfig.version = fullMockConfig.version
+}
+
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe('GET /api/version-check', () => {
-  beforeEach(() => {
-    mockCheckForUpdates.mockClear()
-    mockGetCachedVersionInfo.mockClear()
-    testConfig.versionCheck = { ...fullMockConfig.versionCheck }
-    testConfig.isDocker = fullMockConfig.isDocker
-    testConfig.version = fullMockConfig.version
-  })
+  beforeEach(resetMocks)
 
   it('returns disabled response when version check is disabled', async () => {
     testConfig.versionCheck.enabled = false
@@ -94,6 +119,7 @@ describe('GET /api/version-check', () => {
     expect(body.isUpdateAvailable).toBe(false)
     expect(body.latestVersion).toBeNull()
     expect(body.currentVersion).toBe(testConfig.version)
+    expect(body.changelog).toEqual([])
     // Should NOT call getCachedVersionInfo when disabled
     expect(mockGetCachedVersionInfo).not.toHaveBeenCalled()
   })
@@ -106,19 +132,13 @@ describe('GET /api/version-check', () => {
     const body = await res.json()
     expect(body.currentVersion).toBe('1.0.0') // comes from mock getCachedVersionInfo
     expect(body.isUpdateAvailable).toBe(false)
+    expect(body.channel).toBe('stable')
     expect(mockGetCachedVersionInfo).toHaveBeenCalledTimes(1)
   })
 })
 
 describe('POST /api/version-check/check', () => {
-  beforeEach(() => {
-    mockCheckForUpdates.mockClear()
-    mockGetCachedVersionInfo.mockClear()
-    mockDbSelectGetResult = undefined
-    testConfig.versionCheck = { ...fullMockConfig.versionCheck }
-    testConfig.isDocker = fullMockConfig.isDocker
-    testConfig.version = fullMockConfig.version
-  })
+  beforeEach(resetMocks)
 
   it('rejects non-admin users with 403', async () => {
     mockDbSelectGetResult = { role: 'member' }
@@ -157,17 +177,57 @@ describe('POST /api/version-check/check', () => {
     const body = await res.json()
     expect(body.isUpdateAvailable).toBe(true)
     expect(body.latestVersion).toBe('1.1.0')
+    expect(body.changelog).toHaveLength(1)
+    expect(mockCheckForUpdates).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('PUT /api/version-check/channel', () => {
+  beforeEach(resetMocks)
+
+  it('rejects non-admin users with 403', async () => {
+    mockDbSelectGetResult = { role: 'member' }
+    const app = await createApp()
+    const res = await app.request('/api/version-check/channel', {
+      method: 'PUT',
+      body: JSON.stringify({ channel: 'edge' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    expect(res.status).toBe(403)
+    expect(mockSetUpdateChannel).not.toHaveBeenCalled()
+  })
+
+  it('rejects an invalid channel with 400', async () => {
+    mockDbSelectGetResult = { role: 'admin' }
+    const app = await createApp()
+    const res = await app.request('/api/version-check/channel', {
+      method: 'PUT',
+      body: JSON.stringify({ channel: 'nightly' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error.code).toBe('INVALID_CHANNEL')
+    expect(mockSetUpdateChannel).not.toHaveBeenCalled()
+  })
+
+  it('saves the channel and re-checks for admin users', async () => {
+    mockDbSelectGetResult = { role: 'admin' }
+    testConfig.versionCheck.enabled = true
+    const app = await createApp()
+    const res = await app.request('/api/version-check/channel', {
+      method: 'PUT',
+      body: JSON.stringify({ channel: 'edge' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    expect(res.status).toBe(200)
+    expect(mockSetUpdateChannel).toHaveBeenCalledWith('edge')
     expect(mockCheckForUpdates).toHaveBeenCalledTimes(1)
   })
 })
 
 describe('POST /api/version-check/update', () => {
-  beforeEach(() => {
-    mockDbSelectGetResult = undefined
-    testConfig.versionCheck = { ...fullMockConfig.versionCheck }
-    testConfig.isDocker = fullMockConfig.isDocker
-    testConfig.version = fullMockConfig.version
-  })
+  beforeEach(resetMocks)
 
   it('rejects non-admin users with 403', async () => {
     mockDbSelectGetResult = { role: 'member' }
@@ -176,6 +236,7 @@ describe('POST /api/version-check/update', () => {
     expect(res.status).toBe(403)
     const body = await res.json()
     expect(body.error.code).toBe('FORBIDDEN')
+    expect(mockStartSelfUpdate).not.toHaveBeenCalled()
   })
 
   it('rejects when no profile found with 403', async () => {
@@ -185,14 +246,71 @@ describe('POST /api/version-check/update', () => {
     expect(res.status).toBe(403)
   })
 
-  it('returns 400 in Docker mode', async () => {
+  it('returns 400 when self-update is unavailable (e.g. Docker)', async () => {
     mockDbSelectGetResult = { role: 'admin' }
-    testConfig.isDocker = true
+    mockStartResult = {
+      ok: false,
+      error: { code: 'SELF_UPDATE_UNAVAILABLE', message: 'Docker installs update by pulling a newer image' },
+    }
     const app = await createApp()
     const res = await app.request('/api/version-check/update', { method: 'POST' })
     expect(res.status).toBe(400)
     const body = await res.json()
-    expect(body.error.code).toBe('DOCKER_MODE')
-    expect(body.error.message).toContain('docker compose pull')
+    expect(body.error.code).toBe('SELF_UPDATE_UNAVAILABLE')
+  })
+
+  it('returns 409 when an update is already running', async () => {
+    mockDbSelectGetResult = { role: 'admin' }
+    mockStartResult = {
+      ok: false,
+      error: { code: 'UPDATE_IN_PROGRESS', message: 'An update is already running' },
+    }
+    const app = await createApp()
+    const res = await app.request('/api/version-check/update', { method: 'POST' })
+    expect(res.status).toBe(409)
+  })
+
+  it('starts the update and returns the run id for admin users', async () => {
+    mockDbSelectGetResult = { role: 'admin' }
+    const app = await createApp()
+    const res = await app.request('/api/version-check/update', { method: 'POST' })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.started).toBe(true)
+    expect(body.runId).toBe('run-1234')
+    expect(mockStartSelfUpdate).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('GET /api/version-check/last-update', () => {
+  beforeEach(resetMocks)
+
+  it('returns null when no update was ever attempted', async () => {
+    const app = await createApp()
+    const res = await app.request('/api/version-check/last-update')
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.run).toBeNull()
+  })
+
+  it('returns the last run when present', async () => {
+    mockLastRun = {
+      id: 'run-1234',
+      channel: 'stable',
+      fromVersion: '1.0.0',
+      fromSha: 'abc1234',
+      toVersion: '1.1.0',
+      status: 'success',
+      currentStep: null,
+      error: null,
+      startedAt: 1,
+      finishedAt: 2,
+    }
+    const app = await createApp()
+    const res = await app.request('/api/version-check/last-update')
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.run.id).toBe('run-1234')
+    expect(body.run.status).toBe('success')
   })
 })

@@ -24,7 +24,7 @@ test.describe('Account Settings', () => {
     await page.goto('/')
     await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible({ timeout: 10_000 })
     await loginAs(page)
-    await expect(page.getByText('Kins', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Agents', { exact: true })).toBeVisible({ timeout: 10_000 })
 
     // Reset user profile to known state (handles dirty state from retries)
     await page.request.patch('/api/me', {

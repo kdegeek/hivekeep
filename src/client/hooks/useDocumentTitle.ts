@@ -1,21 +1,21 @@
 import { useEffect } from 'react'
 
-const BASE_TITLE = 'KinBot'
+const BASE_TITLE = 'Hivekeep'
 
 /**
  * Update the browser tab title dynamically.
  *
- * Shows the selected Kin name, a typing indicator when processing,
+ * Shows the selected Agent name, a typing indicator when processing,
  * and an unread message count badge when there are unseen messages
  * (e.g. when the tab was in the background).
  */
 export function useDocumentTitle(
-  kinName?: string | null,
+  agentName?: string | null,
   isProcessing?: boolean,
   unreadCount?: number,
 ) {
   useEffect(() => {
-    if (!kinName) {
+    if (!agentName) {
       document.title = unreadCount
         ? `(${unreadCount}) ${BASE_TITLE}`
         : BASE_TITLE
@@ -25,11 +25,11 @@ export function useDocumentTitle(
     const badge = unreadCount ? `(${unreadCount}) ` : ''
 
     document.title = isProcessing
-      ? `${badge}✦ ${kinName} · ${BASE_TITLE}`
-      : `${badge}${kinName} · ${BASE_TITLE}`
+      ? `${badge}✦ ${agentName} · ${BASE_TITLE}`
+      : `${badge}${agentName} · ${BASE_TITLE}`
 
     return () => {
       document.title = BASE_TITLE
     }
-  }, [kinName, isProcessing, unreadCount])
+  }, [agentName, isProcessing, unreadCount])
 }

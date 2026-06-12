@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://marlburrow.github.io/kinbot/sitemap.xml
+Sitemap: https://hivekeep.app/sitemap-index.xml

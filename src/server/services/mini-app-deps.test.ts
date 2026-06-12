@@ -15,8 +15,8 @@ describe('mini-app-deps', () => {
       expect(parsed.dependencies).toEqual(DEFAULT_DEPENDENCIES)
       expect(parsed.dependencies.react).toBeDefined()
       expect(parsed.dependencies['react-dom/client']).toBeDefined()
-      expect(parsed.dependencies['@kinbot/react']).toBeDefined()
-      expect(parsed.dependencies['@kinbot/components']).toBeDefined()
+      expect(parsed.dependencies['@hivekeep/react']).toBeDefined()
+      expect(parsed.dependencies['@hivekeep/components']).toBeDefined()
     })
   })
 
@@ -24,7 +24,7 @@ describe('mini-app-deps', () => {
     it('treats package names as bare', () => {
       expect(isBareSpecifier('react')).toBe(true)
       expect(isBareSpecifier('react-dom/client')).toBe(true)
-      expect(isBareSpecifier('@kinbot/react')).toBe(true)
+      expect(isBareSpecifier('@hivekeep/react')).toBe(true)
     })
     it('treats paths and URLs as non-bare', () => {
       expect(isBareSpecifier('./utils.js')).toBe(false)
@@ -54,13 +54,13 @@ describe('mini-app-deps', () => {
           import { createRoot } from "react-dom/client";
         </script>
         <script type="module">
-          import { thing } from "@kinbot/react";
+          import { thing } from "@hivekeep/react";
           import "./local.js";
           import x from "https://esm.sh/x";
         </script>
       `
       const found = findBareModuleImports(html)
-      expect(found.sort()).toEqual(['@kinbot/react', 'react', 'react-dom/client'])
+      expect(found.sort()).toEqual(['@hivekeep/react', 'react', 'react-dom/client'])
     })
 
     it('handles dynamic and side-effect imports', () => {

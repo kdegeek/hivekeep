@@ -5,7 +5,7 @@ import { resolve } from 'path'
 /**
  * Regression guard: every native tool registered in `register.ts` MUST have a
  * human-readable label under `tools.names.<tool_name>` in BOTH `en.json` and
- * `fr.json`. Without it the chat UI (ToolCallItem / InlineToolCall) and the Kin
+ * `fr.json`. Without it the chat UI (ToolCallItem / InlineToolCall) and the Agent
  * tools settings tab fall back to the raw snake_case technical name, which is
  * the exact paper-cut this test exists to prevent.
  *

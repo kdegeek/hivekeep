@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/client/components/ui/button'
 import { Badge } from '@/client/components/ui/badge'
 import { Card, CardContent } from '@/client/components/ui/card'
-import { KinBadge } from '@/client/components/common/KinBadge'
+import { AgentBadge } from '@/client/components/common/AgentBadge'
 import {
   Copy,
   Download,
@@ -20,7 +20,7 @@ import { useCopyToClipboard } from '@/client/hooks/useCopyToClipboard'
 
 export interface StoredFileData {
   id: string
-  kinId: string
+  agentId: string
   name: string
   description: string | null
   originalName: string
@@ -32,15 +32,15 @@ export interface StoredFileData {
   expiresAt: number | null
   downloadCount: number
   url: string
-  createdByKinId: string | null
+  createdByAgentId: string | null
   createdAt: number
   updatedAt: number
 }
 
 interface FileStorageCardProps {
   file: StoredFileData
-  kinName?: string
-  kinAvatarUrl?: string | null
+  agentName?: string
+  agentAvatarUrl?: string | null
   onEdit?: () => void
   onDelete?: () => void
 }
@@ -64,7 +64,7 @@ function formatExpiry(expiresAt: number): string {
   return `${days}d`
 }
 
-export function FileStorageCard({ file, kinName, kinAvatarUrl, onEdit, onDelete }: FileStorageCardProps) {
+export function FileStorageCard({ file, agentName, agentAvatarUrl, onEdit, onDelete }: FileStorageCardProps) {
   const { t } = useTranslation()
   const { copy } = useCopyToClipboard()
 
@@ -117,8 +117,8 @@ export function FileStorageCard({ file, kinName, kinAvatarUrl, onEdit, onDelete 
                 <Download className="inline size-2.5 mr-0.5" />
                 {file.downloadCount}
               </span>
-              {file.createdByKinId && kinName && (
-                <KinBadge name={kinName} avatarUrl={kinAvatarUrl} />
+              {file.createdByAgentId && agentName && (
+                <AgentBadge name={agentName} avatarUrl={agentAvatarUrl} />
               )}
             </div>
           </div>

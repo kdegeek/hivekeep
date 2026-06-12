@@ -356,7 +356,7 @@ describe('MatrixAdapter', () => {
       await adapter.onIdentityChange!(
         'ch1',
         { accessTokenVaultKey: 'valid-token-key', homeserverUrl: 'https://matrix.example.com' },
-        { kinSlug: 'kube-master', kinName: 'Kube Master' },
+        { agentSlug: 'kube-master', agentName: 'Kube Master' },
       )
 
       const displaynameReq = sentRequests.find((r) => r.url.includes('/displayname'))
@@ -371,7 +371,7 @@ describe('MatrixAdapter', () => {
         sentRequests.push({ url, method: init?.method ?? 'GET' })
         if (url.includes('/account/whoami')) return jsonResponse({ user_id: '@bot:matrix.org' })
         if (url.includes('/displayname')) return jsonResponse({})
-        if (url.startsWith('https://kinbot.example.com/api/uploads/')) {
+        if (url.startsWith('https://hivekeep.example.com/api/uploads/')) {
           return new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Type': 'image/png' } })
         }
         if (url.includes('/_matrix/media/v3/upload')) {
@@ -385,9 +385,9 @@ describe('MatrixAdapter', () => {
         'ch1',
         { accessTokenVaultKey: 'valid-token-key', homeserverUrl: 'https://matrix.example.com' },
         {
-          kinSlug: 'kube-master',
-          kinName: 'Kube Master',
-          avatarUrl: 'https://kinbot.example.com/api/uploads/kins/abc/avatar.png',
+          agentSlug: 'kube-master',
+          agentName: 'Kube Master',
+          avatarUrl: 'https://hivekeep.example.com/api/uploads/agents/abc/avatar.png',
         },
       )
 
@@ -411,7 +411,7 @@ describe('MatrixAdapter', () => {
       await adapter.onIdentityChange!(
         'ch1',
         { accessTokenVaultKey: 'valid-token-key', homeserverUrl: 'https://matrix.example.com' },
-        { kinSlug: 'kube-master', kinName: 'Kube Master', avatarUrl: 'https://broken/avatar.png' },
+        { agentSlug: 'kube-master', agentName: 'Kube Master', avatarUrl: 'https://broken/avatar.png' },
       )
 
       // Display name was still updated, avatar_url was NOT (fetch failed)

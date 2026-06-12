@@ -7,7 +7,7 @@ import { EmptyState } from '@/client/components/common/EmptyState'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
 import { SettingsListSkeleton } from '@/client/components/common/SettingsListSkeleton'
 import { api, getErrorMessage, toastError } from '@/client/lib/api'
-import { useKinList } from '@/client/hooks/useKinList'
+import { useAgentList } from '@/client/hooks/useAgentList'
 import { FileStorageCard, type StoredFileData } from '@/client/components/file-storage/FileStorageCard'
 import { FileStorageFormDialog } from '@/client/components/file-storage/FileStorageFormDialog'
 
@@ -16,7 +16,7 @@ export function FileStorageSettings() {
   const [files, setFiles] = useState<StoredFileData[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
-  const { kins, kinNames, kinAvatars } = useKinList()
+  const { agents, agentNames, agentAvatars } = useAgentList()
   const [modalOpen, setModalOpen] = useState(false)
   const [editingFile, setEditingFile] = useState<StoredFileData | null>(null)
 
@@ -113,8 +113,8 @@ export function FileStorageSettings() {
         <FileStorageCard
           key={file.id}
           file={file}
-          kinName={file.createdByKinId ? kinNames.get(file.createdByKinId) : undefined}
-          kinAvatarUrl={file.createdByKinId ? kinAvatars.get(file.createdByKinId) : undefined}
+          agentName={file.createdByAgentId ? agentNames.get(file.createdByAgentId) : undefined}
+          agentAvatarUrl={file.createdByAgentId ? agentAvatars.get(file.createdByAgentId) : undefined}
           onEdit={() => openEdit(file)}
           onDelete={() => handleDeleteFile(file.id)}
         />
@@ -130,7 +130,7 @@ export function FileStorageSettings() {
         onOpenChange={setModalOpen}
         onSaved={handleSaved}
         file={editingFile}
-        kins={kins}
+        agents={agents}
       />
 
     </div>

@@ -9,8 +9,8 @@ import { MENTION_REGEX } from '@/shared/constants'
  */
 export const HighlightText = memo(function HighlightText({ text }: { text: string }) {
   const query = useSearchHighlight()
-  const { userHandles, kinHandles } = useMentionLookup()
-  const hasMentionables = userHandles.size > 0 || kinHandles.size > 0
+  const { userHandles, agentHandles } = useMentionLookup()
+  const hasMentionables = userHandles.size > 0 || agentHandles.size > 0
 
   const rendered = useMemo(() => {
     if (!hasMentionables) {
@@ -33,16 +33,16 @@ export const HighlightText = memo(function HighlightText({ text }: { text: strin
         const handle = segment
         const lower = handle.toLowerCase()
         const isUser = userHandles.has(lower)
-        const isKin = !isUser && kinHandles.has(lower)
+        const isAgent = !isUser && agentHandles.has(lower)
 
-        if (isUser || isKin) {
+        if (isUser || isAgent) {
           elements.push(
             <span
               key={`mention-${mentionIndex++}`}
               className={
                 isUser
                   ? 'mention-pill mention-user'
-                  : 'mention-pill mention-kin'
+                  : 'mention-pill mention-agent'
               }
             >
               @{handle}
@@ -59,7 +59,7 @@ export const HighlightText = memo(function HighlightText({ text }: { text: strin
     }
 
     return elements
-  }, [text, query, userHandles, kinHandles, hasMentionables])
+  }, [text, query, userHandles, agentHandles, hasMentionables])
 
   return <>{rendered}</>
 })

@@ -18,7 +18,7 @@ test.describe.serial('Command palette', () => {
     await page.goto('/')
     await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible({ timeout: 10_000 })
     await loginAs(page)
-    await expect(page.getByText('Kins', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Agents', { exact: true })).toBeVisible({ timeout: 10_000 })
   })
 
   test('should open command palette with Ctrl+K', async ({ page }) => {
@@ -38,10 +38,10 @@ test.describe.serial('Command palette', () => {
     await expect(page.getByPlaceholder(CMD_PLACEHOLDER)).not.toBeVisible({ timeout: 3_000 })
   })
 
-  test('should display Actions section with Create new Kin', async ({ page }) => {
+  test('should display Actions section with Create new Agent', async ({ page }) => {
     const dialog = await openCommandPalette(page)
 
-    await expect(dialog.getByText('Create new Kin')).toBeVisible({ timeout: 5_000 })
+    await expect(dialog.getByText('Create new Agent')).toBeVisible({ timeout: 5_000 })
   })
 
   test('should display toggle theme action', async ({ page }) => {
@@ -64,7 +64,7 @@ test.describe.serial('Command palette', () => {
 
     await expect(dialog.getByText(/vault/i).first()).toBeVisible({ timeout: 3_000 })
     // Unrelated items should be filtered
-    await expect(dialog.getByText('Create new Kin')).not.toBeVisible()
+    await expect(dialog.getByText('Create new Agent')).not.toBeVisible()
   })
 
   test('should show empty state for non-matching search', async ({ page }) => {
@@ -84,12 +84,12 @@ test.describe.serial('Command palette', () => {
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 })
   })
 
-  test('should open create kin dialog when clicking Create new Kin', async ({ page }) => {
+  test('should open create agent dialog when clicking Create new Agent', async ({ page }) => {
     const dialog = await openCommandPalette(page)
 
-    await dialog.getByText('Create new Kin').click()
+    await dialog.getByText('Create new Agent').click()
 
-    await expect(page.getByRole('heading', { name: 'Describe your Kin' })).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByRole('heading', { name: 'Describe your Agent' })).toBeVisible({ timeout: 5_000 })
     await page.keyboard.press('Escape')
   })
 

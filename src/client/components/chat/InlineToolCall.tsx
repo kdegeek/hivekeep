@@ -32,7 +32,7 @@ interface InlineToolCallProps {
   toolCall: ToolCallViewItem
 }
 
-/** Compact collapsible inline tool call shown within the Kin's message flow. */
+/** Compact collapsible inline tool call shown within the Agent's message flow. */
 export const InlineToolCall = memo(function InlineToolCall({ toolCall }: InlineToolCallProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(getToolCallsDefaultOpen)
@@ -41,7 +41,7 @@ export const InlineToolCall = memo(function InlineToolCall({ toolCall }: InlineT
   const statusClass = STATUS_CLASSES[toolCall.status]
   const isError = toolCall.status === 'error'
   const CustomRenderer = getRenderer(toolCall.name)
-  // Custom tools (custom_<slug>) carry user/Kin-authored localized names — prefer
+  // Custom tools (custom_<slug>) carry user/Agent-authored localized names — prefer
   // those over the static i18n key so the chat shows a human name, not the slug.
   // The reactive store re-renders this component when the cache hydrates/refreshes.
   const { name: customName } = useCustomToolMeta(toolCall.name)

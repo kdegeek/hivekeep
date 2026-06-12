@@ -38,11 +38,11 @@ export function NotificationItem({ notification, onMarkAsRead, onDelete, onClick
       }`}
     >
       <div className="relative mt-0.5 shrink-0">
-        {notification.kinAvatarUrl ? (
+        {notification.agentAvatarUrl ? (
           <Avatar className="size-7">
-            <AvatarImage src={notification.kinAvatarUrl} alt={notification.kinName ?? ''} />
+            <AvatarImage src={notification.agentAvatarUrl} alt={notification.agentName ?? ''} />
             <AvatarFallback className="text-[10px]">
-              {notification.kinName?.slice(0, 2).toUpperCase() ?? 'K'}
+              {notification.agentName?.slice(0, 2).toUpperCase() ?? 'K'}
             </AvatarFallback>
           </Avatar>
         ) : (
@@ -69,9 +69,9 @@ export function NotificationItem({ notification, onMarkAsRead, onDelete, onClick
             {notification.body}
           </p>
         )}
-        {notification.kinName && (
+        {notification.agentName && (
           <p className="mt-0.5 text-[10px] text-muted-foreground/70">
-            {notification.kinName}
+            {notification.agentName}
           </p>
         )}
       </div>

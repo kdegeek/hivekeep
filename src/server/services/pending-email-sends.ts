@@ -3,13 +3,13 @@
  *
  * When an email account is in `send_mode='approval'`, the `send_email` tool
  * queues the message here instead of sending it. The user approves → we run the
- * real `sendMessage`; rejects → it's dropped. Mirrors the Kin-created cron
+ * real `sendMessage`; rejects → it's dropped. Mirrors the Agent-created cron
  * approval pattern (pending row + notification + SSE + approve/reject endpoints).
  */
 import { v4 as uuid } from 'uuid'
 import { eq } from 'drizzle-orm'
 import { db } from '@/server/db/index'
-import { pendingEmailSends, kins } from '@/server/db/schema'
+import { pendingEmailSends, agents } from '@/server/db/schema'
 import { createLogger } from '@/server/logger'
 import { sseManager } from '@/server/sse/index'
 import { resolveEmailProvider, listEmailAccounts } from '@/server/services/email-accounts'
@@ -31,7 +31,7 @@ function summarize(params: SendEmailParams): string {
 /** Queue an email for approval. Returns the pending id. */
 export async function createPendingSend(input: {
   accountId: string
-  kinId: string
+  agentId: string
   taskId?: string
   params: SendEmailParams
 }): Promise<string> {
@@ -40,7 +40,7 @@ export async function createPendingSend(input: {
   await db.insert(pendingEmailSends).values({
     id,
     accountId: input.accountId,
-    kinId: input.kinId,
+    agentId: input.agentId,
     taskId: input.taskId ?? null,
     payload: JSON.stringify(input.params),
     summary,
@@ -55,24 +55,24 @@ export async function createPendingSend(input: {
     type: 'email:pending-send-approval',
     title: 'Email waiting for approval',
     body: summary,
-    kinId: input.kinId,
+    agentId: input.agentId,
     relatedId: id,
     relatedType: 'email',
   }).catch(() => {})
 
-  sseManager.broadcast({ type: 'email:pending-created', kinId: input.kinId, data: { pendingId: id } })
-  log.info({ id, kinId: input.kinId, accountId: input.accountId }, 'Email queued for approval')
+  sseManager.broadcast({ type: 'email:pending-created', agentId: input.agentId, data: { pendingId: id } })
+  log.info({ id, agentId: input.agentId, accountId: input.accountId }, 'Email queued for approval')
   return id
 }
 
-async function toPending(row: Row, emailByAccount: Map<string, string>, nameByKin: Map<string, string>): Promise<PendingEmailSend> {
+async function toPending(row: Row, emailByAccount: Map<string, string>, nameByAgent: Map<string, string>): Promise<PendingEmailSend> {
   const params = JSON.parse(row.payload) as SendEmailParams
   return {
     id: row.id,
     accountId: row.accountId,
     accountEmail: emailByAccount.get(row.accountId) ?? '',
-    kinId: row.kinId,
-    kinName: nameByKin.get(row.kinId) ?? '',
+    agentId: row.agentId,
+    agentName: nameByAgent.get(row.agentId) ?? '',
     to: params.to.map(addrToString),
     cc: params.cc?.map(addrToString),
     subject: params.subject,
@@ -93,8 +93,8 @@ export async function listPendingSends(opts: { status?: string } = {}): Promise<
 
   const accounts = await listEmailAccounts()
   const emailByAccount = new Map(accounts.map((a) => [a.id, a.emailAddress]))
-  const nameByKin = new Map(db.select({ id: kins.id, name: kins.name }).from(kins).all().map((k) => [k.id, k.name]))
-  return Promise.all(filtered.map((r) => toPending(r, emailByAccount, nameByKin)))
+  const nameByAgent = new Map(db.select({ id: agents.id, name: agents.name }).from(agents).all().map((k) => [k.id, k.name]))
+  return Promise.all(filtered.map((r) => toPending(r, emailByAccount, nameByAgent)))
 }
 
 /** Approve a pending send → actually send the email. */
@@ -105,16 +105,16 @@ export async function approvePendingSend(id: string): Promise<{ ok: boolean; err
 
   const params = JSON.parse(row.payload) as SendEmailParams
   try {
-    // Re-resolve with the requesting Kin's id (it passed the allow-list at
+    // Re-resolve with the requesting Agent's id (it passed the allow-list at
     // request time), then send for real.
-    const { provider, config } = await resolveEmailProvider({ slug: row.accountId, kinId: row.kinId })
+    const { provider, config } = await resolveEmailProvider({ slug: row.accountId, agentId: row.agentId })
     await provider.sendMessage(params, config)
     await db
       .update(pendingEmailSends)
       .set({ status: 'sent', resolvedAt: new Date() })
       .where(eq(pendingEmailSends.id, id))
-    sseManager.broadcast({ type: 'email:pending-resolved', kinId: row.kinId, data: { pendingId: id, status: 'sent' } })
-    log.info({ id, kinId: row.kinId }, 'Approved email sent')
+    sseManager.broadcast({ type: 'email:pending-resolved', agentId: row.agentId, data: { pendingId: id, status: 'sent' } })
+    log.info({ id, agentId: row.agentId }, 'Approved email sent')
     return { ok: true }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -122,7 +122,7 @@ export async function approvePendingSend(id: string): Promise<{ ok: boolean; err
       .update(pendingEmailSends)
       .set({ status: 'failed', error: message, resolvedAt: new Date() })
       .where(eq(pendingEmailSends.id, id))
-    sseManager.broadcast({ type: 'email:pending-resolved', kinId: row.kinId, data: { pendingId: id, status: 'failed' } })
+    sseManager.broadcast({ type: 'email:pending-resolved', agentId: row.agentId, data: { pendingId: id, status: 'failed' } })
     log.warn({ id, error: message }, 'Approved email send failed')
     return { ok: false, error: message }
   }
@@ -137,7 +137,7 @@ export async function rejectPendingSend(id: string): Promise<{ ok: boolean; erro
     .update(pendingEmailSends)
     .set({ status: 'rejected', resolvedAt: new Date() })
     .where(eq(pendingEmailSends.id, id))
-  sseManager.broadcast({ type: 'email:pending-resolved', kinId: row.kinId, data: { pendingId: id, status: 'rejected' } })
+  sseManager.broadcast({ type: 'email:pending-resolved', agentId: row.agentId, data: { pendingId: id, status: 'rejected' } })
   log.info({ id }, 'Email send rejected')
   return { ok: true }
 }

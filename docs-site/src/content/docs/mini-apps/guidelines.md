@@ -8,9 +8,9 @@ description: Best practices for building high-quality mini-apps.
 Mini-apps must work in both themes. The design system CSS handles this automatically when you use CSS variables and components:
 
 - **Use CSS variables** (`var(--color-background)`, `var(--color-foreground)`, etc.) instead of hardcoded colors
-- **Use `@kinbot/components`** which auto-adapt to the current theme
+- **Use `@hivekeep/components`** which auto-adapt to the current theme
 - **Never hardcode** `#ffffff` or `#000000` for backgrounds/text
-- **Test both modes** by toggling the theme in KinBot settings
+- **Test both modes** by toggling the theme in Hivekeep settings
 
 ```css
 /* ✅ Good */
@@ -27,12 +27,12 @@ Mini-apps typically run in a side panel (320-600px wide). Design accordingly:
 - **Mobile-first layout** — single column by default, expand with breakpoints
 - **Use responsive utilities** — `md:grid-cols-2` for wider views
 - **Use `useBreakpoint()`** or `useMediaQuery()` for JS-level responsive logic
-- **Support full-page mode** — use `isFullPage` from `useKinBot()` to adjust layout
+- **Support full-page mode** — use `isFullPage` from `useHivekeep()` to adjust layout
 - **Avoid horizontal scrolling** — keep content within the panel width
 
 ```jsx
 function App() {
-  const { isFullPage } = useKinBot();
+  const { isFullPage } = useHivekeep();
   const bp = useBreakpoint();
 
   return (
@@ -46,7 +46,7 @@ function App() {
 
 ## Use Existing Components
 
-Before building custom UI, check if `@kinbot/components` has what you need. The library includes 50+ components covering most common patterns:
+Before building custom UI, check if `@hivekeep/components` has what you need. The library includes 50+ components covering most common patterns:
 
 - **DataGrid** instead of building custom tables with sorting/pagination
 - **Form** compound component instead of manual form state management
@@ -72,7 +72,7 @@ Look at existing mini-apps and templates for patterns:
 
 ## React Patterns
 
-- **Always call `useKinBot()` first** and wait for `ready`
+- **Always call `useHivekeep()` first** and wait for `ready`
 - **Use `useStorage`** for persistent state, `useState` for ephemeral UI state
 - **Use `useAsync`** for mutations (POST, DELETE) to get loading/error states
 - **Use `useApi`** for GET requests that auto-fetch on mount

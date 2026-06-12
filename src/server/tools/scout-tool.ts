@@ -2,11 +2,13 @@ import { tool } from '@/server/tools/tool-helper'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { db } from '@/server/db/index'
-import { tickets, kins } from '@/server/db/schema'
+import { tickets, agents } from '@/server/db/schema'
 import { spawnTask, suspendTaskForChild } from '@/server/services/tasks'
-import { resolveScoutModel } from '@/server/llm/core/resolve-scout'
+import { resolveScoutModel, resolveScoutThinking } from '@/server/llm/core/resolve-scout'
 import { createLogger } from '@/server/logger'
 import type { ToolRegistration } from '@/server/tools/types'
+import type { AgentThinkingConfig, AgentThinkingEffort } from '@/shared/types'
+import { THINKING_EFFORTS } from '@/shared/constants'
 
 const log = createLogger('tools:scout')
 
@@ -16,19 +18,19 @@ const log = createLogger('tools:scout')
  * burning Opus steps on it.
  *
  * Behaviour: spawn an `await` sub-task on the resolved scout model
- * (resolveScoutModel: per-spawn override → Kin scout → project scout → global
- * scout default → the Kin's own model) with the read-only 'scout' built-in
+ * (resolveScoutModel: per-spawn override → project scout → Agent scout → global
+ * scout default → the Agent's own model) with the read-only 'scout' built-in
  * toolbox (grep / read_file / list_directory / web_search / browse_url /
  * extract_links — NO writes, NO scout/spawn tools, so a scout is always a
  * LEAF), then BLOCK until the scout returns its digest, which becomes the
  * scout tool's result.
  *
  * Two parent shapes, both handled:
- *   - MAIN Kin (ctx.taskId undefined): the child is a normal `await` spawn on
- *     the main Kin. When it resolves, the existing await → task_result →
+ *   - MAIN Agent (ctx.taskId undefined): the child is a normal `await` spawn on
+ *     the main Agent. When it resolves, the existing await → task_result →
  *     processNextMessage re-entry delivers the digest. The tool returns a
  *     placeholder immediately and the main turn ends after this step.
- *   - SUB-Kin task (ctx.taskId set): the child is spawned with parentTaskId =
+ *   - SUB-Agent task (ctx.taskId set): the child is spawned with parentTaskId =
  *     the calling task, then the calling task SUSPENDS into 'awaiting_subtask'
  *     (suspendTaskForChild). The runner ends the run WITHOUT resolving; on the
  *     child's completion resolveTask → resumeTaskFromChildResult re-enters the
@@ -38,7 +40,7 @@ const log = createLogger('tools:scout')
  * `note` in the returned payload (mirrors request_input).
  */
 export const scoutTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: (ctx) =>
     tool({
       description:
@@ -74,23 +76,27 @@ export const scoutTool: ToolRegistration = {
           .string()
           .optional()
           .describe('Provider slug or UUID for the overridden scout model. Required whenever `model` is set.'),
+        thinking_effort: z
+          .enum(['off', ...THINKING_EFFORTS] as [string, ...string[]])
+          .optional()
+          .describe('Reasoning effort for this scout only. "off" disables thinking. Omit to inherit the project default, then the calling Agent\'s config. Scouts are meant to be fast and cheap — prefer low efforts.'),
       }),
-      execute: async ({ task_description, title, hints, model, provider_id }) => {
+      execute: async ({ task_description, title, hints, model, provider_id, thinking_effort }) => {
         if (model && !provider_id) {
           return {
             error:
-              'When overriding the scout model you must pass provider_id too — the same model name can be served by several providers, and kinbot cannot guess which one you mean.',
+              'When overriding the scout model you must pass provider_id too — the same model name can be served by several providers, and hivekeep cannot guess which one you mean.',
           }
         }
 
         // Resolve the project context (for the project tier of the scout chain).
         // Priority: the calling task's ticket project (ticket tasks), then the
-        // Kin's persistent active project (main sessions and non-ticket tasks).
+        // Agent's persistent active project (main sessions and non-ticket tasks).
         //
         // Without the active-project fallback the project scout tier was only
         // ever consulted for ticket-bound tasks: a scout dispatched from a main
-        // session (or a plain spawn) on a Kin with an active project silently
-        // skipped the project's scout_model and fell through to the Kin's own
+        // session (or a plain spawn) on an Agent with an active project silently
+        // skipped the project's scout_model and fell through to the Agent's own
         // main model (e.g. Opus instead of the project's configured Haiku).
         let projectId: string | null = null
         if (ctx.ticketId) {
@@ -102,23 +108,39 @@ export const scoutTool: ToolRegistration = {
           projectId = ticketRow?.projectId ?? null
         }
         if (!projectId) {
-          const kinRow = await db
-            .select({ activeProjectId: kins.activeProjectId })
-            .from(kins)
-            .where(eq(kins.id, ctx.kinId))
+          const agentRow = await db
+            .select({ activeProjectId: agents.activeProjectId })
+            .from(agents)
+            .where(eq(agents.id, ctx.agentId))
             .get()
-          projectId = kinRow?.activeProjectId ?? null
+          projectId = agentRow?.activeProjectId ?? null
         }
 
         // Resolve the cheap scout model via the fallback chain.
         const scout = await resolveScoutModel({
-          kinId: ctx.kinId,
+          agentId: ctx.agentId,
           projectId,
           override: model ? { modelId: model, providerId: provider_id ?? null } : null,
         })
 
+        // Reasoning for the scout — same priority principle as the model:
+        // per-call override → project scout thinking → Agent scout thinking →
+        // global scout default → (at execution) the calling Agent's own general
+        // thinking config. Frozen on the task row when a tier hits; left null
+        // otherwise so the execution-time Agent fallback applies.
+        const thinkingOverride: AgentThinkingConfig | null = thinking_effort === 'off'
+          ? { enabled: false }
+          : thinking_effort
+            ? { enabled: true, effort: thinking_effort as AgentThinkingEffort }
+            : null
+        const thinkingConfig = await resolveScoutThinking({
+          agentId: ctx.agentId,
+          projectId,
+          override: thinkingOverride,
+        })
+
         // Resolve the read-only 'scout' built-in toolbox. It excludes
-        // scout/spawn_self/spawn_kin, so a scout sub-task is always a LEAF.
+        // scout/spawn_self/spawn_agent, so a scout sub-task is always a LEAF.
         const { getToolboxByName } = await import('@/server/services/toolboxes')
         const scoutBox = getToolboxByName('scout')
         if (!scoutBox) {
@@ -138,22 +160,22 @@ export const scoutTool: ToolRegistration = {
 
         log.debug(
           {
-            kinId: ctx.kinId,
+            agentId: ctx.agentId,
             taskId: ctx.taskId,
             scoutModel: scout.modelId,
             scoutProviderId: scout.providerId,
-            isSubKin: !!ctx.taskId,
+            isSubAgent: !!ctx.taskId,
           },
           'scout dispatch requested',
         )
 
         // Spawn the scout as an AWAIT child on the cheap model with the
         // read-only toolbox. parentTaskId is the calling task (when we're in a
-        // sub-Kin) so the resume linkage in resolveTask can find this parent.
+        // sub-Agent) so the resume linkage in resolveTask can find this parent.
         let spawned: { taskId: string; queued: boolean }
         try {
           spawned = await spawnTask({
-            parentKinId: ctx.kinId,
+            parentAgentId: ctx.agentId,
             title: scoutTitle,
             description: brief,
             mode: 'await',
@@ -161,6 +183,7 @@ export const scoutTool: ToolRegistration = {
             model: scout.modelId,
             providerId: scout.providerId ?? undefined,
             toolboxIds: [scoutBox.id],
+            thinkingConfig: thinkingConfig ?? undefined,
             channelOriginId: ctx.channelOriginId,
             parentTaskId: ctx.taskId ?? undefined,
             depth: ctx.taskDepth ? ctx.taskDepth + 1 : undefined,
@@ -171,7 +194,7 @@ export const scoutTool: ToolRegistration = {
           return { error: err instanceof Error ? err.message : 'Failed to dispatch scout' }
         }
 
-        // MAIN-Kin caller: no task to suspend. The existing await re-entry
+        // MAIN-Agent caller: no task to suspend. The existing await re-entry
         // (task_result → processNextMessage) delivers the digest. Just tell the
         // model to stop emitting on this turn.
         if (!ctx.taskId) {
@@ -184,7 +207,7 @@ export const scoutTool: ToolRegistration = {
           }
         }
 
-        // SUB-Kin caller: suspend the calling task on the scout child. The
+        // SUB-Agent caller: suspend the calling task on the scout child. The
         // runner ends this run without resolving; resolveTask resumes us when
         // the child finishes.
         const suspended = await suspendTaskForChild(ctx.taskId, spawned.taskId)
@@ -201,7 +224,7 @@ export const scoutTool: ToolRegistration = {
           scout_model: scout.modelId,
           paused: true as const,
           note:
-            'Your task is now PAUSED waiting for the scout\'s digest. Do NOT emit any further tool calls on this turn — the runner stops the loop after this step and resumes your sub-Kin once the scout reports back in your message history.',
+            'Your task is now PAUSED waiting for the scout\'s digest. Do NOT emit any further tool calls on this turn — the runner stops the loop after this step and resumes your sub-Agent once the scout reports back in your message history.',
         }
       },
     }),

@@ -23,7 +23,7 @@ interface ChannelHealth {
 }
 
 interface SystemHealthBarProps {
-  onOpenSettings?: (section?: string, filters?: { kinId?: string }) => void
+  onOpenSettings?: (section?: string, filters?: { agentId?: string }) => void
 }
 
 export const SystemHealthBar = memo(function SystemHealthBar({ onOpenSettings }: SystemHealthBarProps) {

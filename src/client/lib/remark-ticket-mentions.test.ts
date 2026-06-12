@@ -57,16 +57,16 @@ describe('remarkTicketMentions', () => {
   })
 
   it('replaces a qualified slug#N reference', () => {
-    const tree = parse('Tracked in kinbot#42 by the team.')
+    const tree = parse('Tracked in hivekeep#42 by the team.')
     const mentions = collectMentions(tree)
     expect(mentions).toHaveLength(1)
-    expect(rawOf(mentions[0]!)).toBe('kinbot#42')
+    expect(rawOf(mentions[0]!)).toBe('hivekeep#42')
   })
 
   it('finds multiple mentions in one paragraph', () => {
-    const tree = parse('Blocked by #1, depends on kinbot#2 and soupcon-de-magie#3.')
+    const tree = parse('Blocked by #1, depends on hivekeep#2 and soupcon-de-magie#3.')
     const mentions = collectMentions(tree)
-    expect(mentions.map(rawOf)).toEqual(['#1', 'kinbot#2', 'soupcon-de-magie#3'])
+    expect(mentions.map(rawOf)).toEqual(['#1', 'hivekeep#2', 'soupcon-de-magie#3'])
   })
 
   it('leaves the surrounding text intact around mentions', () => {
@@ -134,9 +134,9 @@ describe('remarkTicketMentions', () => {
   })
 
   it('captures the slug verbatim including hyphens', () => {
-    const tree = parse('See kinbot-master#7.')
+    const tree = parse('See hivekeep-master#7.')
     const mentions = collectMentions(tree)
     expect(mentions).toHaveLength(1)
-    expect(rawOf(mentions[0]!)).toBe('kinbot-master#7')
+    expect(rawOf(mentions[0]!)).toBe('hivekeep-master#7')
   })
 })

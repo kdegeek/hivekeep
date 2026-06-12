@@ -3,32 +3,49 @@ import { Brain, Sparkles } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/client/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/client/components/ui/tooltip'
 import { cn } from '@/client/lib/utils'
-import type { KinThinkingEffort } from '@/shared/types'
-
-const LEVELS: Array<{ value: KinThinkingEffort | null; key: string }> = [
-  { value: null, key: 'off' },
-  { value: 'low', key: 'low' },
-  { value: 'medium', key: 'medium' },
-  { value: 'high', key: 'high' },
-  { value: 'max', key: 'max' },
-]
+import { clampEffort, type ModelReasoningInfo } from '@/client/lib/model-efforts'
+import { DEFAULT_THINKING_EFFORTS } from '@/shared/constants'
+import type { AgentThinkingEffort } from '@/shared/types'
 
 interface Props {
   enabled: boolean
-  effort: KinThinkingEffort | null
-  onChange: (next: { enabled: boolean; effort: KinThinkingEffort | null }) => void
+  effort: AgentThinkingEffort | null
+  onChange: (next: { enabled: boolean; effort: AgentThinkingEffort | null }) => void
+  /**
+   * Reasoning support of the current model (see `modelReasoningInfo`).
+   * Omitted/unknown → the default ladder. `levels` → only the model's efforts.
+   * `toggle` → on/off only. `unsupported` → off only + a hint.
+   */
+  reasoning?: ModelReasoningInfo
   /** Compact icon-only trigger (for chat header). Otherwise renders a labeled button. */
   compact?: boolean
   className?: string
 }
 
-export function ThinkingEffortPicker({ enabled, effort, onChange, compact = false, className }: Props) {
+export function ThinkingEffortPicker({ enabled, effort, onChange, reasoning, compact = false, className }: Props) {
   const { t } = useTranslation()
-  const active = enabled && !!effort
-  const currentLabel = active ? t(`chat.thinkingPicker.effort.${effort}`) : t('chat.thinkingPicker.effort.off')
+  const kind = reasoning?.kind ?? 'unknown'
+  const efforts = kind === 'unknown' ? DEFAULT_THINKING_EFFORTS : reasoning?.efforts ?? []
 
-  const handleSelect = (value: KinThinkingEffort | null) => {
+  // Honest display: show what the provider will actually run (the stored
+  // effort clamped to the model), not a level the model can't reach.
+  const active = enabled && kind !== 'unsupported' && (!!effort || kind === 'toggle')
+  const displayEffort = active && effort && reasoning ? clampEffort(effort, reasoning) : effort
+  const currentLabel = !active
+    ? t('chat.thinkingPicker.effort.off')
+    : kind === 'toggle'
+      ? t('chat.thinkingPicker.effort.on')
+      : t(`chat.thinkingPicker.effort.${displayEffort ?? 'medium'}`)
+
+  const levels: Array<{ value: AgentThinkingEffort | 'on' | null; key: string }> = [
+    { value: null, key: 'off' },
+    ...(kind === 'toggle' ? ([{ value: 'on', key: 'on' }] as const) : []),
+    ...efforts.map((e) => ({ value: e, key: e })),
+  ]
+
+  const handleSelect = (value: AgentThinkingEffort | 'on' | null) => {
     if (value === null) onChange({ enabled: false, effort: null })
+    else if (value === 'on') onChange({ enabled: true, effort: null })
     else onChange({ enabled: true, effort: value })
   }
 
@@ -61,8 +78,12 @@ export function ThinkingEffortPicker({ enabled, effort, onChange, compact = fals
           <p className="text-[11px] font-medium text-muted-foreground">{t('chat.thinkingPicker.title')}</p>
         </div>
         <div className="flex flex-col gap-0.5">
-          {LEVELS.map((level) => {
-            const isSelected = level.value === null ? !active : effort === level.value
+          {levels.map((level) => {
+            const isSelected = level.value === null
+              ? !active
+              : level.value === 'on'
+                ? active
+                : displayEffort === level.value && active
             return (
               <button
                 key={level.key}
@@ -81,6 +102,12 @@ export function ThinkingEffortPicker({ enabled, effort, onChange, compact = fals
             )
           })}
         </div>
+        {kind === 'unsupported' && (
+          <p className="mt-2 px-1 text-[11px] text-muted-foreground">{t('chat.thinkingPicker.unsupported')}</p>
+        )}
+        {reasoning?.note && (
+          <p className="mt-2 px-1 text-[11px] text-muted-foreground">{reasoning.note}</p>
+        )}
       </PopoverContent>
     </Popover>
   )

@@ -13,7 +13,7 @@ const pluginCardRoutes = new Hono<{ Variables: AppVariables }>()
 // Dispatches a user click on an action button to the owning plugin via its
 // `onCardAction` export. Auth is the standard session check enforced by the
 // `/api/*` middleware: any authenticated user can act on any card in this
-// instance, mirroring the rest of the per-Kin surface area.
+// instance, mirroring the rest of the per-Agent surface area.
 pluginCardRoutes.post('/:cardInstanceId/action', async (c) => {
   const cardInstanceId = c.req.param('cardInstanceId')
   if (!cardInstanceId) {
@@ -51,7 +51,7 @@ pluginCardRoutes.post('/:cardInstanceId/action', async (c) => {
       cardInstanceId,
       actionId,
       input,
-      kinId: owner.kinId,
+      agentId: owner.agentId,
     })
     if (!result?.ok) {
       const errMsg = (result && 'error' in result && typeof result.error === 'string') ? result.error : 'Action failed'

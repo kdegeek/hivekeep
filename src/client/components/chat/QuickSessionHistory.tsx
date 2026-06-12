@@ -9,9 +9,9 @@ import { ArrowLeft, History, MessageSquare, Loader2 } from 'lucide-react'
 import type { QuickSessionSummary } from '@/shared/types'
 
 interface QuickSessionHistoryProps {
-  kinId: string
-  kinName: string
-  kinAvatarUrl: string | null
+  agentId: string
+  agentName: string
+  agentAvatarUrl: string | null
   onBack: () => void
 }
 
@@ -60,7 +60,7 @@ function SessionCard({ session, onClick }: { session: QuickSessionSummary; onCli
   )
 }
 
-export function QuickSessionHistory({ kinId, kinName, kinAvatarUrl, onBack }: QuickSessionHistoryProps) {
+export function QuickSessionHistory({ agentId, agentName, agentAvatarUrl, onBack }: QuickSessionHistoryProps) {
   const { t } = useTranslation()
   const { user } = useAuth()
   const {
@@ -75,7 +75,7 @@ export function QuickSessionHistory({ kinId, kinName, kinAvatarUrl, onBack }: Qu
     loadMore,
     viewSession,
     clearSelection,
-  } = useQuickSessionHistory(kinId)
+  } = useQuickSessionHistory(agentId)
 
   useEffect(() => {
     fetchHistory()
@@ -122,8 +122,8 @@ export function QuickSessionHistory({ kinId, kinName, kinAvatarUrl, onBack }: Qu
                       content={msg.content}
                       sourceType={msg.sourceType}
                       files={msg.files}
-                      avatarUrl={isFromUser ? user?.avatarUrl : kinAvatarUrl}
-                      senderName={isFromUser ? (user?.pseudonym ?? user?.firstName) : kinName}
+                      avatarUrl={isFromUser ? user?.avatarUrl : agentAvatarUrl}
+                      senderName={isFromUser ? (user?.pseudonym ?? user?.firstName) : agentName}
                       timestamp={msg.createdAt}
                       tokenUsage={msg.tokenUsage}
                     />

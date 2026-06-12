@@ -41,8 +41,8 @@ interface MemorySearchResult {
   sourceContext: string | null
   importance: number | null
   scope: MemoryScope
-  authorKinId?: string
-  authorKinName?: string | null
+  authorAgentId?: string
+  authorAgentName?: string | null
   score: number
   updatedAt: Date | null
 }
@@ -50,12 +50,12 @@ interface MemorySearchResult {
 // ─── Dedup (lightweight, raw vector distance) ───────────────────────────────
 
 /**
- * Check if a memory content is a near-duplicate of an existing memory for a Kin.
+ * Check if a memory content is a near-duplicate of an existing memory for an Agent.
  * Uses raw cosine distance (no boosts, no HyDE, no multi-query) for speed and accuracy.
  * Returns true if a duplicate is found (distance < threshold).
  */
 export async function isDuplicateMemory(
-  kinId: string,
+  agentId: string,
   content: string,
   distanceThreshold = 0.15, // cosine distance; 0.15 ≈ similarity > 0.85
 ): Promise<boolean> {
@@ -74,14 +74,14 @@ export async function isDuplicateMemory(
 
     if (rows.length === 0) return false
 
-    // Filter to this Kin's memories OR any shared memories (cross-scope dedup)
+    // Filter to this Agent's memories OR any shared memories (cross-scope dedup)
     const ids = rows.map((r) => r.memory_id)
     const placeholders = ids.map(() => '?').join(', ')
     const relevantMemories = sqlite
       .query<{ id: string }, string[]>(
-        `SELECT id FROM memories WHERE id IN (${placeholders}) AND (kin_id = ? OR scope = 'shared')`,
+        `SELECT id FROM memories WHERE id IN (${placeholders}) AND (agent_id = ? OR scope = 'shared')`,
       )
-      .all(...ids, kinId)
+      .all(...ids, agentId)
     const relevantIds = new Set(relevantMemories.map((m) => m.id))
 
     return rows.some((r) => relevantIds.has(r.memory_id) && r.distance < distanceThreshold)
@@ -93,26 +93,26 @@ export async function isDuplicateMemory(
 
 // ─── CRUD ────────────────────────────────────────────────────────────────────
 
-export async function getMemory(memoryId: string, kinId: string) {
+export async function getMemory(memoryId: string, agentId: string) {
   return db
     .select()
     .from(memories)
-    .where(and(eq(memories.id, memoryId), eq(memories.kinId, kinId)))
+    .where(and(eq(memories.id, memoryId), eq(memories.agentId, agentId)))
     .get()
 }
 
 export async function listMemories(
-  kinId: string,
+  agentId: string,
   filters?: { category?: MemoryCategory; subject?: string; scope?: MemoryScope },
 ) {
   const conditions = []
 
   if (filters?.scope === 'shared') {
-    // List all shared memories (from any Kin)
+    // List all shared memories (from any Agent)
     conditions.push(eq(memories.scope, 'shared'))
   } else {
     // Default: list own memories only (private scope)
-    conditions.push(eq(memories.kinId, kinId))
+    conditions.push(eq(memories.agentId, agentId))
     if (filters?.scope === 'private') {
       conditions.push(eq(memories.scope, 'private'))
     }
@@ -129,7 +129,7 @@ export async function listMemories(
     .all()
 }
 
-export async function createMemory(kinId: string, input: CreateMemoryInput) {
+export async function createMemory(agentId: string, input: CreateMemoryInput) {
   const id = uuid()
   const now = new Date()
 
@@ -144,7 +144,7 @@ export async function createMemory(kinId: string, input: CreateMemoryInput) {
 
   await db.insert(memories).values({
     id,
-    kinId,
+    agentId,
     content: input.content,
     embedding: embeddingBuf,
     category: input.category,
@@ -170,21 +170,21 @@ export async function createMemory(kinId: string, input: CreateMemoryInput) {
     }
   }
 
-  log.debug({ kinId, memoryId: id, category: input.category, hasEmbedding: !!embeddingBuf }, 'Memory created')
+  log.debug({ agentId, memoryId: id, category: input.category, hasEmbedding: !!embeddingBuf }, 'Memory created')
 
   const created = db.select().from(memories).where(eq(memories.id, id)).get()!
 
-  sseManager.sendToKin(kinId, {
+  sseManager.sendToAgent(agentId, {
     type: 'memory:created',
-    kinId,
-    data: { memoryId: id, kinId, category: input.category, content: input.content, subject: input.subject ?? null, scope: input.scope ?? 'private' },
+    agentId,
+    data: { memoryId: id, agentId, category: input.category, content: input.content, subject: input.subject ?? null, scope: input.scope ?? 'private' },
   })
 
   return created
 }
 
-export async function updateMemory(memoryId: string, kinId: string, updates: UpdateMemoryInput) {
-  const existing = await getMemory(memoryId, kinId)
+export async function updateMemory(memoryId: string, agentId: string, updates: UpdateMemoryInput) {
+  const existing = await getMemory(memoryId, agentId)
   if (!existing) return null
 
   const setValues: Record<string, unknown> = { updatedAt: new Date() }
@@ -220,21 +220,21 @@ export async function updateMemory(memoryId: string, kinId: string, updates: Upd
   await db
     .update(memories)
     .set(setValues)
-    .where(and(eq(memories.id, memoryId), eq(memories.kinId, kinId)))
+    .where(and(eq(memories.id, memoryId), eq(memories.agentId, agentId)))
 
   const updated = db.select().from(memories).where(eq(memories.id, memoryId)).get()!
 
-  sseManager.sendToKin(kinId, {
+  sseManager.sendToAgent(agentId, {
     type: 'memory:updated',
-    kinId,
-    data: { memoryId, kinId, ...(updates.content !== undefined && { content: updates.content }), ...(updates.category !== undefined && { category: updates.category }), ...(updates.subject !== undefined && { subject: updates.subject }) },
+    agentId,
+    data: { memoryId, agentId, ...(updates.content !== undefined && { content: updates.content }), ...(updates.category !== undefined && { category: updates.category }), ...(updates.subject !== undefined && { subject: updates.subject }) },
   })
 
   return updated
 }
 
-export async function deleteMemory(memoryId: string, kinId: string) {
-  const existing = await getMemory(memoryId, kinId)
+export async function deleteMemory(memoryId: string, agentId: string) {
+  const existing = await getMemory(memoryId, agentId)
   if (!existing) return false
 
   // Remove from sqlite-vec
@@ -244,13 +244,13 @@ export async function deleteMemory(memoryId: string, kinId: string) {
     // sqlite-vec may not be available
   }
 
-  await db.delete(memories).where(and(eq(memories.id, memoryId), eq(memories.kinId, kinId)))
-  log.debug({ memoryId, kinId }, 'Memory deleted')
+  await db.delete(memories).where(and(eq(memories.id, memoryId), eq(memories.agentId, agentId)))
+  log.debug({ memoryId, agentId }, 'Memory deleted')
 
-  sseManager.sendToKin(kinId, {
+  sseManager.sendToAgent(agentId, {
     type: 'memory:deleted',
-    kinId,
-    data: { memoryId, kinId },
+    agentId,
+    data: { memoryId, agentId },
   })
 
   return true
@@ -306,15 +306,15 @@ export function recencyBoost(updatedAt: Date | null): number {
 // ─── Multi-Query Generation ──────────────────────────────────────────────────
 
 /**
- * Get distinct non-null subjects for a given kin, used to ground query expansion.
+ * Get distinct non-null subjects for a given agent, used to ground query expansion.
  */
-async function getDistinctSubjects(kinId: string): Promise<string[]> {
+async function getDistinctSubjects(agentId: string): Promise<string[]> {
   try {
     const rows = sqlite
       .query<{ subject: string }, [string]>(
-        `SELECT DISTINCT subject FROM memories WHERE (kin_id = ? OR scope = 'shared') AND subject IS NOT NULL AND subject != '' ORDER BY subject`,
+        `SELECT DISTINCT subject FROM memories WHERE (agent_id = ? OR scope = 'shared') AND subject IS NOT NULL AND subject != '' ORDER BY subject`,
       )
-      .all(kinId)
+      .all(agentId)
     return rows.map((r) => r.subject)
   } catch {
     return []
@@ -328,7 +328,7 @@ async function getDistinctSubjects(kinId: string): Promise<string[]> {
  * When known subjects are provided, the LLM can generate more targeted
  * entity-specific queries instead of abstract rephrasing.
  */
-async function generateQueryVariations(query: string, knownSubjects?: string[], kinId?: string): Promise<string[]> {
+async function generateQueryVariations(query: string, knownSubjects?: string[], agentId?: string): Promise<string[]> {
   const multiQueryModel = config.memory.multiQueryModel
   if (!multiQueryModel) return [query]
 
@@ -346,7 +346,7 @@ async function generateQueryVariations(query: string, knownSubjects?: string[], 
     const result = await safeGenerateText({
       resolved,
       callSite: 'memory-multi-query',
-      kinId,
+      agentId,
       prompt:
         `Generate 3 alternative search queries for retrieving relevant memories based on this message. ` +
         `Each query should target a DIFFERENT aspect, entity, or sub-topic to maximize recall. ` +
@@ -379,7 +379,7 @@ async function generateQueryVariations(query: string, knownSubjects?: string[], 
  *
  * Returns null if HyDE is disabled or generation fails.
  */
-async function generateHypotheticalMemory(query: string, kinId?: string): Promise<string | null> {
+async function generateHypotheticalMemory(query: string, agentId?: string): Promise<string | null> {
   const hydeModel = config.memory.hydeModel
   if (!hydeModel) return null
 
@@ -393,7 +393,7 @@ async function generateHypotheticalMemory(query: string, kinId?: string): Promis
     const result = await safeGenerateText({
       resolved,
       callSite: 'memory-hyde',
-      kinId,
+      agentId,
       prompt:
         `You are a personal AI companion that stores memories about its user. ` +
         `Given a search query, write a SHORT hypothetical memory entry (1-2 sentences) that would answer it. ` +
@@ -520,13 +520,13 @@ function detectQueryIntentCategories(query: string): Set<string> {
 
 // ─── Hybrid Search (FTS5 + sqlite-vec rank fusion) ───────────────────────────
 
-type ScoreMapEntry = { score: number; content: string; category: string; subject: string | null; sourceContext: string | null; importance: number | null; retrievalCount: number; scope: MemoryScope; kinId: string; updatedAt: Date | null }
+type ScoreMapEntry = { score: number; content: string; category: string; subject: string | null; sourceContext: string | null; importance: number | null; retrievalCount: number; scope: MemoryScope; agentId: string; updatedAt: Date | null }
 
 /**
  * Run hybrid search for a single query and accumulate RRF scores into a shared score map.
  */
 async function hybridSearchSingleQuery(
-  kinId: string,
+  agentId: string,
   query: string,
   candidateLimit: number,
   scoreMap: Map<string, ScoreMapEntry>,
@@ -534,8 +534,8 @@ async function hybridSearchSingleQuery(
   ftsBoost: number,
 ): Promise<void> {
   const [vecResults, ftsResults] = await Promise.all([
-    searchByVector(kinId, query, candidateLimit),
-    searchByFTS(kinId, query, candidateLimit),
+    searchByVector(agentId, query, candidateLimit),
+    searchByFTS(agentId, query, candidateLimit),
   ])
 
   for (let i = 0; i < vecResults.length; i++) {
@@ -545,7 +545,7 @@ async function hybridSearchSingleQuery(
     if (existing) {
       existing.score += rrfScore
     } else {
-      scoreMap.set(r.id, { score: rrfScore, content: r.content, category: r.category, subject: r.subject, sourceContext: r.sourceContext, importance: r.importance, retrievalCount: r.retrievalCount, scope: r.scope, kinId: r.kinId, updatedAt: r.updatedAt })
+      scoreMap.set(r.id, { score: rrfScore, content: r.content, category: r.category, subject: r.subject, sourceContext: r.sourceContext, importance: r.importance, retrievalCount: r.retrievalCount, scope: r.scope, agentId: r.agentId, updatedAt: r.updatedAt })
     }
   }
   for (let i = 0; i < ftsResults.length; i++) {
@@ -556,7 +556,7 @@ async function hybridSearchSingleQuery(
     if (existing) {
       existing.score += rrfScore
     } else {
-      scoreMap.set(r.id, { score: rrfScore, content: r.content, category: r.category, subject: r.subject, sourceContext: r.sourceContext, importance: r.importance, retrievalCount: r.retrievalCount, scope: r.scope, kinId: r.kinId, updatedAt: r.updatedAt })
+      scoreMap.set(r.id, { score: rrfScore, content: r.content, category: r.category, subject: r.subject, sourceContext: r.sourceContext, importance: r.importance, retrievalCount: r.retrievalCount, scope: r.scope, agentId: r.agentId, updatedAt: r.updatedAt })
     }
   }
 }
@@ -567,7 +567,7 @@ async function hybridSearchSingleQuery(
  * Results are merged via reciprocal rank fusion scoring, then weighted by temporal decay.
  */
 export async function searchMemories(
-  kinId: string,
+  agentId: string,
   query: string,
   limit?: number,
 ): Promise<MemorySearchResult[]> {
@@ -582,26 +582,26 @@ export async function searchMemories(
   // Generate query variations (multi-query) and/or hypothetical document (HyDE)
   const [multiQueries, hydeDoc] = await Promise.all([
     config.memory.multiQueryModel
-      ? generateQueryVariations(query, await getDistinctSubjects(kinId), kinId)
+      ? generateQueryVariations(query, await getDistinctSubjects(agentId), agentId)
       : Promise.resolve([query]),
-    generateHypotheticalMemory(query, kinId),
+    generateHypotheticalMemory(query, agentId),
   ])
 
   // Combine: multi-query variations + HyDE hypothetical doc (if generated)
   const queries = hydeDoc ? [...multiQueries, hydeDoc] : multiQueries
 
   if (queries.length > 1) {
-    log.debug({ kinId, queries: queries.length, hasHyDE: !!hydeDoc }, 'Multi-query search')
+    log.debug({ agentId, queries: queries.length, hasHyDE: !!hydeDoc }, 'Multi-query search')
   }
 
   // Run hybrid search for each query variation in parallel
   const candidateLimit = maxResults * 2
   await Promise.all(
-    queries.map((q) => hybridSearchSingleQuery(kinId, q, candidateLimit, scoreMap, K, ftsBoost)),
+    queries.map((q) => hybridSearchSingleQuery(agentId, q, candidateLimit, scoreMap, K, ftsBoost)),
   )
 
   // Detect subjects mentioned in the query for score boosting
-  const knownSubjects = await getDistinctSubjects(kinId)
+  const knownSubjects = await getDistinctSubjects(agentId)
   const queryLower = query.toLowerCase()
   const matchedSubjects = new Set(
     knownSubjects.filter((s) => queryLower.includes(s.toLowerCase())),
@@ -633,35 +633,35 @@ export async function searchMemories(
 
   // Sort by weighted score descending
   const sorted = Array.from(scoreMap.entries())
-    .map(([id, data]) => ({ id, content: data.content, category: data.category, subject: data.subject, sourceContext: data.sourceContext, importance: data.importance, scope: data.scope, authorKinId: data.kinId, score: data.score, updatedAt: data.updatedAt }))
+    .map(([id, data]) => ({ id, content: data.content, category: data.category, subject: data.subject, sourceContext: data.sourceContext, importance: data.importance, scope: data.scope, authorAgentId: data.agentId, score: data.score, updatedAt: data.updatedAt }))
     .sort((a, b) => b.score - a.score)
     .slice(0, fetchLimit)
 
-  // Resolve author Kin names for shared memories from other Kins
-  const sharedFromOthers = sorted.filter((m) => m.scope === 'shared' && m.authorKinId !== kinId)
+  // Resolve author Agent names for shared memories from other Agents
+  const sharedFromOthers = sorted.filter((m) => m.scope === 'shared' && m.authorAgentId !== agentId)
   if (sharedFromOthers.length > 0) {
-    const uniqueKinIds = [...new Set(sharedFromOthers.map((m) => m.authorKinId))]
+    const uniqueAgentIds = [...new Set(sharedFromOthers.map((m) => m.authorAgentId))]
     try {
-      const kinPlaceholders = uniqueKinIds.map(() => '?').join(', ')
-      const kinRows = sqlite
+      const agentPlaceholders = uniqueAgentIds.map(() => '?').join(', ')
+      const agentRows = sqlite
         .query<{ id: string; name: string }, string[]>(
-          `SELECT id, name FROM kins WHERE id IN (${kinPlaceholders})`,
+          `SELECT id, name FROM agents WHERE id IN (${agentPlaceholders})`,
         )
-        .all(...uniqueKinIds)
-      const kinNameMap = new Map(kinRows.map((k) => [k.id, k.name]))
+        .all(...uniqueAgentIds)
+      const agentNameMap = new Map(agentRows.map((k) => [k.id, k.name]))
       for (const m of sorted) {
-        if (m.scope === 'shared' && m.authorKinId !== kinId) {
-          (m as MemorySearchResult).authorKinName = kinNameMap.get(m.authorKinId) ?? null
+        if (m.scope === 'shared' && m.authorAgentId !== agentId) {
+          (m as MemorySearchResult).authorAgentName = agentNameMap.get(m.authorAgentId) ?? null
         }
       }
     } catch {
-      // Kin name resolution failed — continue without names
+      // Agent name resolution failed — continue without names
     }
   }
 
   // Apply re-ranking if enabled: try cross-encoder API first, fall back to LLM
   if (useRerank && sorted.length > 0) {
-    const reranked = await rerankCandidates(query, sorted, maxResults, kinId)
+    const reranked = await rerankCandidates(query, sorted, maxResults, agentId)
     return applyAdaptiveK(reranked)
   }
 
@@ -672,10 +672,10 @@ export async function searchMemories(
  * Semantic search using sqlite-vec KNN.
  */
 async function searchByVector(
-  kinId: string,
+  agentId: string,
   query: string,
   limit: number,
-): Promise<Array<{ id: string; content: string; category: string; subject: string | null; sourceContext: string | null; importance: number | null; retrievalCount: number; distance: number; scope: MemoryScope; kinId: string; updatedAt: Date | null }>> {
+): Promise<Array<{ id: string; content: string; category: string; subject: string | null; sourceContext: string | null; importance: number | null; retrievalCount: number; distance: number; scope: MemoryScope; agentId: string; updatedAt: Date | null }>> {
   try {
     const queryEmbedding = await generateEmbedding(query)
     const queryBuf = Buffer.from(new Float32Array(queryEmbedding).buffer)
@@ -697,17 +697,17 @@ async function searchByVector(
 
     if (matchingIds.length === 0) return []
 
-    // Fetch full memory rows: own memories + shared memories from all Kins
+    // Fetch full memory rows: own memories + shared memories from all Agents
     const placeholders = matchingIds.map(() => '?').join(', ')
     const memRows = sqlite
       .query<
-        { id: string; kin_id: string; content: string; category: string; subject: string | null; source_context: string | null; importance: number | null; retrieval_count: number; scope: string; updated_at: string | null },
+        { id: string; agent_id: string; content: string; category: string; subject: string | null; source_context: string | null; importance: number | null; retrieval_count: number; scope: string; updated_at: string | null },
         string[]
       >(
-        `SELECT id, kin_id, content, category, subject, source_context, importance, retrieval_count, scope, updated_at FROM memories
-         WHERE id IN (${placeholders}) AND (kin_id = ? OR scope = 'shared')`,
+        `SELECT id, agent_id, content, category, subject, source_context, importance, retrieval_count, scope, updated_at FROM memories
+         WHERE id IN (${placeholders}) AND (agent_id = ? OR scope = 'shared')`,
       )
-      .all(...matchingIds, kinId)
+      .all(...matchingIds, agentId)
 
     // Preserve distance ordering
     const memMap = new Map(memRows.map((m) => [m.id, m]))
@@ -715,7 +715,7 @@ async function searchByVector(
       .filter((r) => memMap.has(r.memory_id))
       .map((r) => {
         const m = memMap.get(r.memory_id)!
-        return { id: m.id, kinId: m.kin_id, content: m.content, category: m.category, subject: m.subject, sourceContext: m.source_context, importance: m.importance, retrievalCount: m.retrieval_count, scope: m.scope as MemoryScope, distance: r.distance, updatedAt: m.updated_at ? new Date(m.updated_at) : null }
+        return { id: m.id, agentId: m.agent_id, content: m.content, category: m.category, subject: m.subject, sourceContext: m.source_context, importance: m.importance, retrievalCount: m.retrieval_count, scope: m.scope as MemoryScope, distance: r.distance, updatedAt: m.updated_at ? new Date(m.updated_at) : null }
       })
   } catch {
     // sqlite-vec or embedding provider not available
@@ -727,10 +727,10 @@ async function searchByVector(
  * Full-text search using FTS5.
  */
 function searchByFTS(
-  kinId: string,
+  agentId: string,
   query: string,
   limit: number,
-): Promise<Array<{ id: string; content: string; category: string; subject: string | null; sourceContext: string | null; importance: number | null; retrievalCount: number; rank: number; scope: MemoryScope; kinId: string; updatedAt: Date | null }>> {
+): Promise<Array<{ id: string; content: string; category: string; subject: string | null; sourceContext: string | null; importance: number | null; retrievalCount: number; rank: number; scope: MemoryScope; agentId: string; updatedAt: Date | null }>> {
   try {
     // Escape FTS5 special characters, filter noise, build query with prefix matching
     const terms = query
@@ -748,24 +748,24 @@ function searchByFTS(
     const ftsQueryOr = terms.map((term) => `"${term}"*`).join(' OR ')
 
     const stmt = sqlite.query<
-      { id: string; kin_id: string; content: string; category: string; subject: string | null; source_context: string | null; importance: number | null; retrieval_count: number; scope: string; rank: number; updated_at: string | null },
+      { id: string; agent_id: string; content: string; category: string; subject: string | null; source_context: string | null; importance: number | null; retrieval_count: number; scope: string; rank: number; updated_at: string | null },
       [string, string, number]
     >(
-      `SELECT m.id, m.kin_id, m.content, m.category, m.subject, m.source_context, m.importance, m.retrieval_count, m.scope, fts.rank, m.updated_at
+      `SELECT m.id, m.agent_id, m.content, m.category, m.subject, m.source_context, m.importance, m.retrieval_count, m.scope, fts.rank, m.updated_at
        FROM memories_fts fts
        JOIN memories m ON m.rowid = fts.rowid
-       WHERE memories_fts MATCH ? AND (m.kin_id = ? OR m.scope = 'shared')
+       WHERE memories_fts MATCH ? AND (m.agent_id = ? OR m.scope = 'shared')
        ORDER BY fts.rank
        LIMIT ?`,
     )
 
     // Try AND first (precise), fall back to OR (broad) if no results
-    let rows = stmt.all(ftsQuery, kinId, limit)
+    let rows = stmt.all(ftsQuery, agentId, limit)
     if (rows.length === 0 && terms.length > 1) {
-      rows = stmt.all(ftsQueryOr, kinId, limit)
+      rows = stmt.all(ftsQueryOr, agentId, limit)
     }
 
-    return Promise.resolve(rows.map((r) => ({ ...r, kinId: r.kin_id, sourceContext: r.source_context, retrievalCount: r.retrieval_count, scope: r.scope as MemoryScope, updatedAt: r.updated_at ? new Date(r.updated_at) : null })))
+    return Promise.resolve(rows.map((r) => ({ ...r, agentId: r.agent_id, sourceContext: r.source_context, retrievalCount: r.retrieval_count, scope: r.scope as MemoryScope, updatedAt: r.updated_at ? new Date(r.updated_at) : null })))
   } catch {
     return Promise.resolve([])
   }
@@ -780,11 +780,11 @@ async function rerankCandidates(
   query: string,
   candidates: MemorySearchResult[],
   limit: number,
-  kinId?: string,
+  agentId?: string,
 ): Promise<MemorySearchResult[]> {
   const rerankModel = config.memory.rerankModel
   if (!rerankModel || candidates.length === 0) return candidates.slice(0, limit)
-  return rerankWithLLM(query, candidates, limit, kinId)
+  return rerankWithLLM(query, candidates, limit, agentId)
 }
 
 /**
@@ -796,7 +796,7 @@ async function rerankWithLLM(
   query: string,
   candidates: MemorySearchResult[],
   limit: number,
-  kinId?: string,
+  agentId?: string,
 ): Promise<MemorySearchResult[]> {
   const rerankModel = config.memory.rerankModel
   if (!rerankModel || candidates.length === 0) return candidates.slice(0, limit)
@@ -816,7 +816,7 @@ async function rerankWithLLM(
     const result = await safeGenerateText({
       resolved,
       callSite: 'memory-rerank',
-      kinId,
+      agentId,
       prompt:
         `You are a relevance judge. Given a user query and a list of memory snippets, ` +
         `score each memory's relevance to the query from 0 (irrelevant) to 10 (highly relevant).\n\n` +
@@ -921,7 +921,7 @@ function needsContextualRewrite(message: string): boolean {
 export async function rewriteQueryWithContext(
   message: string,
   recentMessages: Array<{ role: string; content: string }>,
-  kinId?: string,
+  agentId?: string,
 ): Promise<string> {
   const model = config.memory.contextualRewriteModel
   if (!model || !needsContextualRewrite(message) || recentMessages.length === 0) {
@@ -944,7 +944,7 @@ export async function rewriteQueryWithContext(
     const result = await safeGenerateText({
       resolved,
       callSite: 'memory-contextual-rewrite',
-      kinId,
+      agentId,
       prompt:
         `Rewrite the user's last message into a standalone search query for retrieving relevant memories. ` +
         `The query should capture the full intent by incorporating context from the conversation.\n\n` +
@@ -969,33 +969,33 @@ export async function rewriteQueryWithContext(
 
 /**
  * Retrieve the most relevant memories for a given query (incoming user message).
- * Used by kin-engine.ts for Block [5] injection.
+ * Used by agent-engine.ts for Block [5] injection.
  */
 export async function getRelevantMemories(
-  kinId: string,
+  agentId: string,
   query: string,
-): Promise<Array<{ id: string; category: string; content: string; subject: string | null; importance: number | null; scope: MemoryScope; authorKinName?: string | null; updatedAt: Date | null; score: number }>> {
-  const results = await searchMemories(kinId, query, config.memory.maxRelevantMemories)
+): Promise<Array<{ id: string; category: string; content: string; subject: string | null; importance: number | null; scope: MemoryScope; authorAgentName?: string | null; updatedAt: Date | null; score: number }>> {
+  const results = await searchMemories(agentId, query, config.memory.maxRelevantMemories)
   // Track which memories were actually injected into the prompt (fire-and-forget)
   trackRetrievals(results.map((r) => r.id))
-  return results.map((r) => ({ id: r.id, category: r.category, content: r.content, subject: r.subject, importance: r.importance, scope: r.scope, authorKinName: r.authorKinName, updatedAt: r.updatedAt, score: r.score }))
+  return results.map((r) => ({ id: r.id, category: r.category, content: r.content, subject: r.subject, importance: r.importance, scope: r.scope, authorAgentName: r.authorAgentName, updatedAt: r.updatedAt, score: r.score }))
 }
 
 // ─── Re-embedding ────────────────────────────────────────────────────────────
 
 /**
- * Re-embed all memories for a given Kin (or all Kins if kinId is null).
+ * Re-embed all memories for a given Agent (or all Agents if agentId is null).
  * Useful when switching embedding models. Processes memories in batches
  * and reports progress via SSE.
  * Returns { total, success, failed }.
  */
 export async function reembedAllMemories(
-  kinId?: string,
+  agentId?: string,
   onProgress?: (done: number, total: number) => void,
 ): Promise<{ total: number; success: number; failed: number }> {
-  const conditions = kinId ? [eq(memories.kinId, kinId)] : []
+  const conditions = agentId ? [eq(memories.agentId, agentId)] : []
   const allMemories = await db
-    .select({ id: memories.id, kinId: memories.kinId, content: memories.content })
+    .select({ id: memories.id, agentId: memories.agentId, content: memories.content })
     .from(memories)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .all()
@@ -1042,7 +1042,7 @@ export async function reembedAllMemories(
     onProgress?.(success + failed, total)
   }
 
-  log.info({ total, success, failed, kinId: kinId ?? 'all' }, 'Re-embedding complete')
+  log.info({ total, success, failed, agentId: agentId ?? 'all' }, 'Re-embedding complete')
   return { total, success, failed }
 }
 
@@ -1058,7 +1058,7 @@ export async function reembedAllMemories(
  * Adjustments are small (±0.5 per run, clamped to [1, 10]) to avoid overcorrection.
  * Returns the number of memories adjusted.
  */
-export async function recalibrateImportance(kinId: string): Promise<number> {
+export async function recalibrateImportance(agentId: string): Promise<number> {
   const MIN_AGE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
   const now = Date.now()
 
@@ -1068,8 +1068,8 @@ export async function recalibrateImportance(kinId: string): Promise<number> {
   >(
     `SELECT id, importance, retrieval_count, created_at, last_retrieved_at
      FROM memories
-     WHERE kin_id = ? AND importance IS NOT NULL`,
-  ).all(kinId)
+     WHERE agent_id = ? AND importance IS NOT NULL`,
+  ).all(agentId)
 
   let adjusted = 0
   const adjustedIds: string[] = []
@@ -1120,15 +1120,15 @@ export async function recalibrateImportance(kinId: string): Promise<number> {
   }
 
   if (adjusted > 0) {
-    log.info({ kinId, adjusted, total: allMems.length }, 'Importance recalibration complete')
+    log.info({ agentId, adjusted, total: allMems.length }, 'Importance recalibration complete')
 
     // Emit one aggregate SSE event so connected clients refetch their memory
     // lists with updated importance scores. A single event is sufficient
     // because the memory:updated handler in useMemories calls fetchMemories().
-    sseManager.sendToKin(kinId, {
+    sseManager.sendToAgent(agentId, {
       type: 'memory:updated',
-      kinId,
-      data: { kinId, memoryIds: adjustedIds, reason: 'recalibration' },
+      agentId,
+      data: { agentId, memoryIds: adjustedIds, reason: 'recalibration' },
     })
   }
 
@@ -1148,7 +1148,7 @@ export async function recalibrateImportance(kinId: string): Promise<number> {
  *
  * Returns the number of memories pruned.
  */
-export async function pruneStaleMemories(kinId: string): Promise<number> {
+export async function pruneStaleMemories(agentId: string): Promise<number> {
   const now = Date.now()
   const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000
   const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000
@@ -1160,10 +1160,10 @@ export async function pruneStaleMemories(kinId: string): Promise<number> {
   >(
     `SELECT id, importance, retrieval_count, created_at, content
      FROM memories
-     WHERE kin_id = ?
+     WHERE agent_id = ?
        AND importance IS NOT NULL
        AND retrieval_count = 0`,
-  ).all(kinId)
+  ).all(agentId)
 
   let pruned = 0
 
@@ -1177,16 +1177,16 @@ export async function pruneStaleMemories(kinId: string): Promise<number> {
     if (!shouldPrune) continue
 
     log.info(
-      { kinId, memoryId: mem.id, importance: mem.importance, ageDays: Math.round(ageMs / (24 * 60 * 60 * 1000)), content: mem.content.slice(0, 100) },
+      { agentId, memoryId: mem.id, importance: mem.importance, ageDays: Math.round(ageMs / (24 * 60 * 60 * 1000)), content: mem.content.slice(0, 100) },
       'Pruning stale memory',
     )
 
-    await deleteMemory(mem.id, kinId)
+    await deleteMemory(mem.id, agentId)
     pruned++
   }
 
   if (pruned > 0) {
-    log.info({ kinId, pruned, candidates: candidates.length }, 'Stale memory pruning complete')
+    log.info({ agentId, pruned, candidates: candidates.length }, 'Stale memory pruning complete')
   }
 
   return pruned

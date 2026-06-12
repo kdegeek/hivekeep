@@ -31,7 +31,7 @@ import {
 } from 'lucide-react'
 import { useTheme } from '@/client/components/theme-provider'
 
-interface KinSummary {
+interface AgentSummary {
   id: string
   slug: string
   name: string
@@ -40,9 +40,9 @@ interface KinSummary {
 }
 
 interface CommandPaletteProps {
-  kins: KinSummary[]
-  onSelectKin: (slug: string) => void
-  onCreateKin: () => void
+  agents: AgentSummary[]
+  onSelectAgent: (slug: string) => void
+  onCreateAgent: () => void
   onOpenSettings: (section?: string) => void
 }
 
@@ -62,9 +62,9 @@ const SETTINGS_SECTIONS = [
 ] as const
 
 export function CommandPalette({
-  kins,
-  onSelectKin,
-  onCreateKin,
+  agents,
+  onSelectAgent,
+  onCreateAgent,
   onOpenSettings,
 }: CommandPaletteProps) {
   const [open, setOpen] = useState(false)
@@ -94,26 +94,26 @@ export function CommandPalette({
       <CommandList>
         <CommandEmpty>{t('commandPalette.empty')}</CommandEmpty>
 
-        {/* Kins */}
-        {kins.length > 0 && (
-          <CommandGroup heading={t('commandPalette.kins')}>
-            {kins.map((kin) => (
+        {/* Agents */}
+        {agents.length > 0 && (
+          <CommandGroup heading={t('commandPalette.agents')}>
+            {agents.map((agent) => (
               <CommandItem
-                key={kin.id}
-                value={`kin ${kin.name} ${kin.role}`}
-                onSelect={() => runAndClose(() => onSelectKin(kin.slug))}
+                key={agent.id}
+                value={`agent ${agent.name} ${agent.role}`}
+                onSelect={() => runAndClose(() => onSelectAgent(agent.slug))}
               >
-                {kin.avatarUrl ? (
+                {agent.avatarUrl ? (
                   <img
-                    src={kin.avatarUrl}
+                    src={agent.avatarUrl}
                     alt=""
                     className="size-4 rounded-full object-cover"
                   />
                 ) : (
                   <Bot className="size-4" />
                 )}
-                <span>{kin.name}</span>
-                <span className="text-muted-foreground text-xs ml-1">{kin.role}</span>
+                <span>{agent.name}</span>
+                <span className="text-muted-foreground text-xs ml-1">{agent.role}</span>
               </CommandItem>
             ))}
           </CommandGroup>
@@ -124,11 +124,11 @@ export function CommandPalette({
         {/* Actions */}
         <CommandGroup heading={t('commandPalette.actions')}>
           <CommandItem
-            value="create new kin"
-            onSelect={() => runAndClose(onCreateKin)}
+            value="create new agent"
+            onSelect={() => runAndClose(onCreateAgent)}
           >
             <MessageSquarePlus className="size-4" />
-            <span>{t('commandPalette.createKin')}</span>
+            <span>{t('commandPalette.createAgent')}</span>
           </CommandItem>
           <CommandItem
             value="toggle theme dark light"

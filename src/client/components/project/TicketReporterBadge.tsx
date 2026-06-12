@@ -13,13 +13,13 @@ interface TicketReporterBadgeProps {
   /** Avatar size class. Defaults: compact size-4, full size-5. */
   size?: string
   className?: string
-  /** When true and reporter is a Kin with a slug, the avatar links to that Kin's thread. */
+  /** When true and reporter is an Agent with a slug, the avatar links to that Agent's thread. */
   clickable?: boolean
 }
 
 /**
  * Discreet badge showing who created the ticket — either a platform user
- * (via UI) or a Kin (via tool call). Designed to be small and unobtrusive on
+ * (via UI) or an Agent (via tool call). Designed to be small and unobtrusive on
  * the kanban card and inline within the side panel header.
  */
 export function TicketReporterBadge({
@@ -35,19 +35,19 @@ export function TicketReporterBadge({
   if (!reporter) return null
 
   const initials = reporter.name.slice(0, 2).toUpperCase()
-  const isKin = reporter.type === 'kin'
-  const TypeIcon = isKin ? Bot : User
+  const isAgent = reporter.type === 'agent'
+  const TypeIcon = isAgent ? Bot : User
   const avatarSize = size ?? (variant === 'compact' ? 'size-4' : 'size-5')
 
   const handleClick = (e: React.MouseEvent) => {
     if (!clickable) return
-    if (isKin && reporter.slug) {
+    if (isAgent && reporter.slug) {
       e.stopPropagation()
-      navigate(`/kin/${reporter.slug}`)
+      navigate(`/agent/${reporter.slug}`)
     }
   }
 
-  const isClickable = clickable && isKin && reporter.slug
+  const isClickable = clickable && isAgent && reporter.slug
 
   const avatarEl = (
     <Avatar className={cn(avatarSize, 'ring-1 ring-background')}>
@@ -89,7 +89,7 @@ export function TicketReporterBadge({
       </TooltipTrigger>
       <TooltipContent side="top">
         <span className="text-xs">
-          {t(isKin ? 'projects.reporter.byKin' : 'projects.reporter.byUser', { name: reporter.name })}
+          {t(isAgent ? 'projects.reporter.byAgent' : 'projects.reporter.byUser', { name: reporter.name })}
         </span>
       </TooltipContent>
     </Tooltip>

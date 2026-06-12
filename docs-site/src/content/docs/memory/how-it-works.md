@@ -1,19 +1,19 @@
 ---
 title: How Memory Works
-description: Understanding KinBot's memory system — extraction, retrieval, and the advanced search pipeline.
+description: Understanding Hivekeep's memory system — extraction, retrieval, and the advanced search pipeline.
 ---
 
-KinBot gives each Kin persistent memory across conversations. The system uses two complementary channels: **automatic extraction** and **explicit remembering**, backed by a sophisticated hybrid search pipeline. Memories can be **private** (default, only the owning Kin can access them) or **shared** (visible and searchable by all Kins).
+Hivekeep gives each Agent persistent memory across conversations. The system uses two complementary channels: **automatic extraction** and **explicit remembering**, backed by a sophisticated hybrid search pipeline. Memories can be **private** (default, only the owning Agent can access them) or **shared** (visible and searchable by all Agents).
 
 :::note
-For Kin-specific memory features (importance, categories, retrieval), see [Kin Memory](/kinbot/docs/kins/memory/).
+For Agent-specific memory features (importance, categories, retrieval), see [Agent Memory](/docs/agents/memory/).
 :::
 
 ## Dual-Channel Architecture
 
 ### Automatic Extraction
 
-After every LLM turn, KinBot runs a memory extraction pipeline that identifies facts, preferences, decisions, and knowledge from the conversation. These are stored automatically without any user action.
+After every LLM turn, Hivekeep runs a memory extraction pipeline that identifies facts, preferences, decisions, and knowledge from the conversation. These are stored automatically without any user action.
 
 The extraction uses a dedicated model (configurable via `MEMORY_EXTRACTION_MODEL`) to analyze the conversation and produce structured memory entries with:
 
@@ -24,27 +24,27 @@ The extraction uses a dedicated model (configurable via `MEMORY_EXTRACTION_MODEL
 
 ### Explicit Remembering
 
-Kins have a `memorize` tool that lets them (or users) explicitly store information. This is useful for direct instructions like "Remember that I prefer dark mode" or important context the extraction pipeline might miss.
+Agents have a `memorize` tool that lets them (or users) explicitly store information. This is useful for direct instructions like "Remember that I prefer dark mode" or important context the extraction pipeline might miss.
 
 ## Shared Memories
 
-By default, memories are **private** to the Kin that created them. However, Kins can mark memories as **shared** to make them searchable by all other Kins in the instance.
+By default, memories are **private** to the Agent that created them. However, Agents can mark memories as **shared** to make them searchable by all other Agents in the instance.
 
 ### When to share
 
-Shared memories are for information that genuinely helps other Kins: cross-domain facts (infrastructure details, user-wide preferences, project decisions affecting everyone), organizational changes, or user availability. Kins should **not** share internal reasoning, task-specific details, or domain-specific knowledge that other Kins would never need.
+Shared memories are for information that genuinely helps other Agents: cross-domain facts (infrastructure details, user-wide preferences, project decisions affecting everyone), organizational changes, or user availability. Agents should **not** share internal reasoning, task-specific details, or domain-specific knowledge that other Agents would never need.
 
 ### How it works
 
 - The `memorize` and `update_memory` tools accept an optional `scope` parameter: `"private"` (default) or `"shared"`
-- `recall` automatically searches both private and shared memories, with shared results attributed to their author Kin (e.g. *[shared by Assistant]*)
-- `list_memories` can filter by scope; `"shared"` lists shared memories from all Kins
+- `recall` automatically searches both private and shared memories, with shared results attributed to their author Agent (e.g. *[shared by Assistant]*)
+- `list_memories` can filter by scope; `"shared"` lists shared memories from all Agents
 - Deduplication checks span both scopes to prevent redundant entries
-- The prompt builder adds `*[shared by Kin Name]*` attribution to shared memories injected in context
+- The prompt builder adds `*[shared by Agent Name]*` attribution to shared memories injected in context
 
 ## Memory Tools
 
-Kins have six memory tools available (main agent only):
+Agents have six memory tools available (main agent only):
 
 | Tool | Description |
 |------|-------------|
@@ -55,7 +55,7 @@ Kins have six memory tools available (main agent only):
 | `list_memories` | List memories, filtered by subject, category, or scope |
 | `review_memories` | LLM-powered audit that detects contradictions, duplicates, stale entries, and clutter |
 
-Both `recall` and `list_memories` include conversational provenance: when a memory has a `sourceContext` (the context in which it was learned), it's included in the result. Shared memories also include `authorKinName` attribution.
+Both `recall` and `list_memories` include conversational provenance: when a memory has a `sourceContext` (the context in which it was learned), it's included in the result. Shared memories also include `authorAgentName` attribution.
 
 ## Storage
 
@@ -66,7 +66,7 @@ Memories are stored as vector embeddings using an embedding provider (OpenAI, Vo
 
 ## Retrieval Pipeline
 
-When a Kin needs relevant memories (either via the `recall` tool or automatic injection at conversation start), KinBot runs a multi-stage pipeline:
+When an Agent needs relevant memories (either via the `recall` tool or automatic injection at conversation start), Hivekeep runs a multi-stage pipeline:
 
 ### 1. Contextual Query Rewriting
 
@@ -110,9 +110,9 @@ Fused scores are weighted by multiple factors:
 
 ### 6. Re-ranking (Optional)
 
-If enabled via `MEMORY_RERANK_MODEL`, top candidates are re-ranked for relevance. KinBot supports two re-ranking strategies:
+If enabled via `MEMORY_RERANK_MODEL`, top candidates are re-ranked for relevance. Hivekeep supports two re-ranking strategies:
 
-1. **Cross-encoder rerank (preferred)** — If a provider with `rerank` capability is configured (Cohere or Jina), KinBot calls their dedicated rerank API. Cross-encoders are ~20× faster and ~10× cheaper than LLM rerankers with comparable accuracy.
+1. **Cross-encoder rerank (preferred)** — If a provider with `rerank` capability is configured (Cohere or Jina), Hivekeep calls their dedicated rerank API. Cross-encoders are ~20× faster and ~10× cheaper than LLM rerankers with comparable accuracy.
 2. **LLM-based rerank (fallback)** — If no rerank provider is available, an LLM scores each memory's relevance on a 0-10 scale. The LLM score becomes the primary ranking signal, with the hybrid score as tiebreaker.
 
 The system tries cross-encoder first and falls back to LLM automatically. Controlled by `MEMORY_RERANK_MODEL` — disabled by default.
@@ -128,25 +128,25 @@ This ensures only genuinely relevant memories are injected, avoiding noise. Enab
 
 ## Retrieval Tracking
 
-Every time memories are injected into a Kin's context, their retrieval count and timestamp are updated. This data feeds into:
+Every time memories are injected into an Agent's context, their retrieval count and timestamp are updated. This data feeds into:
 
 - **Retrieval frequency boost** during search scoring
 - **Importance recalibration** — a periodic process that nudges importance scores based on retrieval patterns (frequently retrieved = bump up, never retrieved after 30+ days = slight decrease)
 
 ## Memory Consolidation
 
-When enabled, KinBot periodically consolidates similar memories to reduce redundancy:
+When enabled, Hivekeep periodically consolidates similar memories to reduce redundancy:
 
 1. **Pair detection** — memories with cosine similarity above the threshold (default `0.85`) are flagged as candidates
 2. **Clustering** — overlapping pairs are grouped into clusters, capped at **3 memories per cluster** to avoid information loss in large merges (larger clusters are split and handled across multiple runs)
 3. **LLM merge** — each cluster is sent to an LLM that either merges them into a single richer memory or **aborts** if the memories are about genuinely different topics (preventing false merges)
 4. **Quality guardrails** — the LLM preserves all unique details, picks the most appropriate category/subject, and keeps the highest importance rating from the sources
 
-Consolidation is disabled by default. Enable it by setting `MEMORY_CONSOLIDATION_MODEL` to a model identifier. See [configuration](/kinbot/docs/memory/configuration/#memory-consolidation) for all settings.
+Consolidation is disabled by default. Enable it by setting `MEMORY_CONSOLIDATION_MODEL` to a model identifier. See [configuration](/docs/memory/configuration/#memory-consolidation) for all settings.
 
 ## Stale Memory Pruning
 
-After importance recalibration runs during compacting, KinBot automatically prunes memories that have decayed to very low importance and are never retrieved. This completes the importance lifecycle: extraction → recalibration → pruning.
+After importance recalibration runs during compacting, Hivekeep automatically prunes memories that have decayed to very low importance and are never retrieved. This completes the importance lifecycle: extraction → recalibration → pruning.
 
 The pruning is purely heuristic-based, no LLM calls needed:
 
@@ -159,7 +159,7 @@ Pruned memories are permanently deleted. The number of pruned memories is record
 
 ## Session Compacting
 
-When conversations grow long, KinBot automatically **compacts** them using **token-aware multi-summary accumulation**:
+When conversations grow long, Hivekeep automatically **compacts** them using **token-aware multi-summary accumulation**:
 
 1. After each LLM turn, the system checks if context usage exceeds a configurable threshold (`COMPACTING_THRESHOLD_PERCENT`, default: **75%** of the model's context window)
 2. A **keep-window** preserves recent messages that fit within `COMPACTING_KEEP_PERCENT` (default: 40%) of the context window as raw context
@@ -171,7 +171,7 @@ Before compacting runs, a **progressive context pipeline** reduces in-memory con
 - **Observation zone** — Middle-aged tool results truncated
 - **Collapsed zone** — Oldest tool results collapsed to one-line summaries
 
-Users can **force compact** from the UI at any time. All compaction results and errors are persisted in the conversation history, with real-time progress via SSE events. Compacting is fully configurable **per-Kin** (threshold, keep window, summary budget, max summaries, model).
+Users can **force compact** from the UI at any time. All compaction results and errors are persisted in the conversation history, with real-time progress via SSE events. Compacting is fully configurable **per-Agent** (threshold, keep window, summary budget, max summaries, model).
 
 ## Data Flow
 
@@ -181,7 +181,7 @@ User message
   → Multi-query expansion (if enabled)
   → Hybrid search (vector + FTS) per query
   → RRF fusion → score weighting → re-rank → adaptive K
-  → Relevant memories injected into Kin context with prioritization guidance
+  → Relevant memories injected into Agent context with prioritization guidance
   → LLM processes and responds
   → Extraction pipeline analyzes the turn
   → New memories stored as embeddings

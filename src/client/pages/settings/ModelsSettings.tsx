@@ -11,6 +11,10 @@ import { Skeleton } from '@/client/components/ui/skeleton'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
 import { api, toastError } from '@/client/lib/api'
 import { useModels, type ProviderModel } from '@/client/hooks/useModels'
+import { ThinkingEffortSelect } from '@/client/components/common/ThinkingEffortSelect'
+import { configToChoice, choiceToConfig, type ThinkingChoice } from '@/client/lib/thinking-choice'
+import { modelReasoningInfo } from '@/client/lib/model-efforts'
+import type { AgentThinkingConfig } from '@/shared/types'
 import { useProviders } from '@/client/hooks/useProviders'
 
 interface DefaultModelsData {
@@ -22,6 +26,7 @@ interface DefaultModelsData {
   defaultCompactingProviderId: string | null
   defaultScoutModel: string | null
   defaultScoutProviderId: string | null
+  defaultScoutThinking: AgentThinkingConfig | null
   extractionModel: string | null
   extractionProviderId: string | null
   embeddingModel: string | null
@@ -69,6 +74,9 @@ export function ModelsSettings() {
   const [scoutProviderId, setScoutProviderId] = useState('')
   const [initScoutModel, setInitScoutModel] = useState('')
   const [initScoutProviderId, setInitScoutProviderId] = useState('')
+  // Scout reasoning ('inherit' = unset → scouts follow the calling Agent's config)
+  const [scoutThinking, setScoutThinking] = useState<ThinkingChoice>('inherit')
+  const [initScoutThinking, setInitScoutThinking] = useState<ThinkingChoice>('inherit')
 
   const [imageModel, setImageModel] = useState('')
   const [imageProviderId, setImageProviderId] = useState('')
@@ -116,6 +124,8 @@ export function ModelsSettings() {
         setScoutProviderId(data.defaultScoutProviderId ?? '')
         setInitScoutModel(data.defaultScoutModel ?? '')
         setInitScoutProviderId(data.defaultScoutProviderId ?? '')
+        setScoutThinking(configToChoice(data.defaultScoutThinking))
+        setInitScoutThinking(configToChoice(data.defaultScoutThinking))
 
         setImageModel(data.defaultImageModel ?? '')
         setImageProviderId(data.defaultImageProviderId ?? '')
@@ -148,7 +158,7 @@ export function ModelsSettings() {
   // Change detection helpers
   const hasLlmChanges = llmModel !== initLlmModel || llmProviderId !== initLlmProviderId
   const hasCompactingChanges = compactingModel !== initCompactingModel || compactingProviderId !== initCompactingProviderId
-  const hasScoutChanges = scoutModel !== initScoutModel || scoutProviderId !== initScoutProviderId
+  const hasScoutChanges = scoutModel !== initScoutModel || scoutProviderId !== initScoutProviderId || scoutThinking !== initScoutThinking
   const hasImageChanges = imageModel !== initImageModel || imageProviderId !== initImageProviderId
   const hasExtractionChanges = extractionModel !== initExtractionModel || extractionProviderId !== initExtractionProviderId
   const hasEmbeddingChanges = embeddingModel !== initEmbeddingModel || embeddingProviderId !== initEmbeddingProviderId
@@ -187,11 +197,22 @@ export function ModelsSettings() {
       setInitCompactingProviderId(compactingProviderId)
     })
 
-  const handleSaveScout = () =>
-    saveField('scout', '/settings/default-scout', { model: scoutModel || null, providerId: scoutProviderId || null }, () => {
+  const handleSaveScout = async () => {
+    // Two endpoints, one Save: the model pair + the reasoning default.
+    setSavingField('scout')
+    try {
+      await api.put('/settings/default-scout', { model: scoutModel || null, providerId: scoutProviderId || null })
+      await api.put('/settings/default-scout-thinking', { thinking: choiceToConfig(scoutThinking) })
       setInitScoutModel(scoutModel)
       setInitScoutProviderId(scoutProviderId)
-    })
+      setInitScoutThinking(scoutThinking)
+      toast.success(t('settings.models.saved'))
+    } catch (err: unknown) {
+      toastError(err)
+    } finally {
+      setSavingField(null)
+    }
+  }
 
   const handleSaveImage = () =>
     saveField('image', '/settings/default-image', { model: imageModel || null, providerId: imageProviderId || null }, () => {
@@ -304,7 +325,7 @@ export function ModelsSettings() {
       </div>
 
       {/* Default Scout Model — cheap, fast model the `scout` tool delegates
-          heavy read-only exploration to. A Kin or project can override it. */}
+          heavy read-only exploration to. An Agent or project can override it. */}
       <div className="space-y-2">
         <Label className="inline-flex items-center gap-1.5">
           {t('settings.models.defaultScout')}
@@ -319,6 +340,18 @@ export function ModelsSettings() {
           isLoading={modelsLoading}
         />
         <p className="text-xs text-muted-foreground">{t('settings.models.defaultScoutHint')}</p>
+        <Label className="inline-flex items-center gap-1.5 pt-1">
+          {t('settings.models.defaultScoutThinking')}
+          <InfoTip content={t('settings.models.defaultScoutThinkingTip')} />
+        </Label>
+        <ThinkingEffortSelect
+          value={scoutThinking}
+          onChange={setScoutThinking}
+          inheritLabel={t('settings.models.defaultScoutThinkingInherit')}
+          reasoning={scoutModel
+            ? modelReasoningInfo(llmModels.find((m) => m.id === scoutModel && (!scoutProviderId || m.providerId === scoutProviderId)))
+            : undefined}
+        />
         <Button size="sm" onClick={handleSaveScout} disabled={!hasScoutChanges || savingField === 'scout'}>
           {savingField === 'scout' ? t('common.loading') : t('common.save')}
         </Button>

@@ -8,11 +8,11 @@ interface CronsResponse {
 }
 
 interface CreateCronData {
-  kinId: string
+  agentId: string
   name: string
   schedule: string
   taskDescription: string
-  targetKinId?: string
+  targetAgentId?: string
   model?: string
   runOnce?: boolean
   triggerParentTurn?: boolean
@@ -23,7 +23,7 @@ type UpdateCronData = Partial<{
   name: string
   schedule: string
   taskDescription: string
-  targetKinId: string
+  targetAgentId: string
   model: string
   isActive: boolean
   runOnce: boolean
@@ -111,7 +111,7 @@ export function useCrons() {
       )
     },
     'cron:created': () => {
-      // A cron was created (possibly by a kin) — refetch to get full data
+      // A cron was created (possibly by an agent) — refetch to get full data
       fetchCrons()
     },
     'cron:updated': () => {
@@ -124,7 +124,7 @@ export function useCrons() {
       setCronOrder((prev) => prev.filter((id) => id !== cronId))
     },
     'notification:new': (data) => {
-      // A kin-created cron is awaiting approval — refetch so it appears in the list
+      // An agent-created cron is awaiting approval — refetch so it appears in the list
       if (data.type === 'cron:pending-approval') {
         fetchCrons()
       }

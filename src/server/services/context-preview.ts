@@ -1,18 +1,19 @@
 import { db } from '@/server/db/index'
-import { kins, messages, userProfiles, compactingSummaries, tasks } from '@/server/db/schema'
+import { agents, messages, userProfiles, compactingSummaries, tasks } from '@/server/db/schema'
 import { eq, and, isNull, desc, ne, asc } from 'drizzle-orm'
 import { getFilesForMessages } from '@/server/services/files'
 import { buildSystemPrompt, joinSystemPrompt } from '@/server/services/prompt-builder'
+import { listActiveTriggerSummariesForAgent } from '@/server/services/account-triggers'
 import { getRelevantMemories } from '@/server/services/memory'
 import { listContactsForPrompt } from '@/server/services/contacts'
-import { listAvailableKins } from '@/server/services/inter-kin'
+import { listAvailableAgents } from '@/server/services/inter-agent'
 import { getMCPToolsSummary } from '@/server/services/mcp'
 import { toolRegistry } from '@/server/tools/index'
 import { getGlobalPrompt } from '@/server/services/app-settings'
 import { fetchPreviousCronRuns } from '@/server/services/tasks'
 import { fetchCronLearnings } from '@/server/services/cron-learnings'
-import { getActiveChannelsForKin } from '@/server/services/channels'
-import type { KinCompactingConfig, ContextTokenBreakdown } from '@/shared/types'
+import { getActiveChannelsForAgent } from '@/server/services/channels'
+import type { AgentCompactingConfig, ContextTokenBreakdown } from '@/shared/types'
 import { getModelContextWindow } from '@/shared/model-context-windows'
 import { resolveTriggerTokens } from '@/server/services/compacting'
 import { config } from '@/server/config'
@@ -50,13 +51,13 @@ function decomposeSystemPrompt(prompt: string): Array<{ heading: string; tokens:
 /** Pull the most recent assistant turn that reported cache stats and compute
  *  the hit rate. Returns null when no recent turn has cache data. */
 function buildLastTurnCache(
-  kinId: string,
+  agentId: string,
 ): ContextPreviewResult['lastTurnCache'] | undefined {
   const recentAssistant = db
     .select({ metadata: messages.metadata, createdAt: messages.createdAt })
     .from(messages)
     .where(and(
-      eq(messages.kinId, kinId),
+      eq(messages.agentId, agentId),
       eq(messages.role, 'assistant'),
       isNull(messages.taskId),
       isNull(messages.sessionId),
@@ -209,7 +210,7 @@ interface ContextPreviewResult {
   systemPromptBreakdown?: Array<{ heading: string; tokens: number }>
   /** Cache hit/miss breakdown of the most recent assistant turn that reported
    *  cache stats. Null when no recent turn has tokenUsage with cache fields
-   *  (cold Kin, non-Anthropic provider, etc.). Used by the context viewer to
+   *  (cold Agent, non-Anthropic provider, etc.). Used by the context viewer to
    *  surface cache observability inline with the breakdown. */
   lastTurnCache?: {
     inputTokens: number
@@ -225,7 +226,7 @@ interface ContextPreviewResult {
 
 /**
  * Estimate the additional tokens contributed by attached files on a message.
- * Mirrors the file-handling logic in kin-engine's estimateContextTokens so
+ * Mirrors the file-handling logic in agent-engine's estimateContextTokens so
  * the visualizer matches the live banner.
  */
 function estimateMessageFilesTokens(
@@ -251,18 +252,18 @@ function estimateMessageFilesTokens(
 
 // Backed by gpt-tokenizer (BPE) — within ~5-15% of provider tokenizers,
 // vastly more accurate than chars/4 on JSON / YAML / CLI output that
-// dominates tool-heavy Kins.
+// dominates tool-heavy Agents.
 import { countTokens as countTokensShared } from '@/shared/token-estimator'
 function estimateTokens(text: string): number {
   return countTokensShared(text)
 }
 
-/** Read the per-Kin EMA-smoothed calibration factor written by recordApiContextSize.
- *  Lazy-import to avoid a circular dep with kin-engine. */
-async function getKinCalibrationFactor(kinId: string): Promise<number> {
+/** Read the per-Agent EMA-smoothed calibration factor written by recordApiContextSize.
+ *  Lazy-import to avoid a circular dep with agent-engine. */
+async function getAgentCalibrationFactor(agentId: string): Promise<number> {
   try {
-    const { getLastContextUsage } = await import('@/server/services/kin-engine')
-    const cached = await getLastContextUsage(kinId)
+    const { getLastContextUsage } = await import('@/server/services/agent-engine')
+    const cached = await getLastContextUsage(agentId)
     return cached?.calibrationFactor ?? 1
   } catch {
     return 1
@@ -285,27 +286,27 @@ function safeToJsonSchema(schema: unknown): Record<string, unknown> | null {
 }
 
 /**
- * Build a context preview for a Kin — the system prompt as it would be
+ * Build a context preview for an Agent — the system prompt as it would be
  * assembled right now, plus the list of available tools and message history.
  *
- * This mirrors the data-gathering logic in kin-engine.processKinQueue()
+ * This mirrors the data-gathering logic in agent-engine.processAgentQueue()
  * but without queue-specific concerns (no queue item, no speaker profile,
  * no channel context).
  */
-export async function buildContextPreview(kinId: string): Promise<ContextPreviewResult> {
-  // Load the Kin
-  const kin = db
+export async function buildContextPreview(agentId: string): Promise<ContextPreviewResult> {
+  // Load the Agent
+  const agent = db
     .select()
-    .from(kins)
-    .where(eq(kins.id, kinId))
+    .from(agents)
+    .where(eq(agents.id, agentId))
     .get()
-  if (!kin) throw new Error('Kin not found')
+  if (!agent) throw new Error('Agent not found')
 
   // Contacts
   const contactsWithSlug = await listContactsForPrompt()
 
-  // Kin directory
-  const kinDirectory = (await listAvailableKins(kinId)).map((k) => ({
+  // Agent directory
+  const agentDirectory = (await listAvailableAgents(agentId)).map((k) => ({
     slug: k.slug,
     name: k.name,
     role: k.role,
@@ -317,12 +318,12 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
     const lastUserMsg = db
       .select({ content: messages.content })
       .from(messages)
-      .where(and(eq(messages.kinId, kinId), eq(messages.role, 'user'), isNull(messages.taskId), isNull(messages.sessionId)))
+      .where(and(eq(messages.agentId, agentId), eq(messages.role, 'user'), isNull(messages.taskId), isNull(messages.sessionId)))
       .orderBy(desc(messages.createdAt))
       .limit(1)
       .get()
-    const query = lastUserMsg?.content ?? kin.name
-    relevantMemories = await getRelevantMemories(kinId, query)
+    const query = lastUserMsg?.content ?? agent.name
+    relevantMemories = await getRelevantMemories(agentId, query)
   } catch {
     // Non-fatal
   }
@@ -334,20 +335,20 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
     const lastUserMsg = db
       .select({ content: messages.content })
       .from(messages)
-      .where(and(eq(messages.kinId, kinId), eq(messages.role, 'user'), isNull(messages.taskId), isNull(messages.sessionId)))
+      .where(and(eq(messages.agentId, agentId), eq(messages.role, 'user'), isNull(messages.taskId), isNull(messages.sessionId)))
       .orderBy(desc(messages.createdAt))
       .limit(1)
       .get()
-    relevantKnowledge = await searchKnowledge(kinId, lastUserMsg?.content ?? kin.name, 5)
+    relevantKnowledge = await searchKnowledge(agentId, lastUserMsg?.content ?? agent.name, 5)
   } catch {
     // Non-fatal
   }
 
   // MCP tools summary for prompt
-  const mcpToolsSummary = await getMCPToolsSummary(kinId)
+  const mcpToolsSummary = await getMCPToolsSummary(agentId)
 
   // Active channels
-  const activeChannelRows = await getActiveChannelsForKin(kinId)
+  const activeChannelRows = await getActiveChannelsForAgent(agentId)
   const activeChannels = activeChannelRows.map((ch) => ({ platform: ch.platform, name: ch.name }))
 
   // Global prompt
@@ -357,7 +358,7 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
   const activeSummaries = db
     .select()
     .from(compactingSummaries)
-    .where(and(eq(compactingSummaries.kinId, kinId), eq(compactingSummaries.isInContext, true)))
+    .where(and(eq(compactingSummaries.agentId, agentId), eq(compactingSummaries.isInContext, true)))
     .orderBy(asc(compactingSummaries.lastMessageAt))
     .all()
 
@@ -385,7 +386,7 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
     })
     .from(messages)
     .where(and(
-      eq(messages.kinId, kinId),
+      eq(messages.agentId, agentId),
       isNull(messages.taskId),
       isNull(messages.sessionId),
       ne(messages.sourceType, 'compacting'),
@@ -393,8 +394,8 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
     .orderBy(desc(messages.createdAt))
     // Match the live banner's history fetch limit so token estimates agree.
     // The previous limit(100) caused the visualizer to under-count by
-    // hundreds of thousands of tokens on Kins with long histories — the
-    // actual API call (kin-engine.buildMessageHistory) loads up to
+    // hundreds of thousands of tokens on Agents with long histories — the
+    // actual API call (agent-engine.buildMessageHistory) loads up to
     // config.historyMaxMessages messages.
     .limit(config.historyMaxMessages)
     .all()
@@ -407,7 +408,7 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
     : recentMessages
 
   // Pre-load attached files for all visible messages so we can count their
-  // tokens (images, inlined text files, PDFs) — matches what kin-engine sends
+  // tokens (images, inlined text files, PDFs) — matches what agent-engine sends
   // to the API.
   const visibleIds = visibleMessages.map((m) => m.id ?? null).filter((id): id is string => !!id)
   const filesByMessageId = visibleIds.length > 0 ? await getFilesForMessages(visibleIds) : new Map()
@@ -440,7 +441,7 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
   const totalMessageCount = db
     .select({ id: messages.id })
     .from(messages)
-    .where(and(eq(messages.kinId, kinId), isNull(messages.taskId), isNull(messages.sessionId)))
+    .where(and(eq(messages.agentId, agentId), isNull(messages.taskId), isNull(messages.sessionId)))
     .all()
     .length
 
@@ -448,32 +449,35 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
   const hasCompactedHistory = activeSummaries.length > 0
 
   // User language — get from first user profile as fallback
-  let userLanguage: 'fr' | 'en' = 'fr'
-  const firstProfile = db.select({ language: userProfiles.language }).from(userProfiles).limit(1).get()
+  let userLanguage: string = 'fr'
+  const firstProfile = db.select({ language: userProfiles.language, agentLanguage: userProfiles.agentLanguage }).from(userProfiles).limit(1).get()
   if (firstProfile) {
-    userLanguage = firstProfile.language as 'fr' | 'en'
+    userLanguage = firstProfile.agentLanguage ?? firstProfile.language
   }
 
-  // Active project block — mirrors kin-engine.processKinQueue so the preview
-  // shows the exact prompt the Kin will receive (including pinned project
+  // Active project block — mirrors agent-engine.processAgentQueue so the preview
+  // shows the exact prompt the Agent will receive (including pinned project
   // knowledge). Without it, the preview misleads users editing knowledge in
   // the UI because they wouldn't see their pins land in the prompt.
   let activeProject: import('@/server/services/prompt-builder').ActiveProjectPromptInfo | null = null
-  if (kin.activeProjectId) {
+  if (agent.activeProjectId) {
     const { buildActiveProjectInfo } = await import('@/server/services/projects')
-    activeProject = await buildActiveProjectInfo(kin.activeProjectId)
+    activeProject = await buildActiveProjectInfo(agent.activeProjectId)
   }
+
+  const accountTriggerSummaries = await listActiveTriggerSummariesForAgent(agentId)
 
   // Build system prompt
   const systemPrompt = joinSystemPrompt(buildSystemPrompt({
-    kin: { name: kin.name, slug: kin.slug, role: kin.role, character: kin.character, expertise: kin.expertise, kind: kin.kind },
+    agent: { name: agent.name, slug: agent.slug, role: agent.role, character: agent.character, expertise: agent.expertise, kind: agent.kind },
     contacts: contactsWithSlug,
     relevantMemories,
     relevantKnowledge,
-    kinDirectory,
+    agentDirectory,
     mcpTools: mcpToolsSummary,
-    isSubKin: false,
+    isSubAgent: false,
     activeChannels: activeChannels.length > 0 ? activeChannels : undefined,
+    accountTriggers: accountTriggerSummaries.length > 0 ? accountTriggerSummaries : undefined,
     globalPrompt,
     userLanguage,
     compactingSummaries: compactingSummariesData,
@@ -482,7 +486,7 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
       totalMessageCount,
       hasCompactedHistory,
     },
-    workspacePath: kin.workspacePath,
+    workspacePath: agent.workspacePath,
     activeProject: activeProject ?? undefined,
   }))
 
@@ -490,9 +494,9 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
   // across native + plugin + MCP + custom). Mirrors processNextMessage.
   const { resolveToolset } = await import('@/server/services/toolset-resolver')
   const allTools = await resolveToolset({
-    kinId,
-    toolboxIds: kin.toolboxIds,
-    isSubKin: false,
+    agentId,
+    toolboxIds: agent.toolboxIds,
+    isSubAgent: false,
   })
   const toolDefinitions = buildToolDefs(allTools, buildSourceMap(allTools))
 
@@ -509,39 +513,39 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
     messageCount: s.messageCount ?? 0,
   }))
 
-  // Resolve compacting threshold for this Kin
-  let perKinCompacting: KinCompactingConfig | null = null
-  if (kin.compactingConfig) {
-    try { perKinCompacting = JSON.parse(kin.compactingConfig) as KinCompactingConfig } catch { /* ignore */ }
+  // Resolve compacting threshold for this Agent
+  let perAgentCompacting: AgentCompactingConfig | null = null
+  if (agent.compactingConfig) {
+    try { perAgentCompacting = JSON.parse(agent.compactingConfig) as AgentCompactingConfig } catch { /* ignore */ }
   }
   // Effective (capped) threshold — the SAME source of truth as the navbar
   // (resolveTriggerTokens). Without the cap the visualizer showed the raw
-  // per-Kin 95% while the navbar showed the capped 30%, telling opposite
+  // per-Agent 95% while the navbar showed the capped 30%, telling opposite
   // stories about how close compaction is.
-  const rawThresholdPercent = perKinCompacting?.thresholdPercent ?? config.compacting.thresholdPercent
-  const triggerMaxTokens = perKinCompacting?.triggerMaxTokens ?? config.compacting.triggerMaxTokens
-  const ctxWindowForThreshold = getModelContextWindow(kin.model)
+  const rawThresholdPercent = perAgentCompacting?.thresholdPercent ?? config.compacting.thresholdPercent
+  const triggerMaxTokens = perAgentCompacting?.triggerMaxTokens ?? config.compacting.triggerMaxTokens
+  const ctxWindowForThreshold = getModelContextWindow(agent.model)
   const compactingThresholdPercent = ctxWindowForThreshold > 0
     ? Math.round((resolveTriggerTokens(rawThresholdPercent, ctxWindowForThreshold, triggerMaxTokens) / ctxWindowForThreshold) * 100)
     : rawThresholdPercent
 
-  const calibrationFactor = await getKinCalibrationFactor(kinId)
-  const lastTurnCache = buildLastTurnCache(kinId)
+  const calibrationFactor = await getAgentCalibrationFactor(agentId)
+  const lastTurnCache = buildLastTurnCache(agentId)
 
   // Compute section totals against the SAME masked/trimmed messageHistory that
   // the next API call will see. Without this, the visualizer counts raw
   // pre-trim DB content while the navbar counts post-trim, and the two bars
-  // can diverge by 200k+ tokens on tool-heavy Kins (large tool results,
+  // can diverge by 200k+ tokens on tool-heavy Agents (large tool results,
   // file-write args, page_state YAMLs all get masked or capped before being
   // sent). Then × calibrationFactor compounds the gap, since the EMA is
   // calibrated against the post-trim count.
   //
   // The cost is a second buildMessageHistory pass per dialog open (re-reads
   // attached files from disk). Acceptable for an explicit user action.
-  const { buildMessageHistory, estimateContextTokens } = await import('@/server/services/kin-engine')
+  const { buildMessageHistory, estimateContextTokens } = await import('@/server/services/agent-engine')
   let trimmedBreakdown: ContextTokenBreakdown | undefined
   try {
-    const historyResult = await buildMessageHistory(kinId)
+    const historyResult = await buildMessageHistory(agentId)
     const summaryTokensFromMasked = historyResult.compactingSummaries
       ? historyResult.compactingSummaries.reduce((sum, s) => sum + estimateTokens(s.summary), 0)
       : 0
@@ -556,7 +560,7 @@ export async function buildContextPreview(kinId: string): Promise<ContextPreview
     // any reason — better an over-count than a missing bar.
   }
 
-  return formatResult(systemPrompt, toolDefinitions, messagesPreviews, totalMessageCount, getModelContextWindow(kin.model), combinedSummary, summaryPreviews, compactingThresholdPercent, [], [], calibrationFactor, lastTurnCache, trimmedBreakdown)
+  return formatResult(systemPrompt, toolDefinitions, messagesPreviews, totalMessageCount, getModelContextWindow(agent.model), combinedSummary, summaryPreviews, compactingThresholdPercent, [], [], calibrationFactor, lastTurnCache, trimmedBreakdown)
 }
 
 /** Extract JSON Schema tool definitions from a tools map */
@@ -605,7 +609,7 @@ function formatResult(
   compactingThresholdPercent: number | null = null,
   cronRuns: CronRunPreview[] = [],
   cronLearnings: CronLearningPreview[] = [],
-  /** Per-Kin EMA-smoothed factor learned from past API roundtrips (api / raw_BPE).
+  /** Per-Agent EMA-smoothed factor learned from past API roundtrips (api / raw_BPE).
    *  When > 1 (typical: 1.3-1.6 for Anthropic on tool-heavy contexts), the
    *  visualizer's section totals + per-message estimates are scaled to match
    *  what the navbar shows after calibration. Defaults to 1 when no roundtrip
@@ -613,11 +617,11 @@ function formatResult(
   calibrationFactor: number = 1,
   lastTurnCache?: ContextPreviewResult['lastTurnCache'],
   /** Section breakdown computed against the masked/trimmed messageHistory the
-   *  kin-engine will actually send to the provider on the next turn. When
+   *  agent-engine will actually send to the provider on the next turn. When
    *  provided, used as the source of truth for the visualizer's bars so they
    *  match the navbar (which is set via setLastContextUsage with the same
    *  estimator). Without it, the bars sum raw per-message DB content and
-   *  over-count tool-heavy Kins by hundreds of thousands of tokens. */
+   *  over-count tool-heavy Agents by hundreds of thousands of tokens. */
   precomputedBreakdown?: ContextTokenBreakdown,
 ): ContextPreviewResult {
   let fullPrompt = systemPrompt
@@ -640,7 +644,7 @@ function formatResult(
   let rawTotal: number
   if (precomputedBreakdown) {
     // Source of truth: estimateContextTokens against the masked/trimmed
-    // messageHistory that kin-engine will send next turn. Matches the navbar.
+    // messageHistory that agent-engine will send next turn. Matches the navbar.
     summaryTokens = precomputedBreakdown.summary ?? 0
     systemPromptTokens = Math.max(0, precomputedBreakdown.systemPrompt - cronRunsTokens - cronLearningsTokens)
     messagesTokens = precomputedBreakdown.messages
@@ -714,27 +718,27 @@ function formatResult(
 }
 
 // ---------------------------------------------------------------------------
-// Task (sub-kin) context preview
-// Mirrors executeSubKin() in tasks.ts
+// Task (sub-agent) context preview
+// Mirrors executeSubAgent() in tasks.ts
 // ---------------------------------------------------------------------------
 
 export async function buildTaskContextPreview(taskId: string): Promise<ContextPreviewResult> {
   const task = db.select().from(tasks).where(eq(tasks.id, taskId)).get()
   if (!task) throw new Error('Task not found')
 
-  const parentKin = db.select().from(kins).where(eq(kins.id, task.parentKinId)).get()
-  if (!parentKin) throw new Error('Parent Kin not found')
+  const parentAgent = db.select().from(agents).where(eq(agents.id, task.parentAgentId)).get()
+  if (!parentAgent) throw new Error('Parent Agent not found')
 
-  // Determine identity (same logic as executeSubKin)
-  let kinIdentity = parentKin
-  if (task.spawnType === 'other' && task.sourceKinId) {
-    const sourceKin = db.select().from(kins).where(eq(kins.id, task.sourceKinId)).get()
-    if (sourceKin) kinIdentity = sourceKin
+  // Determine identity (same logic as executeSubAgent)
+  let agentIdentity = parentAgent
+  if (task.spawnType === 'other' && task.sourceAgentId) {
+    const sourceAgent = db.select().from(agents).where(eq(agents.id, task.sourceAgentId)).get()
+    if (sourceAgent) agentIdentity = sourceAgent
   }
 
-  // Mirror executeSubKin: prefer the spawn-time prompt-context snapshot so the
-  // visualizer renders exactly what the sub-Kin actually sees (frozen identity,
-  // frozen globalPrompt, frozen kinDirectory, frozen cron context). Legacy
+  // Mirror executeSubAgent: prefer the spawn-time prompt-context snapshot so the
+  // visualizer renders exactly what the sub-Agent actually sees (frozen identity,
+  // frozen globalPrompt, frozen agentDirectory, frozen cron context). Legacy
   // tasks without a snapshot fall back to live DB reads.
   let promptSnapshot: import('@/server/services/tasks').TaskPromptContextSnapshot | null = null
   if (task.promptContextSnapshot) {
@@ -745,14 +749,14 @@ export async function buildTaskContextPreview(taskId: string): Promise<ContextPr
     }
   }
   if (promptSnapshot) {
-    kinIdentity = { ...kinIdentity, ...promptSnapshot.kin }
+    agentIdentity = { ...agentIdentity, ...promptSnapshot.agent }
   }
 
   const globalPrompt = promptSnapshot?.globalPrompt !== undefined
     ? promptSnapshot.globalPrompt
     : await getGlobalPrompt()
 
-  const kinDirectory = (promptSnapshot?.kinDirectory ?? (await listAvailableKins(kinIdentity.id))).map((k) => ({
+  const agentDirectory = (promptSnapshot?.agentDirectory ?? (await listAvailableAgents(agentIdentity.id))).map((k) => ({
     slug: k.slug,
     name: k.name,
     role: k.role,
@@ -780,8 +784,8 @@ export async function buildTaskContextPreview(taskId: string): Promise<ContextPr
         : fetchCronLearnings(task.cronId))
     : undefined
 
-  // Ticket assignment context — mirror executeSubKin: prefer the spawn-time
-  // snapshot so the visualizer shows exactly what the sub-Kin is actually
+  // Ticket assignment context — mirror executeSubAgent: prefer the spawn-time
+  // snapshot so the visualizer shows exactly what the sub-Agent is actually
   // seeing (frozen for cache stability), and fall back to a live fetch for
   // legacy ticket tasks without a snapshot.
   let ticketAssignment: import('@/server/services/prompt-builder').TicketAssignmentInfo | null = null
@@ -803,17 +807,17 @@ export async function buildTaskContextPreview(taskId: string): Promise<ContextPr
   }
 
   const systemPrompt = joinSystemPrompt(buildSystemPrompt({
-    kin: { name: kinIdentity.name, slug: kinIdentity.slug, role: kinIdentity.role, character: kinIdentity.character, expertise: kinIdentity.expertise },
+    agent: { name: agentIdentity.name, slug: agentIdentity.slug, role: agentIdentity.role, character: agentIdentity.character, expertise: agentIdentity.expertise },
     contacts: [],
     relevantMemories: [],
-    kinDirectory,
-    isSubKin: true,
+    agentDirectory,
+    isSubAgent: true,
     taskDescription: task.description,
     previousCronRuns,
     cronLearnings: cronLearningsData,
     globalPrompt,
     userLanguage: 'en',
-    workspacePath: kinIdentity.workspacePath,
+    workspacePath: agentIdentity.workspacePath,
     ticketAssignment: ticketAssignment ?? undefined,
   }))
 
@@ -821,7 +825,7 @@ export async function buildTaskContextPreview(taskId: string): Promise<ContextPr
   const taskMessages = db
     .select({ id: messages.id, role: messages.role, content: messages.content, toolCalls: messages.toolCalls, createdAt: messages.createdAt })
     .from(messages)
-    .where(and(eq(messages.kinId, task.parentKinId), eq(messages.taskId, taskId)))
+    .where(and(eq(messages.agentId, task.parentAgentId), eq(messages.taskId, taskId)))
     .orderBy(asc(messages.createdAt))
     .all()
 
@@ -852,10 +856,10 @@ export async function buildTaskContextPreview(taskId: string): Promise<ContextPr
     }
   })
 
-  // Tools: same resolution as executeSubKin. Unified resolver gives the spawned
-  // Kin's MAIN surface (isSubKin:false) intersected with the task's toolboxes;
-  // we subtract the hard sub-Kin floor AFTER the allow-list, then layer on the
-  // sub-Kin-only comms tools (infrastructure, never toolbox-gated). Toolbox ids
+  // Tools: same resolution as executeSubAgent. Unified resolver gives the spawned
+  // Agent's MAIN surface (isSubAgent:false) intersected with the task's toolboxes;
+  // we subtract the hard sub-Agent floor AFTER the allow-list, then layer on the
+  // sub-Agent-only comms tools (infrastructure, never toolbox-gated). Toolbox ids
   // resolve from the task row (explicit toolbox_ids → legacy tool_preset →
   // default).
   const { resolveTaskToolboxIds, HARD_EXCLUDED_FROM_SUBKIN } = await import('@/server/services/tasks')
@@ -866,9 +870,9 @@ export async function buildTaskContextPreview(taskId: string): Promise<ContextPr
     ticketId: task.ticketId ?? null,
   })
   const mainSurface = await resolveToolset({
-    kinId: kinIdentity.id,
+    agentId: agentIdentity.id,
     toolboxIds: taskToolboxIds,
-    isSubKin: false,
+    isSubAgent: false,
     taskId,
     taskDepth: task.depth,
   })
@@ -876,13 +880,13 @@ export async function buildTaskContextPreview(taskId: string): Promise<ContextPr
     delete mainSurface[name]
   }
 
-  const subKinTools = toolRegistry.resolve({ kinId: task.parentKinId, taskId, taskDepth: task.depth, isSubKin: true })
-  // Mirror executeSubKin: ticket sub-Kins drop report_to_parent (the parent has
+  const subAgentTools = toolRegistry.resolve({ agentId: task.parentAgentId, taskId, taskDepth: task.depth, isSubAgent: true })
+  // Mirror executeSubAgent: ticket sub-Agents drop report_to_parent (the parent has
   // nothing actionable to do with intermediate reports — the user reads the UI).
   if (task.ticketId) {
-    delete subKinTools['report_to_parent']
+    delete subAgentTools['report_to_parent']
   }
-  const allTools = { ...mainSurface, ...subKinTools }
+  const allTools = { ...mainSurface, ...subAgentTools }
   const taskSourceMap = buildSourceMap(allTools)
 
   // Build cron run previews
@@ -906,20 +910,20 @@ export async function buildTaskContextPreview(taskId: string): Promise<ContextPr
       }))
     : []
 
-  const modelId = task.model ?? kinIdentity.model
-  // Tasks share the parent Kin's calibration factor — same model, same content
+  const modelId = task.model ?? agentIdentity.model
+  // Tasks share the parent Agent's calibration factor — same model, same content
   // profile (tools, files, structured outputs).
-  const calibrationFactor = await getKinCalibrationFactor(parentKin.id)
+  const calibrationFactor = await getAgentCalibrationFactor(parentAgent.id)
   return formatResult(systemPrompt, buildToolDefs(allTools, taskSourceMap), messagesPreviews, taskMessages.length, getModelContextWindow(modelId), null, [], null, cronRunPreviews, cronLearningPreviews, calibrationFactor)
 }
 
 // ---------------------------------------------------------------------------
 // Quick session context preview
-// Mirrors processQuickMessage() in kin-engine.ts
+// Mirrors processQuickMessage() in agent-engine.ts
 // ---------------------------------------------------------------------------
 
 const QUICK_SESSION_EXCLUDED_TOOLS = new Set([
-  'spawn_self', 'spawn_kin', 'respond_to_task', 'cancel_task', 'list_tasks',
+  'spawn_self', 'spawn_agent', 'respond_to_task', 'cancel_task', 'list_tasks',
   'report_to_parent', 'update_task_status', 'request_input',
   'send_message', 'reply', 'list_kins',
   'create_cron', 'update_cron', 'delete_cron', 'list_crons', 'get_cron_journal',
@@ -927,21 +931,21 @@ const QUICK_SESSION_EXCLUDED_TOOLS = new Set([
   'create_custom_tool', 'write_custom_tool_file', 'run_custom_tool_setup', 'test_custom_tool',
   'update_custom_tool', 'delete_custom_tool', 'list_custom_tools',
   'create_tool_domain', 'update_tool_domain', 'delete_tool_domain',
-  'create_kin', 'update_kin', 'delete_kin', 'get_kin_details',
+  'create_agent', 'update_agent', 'delete_agent', 'get_agent_details',
   'create_webhook', 'update_webhook', 'delete_webhook', 'list_webhooks',
   'send_channel_message', 'list_channel_conversations',
   'get_platform_logs',
   'memorize', 'update_memory', 'forget',
 ])
 
-export async function buildQuickSessionContextPreview(kinId: string, sessionId: string): Promise<ContextPreviewResult> {
-  const kin = db.select().from(kins).where(eq(kins.id, kinId)).get()
-  if (!kin) throw new Error('Kin not found')
+export async function buildQuickSessionContextPreview(agentId: string, sessionId: string): Promise<ContextPreviewResult> {
+  const agent = db.select().from(agents).where(eq(agents.id, agentId)).get()
+  if (!agent) throw new Error('Agent not found')
 
   // User language
-  let userLanguage: 'fr' | 'en' = 'fr'
-  const firstProfile = db.select({ language: userProfiles.language }).from(userProfiles).limit(1).get()
-  if (firstProfile) userLanguage = firstProfile.language as 'fr' | 'en'
+  let userLanguage: string = 'fr'
+  const firstProfile = db.select({ language: userProfiles.language, agentLanguage: userProfiles.agentLanguage }).from(userProfiles).limit(1).get()
+  if (firstProfile) userLanguage = firstProfile.agentLanguage ?? firstProfile.language
 
   // Memories (use last session message as query)
   let relevantMemories: Array<{ id: string; category: string; content: string; subject: string | null; importance: number | null; updatedAt: Date | null; score: number }> = []
@@ -953,7 +957,7 @@ export async function buildQuickSessionContextPreview(kinId: string, sessionId: 
       .orderBy(desc(messages.createdAt))
       .limit(1)
       .get()
-    if (lastMsg?.content) relevantMemories = await getRelevantMemories(kinId, lastMsg.content)
+    if (lastMsg?.content) relevantMemories = await getRelevantMemories(agentId, lastMsg.content)
   } catch {
     // Non-fatal
   }
@@ -969,32 +973,32 @@ export async function buildQuickSessionContextPreview(kinId: string, sessionId: 
       .orderBy(desc(messages.createdAt))
       .limit(1)
       .get()
-    if (lastMsg?.content) relevantKnowledge = await searchKnowledge(kinId, lastMsg.content, 5)
+    if (lastMsg?.content) relevantKnowledge = await searchKnowledge(agentId, lastMsg.content, 5)
   } catch {
     // Non-fatal
   }
 
   const globalPrompt = await getGlobalPrompt()
 
-  // Mirror kin-engine's quick-session path: include the active project block
+  // Mirror agent-engine's quick-session path: include the active project block
   // (with pinned knowledge) so the preview matches the real prompt.
   let quickSessionActiveProject: import('@/server/services/prompt-builder').ActiveProjectPromptInfo | null = null
-  if (kin.activeProjectId) {
+  if (agent.activeProjectId) {
     const { buildActiveProjectInfo } = await import('@/server/services/projects')
-    quickSessionActiveProject = await buildActiveProjectInfo(kin.activeProjectId)
+    quickSessionActiveProject = await buildActiveProjectInfo(agent.activeProjectId)
   }
 
   const systemPrompt = joinSystemPrompt(buildSystemPrompt({
-    kin: { name: kin.name, slug: kin.slug, role: kin.role, character: kin.character, expertise: kin.expertise, kind: kin.kind },
+    agent: { name: agent.name, slug: agent.slug, role: agent.role, character: agent.character, expertise: agent.expertise, kind: agent.kind },
     contacts: [],
     relevantMemories,
     relevantKnowledge,
-    kinDirectory: [],
-    isSubKin: false,
+    agentDirectory: [],
+    isSubAgent: false,
     isQuickSession: true,
     globalPrompt,
     userLanguage,
-    workspacePath: kin.workspacePath,
+    workspacePath: agent.workspacePath,
     activeProject: quickSessionActiveProject ?? undefined,
   }))
 
@@ -1037,9 +1041,9 @@ export async function buildQuickSessionContextPreview(kinId: string, sessionId: 
   // quick-session exclusion list applied on top.
   const { resolveToolset } = await import('@/server/services/toolset-resolver')
   const allTools = await resolveToolset({
-    kinId,
-    toolboxIds: kin.toolboxIds,
-    isSubKin: false,
+    agentId,
+    toolboxIds: agent.toolboxIds,
+    isSubAgent: false,
     quick: true,
   })
   for (const name of QUICK_SESSION_EXCLUDED_TOOLS) {
@@ -1047,7 +1051,7 @@ export async function buildQuickSessionContextPreview(kinId: string, sessionId: 
   }
   const qsSourceMap = buildSourceMap(allTools)
 
-  // Quick session shares the Kin's calibration factor — same model, same tools.
-  const calibrationFactor = await getKinCalibrationFactor(kinId)
-  return formatResult(systemPrompt, buildToolDefs(allTools, qsSourceMap), messagesPreviews, sessionMessages.length, getModelContextWindow(kin.model), null, [], null, [], [], calibrationFactor)
+  // Quick session shares the Agent's calibration factor — same model, same tools.
+  const calibrationFactor = await getAgentCalibrationFactor(agentId)
+  return formatResult(systemPrompt, buildToolDefs(allTools, qsSourceMap), messagesPreviews, sessionMessages.length, getModelContextWindow(agent.model), null, [], null, [], [], calibrationFactor)
 }

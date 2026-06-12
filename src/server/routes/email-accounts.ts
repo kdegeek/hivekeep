@@ -5,7 +5,7 @@ import { createLogger } from '@/server/logger'
 import { getEmailProvider, listEmailProviders } from '@/server/email/registry'
 import { getContactsProvider } from '@/server/contacts/registry'
 import { getCalendarProvider } from '@/server/calendar/registry'
-import type { OAuthProfile } from '@kinbot-developer/sdk'
+import type { OAuthProfile } from '@hivekeep/sdk'
 import {
   getOAuthClient,
   setOAuthClient,
@@ -20,6 +20,7 @@ import {
   deleteEmailAccount,
   setSendMode,
   setAllowList,
+  resolveEmailProviderByAccountId,
   type SendMode,
 } from '@/server/services/email-accounts'
 import { sseManager } from '@/server/sse/index'
@@ -291,11 +292,11 @@ emailAccountRoutes.get('/oauth/callback', async (c) => {
 // PATCH /api/email-accounts/:id — update send mode / allow-list.
 emailAccountRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id')
-  const body = await c.req.json<{ sendMode?: SendMode; allowedKinIds?: string[] | null }>()
+  const body = await c.req.json<{ sendMode?: SendMode; allowedAgentIds?: string[] | null }>()
   try {
     let account
     if (body.sendMode) account = await setSendMode(id, body.sendMode)
-    if (body.allowedKinIds !== undefined) account = await setAllowList(id, body.allowedKinIds)
+    if (body.allowedAgentIds !== undefined) account = await setAllowList(id, body.allowedAgentIds)
     if (!account) {
       return c.json({ error: { code: 'INVALID_INPUT', message: 'Nothing to update' } }, 400)
     }
@@ -312,6 +313,23 @@ emailAccountRoutes.delete('/:id', async (c) => {
   await deleteEmailAccount(id)
   sseManager.broadcast({ type: 'email-account:deleted', data: { accountId: id } })
   return c.json({ ok: true })
+})
+
+// GET /api/email-accounts/:id/folders — list folders/labels for the trigger
+// folder picker. Falls back to INBOX when the provider can't enumerate folders.
+emailAccountRoutes.get('/:id/folders', async (c) => {
+  const id = c.req.param('id')
+  try {
+    const { provider, config } = await resolveEmailProviderByAccountId(id)
+    if (!provider.listFolders) {
+      return c.json({ folders: [{ id: 'INBOX', name: 'INBOX', type: 'folder' as const }] })
+    }
+    const folders = await provider.listFolders(config)
+    return c.json({ folders: folders.length > 0 ? folders : [{ id: 'INBOX', name: 'INBOX', type: 'folder' as const }] })
+  } catch (err) {
+    log.error({ err, id }, 'Failed to list folders')
+    return c.json({ error: { code: 'FOLDERS_FAILED', message: err instanceof Error ? err.message : 'Failed to list folders' } }, 400)
+  }
 })
 
 export { emailAccountRoutes }

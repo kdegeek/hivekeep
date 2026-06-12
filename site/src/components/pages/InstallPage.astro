@@ -1,0 +1,169 @@
+---
+// Localized /install page body. All copy comes from the locale dictionary;
+// the install one-liner and the method/prereq data shapes stay code-driven.
+import Base from '../../layouts/Base.astro';
+import { Icon } from 'astro-icon/components';
+import InstallConfigurator from '../InstallConfigurator.tsx';
+import LangSwitcher from '../LangSwitcher.astro';
+import { getDict, localePath, type Locale } from '../../i18n';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = getDict(lang);
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const homeHref = `${base}${localePath(lang, '/')}`;
+const pluginsHref = `${base}${localePath(lang, '/plugins')}`;
+
+const INSTALL_ONELINER = 'curl -fsSL https://raw.githubusercontent.com/MarlBurroW/hivekeep/main/install.sh | bash';
+
+// Three install methods, honest tradeoffs. `y` = strength, `n` = caveat.
+// Copy lives in the dictionary; the first method is the recommended (primary) one.
+const methods = t.install.methods.map((m, i) => ({ ...m, primary: i === 0 }));
+
+// Plain prerequisites for the recommended native path, in non-dev language.
+const prereqs = t.install.prereqs.items;
+---
+<Base lang={lang} title={t.meta.install.title} description={t.meta.install.description}>
+  <!-- ===== top bar ===== -->
+  <header class="topbar"><div class="wrap in">
+    <a class="brand" href={homeHref}><img class="brand-logo" src={`${base}/logo.svg`} width="28" height="28" alt="" /> Hivekeep</a>
+    <nav>
+      <a href={`${homeHref}#memory`}>{t.nav.features}</a><a href={`${homeHref}#household`}>{t.nav.household}</a>
+      <a href={`${homeHref}#why`}>{t.nav.why}</a>
+      <a href={pluginsHref}>{t.nav.plugins}</a><a href="https://github.com/MarlBurroW/hivekeep">{t.nav.github}</a>
+    </nav>
+    <div class="nav-actions">
+      <LangSwitcher lang={lang} path="/install" />
+      <a class="btn btn-primary btn-sm" href="#configure">{t.nav.configure}</a>
+    </div>
+  </div></header>
+
+  <!-- ===== intro ===== -->
+  <div class="wrap">
+    <div class="install-head">
+      <span class="kicker" style="justify-content:center">{t.install.intro.kicker}</span>
+      <h1 class="display">{t.install.intro.heading}</h1>
+      <p set:html={t.install.intro.p} />
+    </div>
+
+    <!-- ===== recommended quick start: the single primary path ===== -->
+    <div class="rec-card">
+      <div class="rec-card-top">
+        <span class="rec-tag"><Icon name="lucide:sparkles" /> {t.install.rec.tag}</span>
+        <h2 class="display">{t.install.rec.heading}</h2>
+        <p>{t.install.rec.p}</p>
+      </div>
+      <div class="rec-cmd">
+        <code>{INSTALL_ONELINER}</code>
+        <button
+          type="button"
+          class="rec-copy"
+          data-copy={INSTALL_ONELINER}
+          data-copy-label={t.install.rec.copy}
+          data-copied-label={t.install.rec.copied}
+          aria-label={t.install.rec.copyAria}
+        >
+          <Icon name="lucide:copy" /> <span>{t.install.rec.copy}</span>
+        </button>
+      </div>
+      <p class="rec-then"><Icon name="lucide:arrow-right" /> <span set:html={t.install.rec.then} /></p>
+    </div>
+
+    <!-- ===== customize (configurator) ===== -->
+    <div id="configure" style="scroll-margin-top:80px;margin:46px 0 0;">
+      <span class="kicker">{t.install.configure.kicker}</span>
+      <h2 class="display" style="margin:12px 0 6px;">{t.install.configure.heading}</h2>
+      <p class="prereqs-sub" style="margin-bottom:22px;">{t.install.configure.p}</p>
+      <InstallConfigurator client:load labels={t.install.configurator} />
+    </div>
+
+    <!-- ===== advanced / reference: demoted into a disclosure ===== -->
+    <details class="install-more">
+      <summary>
+        <span class="im-label"><Icon name="lucide:settings-2" /> {t.install.more.label}</span>
+        <span class="im-hint">{t.install.more.hint}</span>
+        <Icon name="lucide:chevron-down" class="im-chev" />
+      </summary>
+      <div class="im-body">
+        <!-- prerequisites -->
+        <div class="prereqs" style="margin:8px 0 0;">
+          <span class="kicker">{t.install.prereqs.kicker}</span>
+          <h3 class="display" style="margin:12px 0 6px;">{t.install.prereqs.heading}</h3>
+          <p class="prereqs-sub">{t.install.prereqs.sub}</p>
+          <div class="prereq-grid">
+            {prereqs.map((p) => (
+              <div class="prereq">
+                <span class="pic"><Icon name={p.icon} /></span>
+                <div>
+                  <div class="pt">{p.title}</div>
+                  <div class="pd">{p.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p class="prereqs-win"><Icon name="lucide:monitor" /> <span set:html={t.install.prereqs.windows} /></p>
+        </div>
+
+        <!-- method comparison -->
+        <div style="margin:40px 0 0;">
+          <span class="kicker">{t.install.compare.kicker}</span>
+          <h3 class="display" style="margin:12px 0 6px;">{t.install.compare.heading}</h3>
+          <p class="prereqs-sub">{t.install.compare.sub}</p>
+        </div>
+        <div class="methods methods-3">
+          {methods.map((m) => (
+            <div class={`method${m.primary ? ' primary' : ''}`}>
+              <span class="tag">{m.tag}</span>
+              <h3 class="display">{m.name}</h3>
+              <p class="for">{m.pick}</p>
+              <ul>
+                {m.points.map(([k, label]) => (
+                  <li class={k}>
+                    <Icon name={k === 'y' ? 'lucide:check' : 'lucide:x'} />
+                    <span class="lbl">{label}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+    </details>
+
+    <div style="height:70px"></div>
+  </div>
+
+  <!-- ===== footer ===== -->
+  <footer class="footer"><div class="wrap in">
+    <a class="brand" href={homeHref}><img class="brand-logo" src={`${base}/logo.svg`} width="26" height="26" alt="" /> Hivekeep</a>
+    <span class="m">{t.footer.line}</span>
+  </div></footer>
+
+<script>
+  // Click-to-copy for the recommended one-liner card ([data-copy]). The
+  // localized "Copy"/"Copied" labels travel on data attributes.
+  document.querySelectorAll<HTMLElement>('[data-copy]').forEach((btn) => {
+    const text = btn.dataset.copy || ''
+    const copyLabel = btn.dataset.copyLabel || 'Copy'
+    const copiedLabel = btn.dataset.copiedLabel || 'Copied'
+    const label = btn.querySelector('span')
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(text)
+      } catch {
+        return
+      }
+      btn.classList.add('done')
+      if (label) label.textContent = copiedLabel
+      setTimeout(() => {
+        btn.classList.remove('done')
+        if (label) label.textContent = copyLabel
+      }, 1500)
+    })
+  })
+</script>
+</Base>

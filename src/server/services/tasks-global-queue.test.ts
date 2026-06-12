@@ -23,7 +23,7 @@
  *       while the 1st is awaiting (idle for the GLOBAL queue, active for the
  *       group), and only runs after the 1st leaves the group.
  *
- * `resolveLLM` is mocked to HANG: executeSubKin flips the row to in_progress and
+ * `resolveLLM` is mocked to HANG: executeSubAgent flips the row to in_progress and
  * then awaits the (never-settling) LLM call, so a promoted/spawned task holds its
  * slot deterministically without cascading into resolveTask/promote. We assert on
  * the synchronous DB state plus the awaitable promoteGlobalQueue()/gate helpers.
@@ -41,7 +41,7 @@ mock.module('@/server/logger', () => ({
 }))
 
 mock.module('@/server/sse/index', () => ({
-  sseManager: { sendToKin: () => {}, broadcast: () => {} },
+  sseManager: { sendToAgent: () => {}, broadcast: () => {} },
 }))
 
 // Queue: capture enqueued messages; stub the rest so resolveTask's await-mode
@@ -51,19 +51,21 @@ mock.module('@/server/services/queue', () => ({
   enqueueMessage: async (m: Record<string, unknown>) => { enqueued.push(m) },
   dequeueMessage: async () => null,
   markQueueItemDone: async () => {},
-  isKinProcessing: async () => false,
+  isAgentProcessing: async () => false,
   getQueueSize: async () => 0,
   recoverStaleProcessingItems: () => {},
   popQueueMessageMetadata: () => undefined,
 }))
 
-// spawnTask freezes a prompt-context snapshot that calls listAvailableKins.
-// Stub it so we don't depend on the inter-Kin directory shape here.
-mock.module('@/server/services/inter-kin', () => ({
-  listAvailableKins: async () => [],
+// spawnTask freezes a prompt-context snapshot that calls listAvailableAgents.
+// Stub it so we don't depend on the inter-Agent directory shape here.
+mock.module('@/server/services/inter-agent', () => ({
+  listAvailableAgents: async () => [],
+  sendInterAgentMessage: async () => undefined,
+  replyToInterAgentMessage: async () => undefined,
 }))
 
-// Force executeSubKin's LLM resolution to HANG. executeSubKin sets the row to
+// Force executeSubAgent's LLM resolution to HANG. executeSubAgent sets the row to
 // in_progress and then awaits this forever, so a running task deterministically
 // holds its global slot without auto-resolving and cascading promotion.
 mock.module('@/server/llm/core/resolve', () => ({
@@ -101,7 +103,7 @@ const itReal = schemaIsReal ? it : it.skip
 beforeAll(() => {
   if (!schemaIsReal) return
   sqlite.run(`
-    CREATE TABLE kins (
+    CREATE TABLE agents (
       id TEXT PRIMARY KEY,
       slug TEXT UNIQUE,
       name TEXT NOT NULL,
@@ -126,8 +128,8 @@ beforeAll(() => {
   sqlite.run(`
     CREATE TABLE tasks (
       id TEXT PRIMARY KEY,
-      parent_kin_id TEXT NOT NULL,
-      source_kin_id TEXT,
+      parent_agent_id TEXT NOT NULL,
+      source_agent_id TEXT,
       spawn_type TEXT NOT NULL,
       kind TEXT NOT NULL DEFAULT 'execute',
       mode TEXT NOT NULL DEFAULT 'await',
@@ -142,7 +144,7 @@ beforeAll(() => {
       parent_task_id TEXT,
       cron_id TEXT,
       request_input_count INTEGER NOT NULL DEFAULT 0,
-      inter_kin_request_count INTEGER NOT NULL DEFAULT 0,
+      inter_agent_request_count INTEGER NOT NULL DEFAULT 0,
       pending_request_id TEXT,
       pending_child_task_id TEXT,
       channel_origin_id TEXT,
@@ -168,7 +170,7 @@ beforeAll(() => {
   sqlite.run(`
     CREATE TABLE messages (
       id TEXT PRIMARY KEY,
-      kin_id TEXT NOT NULL,
+      agent_id TEXT NOT NULL,
       task_id TEXT,
       session_id TEXT,
       role TEXT NOT NULL,
@@ -197,8 +199,8 @@ beforeAll(() => {
   `)
 
   sqlite.run(
-    `INSERT INTO kins (id, name, role, character, expertise, model, workspace_path, created_at, updated_at)
-     VALUES ('kin-a', 'Kin A', 'helper', 'c', 'e', 'm', '/w', 0, 0)`,
+    `INSERT INTO agents (id, name, role, character, expertise, model, workspace_path, created_at, updated_at)
+     VALUES ('agent-a', 'Agent A', 'helper', 'c', 'e', 'm', '/w', 0, 0)`,
   )
 })
 
@@ -213,7 +215,7 @@ function countByStatus(status: string): number {
 }
 /** A promoted task occupies a global slot: it's been claimed out of 'queued'
  *  into the executing set. promoteGlobalQueue() flips it to 'pending' atomically
- *  and then kicks off executeSubKin (fire-and-forget) which advances it to
+ *  and then kicks off executeSubAgent (fire-and-forget) which advances it to
  *  'in_progress' on a later microtask — so either executing status proves the
  *  promotion landed. We assert "executing" rather than a specific status to stay
  *  free of that scheduling race. */
@@ -236,9 +238,9 @@ function seedTask(opts: {
   const id = 't-' + uuid().slice(0, 8)
   const now = Date.now()
   sqlite.run(
-    `INSERT INTO tasks (id, parent_kin_id, spawn_type, mode, description, status, depth,
+    `INSERT INTO tasks (id, parent_agent_id, spawn_type, mode, description, status, depth,
        concurrency_group, concurrency_max, queued_at, created_at, updated_at)
-     VALUES (?, 'kin-a', 'self', ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+     VALUES (?, 'agent-a', 'self', ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
     [
       id,
       opts.mode ?? 'async',
@@ -274,9 +276,9 @@ describe('spawnTask global gate', () => {
     seedTask({ status: 'in_progress' })
 
     // Third spawn → no global slot → queued (spawnTask takes the queued branch
-    // and does NOT kick off executeSubKin).
+    // and does NOT kick off executeSubAgent).
     const res = await spawnTask({
-      parentKinId: 'kin-a',
+      parentAgentId: 'agent-a',
       description: 'third task',
       mode: 'async',
       spawnType: 'self',
@@ -305,7 +307,7 @@ describe('spawnTask global gate', () => {
 
     // Next spawn would have to queue, but the queue is full → throw.
     await expect(
-      spawnTask({ parentKinId: 'kin-a', description: 'overflow', mode: 'async', spawnType: 'self' }),
+      spawnTask({ parentAgentId: 'agent-a', description: 'overflow', mode: 'async', spawnType: 'self' }),
     ).rejects.toThrow(/TASK_QUEUE_FULL/)
 
     // No new row was inserted (still exactly 2 queued + 1 executing).
@@ -316,14 +318,14 @@ describe('spawnTask global gate', () => {
   itReal('starts immediately (pending→in_progress) when a global slot is free', async () => {
     await setMaxConcurrentTasks(5)
     const res = await spawnTask({
-      parentKinId: 'kin-a',
+      parentAgentId: 'agent-a',
       description: 'free slot',
       mode: 'async',
       spawnType: 'self',
     })
     expect(res.queued).toBe(false)
-    // executeSubKin was kicked off — the row is in the executing set (pending
-    // right after spawn, advanced to in_progress once executeSubKin runs).
+    // executeSubAgent was kicked off — the row is in the executing set (pending
+    // right after spawn, advanced to in_progress once executeSubAgent runs).
     expectExecuting(res.taskId)
   })
 
@@ -338,7 +340,7 @@ describe('spawnTask global gate', () => {
     // The single global slot is taken; with maxQueue=0 there's no room to queue.
     seedTask({ status: 'in_progress' })
     await expect(
-      spawnTask({ parentKinId: 'kin-a', description: 'no-queue', mode: 'async', spawnType: 'self' }),
+      spawnTask({ parentAgentId: 'agent-a', description: 'no-queue', mode: 'async', spawnType: 'self' }),
     ).rejects.toThrow(/TASK_QUEUE_FULL/)
     expect(countByStatus('queued')).toBe(0) // nothing parked
   })

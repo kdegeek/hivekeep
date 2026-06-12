@@ -27,17 +27,17 @@ const todoItemSchema = z.object({
 })
 
 /**
- * `task_todos` — bulk-set the structured plan for a sub-Kin task.
+ * `task_todos` — bulk-set the structured plan for a sub-Agent task.
  *
- * Available to sub-Kins only. The model passes the FULL list each time it
+ * Available to sub-Agents only. The model passes the FULL list each time it
  * changes (creating items, advancing one to in_progress, marking one as
  * completed, cancelling stale ones). The list is held in memory for the
  * task lifetime and broadcast over SSE so the ticket UI can render
  * progress. It is NOT persisted to disk — a server restart loses it,
- * which matches the same model as `awaiting_kin_response` recovery.
+ * which matches the same model as `awaiting_agent_response` recovery.
  */
 export const taskTodosTool: ToolRegistration = {
-  availability: ['sub-kin'],
+  availability: ['sub-agent'],
   create: (ctx) =>
     tool({
       description:
@@ -47,7 +47,7 @@ export const taskTodosTool: ToolRegistration = {
       }),
       execute: async ({ todos }) => {
         if (!ctx.taskId) {
-          return { error: 'task_todos is only available inside a sub-Kin task.' }
+          return { error: 'task_todos is only available inside a sub-Agent task.' }
         }
 
         const task = await db.select().from(tasks).where(eq(tasks.id, ctx.taskId)).get()
@@ -55,7 +55,7 @@ export const taskTodosTool: ToolRegistration = {
 
         try {
           const stored = setTodosForTask(ctx.taskId, todos, {
-            parentKinId: task.parentKinId,
+            parentAgentId: task.parentAgentId,
             ticketId: task.ticketId ?? null,
           })
           recordGuardFire(ctx.taskId, 'todoUpdate')

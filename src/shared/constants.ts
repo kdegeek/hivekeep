@@ -1,7 +1,69 @@
 // Shared constants used by both client and server
-// 🤖 KinBot — Where AI agents collaborate!
+// 🤖 Hivekeep — Where AI agents collaborate!
 
-export const SUPPORTED_LANGUAGES = ['en', 'fr'] as const
+/** UI translation languages — every code here must have a matching
+ *  src/client/locales/<code>.json shipped with the app. */
+export const SUPPORTED_LANGUAGES = ['en', 'fr', 'es', 'de', 'pt-BR', 'zh-CN', 'ja', 'ru', 'it', 'pl'] as const
+
+// ─── Agent communication languages ──────────────────────────────────────────
+// Languages a user can ask Agents to speak (user_profiles.agent_language).
+// Decoupled from SUPPORTED_LANGUAGES (UI translations): LLMs speak far more
+// languages than the UI ships, so this list is intentionally broad.
+// `name` is the English name (injected into the system prompt); `nativeName`
+// is what the picker displays.
+export const AGENT_LANGUAGES = [
+  { code: 'ar', name: 'Arabic', nativeName: 'العربية' },
+  { code: 'bn', name: 'Bengali', nativeName: 'বাংলা' },
+  { code: 'bg', name: 'Bulgarian', nativeName: 'Български' },
+  { code: 'ca', name: 'Catalan', nativeName: 'Català' },
+  { code: 'zh-CN', name: 'Chinese (Simplified)', nativeName: '简体中文' },
+  { code: 'zh-TW', name: 'Chinese (Traditional)', nativeName: '繁體中文' },
+  { code: 'hr', name: 'Croatian', nativeName: 'Hrvatski' },
+  { code: 'cs', name: 'Czech', nativeName: 'Čeština' },
+  { code: 'da', name: 'Danish', nativeName: 'Dansk' },
+  { code: 'nl', name: 'Dutch', nativeName: 'Nederlands' },
+  { code: 'en', name: 'English', nativeName: 'English' },
+  { code: 'et', name: 'Estonian', nativeName: 'Eesti' },
+  { code: 'fi', name: 'Finnish', nativeName: 'Suomi' },
+  { code: 'fr', name: 'French', nativeName: 'Français' },
+  { code: 'de', name: 'German', nativeName: 'Deutsch' },
+  { code: 'el', name: 'Greek', nativeName: 'Ελληνικά' },
+  { code: 'he', name: 'Hebrew', nativeName: 'עברית' },
+  { code: 'hi', name: 'Hindi', nativeName: 'हिन्दी' },
+  { code: 'hu', name: 'Hungarian', nativeName: 'Magyar' },
+  { code: 'id', name: 'Indonesian', nativeName: 'Bahasa Indonesia' },
+  { code: 'it', name: 'Italian', nativeName: 'Italiano' },
+  { code: 'ja', name: 'Japanese', nativeName: '日本語' },
+  { code: 'ko', name: 'Korean', nativeName: '한국어' },
+  { code: 'lv', name: 'Latvian', nativeName: 'Latviešu' },
+  { code: 'lt', name: 'Lithuanian', nativeName: 'Lietuvių' },
+  { code: 'ms', name: 'Malay', nativeName: 'Bahasa Melayu' },
+  { code: 'no', name: 'Norwegian', nativeName: 'Norsk' },
+  { code: 'fa', name: 'Persian', nativeName: 'فارسی' },
+  { code: 'pl', name: 'Polish', nativeName: 'Polski' },
+  { code: 'pt-BR', name: 'Portuguese (Brazil)', nativeName: 'Português (Brasil)' },
+  { code: 'pt-PT', name: 'Portuguese (Portugal)', nativeName: 'Português (Portugal)' },
+  { code: 'ro', name: 'Romanian', nativeName: 'Română' },
+  { code: 'ru', name: 'Russian', nativeName: 'Русский' },
+  { code: 'sr', name: 'Serbian', nativeName: 'Српски' },
+  { code: 'sk', name: 'Slovak', nativeName: 'Slovenčina' },
+  { code: 'sl', name: 'Slovenian', nativeName: 'Slovenščina' },
+  { code: 'es', name: 'Spanish', nativeName: 'Español' },
+  { code: 'sv', name: 'Swedish', nativeName: 'Svenska' },
+  { code: 'th', name: 'Thai', nativeName: 'ไทย' },
+  { code: 'tr', name: 'Turkish', nativeName: 'Türkçe' },
+  { code: 'uk', name: 'Ukrainian', nativeName: 'Українська' },
+  { code: 'vi', name: 'Vietnamese', nativeName: 'Tiếng Việt' },
+] as const
+
+export type AgentLanguageCode = (typeof AGENT_LANGUAGES)[number]['code']
+
+export const AGENT_LANGUAGE_CODES: readonly string[] = AGENT_LANGUAGES.map((l) => l.code)
+
+/** code → English name, for prompt injection ("You MUST respond in …"). */
+export const AGENT_LANGUAGE_NAMES: Record<string, string> = Object.fromEntries(
+  AGENT_LANGUAGES.map((l) => [l.code, l.name]),
+)
 
 // ─── Appearance preferences (DB-backed via user_profiles, see /api/me) ──────────
 // PALETTE_IDS already lives lower in this file. THEME_MODES / CONTRAST_MODES are
@@ -19,8 +81,8 @@ export const MAX_MESSAGE_LENGTH = 32_000
 
 /** Default maximum number of concurrency-safe tools that can run in parallel
  *  within a single step batch. Override at runtime with the
- *  KINBOT_MAX_TOOL_USE_CONCURRENCY env var. */
-export const KINBOT_MAX_TOOL_USE_CONCURRENCY_DEFAULT = 10
+ *  HIVEKEEP_MAX_TOOL_USE_CONCURRENCY env var. */
+export const HIVEKEEP_MAX_TOOL_USE_CONCURRENCY_DEFAULT = 10
 
 // ---------------------------------------------------------------------------
 // Provider constants — all derived from PROVIDER_META (single source of truth)
@@ -65,26 +127,29 @@ export const REQUIRED_CAPABILITIES = ['llm', 'embedding'] as const
 
 /** Preference order (case-insensitive substring match against model ids) used
  *  to pick a balanced, tool-use-reliable model when seeding the configurator
- *  Kin (Sherpa) on a freshly added native LLM provider. resolveConfiguratorModel()
+ *  Agent (Queenie) on a freshly added native LLM provider. resolveConfiguratorModel()
  *  returns the first listed model whose id matches the earliest preference; if
  *  none match it falls back to the provider's first listed model. Keyed by
  *  provider `type`. Drift-proof (always validated against the live model list).
- *  See sherpa.md §4.2. */
+ *  See queenie.md §4.2. */
 export const CONFIGURATOR_MODEL_PREFERENCES: Record<string, readonly string[]> = {
   anthropic: ['sonnet', 'opus', 'haiku'],
   'anthropic-oauth': ['sonnet', 'opus', 'haiku'],
   openai: ['gpt-5', 'gpt-4.1', 'gpt-4o', 'o4', 'gpt-4'],
   'openai-codex': ['gpt-5', 'gpt-4.1', 'gpt-4o'],
-  gemini: ['flash', 'pro'],
+  gemini: ['pro', 'flash'],
   openrouter: ['sonnet', 'gpt-4o', 'gpt-4.1', 'llama'],
   xai: ['grok-4', 'grok-3', 'grok-2', 'grok'],
+  deepseek: ['pro', 'flash', 'deepseek'],
+  minimax: ['m3', 'minimax'],
+  moonshot: ['k2.6', 'kimi-k2', 'kimi', 'moonshot'],
 }
 
 /** Avatar appearance is two independent global axes the prompt-writer agent is
  *  guided by: the art STYLE (how it's drawn) and the SUBJECT/type (what it
  *  depicts). Presets are UI/onboarding shortcuts; both axes accept free text
- *  ("Other"). The agent writes the per-Kin character (axis C) guided by A+B.
- *  See sherpa.md §9. */
+ *  ("Other"). The agent writes the per-Agent character (axis C) guided by A+B.
+ *  See queenie.md §9. */
 export interface AvatarPreset {
   id: string
   /** Short label shown in the UI / proposed by the configurator. */
@@ -94,6 +159,7 @@ export interface AvatarPreset {
 }
 
 export const AVATAR_STYLE_PRESETS: readonly AvatarPreset[] = [
+  { id: 'hivekeep', label: 'Hivekeep (robot-bee)', prompt: '2D "serious cartoon" splash-art, in the art direction of Valorant and League of Legends key art: bold confident linework, semi-realistic hand-painted digital illustration, painterly textures, dramatic rim lighting, rich shadows. Dark charcoal-violet background with a subtle hexagon honeycomb pattern and a soft glow. Centered head-and-shoulders avatar composition. Premium, mature, never childish. No text, no letters, no words, no UI elements.' },
   { id: 'pixar', label: 'Pixar 3D', prompt: 'Pixar / 3D-animation style, soft lighting' },
   { id: 'anime', label: 'Anime', prompt: 'anime art style, clean linework, cel shading' },
   { id: 'watercolor', label: 'Watercolor', prompt: 'soft watercolor painting style' },
@@ -102,6 +168,7 @@ export const AVATAR_STYLE_PRESETS: readonly AvatarPreset[] = [
 ]
 
 export const AVATAR_SUBJECT_PRESETS: readonly AvatarPreset[] = [
+  { id: 'hivekeep-bee', label: 'Hivekeep robot-bee', prompt: 'An insectoid robot bee: two large faceted glowing compound eyes, a mechanical mandible, segmented antennae with rounded tips, large translucent mechanical wings spread wide behind the shoulders, a robotic thorax with yellow-and-black striped panels, a matte dark charcoal shell with subtle aurora gradient edge accents (indigo to violet to warm orange). Clearly an insect-machine, NOT a humanoid robot, no human face, no human mouth.' },
   { id: 'robot', label: 'Robot', prompt: 'a small, friendly, cute robot' },
   { id: 'human', label: 'Human', prompt: 'a human character' },
   { id: 'elf', label: 'Elf', prompt: 'an elf character with pointed ears' },
@@ -111,7 +178,8 @@ export const AVATAR_SUBJECT_PRESETS: readonly AvatarPreset[] = [
 ]
 
 /** Defaults used when the user hasn't customized the avatar axes. The default
- *  subject is a robot because the bundled img2img base image is a robot. */
+ *  style + subject are the Hivekeep robot-bee, matching the bundled img2img base
+ *  image (src/server/assets/base-avatar.png) and the specialist avatar roster. */
 export const DEFAULT_AVATAR_STYLE = AVATAR_STYLE_PRESETS[0]!.prompt
 export const DEFAULT_AVATAR_SUBJECT = AVATAR_SUBJECT_PRESETS[0]!.prompt
 
@@ -119,7 +187,7 @@ export const MEMORY_CATEGORIES = ['fact', 'preference', 'decision', 'knowledge']
 
 export const MEMORY_SCOPES = ['private', 'shared'] as const
 
-export const MESSAGE_SOURCES = ['user', 'kin', 'task', 'cron', 'system', 'webhook', 'channel'] as const
+export const MESSAGE_SOURCES = ['user', 'agent', 'task', 'cron', 'system', 'webhook', 'channel'] as const
 
 export const KNOWN_CHANNEL_PLATFORMS = ['telegram', 'discord', 'slack', 'whatsapp', 'signal', 'matrix'] as const
 
@@ -133,7 +201,7 @@ export const TASK_STATUSES = ['pending', 'in_progress', 'awaiting_human_input', 
  * Crucially this includes the SUSPENDED-BUT-ALIVE states a task enters while it
  * delegates work downward or waits on something:
  *   - `paused`               — manually paused, still owns the slot
- *   - `awaiting_kin_response`— blocked on an inter-Kin request it sent
+ *   - `awaiting_agent_response`— blocked on an inter-Agent request it sent
  *   - `awaiting_subtask`     — blocked on a child it spawned (e.g. the `scout`
  *                              tool) via suspendTaskForChild
  *
@@ -148,7 +216,7 @@ export const TICKET_RUNNING_TASK_STATUSES = [
   'pending',
   'in_progress',
   'paused',
-  'awaiting_kin_response',
+  'awaiting_agent_response',
   'awaiting_subtask',
 ] as const
 
@@ -158,9 +226,10 @@ export const NOTIFICATION_TYPES = [
   'cron:pending-approval',
   'mcp:pending-approval',
   'email:pending-send-approval',
-  'kin:error',
-  'kin:alert',
+  'agent:error',
+  'agent:alert',
   'mention',
+  'miniapp:notify',
 ] as const
 
 /** Regex to detect @mentions in message content. Shared between client (rendering) and server (parsing). */
@@ -188,10 +257,36 @@ export const PALETTE_IDS = [
 ] as const
 
 // ---------------------------------------------------------------------------
-// Tool domains — centralized metadata for consistent UI across the app
+// Thinking / reasoning efforts
 // ---------------------------------------------------------------------------
 
-import type { BuiltinToolDomain } from '@/shared/types'
+import type { AgentThinkingEffort, BuiltinToolDomain } from '@/shared/types'
+
+/** Canonical effort ladder, lowest → highest. Single source of truth for the
+ *  UI selectors and route validation. Mirrors the SDK's
+ *  `THINKING_EFFORT_ORDER` (kept inline so the client bundle never imports
+ *  SDK values). */
+export const THINKING_EFFORTS: readonly AgentThinkingEffort[] = [
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+]
+
+/** The pre-models.dev default ladder — what selectors offer when the selected
+ *  model's supported efforts are unknown (no registry data, plugin providers). */
+export const DEFAULT_THINKING_EFFORTS: readonly AgentThinkingEffort[] = [
+  'low',
+  'medium',
+  'high',
+  'max',
+]
+
+// ---------------------------------------------------------------------------
+// Tool domains — centralized metadata for consistent UI across the app
+// ---------------------------------------------------------------------------
 
 /** Metadata for a tool domain: icon name (Lucide), CSS classes, i18n key */
 export interface ToolDomainMeta {
@@ -221,7 +316,7 @@ export const TOOL_DOMAIN_META: Record<BuiltinToolDomain, ToolDomainMeta> = {
   memory:     { icon: 'Brain',        bg: 'bg-chart-2/40',   text: 'text-chart-2',          border: 'border-chart-2/40',           labelKey: 'tools.domains.memory' },
   vault:      { icon: 'ShieldCheck',  bg: 'bg-warning/40',   text: 'text-warning',          border: 'border-warning/40',           labelKey: 'tools.domains.vault' },
   tasks:      { icon: 'ListTodo',     bg: 'bg-chart-1/40',   text: 'text-chart-1',          border: 'border-chart-1/40',           labelKey: 'tools.domains.tasks' },
-  'inter-kin':{ icon: 'MessageCircle',bg: 'bg-chart-4/40',   text: 'text-chart-4',          border: 'border-chart-4/40',           labelKey: 'tools.domains.inter-kin' },
+  'inter-agent':{ icon: 'MessageCircle',bg: 'bg-chart-4/40',   text: 'text-chart-4',          border: 'border-chart-4/40',           labelKey: 'tools.domains.inter-agent' },
   crons:      { icon: 'Clock',        bg: 'bg-chart-5/40',   text: 'text-chart-5',          border: 'border-chart-5/40',           labelKey: 'tools.domains.crons' },
   custom:     { icon: 'Puzzle',       bg: 'bg-chart-3/40',   text: 'text-chart-3',          border: 'border-chart-3/40',           labelKey: 'tools.domains.custom' },
   images:     { icon: 'Image',        bg: 'bg-primary/40',   text: 'text-primary',          border: 'border-primary/40',           labelKey: 'tools.domains.images' },
@@ -229,7 +324,7 @@ export const TOOL_DOMAIN_META: Record<BuiltinToolDomain, ToolDomainMeta> = {
   filesystem:      { icon: 'FileCode',    bg: 'bg-chart-1/40',   text: 'text-chart-1',          border: 'border-chart-1/40',           labelKey: 'tools.domains.filesystem' },
   'file-storage':  { icon: 'HardDrive',   bg: 'bg-accent/40',   text: 'text-accent-foreground',border: 'border-accent/40',            labelKey: 'tools.domains.file-storage' },
   mcp:             { icon: 'Plug',         bg: 'bg-muted',        text: 'text-muted-foreground', border: 'border-muted-foreground/40',  labelKey: 'tools.domains.mcp' },
-  'kin-management':{ icon: 'Crown',       bg: 'bg-chart-3/40',   text: 'text-chart-3',          border: 'border-chart-3/40',           labelKey: 'tools.domains.kin-management' },
+  'agent-management':{ icon: 'Crown',       bg: 'bg-chart-3/40',   text: 'text-chart-3',          border: 'border-chart-3/40',           labelKey: 'tools.domains.agent-management' },
   webhooks:        { icon: 'Webhook',     bg: 'bg-info/40',      text: 'text-info',             border: 'border-info/40',              labelKey: 'tools.domains.webhooks' },
   channels:        { icon: 'Radio',       bg: 'bg-chart-4/40',   text: 'text-chart-4',          border: 'border-chart-4/40',           labelKey: 'tools.domains.channels' },
   system:          { icon: 'ScrollText',  bg: 'bg-chart-5/40',   text: 'text-chart-5',          border: 'border-chart-5/40',           labelKey: 'tools.domains.system' },
@@ -379,7 +474,7 @@ export const TICKET_STATUSES = ['backlog', 'todo', 'in_progress', 'blocked', 'do
  *  - starts with a letter
  *  - 2-32 chars total
  *  - no leading hyphen (handled by leading-letter rule)
- *  Examples: `kinbot`, `soupcon-de-magie`, `x-1`. */
+ *  Examples: `hivekeep`, `soupcon-de-magie`, `x-1`. */
 export const PROJECT_SLUG_REGEX = /^[a-z][a-z0-9-]{1,31}$/
 
 /** Regex to capture a ticket reference in free text. Two shapes:
@@ -418,7 +513,7 @@ export function isValidGitBranch(name: string): boolean {
  *  sync. */
 export const CLONE_STATUSES = ['none', 'cloning', 'ready', 'error'] as const
 
-/** Tags applied to every newly created project. Editable by user/Kin afterward. */
+/** Tags applied to every newly created project. Editable by user/Agent afterward. */
 export const DEFAULT_PROJECT_TAGS: ReadonlyArray<{ label: string; color: string }> = [
   { label: 'bug', color: '#ef4444' },
   { label: 'feature', color: '#3b82f6' },
@@ -427,12 +522,12 @@ export const DEFAULT_PROJECT_TAGS: ReadonlyArray<{ label: string; color: string 
 ]
 
 /**
- * Mandatory tool floor present in EVERY resolved toolset (main Kins and tasks)
+ * Mandatory tool floor present in EVERY resolved toolset (main Agents and tasks)
  * regardless of toolbox selection, because the system protocol assumes them.
  * The toolbox resolver unions this with the selected toolboxes' listed tools.
  *
  * This is the single source of truth, shared between the server resolver and
- * the client (Kin tools preview). `@/server/services/tool-presets` re-exports
+ * the client (Agent tools preview). `@/server/services/tool-presets` re-exports
  * it so existing server imports keep working.
  */
 export const CORE_TOOLS: readonly string[] = [
@@ -448,7 +543,7 @@ export const CORE_TOOLS: readonly string[] = [
   // Shell (with the wrapper-refusal gate already in place).
   'run_shell',
 
-  // Sub-Kin protocol — strictly required by the runner.
+  // Sub-Agent protocol — strictly required by the runner.
   'update_task_status',
   'request_input',
   'report_to_parent',
@@ -457,17 +552,28 @@ export const CORE_TOOLS: readonly string[] = [
   'prompt_human',
   'notify',
 
-  // File attachments (sub-Kins often need to surface screenshots / files
+  // Tool self-service: every Agent can discover what exists and ask the user
+  // for access — the approval card is the gate (granted names land in
+  // agents.extra_tool_names).
+  'list_tools',
+  'request_tool_access',
+  // Secure secret entry (popup → vault; the value never reaches the LLM). The
+  // secure analog of prompt_human, so any Agent can acquire a credential it needs
+  // instead of asking the user to paste it into the chat. Main-only in practice
+  // (availability 'main' keeps it out of sub-Agents) and admin-gated at runtime.
+  'prompt_secret',
+
+  // File attachments (sub-Agents often need to surface screenshots / files
   // back to the user without going through write_file + a separate channel
   // call).
   'attach_file',
 
   // Reasoning aid (no-op tool that logs a thought). Cheap, no side effects,
-  // available to every sub-Kin regardless of preset so it can be leaned on
+  // available to every sub-Agent regardless of preset so it can be leaned on
   // for planning before committing to concrete tool calls.
   'think',
 
-  // Structured planning (TodoWrite-equivalent). Sub-Kins use it to lay out
+  // Structured planning (TodoWrite-equivalent). Sub-Agents use it to lay out
   // a plan up-front on multi-step work and surface progress to the user.
   'task_todos',
 ]

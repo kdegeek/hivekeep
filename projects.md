@@ -1,8 +1,8 @@
-# KinBot — Projets et tickets
+# Hivekeep — Projets et tickets
 
-Système de gestion de projets avec tickets organisés en kanban. Permet à n'importe quel Kin de la plateforme de travailler sur n'importe quel projet, en lui injectant le contexte du projet actif dans son prompt et en lui exposant des outils CRUD dédiés.
+Système de gestion de projets avec tickets organisés en kanban. Permet à n'importe quel Agent de la plateforme de travailler sur n'importe quel projet, en lui injectant le contexte du projet actif dans son prompt et en lui exposant des outils CRUD dédiés.
 
-> Ce document décrit la feature complète : modèle de données, outils Kin, API REST, prompt, navigation. Voir `idea.md` pour le contexte global de KinBot et `schema.md` pour les conventions générales de schéma.
+> Ce document décrit la feature complète : modèle de données, outils Agent, API REST, prompt, navigation. Voir `CLAUDE.md` pour le contexte global de Hivekeep et `schema.md` pour les conventions générales de schéma.
 
 ---
 
@@ -10,23 +10,23 @@ Système de gestion de projets avec tickets organisés en kanban. Permet à n'im
 
 ### Projet
 
-Un projet est une **entité de premier ordre** dans KinBot, indépendante des Kins. Il regroupe une description (contexte donné aux Kins qui travaillent dessus), une liste de tickets, et une bibliothèque de tags propre au projet.
+Un projet est une **entité de premier ordre** dans Hivekeep, indépendante des Agents. Il regroupe une description (contexte donné aux Agents qui travaillent dessus), une liste de tickets, et une bibliothèque de tags propre au projet.
 
-Un projet n'a **pas d'owner Kin**. N'importe quel Kin peut sélectionner n'importe quel projet et travailler dessus. La spécialisation Kin↔projet est une préoccupation utilisateur, exprimée dans le `character`/`expertise`/prompt système de chaque Kin (ex: « Tu es le Kin dédié au projet X, commence chaque session par select_project("x") »).
+Un projet n'a **pas d'owner Agent**. N'importe quel Agent peut sélectionner n'importe quel projet et travailler dessus. La spécialisation Agent↔projet est une préoccupation utilisateur, exprimée dans le `character`/`expertise`/prompt système de chaque Agent (ex: « Tu es le Agent dédié au projet X, commence chaque session par select_project("x") »).
 
 ### Ticket
 
-Unité de travail au sein d'un projet. Possède un titre, une description, un statut (kanban) et des tags. Peut être créé par un utilisateur (via l'UI) ou par un Kin (via ses outils).
+Unité de travail au sein d'un projet. Possède un titre, une description, un statut (kanban) et des tags. Peut être créé par un utilisateur (via l'UI) ou par un Agent (via ses outils).
 
 > Pas de notion de priorité au MVP. Si le besoin émerge, ajouter un champ texte libre ou un système de tags dédié plutôt qu'une enum figée.
 
 ### Task liée à un ticket
 
-Le mécanisme d'exécution d'un ticket réutilise la primitive **task** (sub-Kin) existante. Un Kin appelle `start_ticket_task(ticket_id)` qui spawn un sub-Kin avec le contexte du projet et du ticket en prompt. Plusieurs tasks peuvent être liées au même ticket (relances, runs successifs, plusieurs Kins qui contribuent).
+Le mécanisme d'exécution d'un ticket réutilise la primitive **task** (sub-Agent) existante. Un Agent appelle `start_ticket_task(ticket_id)` qui spawn un sub-Agent avec le contexte du projet et du ticket en prompt. Plusieurs tasks peuvent être liées au même ticket (relances, runs successifs, plusieurs Agents qui contribuent).
 
-### Projet actif (par Kin)
+### Projet actif (par Agent)
 
-Chaque Kin a un état `active_project_id` (nullable, persisté). Quand un projet est actif, son contexte est injecté dans le prompt système du Kin à chaque tour. Le projet actif peut être changé par l'utilisateur (via l'UI) ou par le Kin lui-même (via l'outil `set_active_project`). Singleton — un Kin n'a qu'un seul projet actif à la fois.
+Chaque Agent a un état `active_project_id` (nullable, persisté). Quand un projet est actif, son contexte est injecté dans le prompt système du Agent à chaque tour. Le projet actif peut être changé par l'utilisateur (via l'UI) ou par le Agent lui-même (via l'outil `set_active_project`). Singleton — un Agent n'a qu'un seul projet actif à la fois.
 
 ---
 
@@ -42,7 +42,7 @@ Entité projet indépendante.
 |---|---|---|---|
 | `id` | text PK | UUID | |
 | `title` | text | NOT NULL | Titre du projet |
-| `description` | text | NOT NULL, DEFAULT '' | Description complète — injectée dans le prompt système des Kins quand le projet est actif. Pas de cap dur en DB. |
+| `description` | text | NOT NULL, DEFAULT '' | Description complète — injectée dans le prompt système des Agents quand le projet est actif. Pas de cap dur en DB. |
 | `github_url` | text | | URL du repo GitHub (metadata uniquement, pas d'intégration tool au MVP) |
 | `created_at` | integer | NOT NULL | |
 | `updated_at` | integer | NOT NULL | |
@@ -50,7 +50,7 @@ Entité projet indépendante.
 **Index** :
 - `idx_projects_created` sur `created_at` (pour le tri dans la sidebar)
 
-> Pas de FK `user_id` / `owner_kin_id`. Les projets sont partagés entre tous les utilisateurs, conformément au principe KinBot (idea.md §11 — « Les Kins sont partagés entre tous les utilisateurs »). Même règle pour les projets.
+> Pas de FK `user_id` / `owner_agent_id`. Les projets sont partagés entre tous les utilisateurs, conformément au principe Hivekeep (« les Agents sont partagés entre tous les utilisateurs »). Même règle pour les projets.
 
 #### `project_tags`
 
@@ -70,7 +70,7 @@ Tags définis au niveau du projet. Bibliothèque propre à chaque projet — un 
 **Index** :
 - `idx_project_tags_project` sur `project_id`
 
-> Pas de champ `is_default`. La liste standard de tags est définie en code (`src/shared/constants.ts → DEFAULT_PROJECT_TAGS`) et appliquée comme seed à la création de chaque projet. Après cela, l'utilisateur (ou un Kin) peut ajouter / modifier / supprimer librement.
+> Pas de champ `is_default`. La liste standard de tags est définie en code (`src/shared/constants.ts → DEFAULT_PROJECT_TAGS`) et appliquée comme seed à la création de chaque projet. Après cela, l'utilisateur (ou un Agent) peut ajouter / modifier / supprimer librement.
 
 #### `tickets`
 
@@ -108,15 +108,15 @@ Liaison N-N tickets ↔ tags.
 
 ### Modifications de tables existantes
 
-#### `kins`
+#### `agents`
 
 Ajout d'une colonne :
 
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
-| `active_project_id` | text | FK → projects.id, ON DELETE SET NULL | Projet actif du Kin (NULL si aucun). État persistant. |
+| `active_project_id` | text | FK → projects.id, ON DELETE SET NULL | Projet actif du Agent (NULL si aucun). État persistant. |
 
-> Si le projet actif est supprimé, le Kin perd son contexte projet (`SET NULL`), pas d'erreur ni d'orphelin.
+> Si le projet actif est supprimé, le Agent perd son contexte projet (`SET NULL`), pas d'erreur ni d'orphelin.
 
 #### `tasks`
 
@@ -129,15 +129,15 @@ Ajout d'une colonne :
 **Index** :
 - `idx_tasks_ticket` sur `ticket_id`
 
-> Si le ticket est supprimé, les tasks historiques sont préservées (`SET NULL`) — important pour conserver l'audit trail dans le thread du Kin.
+> Si le ticket est supprimé, les tasks historiques sont préservées (`SET NULL`) — important pour conserver l'audit trail dans le thread du Agent.
 
-> Pas de colonne `additional_context` : le prompt-builder du sub-Kin lookup le ticket courant au runtime (description, tags, projet) plutôt que de figer le contexte au moment du spawn. Avantage : si l'utilisateur enrichit le ticket pendant que la task est en queue, la task voit la version à jour.
+> Pas de colonne `additional_context` : le prompt-builder du sub-Agent lookup le ticket courant au runtime (description, tags, projet) plutôt que de figer le contexte au moment du spawn. Avantage : si l'utilisateur enrichit le ticket pendant que la task est en queue, la task voit la version à jour.
 
 ### Cascades — récapitulatif
 
 | Suppression de | Effet |
 |---|---|
-| Projet | CASCADE : tickets, project_tags, ticket_tags (via les tickets) sont supprimés. `kins.active_project_id` mis à NULL pour les Kins concernés. `tasks.ticket_id` mis à NULL pour les tasks historiques liées aux tickets cascadés. |
+| Projet | CASCADE : tickets, project_tags, ticket_tags (via les tickets) sont supprimés. `agents.active_project_id` mis à NULL pour les Agents concernés. `tasks.ticket_id` mis à NULL pour les tasks historiques liées aux tickets cascadés. |
 | Ticket | CASCADE : ticket_tags supprimés. `tasks.ticket_id` mis à NULL. |
 | Tag | CASCADE : `ticket_tags` supprimés (les tickets perdent juste ce tag). |
 
@@ -145,7 +145,7 @@ Ajout d'une colonne :
 
 ---
 
-## 3. Outils natifs Kin
+## 3. Outils natifs Agent
 
 Tous exposés dans `src/server/tools/project-tools.ts` (à créer). Conventions de flags (`readOnly`, `concurrencySafe`, `destructive`) conformes à `CLAUDE.md` § « Tool concurrency ».
 
@@ -161,7 +161,7 @@ Tous exposés dans `src/server/tools/project-tools.ts` (à créer). Conventions 
 | `append_project_description(project_id, text, separator?)` | — | Ajoute en fin (séparateur par défaut : `\n\n`). Utile pour ajouter une règle sans relire. |
 | `patch_project_description(project_id, find, replace)` | — | Recherche-remplace précis. Erreur si `find` introuvable ou ambigu (multi-occurrences sans `replace_all` explicite). |
 | `delete_project(project_id)` | destructive | Supprime un projet (cascade). |
-| `set_active_project(project_id \| null)` | — | Définit ou réinitialise le projet actif du Kin appelant. Émet un event SSE pour mettre à jour l'UI. |
+| `set_active_project(project_id \| null)` | — | Définit ou réinitialise le projet actif du Agent appelant. Émet un event SSE pour mettre à jour l'UI. |
 
 ### Tags
 
@@ -176,7 +176,7 @@ Tous exposés dans `src/server/tools/project-tools.ts` (à créer). Conventions 
 | Tool | Flags | Description |
 |---|---|---|
 | `list_tickets(project_id, filters?)` | readOnly, concurrencySafe | Liste paginée. Filtres : `status`, `tag_ids[]`, `limit`, `offset`. |
-| `get_ticket(ticket_id)` | readOnly, concurrencySafe | Détail complet du ticket + ses tasks liées (id, status, parent_kin, created_at). |
+| `get_ticket(ticket_id)` | readOnly, concurrencySafe | Détail complet du ticket + ses tasks liées (id, status, parent_agent, created_at). |
 | `create_ticket(project_id, title, description?, status?, tag_ids?)` | — | Crée un ticket. Status par défaut : `backlog`. Position : `max(position) + 1024` dans la colonne. |
 | `update_ticket(ticket_id, fields)` | — | Modifie title / description / status / position. Sur changement de status, la position est recalculée pour atterrir en haut de la colonne cible (max + 1024). |
 | `add_ticket_tag(ticket_id, tag_id)` | — | Ajoute un tag (idempotent). |
@@ -187,15 +187,15 @@ Tous exposés dans `src/server/tools/project-tools.ts` (à créer). Conventions 
 
 | Tool | Flags | Description |
 |---|---|---|
-| `start_ticket_task(ticket_id)` | — | Spawn un sub-Kin avec le contexte du ticket. **Toujours en mode `await`** (aucun param `mode` exposé — voir § 5). **Aucun effet de bord sur le statut du ticket** : c'est au Kin de l'avoir mis à `in_progress` au préalable s'il le souhaite (cf. § 5 et `prompt-system.md` bloc [6]). |
+| `start_ticket_task(ticket_id)` | — | Spawn un sub-Agent avec le contexte du ticket. **Toujours en mode `await`** (aucun param `mode` exposé — voir § 5). **Aucun effet de bord sur le statut du ticket** : c'est au Agent de l'avoir mis à `in_progress` au préalable s'il le souhaite (cf. § 5 et `prompt-system.md` bloc [6]). |
 
-> Pas d'outil dédié pour "lier une task existante à un ticket" — la liaison se fait toujours via `start_ticket_task`. Si un Kin veut bosser sur un ticket sans déléguer à un sub-Kin, il fait juste son travail dans son tour LLM et met à jour le ticket via `update_ticket`.
+> Pas d'outil dédié pour "lier une task existante à un ticket" — la liaison se fait toujours via `start_ticket_task`. Si un Agent veut bosser sur un ticket sans déléguer à un sub-Agent, il fait juste son travail dans son tour LLM et met à jour le ticket via `update_ticket`.
 
 ### Règle d'usage du projet actif
 
-Les outils ticket prennent **toujours** un `project_id` ou `ticket_id` explicite. Le projet actif n'est pas un défaut implicite : si le Kin manipule le projet B alors que son projet actif est A, il doit explicitement passer `project_id = B` (et idéalement appeler `set_active_project(B)` avant pour la cohérence du contexte).
+Les outils ticket prennent **toujours** un `project_id` ou `ticket_id` explicite. Le projet actif n'est pas un défaut implicite : si le Agent manipule le projet B alors que son projet actif est A, il doit explicitement passer `project_id = B` (et idéalement appeler `set_active_project(B)` avant pour la cohérence du contexte).
 
-Justification : éviter les effets de bord silencieux où un outil modifierait un autre projet que celui visible dans le contexte du Kin.
+Justification : éviter les effets de bord silencieux où un outil modifierait un autre projet que celui visible dans le contexte du Agent.
 
 ---
 
@@ -203,19 +203,19 @@ Justification : éviter les effets de bord silencieux où un outil modifierait u
 
 ### État persistant
 
-`kins.active_project_id` (FK nullable). Lu à chaque construction de prompt, modifiable par :
-- L'API REST `PATCH /api/kins/:id/active-project` (déclenchée par l'UI quand l'utilisateur clique sur un projet)
-- L'outil Kin `set_active_project(id)` (déclenché par le Kin lui-même)
+`agents.active_project_id` (FK nullable). Lu à chaque construction de prompt, modifiable par :
+- L'API REST `PATCH /api/agents/:id/active-project` (déclenchée par l'UI quand l'utilisateur clique sur un projet)
+- L'outil Agent `set_active_project(id)` (déclenché par le Agent lui-même)
 
-Les deux chemins émettent un event SSE `kin:active-project` (cf. § 8) pour que la UI se synchronise (ex: l'icône du projet dans la sidebar surligne le projet actif).
+Les deux chemins émettent un event SSE `agent:active-project` (cf. § 8) pour que la UI se synchronise (ex: l'icône du projet dans la sidebar surligne le projet actif).
 
 ### Override temporaire (cas task)
 
-Quand une task liée à un ticket termine (cf. § 5), le turn de réaction chez le Kin parent doit voir le contexte du projet du ticket, **même si le Kin a switché entre-temps**.
+Quand une task liée à un ticket termine (cf. § 5), le turn de réaction chez le Agent parent doit voir le contexte du projet du ticket, **même si le Agent a switché entre-temps**.
 
-Implémentation : la fonction `buildSystemPrompt()` accepte un paramètre optionnel `projectOverride?: { projectId: string }`. Quand fourni, ce projet est injecté à la place de `kins.active_project_id` pour ce turn uniquement. La valeur persistée n'est pas modifiée.
+Implémentation : la fonction `buildSystemPrompt()` accepte un paramètre optionnel `projectOverride?: { projectId: string }`. Quand fourni, ce projet est injecté à la place de `agents.active_project_id` pour ce turn uniquement. La valeur persistée n'est pas modifiée.
 
-Le kin-engine détecte le besoin d'override en lisant le `task_result` qui déclenche le turn : si la task a un `ticket_id`, on lookup `tickets.project_id` et on l'utilise comme `projectOverride`.
+Le agent-engine détecte le besoin d'override en lisant le `task_result` qui déclenche le turn : si la task a un `ticket_id`, on lookup `tickets.project_id` et on l'utilise comme `projectOverride`.
 
 ### Pas de défaut implicite sur les outils
 
@@ -227,35 +227,35 @@ Bien que le projet actif soit injecté dans le prompt, **aucun outil n'utilise `
 
 ### Spawn
 
-1. Le Kin appelle `start_ticket_task(ticket_id)`
+1. Le Agent appelle `start_ticket_task(ticket_id)`
 2. Le service tasks crée une row `tasks` :
    - `ticket_id` = ticket_id passé
-   - `parent_kin_id` = id du Kin appelant
-   - `spawn_type` = 'self' (le sub-Kin clone le Kin parent)
+   - `parent_agent_id` = id du Agent appelant
+   - `spawn_type` = 'self' (le sub-Agent clone le Agent parent)
    - `mode` = **toujours `'await'`** (voir ci-dessous, pas de paramètre exposé)
    - `description` = "Travailler sur le ticket : {ticket.title}" (court — le détail vient du prompt-builder, voir § 6)
-3. **Aucun side-effect sur le ticket.** Le statut, la position, les tags ne sont pas modifiés. Le Kin est responsable de maintenir le ticket à jour avant et après. Une instruction le rappelle dans `prompt-system.md` bloc [6] "Hidden system instructions".
-4. Le sub-Kin est enqueué et démarre son turn LLM normalement.
+3. **Aucun side-effect sur le ticket.** Le statut, la position, les tags ne sont pas modifiés. Le Agent est responsable de maintenir le ticket à jour avant et après. Une instruction le rappelle dans `prompt-system.md` bloc [6] "Hidden system instructions".
+4. Le sub-Agent est enqueué et démarre son turn LLM normalement.
 
 ### Pourquoi `await` obligatoire ?
 
-Le mode `async` (fire-and-forget) dépose le résultat de la task dans l'historique sans déclencher de turn LLM sur le parent (cf. `idea.md` § 7). Combiné avec le principe "le Kin gère manuellement le statut du ticket", ça donnerait : tu spawn une task async, elle finit, personne ne met à jour le ticket → état figé.
+Le mode `async` (fire-and-forget) dépose le résultat de la task dans l'historique sans déclencher de turn LLM sur le parent. Combiné avec le principe "le Agent gère manuellement le statut du ticket", ça donnerait : tu spawn une task async, elle finit, personne ne met à jour le ticket → état figé.
 
 Donc règle : tasks liées à un ticket = toujours `await`. Le service valide explicitement : si une autre source (futur webhook, futur cron) tente de spawner une task avec `ticket_id !== null` et `mode = 'async'`, refus avec code d'erreur `TICKET_TASK_REQUIRES_AWAIT`.
 
-### Exécution du sub-Kin
+### Exécution du sub-Agent
 
-Quand le prompt-builder construit le prompt du sub-Kin, il détecte `task.ticket_id !== null` et :
+Quand le prompt-builder construit le prompt du sub-Agent, il détecte `task.ticket_id !== null` et :
 - Lookup `ticket` + `project` correspondants (toujours la version à jour, pas de snapshot figé)
-- Injecte un bloc dédié dans le `stableBlocks` du sub-Kin (cf. § 6.4) avec : titre projet, description projet, titre ticket, description ticket, statut, tags.
-- Le sub-Kin a accès aux outils ticket (read + update) hérités du Kin parent.
+- Injecte un bloc dédié dans le `stableBlocks` du sub-Agent (cf. § 6.4) avec : titre projet, description projet, titre ticket, description ticket, statut, tags.
+- Le sub-Agent a accès aux outils ticket (read + update) hérités du Agent parent.
 
 ### Restitution (mode await)
 
 À la fin de la task :
 - `update_task_status('completed', result)` ou `('failed', ..., reason)`
-- Un message de type `task_result` entre dans la queue FIFO du **Kin parent** (= `tasks.parent_kin_id`)
-- **Format enrichi** quand `task.ticket_id !== null` : au préfixe existant `[Task: {task.description}] Result: {result}` est concaténé un rappel inline qui oriente le Kin vers la mise à jour du ticket :
+- Un message de type `task_result` entre dans la queue FIFO du **Agent parent** (= `tasks.parent_agent_id`)
+- **Format enrichi** quand `task.ticket_id !== null` : au préfixe existant `[Task: {task.description}] Result: {result}` est concaténé un rappel inline qui oriente le Agent vers la mise à jour du ticket :
 
   ```
   [Task: {task.description}] Result: {result}
@@ -267,20 +267,20 @@ Quand le prompt-builder construit le prompt du sub-Kin, il détecte `task.ticket
 
   Le rappel n'apparaît **que** pour les tasks liées à un ticket. Pour les tasks classiques, le format historique reste inchangé.
 - Le turn LLM qui en résulte est construit avec `projectOverride = { projectId: ticket.project_id }` (cf. § 4)
-- Le Kin parent lit le résultat + le rappel, décide, et peut appeler `update_ticket(status='done')` ou autre
+- Le Agent parent lit le résultat + le rappel, décide, et peut appeler `update_ticket(status='done')` ou autre
 
-> Si le projet du ticket a été supprimé entre le spawn et la completion, le rappel n'est pas injecté (le ticket et le projet n'existent plus, le rappel serait incorrect). Le message reste au format historique. Le `projectOverride` n'est pas posé non plus. Voir `prompt-system.md` § sub-Kin ticket assignment block pour le fallback équivalent côté sub-Kin.
+> Si le projet du ticket a été supprimé entre le spawn et la completion, le rappel n'est pas injecté (le ticket et le projet n'existent plus, le rappel serait incorrect). Le message reste au format historique. Le `projectOverride` n'est pas posé non plus. Voir `prompt-system.md` § sub-Agent ticket assignment block pour le fallback équivalent côté sub-Agent.
 
 ### Routage
 
-Le résultat va **toujours** au Kin qui a spawn la task (`parent_kin_id`). Si l'utilisateur a basculé en cours de route sur un autre Kin dans l'UI, le résultat arrive quand même chez le bon Kin (silencieusement, mais avec un badge SSE-driven sur l'icône du Kin dans la sidebar du mode Kins pour notifier).
+Le résultat va **toujours** au Agent qui a spawn la task (`parent_agent_id`). Si l'utilisateur a basculé en cours de route sur un autre Agent dans l'UI, le résultat arrive quand même chez le bon Agent (silencieusement, mais avec un badge SSE-driven sur l'icône du Agent dans la sidebar du mode Agents pour notifier).
 
 ### Plusieurs tasks par ticket
 
 Aucune contrainte d'unicité. Cas usuels :
-- Une task échoue → le Kin (ou l'utilisateur) relance `start_ticket_task` → nouvelle row. Le statut du ticket reste celui décidé par le Kin/utilisateur (probablement `in_progress` s'il a été mis là, sinon ce qui était avant).
-- Plusieurs Kins contribuent à un même ticket → chacun spawn ses propres tasks
-- La carte ticket dans le kanban affiche l'historique : `Task #1 (Kin Alpha) — done · Task #2 (Kin Beta) — running`
+- Une task échoue → le Agent (ou l'utilisateur) relance `start_ticket_task` → nouvelle row. Le statut du ticket reste celui décidé par le Agent/utilisateur (probablement `in_progress` s'il a été mis là, sinon ce qui était avant).
+- Plusieurs Agents contribuent à un même ticket → chacun spawn ses propres tasks
+- La carte ticket dans le kanban affiche l'historique : `Task #1 (Agent Alpha) — done · Task #2 (Agent Beta) — running`
 
 ---
 
@@ -290,9 +290,9 @@ Aucune contrainte d'unicité. Cas usuels :
 
 Le prompt-builder existant (`src/server/services/prompt-builder.ts`) sépare déjà le prompt en `{ stable, volatile }` avec un cache breakpoint entre les deux (cf. comment du fichier, lignes 452-469).
 
-Le bloc projet actif est **volatile** : il change quand le Kin switche de projet. Il rejoint donc les `volatileBlocks` — aux côtés de memories, contacts résumés, current speaker, language, workspace tree, date.
+Le bloc projet actif est **volatile** : il change quand le Agent switche de projet. Il rejoint donc les `volatileBlocks` — aux côtés de memories, contacts résumés, current speaker, language, workspace tree, date.
 
-Conséquence : switcher de projet n'invalide que le segment volatile (déjà recalculé à chaque tour). Le prefixe stable (identité, character, expertise, hidden instructions, kin directory, MCP) reste en cache.
+Conséquence : switcher de projet n'invalide que le segment volatile (déjà recalculé à chaque tour). Le prefixe stable (identité, character, expertise, hidden instructions, agent directory, MCP) reste en cache.
 
 ### 6.2 Position dans la séquence volatile
 
@@ -307,7 +307,7 @@ L'ordre final des `volatileBlocks` après modification :
 → Final reminder (toujours en dernier)
 ```
 
-### 6.3 Contenu du bloc — Kin principal
+### 6.3 Contenu du bloc — Agent principal
 
 Quand `active_project_id` (ou `projectOverride`) résout un projet :
 
@@ -342,9 +342,9 @@ Title: {project.title}
 
 **Liste tickets** : limitée aux 50 tickets non-`done` les plus récemment mis à jour. Au-delà : `... and N more — call list_tickets() to inspect`.
 
-### 6.4 Contenu du bloc — Sub-Kin lié à un ticket
+### 6.4 Contenu du bloc — Sub-Agent lié à un ticket
 
-Quand un sub-Kin est exécuté avec `task.ticket_id !== null`, le bloc est plus complet et fait référence au ticket spécifique :
+Quand un sub-Agent est exécuté avec `task.ticket_id !== null`, le bloc est plus complet et fait référence au ticket spécifique :
 
 ```
 ## Ticket assignment
@@ -369,12 +369,12 @@ Description:
 {ticket.description}
 
 > Use update_ticket() to update the ticket as you progress (status, description, tags).
-> Report back to the parent Kin with report_to_parent() / update_task_status() as usual.
+> Report back to the parent Agent with report_to_parent() / update_task_status() as usual.
 ```
 
-Le bloc est injecté dans les `stableBlocks` du sub-Kin (juste après « Your mission »), car pour la durée d'une task, le ticket assigné est figé.
+Le bloc est injecté dans les `stableBlocks` du sub-Agent (juste après « Your mission »), car pour la durée d'une task, le ticket assigné est figé.
 
-> Le sub-Kin hérite des outils ticket (lecture + update) de son parent. Mécanisme à confirmer dans la phase d'implémentation : par défaut, les sub-Kins n'ont pas accès à tous les outils du parent (cf. `prompt-system.md` [12]). Il faudra ajouter les outils ticket à la liste des outils sub-Kin quand `task.ticket_id !== null`.
+> Le sub-Agent hérite des outils ticket (lecture + update) de son parent. Mécanisme à confirmer dans la phase d'implémentation : par défaut, les sub-Agents n'ont pas accès à tous les outils du parent (cf. `prompt-system.md` [12]). Il faudra ajouter les outils ticket à la liste des outils sub-Agent quand `task.ticket_id !== null`.
 
 ---
 
@@ -441,7 +441,7 @@ Conventions : camelCase dans les payloads JSON, `{ resource: {...} }` pour les r
 // Request (tous optionnels)
 {
   title?: string
-  description?: string     // remplace tout (les outils Kin offrent append/patch)
+  description?: string     // remplace tout (les outils Agent offrent append/patch)
   githubUrl?: string | null
 }
 
@@ -537,8 +537,8 @@ Conventions : camelCase dans les payloads JSON, `{ resource: {...} }` pour les r
     ...same shape as list item (description complète, pas tronquée)
     tasks: Array<{
       id: string
-      parentKinId: string
-      parentKinName: string
+      parentAgentId: string
+      parentAgentName: string
       status: string
       mode: 'await' | 'async'
       createdAt: number
@@ -589,19 +589,19 @@ Conventions : camelCase dans les payloads JSON, `{ resource: {...} }` pour les r
 
 #### `POST /api/tickets/:id/start-task`
 
-Spawn un sub-Kin pour travailler sur le ticket. L'API impose un `kinId` explicite dans le body (cf. règle "pas de défaut implicite"). **Toujours en mode await** — pas de param `mode`.
+Spawn un sub-Agent pour travailler sur le ticket. L'API impose un `agentId` explicite dans le body (cf. règle "pas de défaut implicite"). **Toujours en mode await** — pas de param `mode`.
 
 ```typescript
 // Request
 {
-  kinId: string              // Kin qui spawn la task (= parent_kin_id)
+  agentId: string              // Agent qui spawn la task (= parent_agent_id)
 }
 
 // Response 201
 {
   task: {
     id: string
-    parentKinId: string
+    parentAgentId: string
     ticketId: string
     status: string
     createdAt: number
@@ -609,13 +609,13 @@ Spawn un sub-Kin pour travailler sur le ticket. L'API impose un `kinId` explicit
 }
 ```
 
-> Aucun effet de bord sur le ticket. Le statut, la position, les tags ne sont pas modifiés. Le Kin (ou l'utilisateur via drag-drop) est responsable de mettre le ticket à `in_progress` au préalable s'il veut que le kanban reflète l'avancement.
+> Aucun effet de bord sur le ticket. Le statut, la position, les tags ne sont pas modifiés. Le Agent (ou l'utilisateur via drag-drop) est responsable de mettre le ticket à `in_progress` au préalable s'il veut que le kanban reflète l'avancement.
 
-> Côté UI : le bouton "Démarrer une task" demande à l'utilisateur quel Kin doit l'exécuter (dropdown des Kins disponibles). Pré-sélection : le premier Kin ayant `active_project_id = ticket.project_id`. Le choix reste explicite.
+> Côté UI : le bouton "Démarrer une task" demande à l'utilisateur quel Agent doit l'exécuter (dropdown des Agents disponibles). Pré-sélection : le premier Agent ayant `active_project_id = ticket.project_id`. Le choix reste explicite.
 
-### Kin — projet actif
+### Agent — projet actif
 
-#### `PATCH /api/kins/:id/active-project`
+#### `PATCH /api/agents/:id/active-project`
 
 ```typescript
 // Request
@@ -633,8 +633,8 @@ Spawn un sub-Kin pour travailler sur le ticket. L'API impose un `kinId` explicit
 Ajoutés au SSE global existant (`GET /api/sse`) :
 
 ```typescript
-// Projet actif d'un Kin changé
-{ event: 'kin:active-project', data: { kinId: string, activeProjectId: string | null } }
+// Projet actif d'un Agent changé
+{ event: 'agent:active-project', data: { agentId: string, activeProjectId: string | null } }
 
 // Projet créé / modifié / supprimé
 { event: 'project:created', data: { project: ProjectSummary } }
@@ -674,9 +674,9 @@ Nouvelle bande verticale à l'extrême gauche, ≈ 48-56 px. Mountée au root du
 ```
 
 Icônes au MVP :
-- **Kins** (🏠 ou icône équivalente Lucide) — mode existant : sidebar avec Kins / Tasks / Crons / Mini-apps / Settings + thread principal
+- **Agents** (🏠 ou icône équivalente Lucide) — mode existant : sidebar avec Agents / Tasks / Crons / Mini-apps / Settings + thread principal
 - **Projets** (⊞ ou Trello-like) — nouveau mode : sidebar liste projets + kanban
-- **Settings / compte** restent accessibles via les patterns existants (badge avatar en bas, ou intégrés dans la sidebar Kins)
+- **Settings / compte** restent accessibles via les patterns existants (badge avatar en bas, ou intégrés dans la sidebar Agents)
 
 L'icône sélectionnée a un indicateur visuel (fond surligné, bordure gauche, ou similar — à aligner avec le design system).
 
@@ -685,10 +685,10 @@ L'icône sélectionnée a un indicateur visuel (fond surligné, bordure gauche, 
 Liste des projets, triée par défaut sur `updated_at DESC`. Chaque entrée affiche :
 - Titre du projet
 - Compteur de tickets ouverts (`status !== 'done'`)
-- Pastille si au moins un Kin a ce projet en `active_project_id` (avec tooltip listant les Kins concernés)
+- Pastille si au moins un Agent a ce projet en `active_project_id` (avec tooltip listant les Agents concernés)
 - Bouton "+ Nouveau projet" en haut
 
-Clic sur un projet → la vue principale affiche son kanban. Le projet ne devient **pas** automatiquement le projet actif d'un Kin — c'est une décision séparée (cf. § 8.5).
+Clic sur un projet → la vue principale affiche son kanban. Le projet ne devient **pas** automatiquement le projet actif d'un Agent — c'est une décision séparée (cf. § 8.5).
 
 ### 8.3 Mode Projets — vue kanban
 
@@ -698,7 +698,7 @@ Chaque carte ticket affiche :
 - Titre
 - Tags (chips colorés)
 - Compteur de tasks : `🔄 2 (1 running)` cliquable → ouvre le side panel sur le ticket (`openTicket`)
-- Mini-avatar du dernier Kin ayant agi sur le ticket
+- Mini-avatar du dernier Agent ayant agi sur le ticket
 
 Au-dessus du kanban : header avec titre du projet, bouton "Ouvrir la description" (qui ouvre le side panel sur le ticket projet, ou un mode édition inline à choisir au moment du build), bouton "+ Nouveau ticket".
 
@@ -722,7 +722,7 @@ API d'invocation côté frontend (existant + extensions) :
 const { openApp, openTask, openTicket, closePanel, switchTab } = useSidePanel()
 
 openApp(appId)                                              // existant
-openTask({ taskId, kinName, kinAvatarUrl })                 // existant
+openTask({ taskId, agentName, agentAvatarUrl })                 // existant
 openTicket({ ticketId })                                    // NEW (Phase 26.7)
 openTask({ taskId, ..., parent: { type: 'ticket', id } })   // NEW pattern parent (Phase 26.7)
 closePanel()
@@ -732,7 +732,7 @@ Types d'entités prises en charge à la fin de Phase 26 :
 - **Mini-app** (existante)
 - **Task** (existante)
 - **Ticket** (nouvelle, Phase 26.7)
-- (Futur : Kin profile, Cron run, etc.)
+- (Futur : Agent profile, Cron run, etc.)
 
 Le pattern "single-slot avec retour parent" est implémenté de manière incrémentale : un champ `parent` optionnel est posé sur la dernière entité ouverte ; si présent, le header du panel affiche un bouton retour. Pas de stack à profondeur > 1 au MVP.
 
@@ -742,11 +742,11 @@ Pour éviter que les deux modes ne deviennent des silos :
 
 | Depuis | Action | Effet |
 |---|---|---|
-| Thread Kin (mode Kins) | Mention de ticket dans un message (markdown auto-linkifié `[#abc12]`) | Ouvre le side panel sur le ticket (reste en mode Kins) |
-| Header thread Kin | Chip "Projet actif: ✦ {title}" | Clic = bascule mode Projets sur ce projet (volontaire) |
-| Header thread Kin (sans projet actif) | Chip "Aucun projet" | Optionnel : dropdown pour sélectionner. À évaluer en design. |
+| Thread Agent (mode Agents) | Mention de ticket dans un message (markdown auto-linkifié `[#abc12]`) | Ouvre le side panel sur le ticket (reste en mode Agents) |
+| Header thread Agent | Chip "Projet actif: ✦ {title}" | Clic = bascule mode Projets sur ce projet (volontaire) |
+| Header thread Agent (sans projet actif) | Chip "Aucun projet" | Optionnel : dropdown pour sélectionner. À évaluer en design. |
 | Carte ticket kanban | Clic | Ouvre le side panel sur le ticket (`openTicket`) |
-| Side panel tab `'ticket'` | Lien sur chaque task → "Voir thread Kin Alpha" | Bascule mode Kins, focus Kin Alpha, scroll vers le message qui contient la task |
+| Side panel tab `'ticket'` | Lien sur chaque task → "Voir thread Agent Alpha" | Bascule mode Agents, focus Agent Alpha, scroll vers le message qui contient la task |
 | Side panel tab `'task'` | Lien "→ Voir le ticket parent" (si parent ticket renseigné) | Reste en mode courant, side panel remonte sur le ticket (`openTicket`) |
 | Notification badge sur icône activity bar | Le mode inactif accumule des changements (nouveau ticket, task done, etc.) | Pastille avec compteur, optionnel toast pour évènements forts |
 
@@ -756,12 +756,12 @@ Pour éviter que les deux modes ne deviennent des silos :
 
 Sur la carte ticket et dans le side panel (tab ticket) :
 - Bouton "▶ Démarrer une task"
-- Dropdown : "Avec quel Kin ?" (liste des Kins)
-- **Pré-sélection** : si un ou plusieurs Kins ont `active_project_id = ticket.project_id`, pré-sélectionner le premier (par ordre alphabétique ou par `kin_order` user). Cas usuel : un seul Kin avec ce projet actif → sélection auto. Cas rare : plusieurs → l'utilisateur peut ajuster le dropdown.
+- Dropdown : "Avec quel Agent ?" (liste des Agents)
+- **Pré-sélection** : si un ou plusieurs Agents ont `active_project_id = ticket.project_id`, pré-sélectionner le premier (par ordre alphabétique ou par `agent_order` user). Cas usuel : un seul Agent avec ce projet actif → sélection auto. Cas rare : plusieurs → l'utilisateur peut ajuster le dropdown.
 - Pas d'option mode (`await` est imposé pour les tasks liées à un ticket — voir § 5)
 - Validation → `POST /api/tickets/:id/start-task`
 
-Après le clic : la carte ticket affiche immédiatement (optimistic) un badge "running task". **La carte ne change pas de colonne automatiquement** — si l'utilisateur veut refléter "en cours", il drag la carte lui-même, ou il laisse le Kin le faire dans sa boucle de travail. Conséquence visible : une carte peut afficher un badge "running task" même en colonne `Backlog` ou `À faire`. C'est informatif et voulu (le badge dit qu'un Kin travaille dessus actuellement, indépendamment du statut kanban formel).
+Après le clic : la carte ticket affiche immédiatement (optimistic) un badge "running task". **La carte ne change pas de colonne automatiquement** — si l'utilisateur veut refléter "en cours", il drag la carte lui-même, ou il laisse le Agent le faire dans sa boucle de travail. Conséquence visible : une carte peut afficher un badge "running task" même en colonne `Backlog` ou `À faire`. C'est informatif et voulu (le badge dit qu'un Agent travaille dessus actuellement, indépendamment du statut kanban formel).
 
 ---
 
@@ -784,7 +784,7 @@ Après le clic : la carte ticket affiche immédiatement (optimistic) un badge "r
 | `src/client/components/sidebar/TicketPanelContent.tsx` | Détail ticket — nouveau composant chargé dans le tab `'ticket'` du side panel (Phase 26.7) |
 | `src/client/components/sidebar/TaskPanelContent.tsx` | **Existant** (633 lignes), conservé tel quel. Pas de déplacement. |
 | `src/client/components/mini-app/MiniAppViewer.tsx` | **Existant**, conservé. Lifté au root du layout en Phase 26.0. Étendu en Phase 26.7 pour router vers `TicketPanelContent` quand `activeTab === 'ticket'`. |
-| `src/client/components/layout/ActivityBar.tsx` | Bande verticale de switch de mode (Kins / Projets) |
+| `src/client/components/layout/ActivityBar.tsx` | Bande verticale de switch de mode (Agents / Projets) |
 | `src/client/hooks/useProjects.ts` | Hook données projets |
 | `src/client/hooks/useTickets.ts` | Hook données tickets |
 | `src/client/hooks/useActivityBar.ts` | Store global du mode actif |
@@ -811,7 +811,7 @@ Nouvelles entrées dans `src/server/config.ts` :
 
 ### 11.1 Pré-requis : lift + rename du side panel
 
-Le panneau latéral actuel (qui héberge mini-apps et détail task) vit dans la page Kins via [`MiniAppProvider`](src/client/contexts/MiniAppContext.tsx) monté à [ChatPage.tsx:207](src/client/pages/chat/ChatPage.tsx#L207) et [`MiniAppViewer`](src/client/components/mini-app/MiniAppViewer.tsx) rendu dans [`ChatPanel`](src/client/components/chat/ChatPanel.tsx). C'est ce qui empêche aujourd'hui un autre mode (Projets) d'accéder au panneau.
+Le panneau latéral actuel (qui héberge mini-apps et détail task) vit dans la page Agents via [`MiniAppProvider`](src/client/contexts/MiniAppContext.tsx) monté à [ChatPage.tsx:207](src/client/pages/chat/ChatPage.tsx#L207) et [`MiniAppViewer`](src/client/components/mini-app/MiniAppViewer.tsx) rendu dans [`ChatPanel`](src/client/components/chat/ChatPanel.tsx). C'est ce qui empêche aujourd'hui un autre mode (Projets) d'accéder au panneau.
 
 Approche retenue : **lift + rename de l'existant**, pas de création d'un Inspector parallèle. On réutilise toute la mécanique (rendering, tab switching, hook `useTaskDetail` avec 633 lignes de gestion SSE).
 
@@ -820,7 +820,7 @@ Approche retenue : **lift + rename de l'existant**, pas de création d'un Inspec
 2. Lifter `<SidePanelProvider>` de `ChatPage` vers `AppRoot` (`src/client/App.tsx`).
 3. **Lift partiel pour le Viewer** : `<MiniAppViewer />` reste rendu dans `ChatPanel`. Chaque page qui veut utiliser le side panel le rendra dans son propre layout (ProjectsPage le fera en Phase 26.6). Justification : lifter le Viewer au root nécessiterait de restructurer le layout shadcn `SidebarInset`/`h-svh` de ChatPage avec un risque de régression supérieur au gain. Coût accepté : ~1s de retard sur les tokens streaming lors d'un switch de mode (couvert par le polling fallback à 1Hz de `useTaskDetail`).
 4. Étendre `ActiveTab` du context pour préparer le type `'ticket'` (Phase 26.7 implémentera le rendu).
-5. Conserver le tab `'mini-app'` lié à la page Kins (le bouton `openApp` n'est invoqué que depuis chat — pas de changement UX).
+5. Conserver le tab `'mini-app'` lié à la page Agents (le bouton `openApp` n'est invoqué que depuis chat — pas de changement UX).
 6. Vérifier que les évènements SSE existants (`task:status`, `task:done`, streaming) continuent à fonctionner après le lift.
 
 Ce refactor est la **première sous-tâche** de la phase 26 dans `DEVELOPMENT_PLAN.md`. Aucun code projet n'est écrit avant qu'il soit terminé et validé.
@@ -831,18 +831,18 @@ Un projet peut être supprimé alors que des tasks liées à ses tickets sont en
 
 Décision : **les tasks en cours ne sont pas annulées**. Elles continuent à tourner. À la fin :
 - `update_task_status` réussit toujours
-- Le `task_result` est tout de même délivré au Kin parent
+- Le `task_result` est tout de même délivré au Agent parent
 - Le `projectOverride` détecte que `ticket.project_id` pointe vers un projet inexistant → fallback gracieux : injecte un bloc dégradé `"## Note: the project this ticket belonged to has been deleted."` au lieu du bloc complet
 
 Justification : (a) c'est le comportement le moins surprenant, (b) annuler des tasks en cours peut perdre du travail utile.
 
 Côté UI : avant la confirmation de suppression, afficher un warning si des tasks sont en cours : "N tâche(s) en cours seront poursuivies sans contexte projet."
 
-### 11.3 Multi-Kin sur le même projet
+### 11.3 Multi-Agent sur le même projet
 
-Aucune contrainte. Plusieurs Kins peuvent avoir `active_project_id = X` simultanément. Chacun a sa propre boucle de travail (queue FIFO indépendante). Pas de verrou, pas de "qui a la main".
+Aucune contrainte. Plusieurs Agents peuvent avoir `active_project_id = X` simultanément. Chacun a sa propre boucle de travail (queue FIFO indépendante). Pas de verrou, pas de "qui a la main".
 
-Si deux Kins modifient le même ticket en parallèle (ex: tous deux passent un ticket à `done`), c'est last-write-wins au niveau de la DB. Pas de mécanisme de merge — la granularité ticket le rend acceptable.
+Si deux Agents modifient le même ticket en parallèle (ex: tous deux passent un ticket à `done`), c'est last-write-wins au niveau de la DB. Pas de mécanisme de merge — la granularité ticket le rend acceptable.
 
 ### 11.4 Tags entre projets — pas de partage
 
@@ -858,7 +858,7 @@ Les tags ne sont pas globaux. Recréer "bug" dans chaque projet est explicite et
 
 ### 11.7 Pas d'historique de modification
 
-Pas de table `ticket_history` ni `project_history` au MVP. `updated_at` sur les rows suffit. Si l'utilisateur veut tracer les changements d'un ticket, il a accès aux thread des Kins (qui ont éventuellement appelé `update_ticket`).
+Pas de table `ticket_history` ni `project_history` au MVP. `updated_at` sur les rows suffit. Si l'utilisateur veut tracer les changements d'un ticket, il a accès aux thread des Agents (qui ont éventuellement appelé `update_ticket`).
 
 ### 11.8 Cron + ticket — pas au MVP
 
@@ -875,9 +875,9 @@ Un cron pourrait théoriquement spawner une task liée à un ticket (ex: cron qu
 | Sub-tickets (parent/child) | Pas de besoin remonté |
 | Dépendances entre tickets (blocks/blocked-by) | Pas de besoin remonté |
 | Champs custom par projet | Trop early |
-| Commentaires sur les tickets | Le thread du Kin sert d'historique conversationnel |
-| Attachments sur les tickets | Hors scope du module ; les Kins peuvent attacher des fichiers via leur workspace |
-| Permissions par utilisateur / par projet | Tout est partagé, cf. principe KinBot |
+| Commentaires sur les tickets | Le thread du Agent sert d'historique conversationnel |
+| Attachments sur les tickets | Hors scope du module ; les Agents peuvent attacher des fichiers via leur workspace |
+| Permissions par utilisateur / par projet | Tout est partagé, cf. principe Hivekeep |
 | Intégration GitHub réelle (issues, PR, commits) | Metadata only au MVP, intégration ultérieure |
 | Plan / planification pré-task explicite (entité `plan`) | L'enrichissement via `update_ticket` ou message dans le thread suffit au MVP |
 | Webhook entrant pour créer / modifier des tickets | Les webhooks existants ne sont pas câblés sur les projets au MVP |
@@ -887,7 +887,7 @@ Un cron pourrait théoriquement spawner une task liée à un ticket (ex: cron qu
 
 ## 13. Arbitrages flaggés à valider pendant l'implémentation
 
-1. **Outils ticket dans le sub-Kin** : les outils projet/ticket sont **universels** — pas de notion de permission par Kin, n'importe quel Kin peut les utiliser sur n'importe quel projet. Règle d'injection : quand `task.ticket_id !== null`, ajouter au toolset du sub-Kin **le même set d'outils projet/ticket que celui exposé au Kin principal du main thread** (`get_project`, `get_ticket`, `list_tickets`, `update_ticket`, `add_ticket_tag`, `remove_ticket_tag`, `update_project_description`, `append_project_description`, `patch_project_description`). On exclut `delete_project` et `delete_ticket` pour éviter qu'un sub-Kin nuke le contexte de son propre run. Pas besoin de walker la chaîne `parent_task_id` : c'est juste un set fixe injecté quand la condition est remplie.
+1. **Outils ticket dans le sub-Agent** : les outils projet/ticket sont **universels** — pas de notion de permission par Agent, n'importe quel Agent peut les utiliser sur n'importe quel projet. Règle d'injection : quand `task.ticket_id !== null`, ajouter au toolset du sub-Agent **le même set d'outils projet/ticket que celui exposé au Agent principal du main thread** (`get_project`, `get_ticket`, `list_tickets`, `update_ticket`, `add_ticket_tag`, `remove_ticket_tag`, `update_project_description`, `append_project_description`, `patch_project_description`). On exclut `delete_project` et `delete_ticket` pour éviter qu'un sub-Agent nuke le contexte de son propre run. Pas besoin de walker la chaîne `parent_task_id` : c'est juste un set fixe injecté quand la condition est remplie.
 
 2. **Compteur de tasks "running"** dans la liste tickets : la query peut être coûteuse si beaucoup de tickets. Si problème de perf, passer par un trigger qui maintient un cache sur `tickets.running_task_count` (denormalization). À mesurer.
 

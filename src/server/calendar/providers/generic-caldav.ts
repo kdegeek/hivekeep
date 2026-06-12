@@ -12,7 +12,7 @@ import type {
   CreateEventParams,
   UpdateEventParams,
 } from '@/server/calendar/types'
-import type { ProviderConfig, AuthResult } from '@kinbot-developer/sdk'
+import type { ProviderConfig, AuthResult } from '@hivekeep/sdk'
 
 function ops(config: ProviderConfig) {
   return calDavOps(

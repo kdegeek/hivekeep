@@ -173,11 +173,11 @@ describe('template content quality', () => {
     }
   })
 
-  it('app.json dependencies include kinbot SDK', () => {
+  it('app.json dependencies include hivekeep SDK', () => {
     for (const id of KNOWN_TEMPLATE_IDS) {
       const tmpl = getTemplateById(id)!
       const appJson = JSON.parse(tmpl.files['app.json']!)
-      expect(appJson.dependencies['@kinbot/react']).toBeDefined()
+      expect(appJson.dependencies['@hivekeep/react']).toBeDefined()
     }
   })
 

@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/client/components/ui/button'
 import { Card, CardContent } from '@/client/components/ui/card'
 import { Switch } from '@/client/components/ui/switch'
-import { KinBadge } from '@/client/components/common/KinBadge'
+import { AgentBadge } from '@/client/components/common/AgentBadge'
 import { ConfirmDeleteButton } from '@/client/components/common/ConfirmDeleteButton'
 import { Badge } from '@/client/components/ui/badge'
 import { Pencil, Trash2, Webhook, Copy, RefreshCw, History, Filter, ListTodo } from 'lucide-react'
@@ -37,7 +37,7 @@ export function WebhookCard({ webhook, onEdit, onDelete, onToggle, onRegenerateT
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-sm font-medium truncate">{webhook.name}</p>
-              <KinBadge name={webhook.kinName} avatarUrl={webhook.kinAvatarUrl} />
+              <AgentBadge name={webhook.agentName} avatarUrl={webhook.agentAvatarUrl} />
               {!webhook.isActive && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{t('settings.webhooks.inactive')}</Badge>}
               {webhook.dispatchMode === 'task' && (
                 <Badge variant="outline" size="xs" className="gap-0.5">

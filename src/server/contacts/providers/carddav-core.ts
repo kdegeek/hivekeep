@@ -12,7 +12,7 @@ import type {
   ContactEmailAddress,
   ContactSearchQuery,
   AuthResult,
-} from '@kinbot-developer/sdk'
+} from '@hivekeep/sdk'
 
 export interface CardDavCreds {
   serverUrl: string

@@ -11,19 +11,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/client/components/ui/select'
-import { KinSelector } from '@/client/components/common/KinSelector'
-import type { KinOption } from '@/client/components/common/KinSelectItem'
+import { AgentSelector } from '@/client/components/common/AgentSelector'
+import type { AgentOption } from '@/client/components/common/AgentSelectItem'
 import { MEMORY_CATEGORIES } from '@/shared/constants'
 import type { MemorySummary, MemoryCategory, MemoryScope } from '@/shared/types'
 
 interface MemoryFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSave: (kinId: string, data: { content: string; category: MemoryCategory; subject?: string; scope?: MemoryScope }) => Promise<void>
-  onUpdate?: (memoryId: string, kinId: string, data: { content?: string; category?: MemoryCategory; subject?: string | null; scope?: MemoryScope }) => Promise<void>
+  onSave: (agentId: string, data: { content: string; category: MemoryCategory; subject?: string; scope?: MemoryScope }) => Promise<void>
+  onUpdate?: (memoryId: string, agentId: string, data: { content?: string; category?: MemoryCategory; subject?: string | null; scope?: MemoryScope }) => Promise<void>
   memory?: MemorySummary | null
-  kinId?: string | null
-  kins?: KinOption[]
+  agentId?: string | null
+  agents?: AgentOption[]
 }
 
 export function MemoryFormDialog({
@@ -32,13 +32,13 @@ export function MemoryFormDialog({
   onSave,
   onUpdate,
   memory,
-  kinId,
-  kins,
+  agentId,
+  agents,
 }: MemoryFormDialogProps) {
   const { t } = useTranslation()
   const isEdit = !!memory
 
-  const [selectedKinId, setSelectedKinId] = useState('')
+  const [selectedAgentId, setSelectedAgentId] = useState('')
   const [content, setContent] = useState('')
   const [category, setCategory] = useState<MemoryCategory>('fact')
   const [subject, setSubject] = useState('')
@@ -51,31 +51,31 @@ export function MemoryFormDialog({
       setCategory(memory.category)
       setSubject(memory.subject ?? '')
       setScope(memory.scope ?? 'private')
-      setSelectedKinId(memory.kinId)
+      setSelectedAgentId(memory.agentId)
     } else {
       setContent('')
       setCategory('fact')
       setSubject('')
       setScope('private')
-      setSelectedKinId(kinId ?? '')
+      setSelectedAgentId(agentId ?? '')
     }
-  }, [memory, kinId, open])
+  }, [memory, agentId, open])
 
   const handleSubmit = async () => {
     setIsLoading(true)
 
     try {
       if (isEdit && onUpdate && memory) {
-        await onUpdate(memory.id, memory.kinId, {
+        await onUpdate(memory.id, memory.agentId, {
           content,
           category,
           subject: subject || null,
           scope,
         })
       } else {
-        const targetKinId = kinId ?? selectedKinId
-        if (!targetKinId) return
-        await onSave(targetKinId, {
+        const targetAgentId = agentId ?? selectedAgentId
+        if (!targetAgentId) return
+        await onSave(targetAgentId, {
           content,
           category,
           subject: subject || undefined,
@@ -90,8 +90,8 @@ export function MemoryFormDialog({
     }
   }
 
-  const showKinPicker = !kinId && !isEdit
-  const canSubmit = !!(content.trim() && category && (kinId || selectedKinId || isEdit))
+  const showAgentPicker = !agentId && !isEdit
+  const canSubmit = !!(content.trim() && category && (agentId || selectedAgentId || isEdit))
 
   return (
     <FormDialog
@@ -104,13 +104,13 @@ export function MemoryFormDialog({
       submitDisabled={!canSubmit}
       submitLabel={t('common.save')}
     >
-      {showKinPicker && kins && kins.length > 0 && (
-        <FormField label={t('settings.memories.kin')} tip={t('settings.memories.kinTip')}>
-          <KinSelector
-            value={selectedKinId}
-            onValueChange={setSelectedKinId}
-            kins={kins}
-            placeholder={t('settings.memories.kinPlaceholder')}
+      {showAgentPicker && agents && agents.length > 0 && (
+        <FormField label={t('settings.memories.agent')} tip={t('settings.memories.agentTip')}>
+          <AgentSelector
+            value={selectedAgentId}
+            onValueChange={setSelectedAgentId}
+            agents={agents}
+            placeholder={t('settings.memories.agentPlaceholder')}
           />
         </FormField>
       )}

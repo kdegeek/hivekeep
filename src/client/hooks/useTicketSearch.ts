@@ -5,7 +5,7 @@
  *
  *   const { hits, isLoading, error } = useTicketSearch({
  *     query: '23',
- *     projectId: kin.activeProjectId,
+ *     projectId: agent.activeProjectId,
  *     projectSlug: null,
  *     enabled: true,
  *   })

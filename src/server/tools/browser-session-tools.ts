@@ -20,8 +20,8 @@ function err(message: string) {
   return { error: message }
 }
 
-async function snapshotAfterAction(sessionId: string, kinId: string) {
-  const session = playwrightManager.resolveSession(sessionId, kinId)
+async function snapshotAfterAction(sessionId: string, agentId: string) {
+  const session = playwrightManager.resolveSession(sessionId, agentId)
   const state = await getPageState(session.page)
   await playwrightManager.refreshSessionMeta(session)
   return state
@@ -30,12 +30,12 @@ async function snapshotAfterAction(sessionId: string, kinId: string) {
 // ─── Session lifecycle ──────────────────────────────────────────────────────
 
 export const browserOpenSessionTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   defaultDisabled: true,
   create: (ctx) =>
     tool({
       description:
-        'Open a stateful browser session (page state, cookies, login persist across calls). Returns a session_id required by all other browser_* calls. Optionally pre-load a saved state and navigate to a start URL. Max one active session per Kin.',
+        'Open a stateful browser session (page state, cookies, login persist across calls). Returns a session_id required by all other browser_* calls. Optionally pre-load a saved state and navigate to a start URL. Max one active session per Agent.',
       inputSchema: z.object({
         start_url: z.string().url().optional().describe('If provided, navigate to this URL after opening.'),
         load_state: z
@@ -57,7 +57,7 @@ export const browserOpenSessionTool: ToolRegistration = {
         user_agent: z.string().optional().describe('Override the User-Agent for this session.'),
       }),
       execute: async (args) => {
-        log.debug({ kinId: ctx.kinId, taskId: ctx.taskId, startUrl: args.start_url, loadState: args.load_state }, 'browser_open_session')
+        log.debug({ agentId: ctx.agentId, taskId: ctx.taskId, startUrl: args.start_url, loadState: args.load_state }, 'browser_open_session')
         try {
           if (args.start_url) {
             const blocked = await isBlockedUrl(args.start_url)
@@ -72,7 +72,7 @@ export const browserOpenSessionTool: ToolRegistration = {
           let storageState: import('@/server/services/playwright-manager').BrowserStorageState | undefined
           let loadedFrom: { name: string; savedAt: number; savedFromUrl: string | null } | undefined
           if (args.load_state) {
-            const file = await playwrightManager.loadSavedState(ctx.kinId, args.load_state)
+            const file = await playwrightManager.loadSavedState(ctx.agentId, args.load_state)
             storageState = file.storageState
             loadedFrom = { name: file.name, savedAt: file.savedAt, savedFromUrl: file.savedFromUrl }
           }
@@ -86,7 +86,7 @@ export const browserOpenSessionTool: ToolRegistration = {
               : undefined
 
           const session = await playwrightManager.openSession({
-            kinId: ctx.kinId,
+            agentId: ctx.agentId,
             taskId: ctx.taskId,
             startUrl: args.start_url,
             cookies,
@@ -97,7 +97,7 @@ export const browserOpenSessionTool: ToolRegistration = {
 
           let pageState = null
           if (args.start_url) {
-            pageState = await snapshotAfterAction(session.sessionId, ctx.kinId)
+            pageState = await snapshotAfterAction(session.sessionId, ctx.agentId)
           }
 
           return {
@@ -110,7 +110,7 @@ export const browserOpenSessionTool: ToolRegistration = {
           }
         } catch (e) {
           const message = e instanceof Error ? e.message : String(e)
-          log.warn({ kinId: ctx.kinId, error: message }, 'browser_open_session failed')
+          log.warn({ agentId: ctx.agentId, error: message }, 'browser_open_session failed')
           return err(message)
         }
       },
@@ -118,7 +118,7 @@ export const browserOpenSessionTool: ToolRegistration = {
 }
 
 export const browserCloseSessionTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   defaultDisabled: true,
   create: (ctx) =>
     tool({
@@ -129,7 +129,7 @@ export const browserCloseSessionTool: ToolRegistration = {
       execute: async ({ session_id }) => {
         try {
           // Verify ownership before closing
-          playwrightManager.resolveSession(session_id, ctx.kinId)
+          playwrightManager.resolveSession(session_id, ctx.agentId)
           await playwrightManager.closeSession(session_id, { reason: 'tool' })
           return { closed: true }
         } catch (e) {
@@ -140,15 +140,15 @@ export const browserCloseSessionTool: ToolRegistration = {
 }
 
 export const browserListSessionsTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   defaultDisabled: true,
   readOnly: true,
   create: (ctx) =>
     tool({
-      description: 'List active browser sessions owned by this Kin. Useful to recover a session_id you forgot.',
+      description: 'List active browser sessions owned by this Agent. Useful to recover a session_id you forgot.',
       inputSchema: z.object({}),
       execute: async () => {
-        const sessions = playwrightManager.listSessions(ctx.kinId)
+        const sessions = playwrightManager.listSessions(ctx.agentId)
         return { sessions }
       },
     }),
@@ -157,7 +157,7 @@ export const browserListSessionsTool: ToolRegistration = {
 // ─── Navigation & actions ───────────────────────────────────────────────────
 
 export const browserNavigateTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   defaultDisabled: true,
   create: (ctx) =>
     tool({
@@ -175,12 +175,12 @@ export const browserNavigateTool: ToolRegistration = {
           const blocked = await isBlockedUrl(url)
           if (blocked.blocked) return err(`URL blocked: ${blocked.reason}`)
 
-          const session = playwrightManager.resolveSession(session_id, ctx.kinId)
+          const session = playwrightManager.resolveSession(session_id, ctx.agentId)
           await session.page.goto(url, {
             waitUntil: wait_until ?? 'domcontentloaded',
             timeout: config.webBrowsing.pageTimeout,
           })
-          return { page_state: await snapshotAfterAction(session_id, ctx.kinId) }
+          return { page_state: await snapshotAfterAction(session_id, ctx.agentId) }
         } catch (e) {
           return err(e instanceof Error ? e.message : String(e))
         }
@@ -189,7 +189,7 @@ export const browserNavigateTool: ToolRegistration = {
 }
 
 export const browserClickTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   defaultDisabled: true,
   create: (ctx) =>
     tool({
@@ -201,10 +201,10 @@ export const browserClickTool: ToolRegistration = {
       }),
       execute: async ({ session_id, ref }) => {
         try {
-          const session = playwrightManager.resolveSession(session_id, ctx.kinId)
+          const session = playwrightManager.resolveSession(session_id, ctx.agentId)
           const locator = locatorForRef(session.page, ref)
           await locator.click({ timeout: 10_000 })
-          return { page_state: await snapshotAfterAction(session_id, ctx.kinId) }
+          return { page_state: await snapshotAfterAction(session_id, ctx.agentId) }
         } catch (e) {
           return err(e instanceof Error ? e.message : String(e))
         }
@@ -213,7 +213,7 @@ export const browserClickTool: ToolRegistration = {
 }
 
 export const browserTypeTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   defaultDisabled: true,
   create: (ctx) =>
     tool({
@@ -227,12 +227,12 @@ export const browserTypeTool: ToolRegistration = {
       }),
       execute: async ({ session_id, ref, text, submit, clear_first }) => {
         try {
-          const session = playwrightManager.resolveSession(session_id, ctx.kinId)
+          const session = playwrightManager.resolveSession(session_id, ctx.agentId)
           const locator = locatorForRef(session.page, ref)
           if (clear_first !== false) await locator.fill(text)
           else await locator.type(text)
           if (submit) await locator.press('Enter')
-          return { page_state: await snapshotAfterAction(session_id, ctx.kinId) }
+          return { page_state: await snapshotAfterAction(session_id, ctx.agentId) }
         } catch (e) {
           return err(e instanceof Error ? e.message : String(e))
         }
@@ -241,7 +241,7 @@ export const browserTypeTool: ToolRegistration = {
 }
 
 export const browserSelectTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   defaultDisabled: true,
   create: (ctx) =>
     tool({
@@ -253,7 +253,7 @@ export const browserSelectTool: ToolRegistration = {
       }),
       execute: async ({ session_id, ref, value }) => {
         try {
-          const session = playwrightManager.resolveSession(session_id, ctx.kinId)
+          const session = playwrightManager.resolveSession(session_id, ctx.agentId)
           const locator = locatorForRef(session.page, ref)
           // Try by value first, fall back to label
           try {
@@ -261,7 +261,7 @@ export const browserSelectTool: ToolRegistration = {
           } catch {
             await locator.selectOption({ label: value })
           }
-          return { page_state: await snapshotAfterAction(session_id, ctx.kinId) }
+          return { page_state: await snapshotAfterAction(session_id, ctx.agentId) }
         } catch (e) {
           return err(e instanceof Error ? e.message : String(e))
         }
@@ -270,7 +270,7 @@ export const browserSelectTool: ToolRegistration = {
 }
 
 export const browserPressKeyTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   defaultDisabled: true,
   create: (ctx) =>
     tool({
@@ -283,13 +283,13 @@ export const browserPressKeyTool: ToolRegistration = {
       }),
       execute: async ({ session_id, key, ref }) => {
         try {
-          const session = playwrightManager.resolveSession(session_id, ctx.kinId)
+          const session = playwrightManager.resolveSession(session_id, ctx.agentId)
           if (ref) {
             await locatorForRef(session.page, ref).press(key)
           } else {
             await session.page.keyboard.press(key)
           }
-          return { page_state: await snapshotAfterAction(session_id, ctx.kinId) }
+          return { page_state: await snapshotAfterAction(session_id, ctx.agentId) }
         } catch (e) {
           return err(e instanceof Error ? e.message : String(e))
         }
@@ -298,7 +298,7 @@ export const browserPressKeyTool: ToolRegistration = {
 }
 
 export const browserScrollTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   defaultDisabled: true,
   create: (ctx) =>
     tool({
@@ -310,7 +310,7 @@ export const browserScrollTool: ToolRegistration = {
       }),
       execute: async ({ session_id, direction, amount_px }) => {
         try {
-          const session = playwrightManager.resolveSession(session_id, ctx.kinId)
+          const session = playwrightManager.resolveSession(session_id, ctx.agentId)
           await session.page.evaluate(
             ({ direction, amount_px }) => {
               const h = amount_px ?? window.innerHeight
@@ -321,7 +321,7 @@ export const browserScrollTool: ToolRegistration = {
             },
             { direction, amount_px },
           )
-          return { page_state: await snapshotAfterAction(session_id, ctx.kinId) }
+          return { page_state: await snapshotAfterAction(session_id, ctx.agentId) }
         } catch (e) {
           return err(e instanceof Error ? e.message : String(e))
         }
@@ -330,7 +330,7 @@ export const browserScrollTool: ToolRegistration = {
 }
 
 export const browserWaitForTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   defaultDisabled: true,
   create: (ctx) =>
     tool({
@@ -343,7 +343,7 @@ export const browserWaitForTool: ToolRegistration = {
       }),
       execute: async ({ session_id, condition, timeout_ms }) => {
         try {
-          const session = playwrightManager.resolveSession(session_id, ctx.kinId)
+          const session = playwrightManager.resolveSession(session_id, ctx.agentId)
           const timeout = timeout_ms ?? 15_000
           const eq = condition.indexOf('=')
           if (eq < 0) return err(`Invalid condition "${condition}". Use kind=value (e.g. "url=...", "ref=...", "text=...", "ms=...").`)
@@ -368,7 +368,7 @@ export const browserWaitForTool: ToolRegistration = {
             default:
               return err(`Unknown condition kind "${kind}". Use url, ref, text, or ms.`)
           }
-          return { page_state: await snapshotAfterAction(session_id, ctx.kinId) }
+          return { page_state: await snapshotAfterAction(session_id, ctx.agentId) }
         } catch (e) {
           return err(e instanceof Error ? e.message : String(e))
         }
@@ -379,7 +379,7 @@ export const browserWaitForTool: ToolRegistration = {
 // ─── Screenshots ────────────────────────────────────────────────────────────
 
 export const browserScreenshotTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   defaultDisabled: true,
   readOnly: true,
   create: (ctx) =>
@@ -391,15 +391,15 @@ export const browserScreenshotTool: ToolRegistration = {
       }),
       execute: async ({ session_id, full_page }) => {
         try {
-          const session = playwrightManager.resolveSession(session_id, ctx.kinId)
+          const session = playwrightManager.resolveSession(session_id, ctx.agentId)
           const buffer = await session.page.screenshot({ type: 'png', fullPage: full_page ?? false })
           const hostname = new URL(session.page.url()).hostname.replace(/[^a-z0-9.-]/gi, '_')
           const name = `session-screenshot-${hostname}-${Date.now()}`
-          const file = await createFileFromContent(ctx.kinId, name, buffer.toString('base64'), 'image/png', {
+          const file = await createFileFromContent(ctx.agentId, name, buffer.toString('base64'), 'image/png', {
             isBase64: true,
             description: `Browser session screenshot of ${session.page.url()}`,
             isPublic: true,
-            createdByKinId: ctx.kinId,
+            createdByAgentId: ctx.agentId,
           })
           await playwrightManager.refreshSessionMeta(session)
           return {
@@ -418,7 +418,7 @@ export const browserScreenshotTool: ToolRegistration = {
 // ─── Cookies ────────────────────────────────────────────────────────────────
 
 export const browserSetCookiesTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   defaultDisabled: true,
   create: (ctx) =>
     tool({
@@ -432,7 +432,7 @@ export const browserSetCookiesTool: ToolRegistration = {
       execute: async ({ session_id, cookies, default_cookie_domain }) => {
         try {
           const parsed = parseCookieInput(cookies, default_cookie_domain)
-          const added = await playwrightManager.setCookies(session_id, ctx.kinId, parsed)
+          const added = await playwrightManager.setCookies(session_id, ctx.agentId, parsed)
           return { added }
         } catch (e) {
           return err(e instanceof Error ? e.message : String(e))
@@ -442,7 +442,7 @@ export const browserSetCookiesTool: ToolRegistration = {
 }
 
 export const browserGetCookiesTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   defaultDisabled: true,
   readOnly: true,
   create: (ctx) =>
@@ -454,7 +454,7 @@ export const browserGetCookiesTool: ToolRegistration = {
       }),
       execute: async ({ session_id, urls }) => {
         try {
-          const cookies = await playwrightManager.getCookies(session_id, ctx.kinId, urls)
+          const cookies = await playwrightManager.getCookies(session_id, ctx.agentId, urls)
           return { cookies }
         } catch (e) {
           return err(e instanceof Error ? e.message : String(e))
@@ -464,7 +464,7 @@ export const browserGetCookiesTool: ToolRegistration = {
 }
 
 export const browserClearCookiesTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   defaultDisabled: true,
   create: (ctx) =>
     tool({
@@ -474,7 +474,7 @@ export const browserClearCookiesTool: ToolRegistration = {
       }),
       execute: async ({ session_id }) => {
         try {
-          await playwrightManager.clearCookies(session_id, ctx.kinId)
+          await playwrightManager.clearCookies(session_id, ctx.agentId)
           return { cleared: true }
         } catch (e) {
           return err(e instanceof Error ? e.message : String(e))
@@ -486,7 +486,7 @@ export const browserClearCookiesTool: ToolRegistration = {
 // ─── State persistence (save / load across sessions) ───────────────────────
 
 export const browserSaveStateTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   defaultDisabled: true,
   create: (ctx) =>
     tool({
@@ -506,7 +506,7 @@ export const browserSaveStateTool: ToolRegistration = {
       }),
       execute: async ({ session_id, name, description }) => {
         try {
-          const meta = await playwrightManager.saveSessionState(session_id, ctx.kinId, name, description)
+          const meta = await playwrightManager.saveSessionState(session_id, ctx.agentId, name, description)
           return { saved: true, ...meta }
         } catch (e) {
           return err(e instanceof Error ? e.message : String(e))
@@ -516,16 +516,16 @@ export const browserSaveStateTool: ToolRegistration = {
 }
 
 export const browserListStatesTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   defaultDisabled: true,
   readOnly: true,
   create: (ctx) =>
     tool({
-      description: 'List saved browser states for this Kin (name, saved-at, source URL, description, size). Load one via browser_open_session({ load_state: name }).',
+      description: 'List saved browser states for this Agent (name, saved-at, source URL, description, size). Load one via browser_open_session({ load_state: name }).',
       inputSchema: z.object({}),
       execute: async () => {
         try {
-          const states = await playwrightManager.listSavedStates(ctx.kinId)
+          const states = await playwrightManager.listSavedStates(ctx.agentId)
           return { states, count: states.length }
         } catch (e) {
           return err(e instanceof Error ? e.message : String(e))
@@ -535,7 +535,7 @@ export const browserListStatesTool: ToolRegistration = {
 }
 
 export const browserDeleteStateTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   defaultDisabled: true,
   create: (ctx) =>
     tool({
@@ -545,7 +545,7 @@ export const browserDeleteStateTool: ToolRegistration = {
       }),
       execute: async ({ name }) => {
         try {
-          const deleted = await playwrightManager.deleteSavedState(ctx.kinId, name)
+          const deleted = await playwrightManager.deleteSavedState(ctx.agentId, name)
           return { deleted, name }
         } catch (e) {
           return err(e instanceof Error ? e.message : String(e))
@@ -557,7 +557,7 @@ export const browserDeleteStateTool: ToolRegistration = {
 // ─── Human-in-the-loop ──────────────────────────────────────────────────────
 
 export const browserRequestHumanTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   defaultDisabled: true,
   create: (ctx) => {
     let calledThisTurn = false
@@ -593,7 +593,7 @@ export const browserRequestHumanTool: ToolRegistration = {
           }
           calledThisTurn = true
 
-          // Guard: cron-spawned sub-Kin tasks cannot prompt humans
+          // Guard: cron-spawned sub-Agent tasks cannot prompt humans
           if (ctx.taskId) {
             const task = await db.select().from(tasks).where(eq(tasks.id, ctx.taskId)).get()
             if (!task) return err('Task not found')
@@ -601,15 +601,15 @@ export const browserRequestHumanTool: ToolRegistration = {
             if (!task.allowHumanPrompt) return err('Human prompts are disabled for this task by the parent')
           }
 
-          const session = playwrightManager.resolveSession(session_id, ctx.kinId)
+          const session = playwrightManager.resolveSession(session_id, ctx.agentId)
           const buffer = await session.page.screenshot({ type: 'png', fullPage: full_page ?? false })
           const hostname = new URL(session.page.url()).hostname.replace(/[^a-z0-9.-]/gi, '_')
           const name = `intervention-${hostname}-${Date.now()}`
-          const file = await createFileFromContent(ctx.kinId, name, buffer.toString('base64'), 'image/png', {
+          const file = await createFileFromContent(ctx.agentId, name, buffer.toString('base64'), 'image/png', {
             isBase64: true,
             description: `Browser intervention screenshot at ${session.page.url()}`,
             isPublic: true,
-            createdByKinId: ctx.kinId,
+            createdByAgentId: ctx.agentId,
           })
           await playwrightManager.refreshSessionMeta(session)
 
@@ -621,7 +621,7 @@ export const browserRequestHumanTool: ToolRegistration = {
             (session.title ? `\n**Page** : ${session.title}` : '')
 
           const { promptId } = await createHumanPrompt({
-            kinId: ctx.kinId,
+            agentId: ctx.agentId,
             taskId: ctx.taskId,
             promptType: 'confirm',
             question: reason,
@@ -632,7 +632,7 @@ export const browserRequestHumanTool: ToolRegistration = {
             ],
           })
 
-          log.info({ kinId: ctx.kinId, taskId: ctx.taskId, sessionId: session_id, promptId }, 'browser_request_human prompt created')
+          log.info({ agentId: ctx.agentId, taskId: ctx.taskId, sessionId: session_id, promptId }, 'browser_request_human prompt created')
 
           return {
             promptId,

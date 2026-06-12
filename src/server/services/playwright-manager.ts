@@ -72,7 +72,7 @@ export interface SavedStateMeta {
 }
 
 export interface SessionOptions {
-  kinId: string
+  agentId: string
   taskId?: string
   startUrl?: string
   cookies?: CookieSpec[]
@@ -84,7 +84,7 @@ export interface SessionOptions {
 
 export interface BrowserSessionState {
   sessionId: string
-  kinId: string
+  agentId: string
   taskId?: string
   url: string
   title: string | null
@@ -361,9 +361,9 @@ class PlaywrightManager {
 
   // ─── Stateful session API ─────────────────────────────────────────────────
 
-  countSessionsForKin(kinId: string): number {
+  countSessionsForAgent(agentId: string): number {
     let n = 0
-    for (const s of this.sessions.values()) if (s.kinId === kinId) n++
+    for (const s of this.sessions.values()) if (s.agentId === agentId) n++
     return n
   }
 
@@ -379,9 +379,9 @@ class PlaywrightManager {
         `Global session limit reached (${config.browserSessions.maxTotal}). Close an existing session before opening a new one.`,
       )
     }
-    if (this.countSessionsForKin(opts.kinId) >= config.browserSessions.maxPerKin) {
+    if (this.countSessionsForAgent(opts.agentId) >= config.browserSessions.maxPerAgent) {
       throw new Error(
-        `This Kin already has ${config.browserSessions.maxPerKin} active session(s) (limit per Kin). Close it first via browser_close_session.`,
+        `This Agent already has ${config.browserSessions.maxPerAgent} active session(s) (limit per Agent). Close it first via browser_close_session.`,
       )
     }
 
@@ -421,7 +421,7 @@ class PlaywrightManager {
       const now = Date.now()
       const session: BrowserSessionInternal = {
         sessionId,
-        kinId: opts.kinId,
+        agentId: opts.agentId,
         taskId: opts.taskId,
         url: page.url(),
         title: opts.startUrl ? (await page.title().catch(() => null)) : null,
@@ -434,7 +434,7 @@ class PlaywrightManager {
       }
 
       this.sessions.set(sessionId, session)
-      log.info({ sessionId, kinId: opts.kinId, taskId: opts.taskId }, 'Browser session opened')
+      log.info({ sessionId, agentId: opts.agentId, taskId: opts.taskId }, 'Browser session opened')
 
       return this.toState(session)
     } catch (err) {
@@ -446,13 +446,13 @@ class PlaywrightManager {
   }
 
   /**
-   * Resolve a session by ID. Throws if not found or owned by a different Kin.
+   * Resolve a session by ID. Throws if not found or owned by a different Agent.
    * Updates lastUsedAt as a side effect.
    */
-  resolveSession(sessionId: string, kinId: string): BrowserSessionInternal {
+  resolveSession(sessionId: string, agentId: string): BrowserSessionInternal {
     const s = this.sessions.get(sessionId)
     if (!s) throw new Error(`Session ${sessionId} not found (closed, expired, or invalid).`)
-    if (s.kinId !== kinId) throw new Error(`Session ${sessionId} is not owned by this Kin.`)
+    if (s.agentId !== agentId) throw new Error(`Session ${sessionId} is not owned by this Agent.`)
     s.lastUsedAt = Date.now()
     return s
   }
@@ -466,12 +466,12 @@ class PlaywrightManager {
     try { await s.context.close() } catch {}
     s.release()
 
-    log.info({ sessionId, kinId: s.kinId, reason: opts.reason ?? 'explicit' }, 'Browser session closed')
+    log.info({ sessionId, agentId: s.agentId, reason: opts.reason ?? 'explicit' }, 'Browser session closed')
   }
 
-  async closeSessionsForKin(kinId: string, reason = 'kin_deleted'): Promise<number> {
+  async closeSessionsForAgent(agentId: string, reason = 'agent_deleted'): Promise<number> {
     const ids: string[] = []
-    for (const [sid, s] of this.sessions) if (s.kinId === kinId) ids.push(sid)
+    for (const [sid, s] of this.sessions) if (s.agentId === agentId) ids.push(sid)
     for (const sid of ids) await this.closeSession(sid, { reason })
     return ids.length
   }
@@ -483,10 +483,10 @@ class PlaywrightManager {
     return ids.length
   }
 
-  listSessions(kinId?: string): BrowserSessionState[] {
+  listSessions(agentId?: string): BrowserSessionState[] {
     const out: BrowserSessionState[] = []
     for (const s of this.sessions.values()) {
-      if (!kinId || s.kinId === kinId) out.push(this.toState(s))
+      if (!agentId || s.agentId === agentId) out.push(this.toState(s))
     }
     return out
   }
@@ -494,7 +494,7 @@ class PlaywrightManager {
   private toState(s: BrowserSessionInternal): BrowserSessionState {
     return {
       sessionId: s.sessionId,
-      kinId: s.kinId,
+      agentId: s.agentId,
       taskId: s.taskId,
       url: s.url,
       title: s.title,
@@ -512,31 +512,31 @@ class PlaywrightManager {
 
   // ─── Cookie helpers ───────────────────────────────────────────────────────
 
-  async setCookies(sessionId: string, kinId: string, cookies: CookieSpec[]): Promise<number> {
-    const s = this.resolveSession(sessionId, kinId)
+  async setCookies(sessionId: string, agentId: string, cookies: CookieSpec[]): Promise<number> {
+    const s = this.resolveSession(sessionId, agentId)
     if (cookies.length === 0) return 0
     await s.context.addCookies(cookies as Parameters<BrowserContext['addCookies']>[0])
     return cookies.length
   }
 
-  async getCookies(sessionId: string, kinId: string, urls?: string[]): Promise<Cookie[]> {
-    const s = this.resolveSession(sessionId, kinId)
+  async getCookies(sessionId: string, agentId: string, urls?: string[]): Promise<Cookie[]> {
+    const s = this.resolveSession(sessionId, agentId)
     return s.context.cookies(urls)
   }
 
-  async clearCookies(sessionId: string, kinId: string): Promise<void> {
-    const s = this.resolveSession(sessionId, kinId)
+  async clearCookies(sessionId: string, agentId: string): Promise<void> {
+    const s = this.resolveSession(sessionId, agentId)
     await s.context.clearCookies()
   }
 
   // ─── Saved state persistence (cross-session) ──────────────────────────────
 
-  private statesDirForKin(kinId: string): string {
-    return join(config.browserSessions.statesDir, kinId)
+  private statesDirForAgent(agentId: string): string {
+    return join(config.browserSessions.statesDir, agentId)
   }
 
-  private statePathForKin(kinId: string, name: string): string {
-    return join(this.statesDirForKin(kinId), `${name}.json`)
+  private statePathForAgent(agentId: string, name: string): string {
+    return join(this.statesDirForAgent(agentId), `${name}.json`)
   }
 
   private validateStateName(name: string): void {
@@ -549,12 +549,12 @@ class PlaywrightManager {
 
   async saveSessionState(
     sessionId: string,
-    kinId: string,
+    agentId: string,
     name: string,
     description?: string,
   ): Promise<SavedStateMeta> {
     this.validateStateName(name)
-    const session = this.resolveSession(sessionId, kinId)
+    const session = this.resolveSession(sessionId, agentId)
 
     const storageState = await session.context.storageState()
     const url = session.page.url()
@@ -574,17 +574,17 @@ class PlaywrightManager {
       )
     }
 
-    const dir = this.statesDirForKin(kinId)
+    const dir = this.statesDirForAgent(agentId)
     await mkdir(dir, { recursive: true })
 
-    // Enforce per-Kin cap (only when creating a new entry)
-    const existingPath = this.statePathForKin(kinId, name)
+    // Enforce per-Agent cap (only when creating a new entry)
+    const existingPath = this.statePathForAgent(agentId, name)
     const isNew = !existsSync(existingPath)
     if (isNew) {
-      const existing = await this.listSavedStates(kinId)
-      if (existing.length >= config.browserSessions.maxStatesPerKin) {
+      const existing = await this.listSavedStates(agentId)
+      if (existing.length >= config.browserSessions.maxStatesPerAgent) {
         throw new Error(
-          `This Kin already has ${existing.length} saved states (limit: ${config.browserSessions.maxStatesPerKin}). Delete one first via browser_delete_state.`,
+          `This Agent already has ${existing.length} saved states (limit: ${config.browserSessions.maxStatesPerAgent}). Delete one first via browser_delete_state.`,
         )
       }
     }
@@ -594,7 +594,7 @@ class PlaywrightManager {
     // report the same number (otherwise embedding sizeBytes in the file caused
     // a small chicken-and-egg drift between the two).
     const stats = await stat(existingPath)
-    log.info({ kinId, name, sizeBytes: stats.size, fromUrl: url }, 'Browser state saved')
+    log.info({ agentId, name, sizeBytes: stats.size, fromUrl: url }, 'Browser state saved')
 
     return {
       name: file.name,
@@ -606,19 +606,19 @@ class PlaywrightManager {
     }
   }
 
-  async loadSavedState(kinId: string, name: string): Promise<SavedStateFile> {
+  async loadSavedState(agentId: string, name: string): Promise<SavedStateFile> {
     this.validateStateName(name)
-    const path = this.statePathForKin(kinId, name)
+    const path = this.statePathForAgent(agentId, name)
     if (!existsSync(path)) {
-      throw new Error(`Saved state "${name}" not found for this Kin. Use browser_list_states to see what's available.`)
+      throw new Error(`Saved state "${name}" not found for this Agent. Use browser_list_states to see what's available.`)
     }
     const raw = await readFile(path, 'utf-8')
     const parsed = JSON.parse(raw) as SavedStateFile
     return parsed
   }
 
-  async listSavedStates(kinId: string): Promise<SavedStateMeta[]> {
-    const dir = this.statesDirForKin(kinId)
+  async listSavedStates(agentId: string): Promise<SavedStateMeta[]> {
+    const dir = this.statesDirForAgent(agentId)
     if (!existsSync(dir)) return []
     const entries = await readdir(dir)
     const out: SavedStateMeta[] = []
@@ -638,24 +638,24 @@ class PlaywrightManager {
           sizeBytes: stats.size,
         })
       } catch (err) {
-        log.warn({ kinId, entry, err }, 'Skipping unreadable browser state file')
+        log.warn({ agentId, entry, err }, 'Skipping unreadable browser state file')
       }
     }
     return out.sort((a, b) => b.savedAt - a.savedAt)
   }
 
-  async deleteSavedState(kinId: string, name: string): Promise<boolean> {
+  async deleteSavedState(agentId: string, name: string): Promise<boolean> {
     this.validateStateName(name)
-    const path = this.statePathForKin(kinId, name)
+    const path = this.statePathForAgent(agentId, name)
     if (!existsSync(path)) return false
     await unlink(path)
-    log.info({ kinId, name }, 'Browser state deleted')
+    log.info({ agentId, name }, 'Browser state deleted')
     return true
   }
 
-  /** Called by deleteKin — remove all saved states for a Kin. */
-  async deleteAllSavedStatesForKin(kinId: string): Promise<number> {
-    const dir = this.statesDirForKin(kinId)
+  /** Called by deleteAgent — remove all saved states for an Agent. */
+  async deleteAllSavedStatesForAgent(agentId: string): Promise<number> {
+    const dir = this.statesDirForAgent(agentId)
     if (!existsSync(dir)) return 0
     const entries = await readdir(dir)
     let removed = 0
@@ -665,7 +665,7 @@ class PlaywrightManager {
         await unlink(join(dir, entry))
         removed++
       } catch (err) {
-        log.warn({ kinId, entry, err }, 'Failed to remove browser state file')
+        log.warn({ agentId, entry, err }, 'Failed to remove browser state file')
       }
     }
     return removed

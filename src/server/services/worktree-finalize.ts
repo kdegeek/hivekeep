@@ -115,7 +115,7 @@ export async function finalizeTicketSubTaskWorktree(input: FinalizeInput): Promi
   const baseBranch = projectRow.defaultBranch ?? 'main'
 
   // Was a worktree actually created for this task? createWorktree only runs
-  // when cloneStatus was 'ready' at executeSubKin time. Without a worktree
+  // when cloneStatus was 'ready' at executeSubAgent time. Without a worktree
   // there's nothing to finalize.
   if (!(await dirExists(wtPath))) {
     return neutral
@@ -268,7 +268,7 @@ async function dirExists(path: string): Promise<boolean> {
 
 async function taskEnv(projectRow: { githubPatVaultKey: string | null }): Promise<Record<string, string>> {
   const pat = await resolvePat(projectRow.githubPatVaultKey)
-  return pat ? { KINBOT_GH_TOKEN: pat } : {}
+  return pat ? { HIVEKEEP_GH_TOKEN: pat } : {}
 }
 
 /** Exposed for tests / sub-ticket-tooling. */

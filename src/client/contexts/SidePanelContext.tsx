@@ -13,8 +13,8 @@ export interface SidePanelParentRef {
 
 interface TaskPanelInfo {
   taskId: string
-  kinName?: string
-  kinAvatarUrl?: string | null
+  agentName?: string
+  agentAvatarUrl?: string | null
   parent?: SidePanelParentRef
 }
 

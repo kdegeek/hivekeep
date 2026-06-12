@@ -20,7 +20,7 @@ const ALL_STATUSES: TaskStatus[] = [
   'in_progress',
   'paused',
   'awaiting_human_input',
-  'awaiting_kin_response',
+  'awaiting_agent_response',
   'awaiting_subtask',
   'completed',
   'failed',
@@ -48,7 +48,7 @@ describe('TASK_STATUS_META (single source of truth)', () => {
       queued: 'text-queued',
       paused: 'text-paused',
       awaiting_human_input: 'text-warning',
-      awaiting_kin_response: 'text-info',
+      awaiting_agent_response: 'text-info',
       awaiting_subtask: 'text-info',
       completed: 'text-success',
       failed: 'text-destructive',
@@ -74,7 +74,7 @@ describe('TASK_STATUS_META (single source of truth)', () => {
     const pulsing = ALL_STATUSES.filter((s) => taskStatusMeta(s).pulse)
     const expected: TaskStatus[] = [
       'awaiting_human_input',
-      'awaiting_kin_response',
+      'awaiting_agent_response',
       'awaiting_subtask',
       'in_progress',
     ]
@@ -103,7 +103,7 @@ describe('lifecycle group predicates', () => {
   it('suspended = {paused, awaiting_*}', () => {
     const expected: TaskStatus[] = [
       'awaiting_human_input',
-      'awaiting_kin_response',
+      'awaiting_agent_response',
       'awaiting_subtask',
       'paused',
     ]

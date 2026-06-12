@@ -44,7 +44,7 @@ function parseMetadata(raw: string | null): PersistedMetadata | null {
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 export interface EmitPluginCardParams {
-  kinId: string
+  agentId: string
   pluginId: string
   cardType: string
   layout: PluginCardPrimitive[]
@@ -80,7 +80,7 @@ export async function emitPluginCard(params: EmitPluginCardParams): Promise<Emit
   const now = new Date()
   await db.insert(messages).values({
     id: messageId,
-    kinId: params.kinId,
+    agentId: params.agentId,
     role: 'system',
     content: null,
     sourceType: 'system',
@@ -91,9 +91,9 @@ export async function emitPluginCard(params: EmitPluginCardParams): Promise<Emit
 
   // Mirror the /api/messages enrichment shape so the client can pick this up
   // through its existing `chat:message` handler without any extra plumbing.
-  sseManager.sendToKin(params.kinId, {
+  sseManager.sendToAgent(params.agentId, {
     type: 'chat:message',
-    kinId: params.kinId,
+    agentId: params.agentId,
     data: {
       id: messageId,
       role: 'system',
@@ -107,7 +107,7 @@ export async function emitPluginCard(params: EmitPluginCardParams): Promise<Emit
   })
 
   log.debug(
-    { kinId: params.kinId, pluginId: params.pluginId, cardInstanceId, cardType: params.cardType },
+    { agentId: params.agentId, pluginId: params.pluginId, cardInstanceId, cardType: params.cardType },
     'plugin card emitted',
   )
 
@@ -148,9 +148,9 @@ export async function updatePluginCard(params: UpdatePluginCardParams): Promise<
     .set({ metadata: JSON.stringify(nextMeta) })
     .where(eq(messages.id, row.id))
 
-  sseManager.sendToKin(row.kinId, {
+  sseManager.sendToAgent(row.agentId, {
     type: 'card:updated',
-    kinId: row.kinId,
+    agentId: row.agentId,
     data: {
       cardInstanceId: params.cardInstanceId,
       state: nextState,
@@ -166,29 +166,29 @@ export async function getPluginCard(cardInstanceId: string): Promise<PluginCard 
   return meta?.pluginCard ?? null
 }
 
-/** Read a card + its hosting kinId, for routes that need to authorize. */
-export async function getPluginCardWithOwner(cardInstanceId: string): Promise<{ card: PluginCard; kinId: string; messageId: string } | null> {
+/** Read a card + its hosting agentId, for routes that need to authorize. */
+export async function getPluginCardWithOwner(cardInstanceId: string): Promise<{ card: PluginCard; agentId: string; messageId: string } | null> {
   const row = await findMessageByCardInstanceId(cardInstanceId)
   if (!row) return null
   const meta = parseMetadata(row.metadata)
   if (!meta) return null
-  return { card: meta.pluginCard, kinId: row.kinId, messageId: row.id }
+  return { card: meta.pluginCard, agentId: row.agentId, messageId: row.id }
 }
 
 // ─── Lookup helpers ──────────────────────────────────────────────────────────
 //
 // We index by cardInstanceId by scanning recent system messages. The volume
-// of active cards per Kin is small (one per running session at most), so a
+// of active cards per Agent is small (one per running session at most), so a
 // targeted scan is cheap. A dedicated index/table is overkill at V1.
 
-async function findMessageByCardInstanceId(cardInstanceId: string): Promise<{ id: string; kinId: string; metadata: string | null } | null> {
+async function findMessageByCardInstanceId(cardInstanceId: string): Promise<{ id: string; agentId: string; metadata: string | null } | null> {
   // Push the substring filter to SQLite so the scan stays cheap even on
   // conversations with deep history. Parse + verify the few candidates in
   // JS to guard against false positives that only happen if the id pattern
   // also appears verbatim in unrelated metadata blobs (extremely unlikely
   // with UUIDs, but the parsing is cheap enough that we keep the check).
   const rows = await db
-    .select({ id: messages.id, kinId: messages.kinId, metadata: messages.metadata })
+    .select({ id: messages.id, agentId: messages.agentId, metadata: messages.metadata })
     .from(messages)
     .where(and(
       eq(messages.sourceType, 'system'),

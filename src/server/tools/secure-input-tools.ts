@@ -1,8 +1,8 @@
 /**
- * Secure-input tools — let the configurator Kin (Sherpa) request a secret from
+ * Secure-input tools — let the configurator Agent (Queenie) request a secret from
  * the user through a UI popup. The raw value goes straight to the vault / into
  * an encrypted provider config; the LLM only ever receives a non-sensitive
- * confirmation. See services/secret-prompts.ts and sherpa.md §7.
+ * confirmation. See services/secret-prompts.ts and queenie.md §7.
  *
  * Admin-only (these create global resources / store global secrets).
  */
@@ -11,7 +11,7 @@ import { tool } from '@/server/tools/tool-helper'
 import { z } from 'zod'
 import { or, eq } from 'drizzle-orm'
 import { db } from '@/server/db/index'
-import { kins } from '@/server/db/schema'
+import { agents } from '@/server/db/schema'
 import {
   getConfigSchemaForType,
   getSecretFieldKeys,
@@ -76,7 +76,7 @@ export const requestProviderSetupTool: ToolRegistration = {
           }))
 
         const { promptId } = await createSecretPrompt({
-          kinId: ctx.kinId,
+          agentId: ctx.agentId,
           taskId: ctx.taskId,
           purpose: 'provider',
           title: `Connect ${name}`,
@@ -98,34 +98,34 @@ export const requestProviderSetupTool: ToolRegistration = {
 /**
  * request_channel_setup — open a secure popup for the user to paste a messaging
  * channel's credentials (Discord/Telegram bot token), then create + activate the
- * channel bound to a Kin. The token goes straight to the vault.
+ * channel bound to an Agent. The token goes straight to the vault.
  */
 export const requestChannelSetupTool: ToolRegistration = {
   availability: ['main'],
   create: (ctx) =>
     tool({
       description:
-        'Open a SECURE POPUP for the user to paste a messaging channel\'s credentials (e.g. a Discord or Telegram bot token), then create + activate the channel bound to a Kin. ' +
+        'Open a SECURE POPUP for the user to paste a messaging channel\'s credentials (e.g. a Discord or Telegram bot token), then create + activate the channel bound to an Agent. ' +
         'The token goes straight to the encrypted vault — you never see it; you get back whether activation succeeded. ' +
-        'Ask the user which platform and which Kin first. This ends your turn; you resume when they submit.',
+        'Ask the user which platform and which Agent first. This ends your turn; you resume when they submit.',
       inputSchema: z.object({
         platform: z.string().describe('Channel platform, e.g. "discord" or "telegram".'),
         name: z.string().describe('A name for this channel, e.g. "My Discord".'),
-        kin_id: z.string().describe('Id or slug of the Kin this channel should talk to.'),
+        agent_id: z.string().describe('Id or slug of the Agent this channel should talk to.'),
         config: z
           .record(z.string(), z.string())
           .optional()
           .describe('Non-secret config fields declared by the platform. Do NOT put the token here — the popup collects it.'),
       }),
-      execute: async ({ platform, name, kin_id, config }) => {
+      execute: async ({ platform, name, agent_id, config }) => {
         const denied = await requireAdmin(ctx)
         if (denied) return denied
         const adapter = channelAdapters.get(platform)
         if (!adapter) {
           return { error: `Unknown channel platform "${platform}". Supported: ${channelAdapters.list().join(', ') || 'none'}.` }
         }
-        const kin = db.select().from(kins).where(or(eq(kins.id, kin_id), eq(kins.slug, kin_id))).get()
-        if (!kin) return { error: `Kin not found: "${kin_id}".` }
+        const agent = db.select().from(agents).where(or(eq(agents.id, agent_id), eq(agents.slug, agent_id))).get()
+        if (!agent) return { error: `Agent not found: "${agent_id}".` }
 
         const fields: SecretPromptField[] = (adapter.configSchema?.fields ?? [])
           .filter((f: { type: string }) => f.type === 'password')
@@ -141,13 +141,13 @@ export const requestChannelSetupTool: ToolRegistration = {
         }
 
         const { promptId } = await createSecretPrompt({
-          kinId: ctx.kinId,
+          agentId: ctx.agentId,
           taskId: ctx.taskId,
           purpose: 'channel',
           title: `Connect ${name} (${platform})`,
           description: `Paste the ${platform} credentials. They go straight into the encrypted vault — I never see them.`,
           fields,
-          spec: { platform, name, kinId: kin.id, config: config ?? {} },
+          spec: { platform, name, agentId: agent.id, config: config ?? {} },
         })
 
         return {
@@ -185,7 +185,7 @@ export const promptSecretTool: ToolRegistration = {
           { key, label, secret: true, ...(description ? { description } : {}) },
         ]
         const { promptId } = await createSecretPrompt({
-          kinId: ctx.kinId,
+          agentId: ctx.agentId,
           taskId: ctx.taskId,
           purpose: 'vault',
           title: label,

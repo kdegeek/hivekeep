@@ -31,7 +31,7 @@ usageRoutes.use('*', async (c, next) => {
  */
 usageRoutes.get('/', (c) => {
   const filters = {
-    kinId: c.req.query('kinId') || undefined,
+    agentId: c.req.query('agentId') || undefined,
     providerId: c.req.query('providerId') || undefined,
     providerType: c.req.query('providerType') || undefined,
     modelId: c.req.query('modelId') || undefined,
@@ -54,16 +54,16 @@ usageRoutes.get('/', (c) => {
  */
 usageRoutes.get('/summary', (c) => {
   const groupBy = c.req.query('groupBy') as UsageGroupBy | undefined
-  if (!groupBy || !['provider_type', 'model_id', 'kin_id', 'call_site', 'day'].includes(groupBy)) {
+  if (!groupBy || !['provider_type', 'model_id', 'agent_id', 'call_site', 'day'].includes(groupBy)) {
     return c.json(
-      { error: { code: 'BAD_REQUEST', message: 'groupBy is required (provider_type, model_id, kin_id, call_site, day)' } },
+      { error: { code: 'BAD_REQUEST', message: 'groupBy is required (provider_type, model_id, agent_id, call_site, day)' } },
       400,
     )
   }
 
   const filters = {
     groupBy,
-    kinId: c.req.query('kinId') || undefined,
+    agentId: c.req.query('agentId') || undefined,
     providerType: c.req.query('providerType') || undefined,
     modelId: c.req.query('modelId') || undefined,
     from: c.req.query('from') ? Number(c.req.query('from')) : undefined,

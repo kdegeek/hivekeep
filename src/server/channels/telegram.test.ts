@@ -297,7 +297,7 @@ describe('TelegramAdapter polling mode', () => {
       message_id: 100,
       from: { id: 12345, is_bot: false, first_name: 'John', last_name: 'Doe', username: 'johndoe' },
       chat: { id: 67890, type: 'private' },
-      text: 'Hello KinBot!',
+      text: 'Hello Hivekeep!',
       date: 1710000000,
     }
 
@@ -320,7 +320,7 @@ describe('TelegramAdapter polling mode', () => {
       platformDisplayName: 'John Doe',
       platformMessageId: '100',
       platformChatId: '67890',
-      content: 'Hello KinBot!',
+      content: 'Hello Hivekeep!',
     })
   })
 

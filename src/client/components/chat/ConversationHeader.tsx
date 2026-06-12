@@ -1,5 +1,6 @@
 import { useState, useMemo, memo, useRef, useLayoutEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { useIsMobile } from '@/client/hooks/use-mobile'
 import { ChatAvatar } from '@/client/components/chat/ChatAvatar'
 import { Button } from '@/client/components/ui/button'
@@ -7,7 +8,7 @@ import { Badge } from '@/client/components/ui/badge'
 import { Progress } from '@/client/components/ui/progress'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/client/components/ui/tooltip'
 import { computeCacheHitRate, computeFreshInput } from '@/shared/billing'
-import type { MessageTokenUsage, KinThinkingEffort } from '@/shared/types'
+import type { MessageTokenUsage, AgentThinkingEffort } from '@/shared/types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/client/components/ui/popover'
 import {
   DropdownMenu,
@@ -26,7 +27,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/client/components/ui/alert-dialog'
-import { AlertTriangle, Bot, Settings, Pencil, MessageSquare, Loader2, Wrench, Archive, Zap, FileText, FileJson, Search, Trash2, MoreHorizontal, Coins, ListPlus } from 'lucide-react'
+import { AlertTriangle, Bot, Settings, Pencil, MessageSquare, Loader2, Wrench, Archive, Zap, FileText, FileJson, Search, Trash2, MoreHorizontal, Coins, ListPlus, Folder } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 import { ContextBar } from '@/client/components/chat/ContextBar'
 import { ConversationStats } from '@/client/components/chat/ConversationStats'
@@ -44,7 +45,7 @@ interface LLMModel {
 }
 
 interface ConversationHeaderProps {
-  kinId: string
+  agentId: string
   name: string
   role: string
   model: string
@@ -85,8 +86,8 @@ interface ConversationHeaderProps {
   messages?: ChatMessage[]
   scrollViewportRef?: React.RefObject<HTMLElement | null>
   thinkingEnabled?: boolean
-  thinkingEffort?: KinThinkingEffort | null
-  onChangeThinking?: (next: { enabled: boolean; effort: KinThinkingEffort | null }) => void
+  thinkingEffort?: AgentThinkingEffort | null
+  onChangeThinking?: (next: { enabled: boolean; effort: AgentThinkingEffort | null }) => void
   /** Optional leading element (e.g. the mobile sidebar trigger). Rendered at the
    *  very start of the header so we can collapse the separate trigger bar on
    *  mobile and reclaim that vertical space. */
@@ -125,7 +126,7 @@ const FOLD_USAGE_BELOW = 660
 const FOLD_QUICK_BELOW = 580
 
 export const ConversationHeader = memo(function ConversationHeader({
-  kinId,
+  agentId,
   name,
   role,
   model,
@@ -168,6 +169,7 @@ export const ConversationHeader = memo(function ConversationHeader({
   leading,
 }: ConversationHeaderProps) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
 
   const [mobileInfoOpen, setMobileInfoOpen] = useState(false)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
@@ -262,7 +264,7 @@ export const ConversationHeader = memo(function ConversationHeader({
                 </span>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                {t('kin.modelUnavailableHint')}
+                {t('agent.modelUnavailableHint')}
               </TooltipContent>
             </Tooltip>
           )}
@@ -271,7 +273,7 @@ export const ConversationHeader = memo(function ConversationHeader({
           )}
           {queueSize > 0 && (
             <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-              {t('kin.queue', { count: queueSize })}
+              {t('agent.queue', { count: queueSize })}
             </span>
           )}
           {lastTurnCache && (
@@ -341,7 +343,7 @@ export const ConversationHeader = memo(function ConversationHeader({
             {/* Model & effort pickers now live in the composer toolbar; this
                 popover is a context-usage summary only. */}
             <ContextBar
-              kinId={kinId}
+              agentId={agentId}
               estimatedTokens={estimatedTokens}
               maxTokens={maxTokens}
               apiContextTokens={apiContextTokens}
@@ -364,7 +366,7 @@ export const ConversationHeader = memo(function ConversationHeader({
           in the name-tap popover above). Always visible; never folds. */}
       <div className="hidden min-w-0 items-center sm:flex">
         <ContextBar
-          kinId={kinId}
+          agentId={agentId}
           estimatedTokens={estimatedTokens}
           maxTokens={maxTokens}
           apiContextTokens={apiContextTokens}
@@ -481,17 +483,17 @@ export const ConversationHeader = memo(function ConversationHeader({
         </DropdownMenu>
       )}
 
-      {/* Settings — real cog. Holds kin + conversation actions (no standalone ⋯). */}
+      {/* Settings — real cog. Holds agent + conversation actions (no standalone ⋯). */}
       <DropdownMenu>
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label={t('accessibility.kinSettings')}>
+              <Button variant="ghost" size="icon-sm" aria-label={t('accessibility.agentSettings')}>
                 <Settings className="size-4" />
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent side="bottom">{t('accessibility.kinSettings')}</TooltipContent>
+          <TooltipContent side="bottom">{t('accessibility.agentSettings')}</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end">
           {/* Mobile: the standalone ⋯ overflow is hidden, so its foldable
@@ -509,18 +511,23 @@ export const ConversationHeader = memo(function ConversationHeader({
             </DropdownMenuItem>
           )}
           {isMobile && (onQuickSession || onViewUsage) && <DropdownMenuSeparator />}
-          {/* Edit this Kin's configuration */}
+          {/* Edit this Agent's configuration */}
           <DropdownMenuItem onClick={onEdit}>
             <Pencil className="mr-2 size-4" />
-            {t('sidebar.kins.contextMenu.edit')}
+            {t('sidebar.agents.contextMenu.edit')}
           </DropdownMenuItem>
-          {/* Launch a standalone (orphan) task on this Kin — no project/ticket. */}
+          {/* Launch a standalone (orphan) task on this Agent — no project/ticket. */}
           {onStartTask && (
             <DropdownMenuItem onClick={onStartTask}>
               <ListPlus className="mr-2 size-4" />
               {t('orphanTask.menuAction')}
             </DropdownMenuItem>
           )}
+          {/* Browse this Agent's workspace in the Files section */}
+          <DropdownMenuItem onClick={() => navigate(`/files/${agentId}`)}>
+            <Folder className="mr-2 size-4" />
+            {t('files.browseWorkspace')}
+          </DropdownMenuItem>
           {(onForceCompact || onExportMarkdown || onExportJSON) && <DropdownMenuSeparator />}
           {onForceCompact && (
             <DropdownMenuItem onClick={onForceCompact} disabled={isCompacting}>

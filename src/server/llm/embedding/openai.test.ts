@@ -24,7 +24,11 @@ mock.module('openai', () => {
       embeddings: { create: mockEmbeddingsCreate },
     }
   }
-  return { default: OpenAI, APIError }
+  return {
+    default: OpenAI,
+    APIError,
+    toFile: async (data: Uint8Array, name: string, _opts?: { type?: string }) => ({ data, name }),
+  }
 })
 
 const { openaiEmbeddingProvider } = await import('./openai')

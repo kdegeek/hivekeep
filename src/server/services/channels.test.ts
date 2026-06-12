@@ -26,7 +26,7 @@ mock.module('@/server/services/contacts', () => ({
   updateContactNote: () => null,
   deleteContactNote: () => false,
   getVisibleNotes: () => [],
-  deleteNotesByKin: () => {},
+  deleteNotesByAgent: () => {},
   listContactsForPrompt: async () => [],
   ensureUserContactsExist: async () => {},
 }))

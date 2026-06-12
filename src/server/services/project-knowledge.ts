@@ -2,7 +2,7 @@ import { eq, and, desc, count, sql } from 'drizzle-orm'
 import { v4 as uuid } from 'uuid'
 import { db, sqlite } from '@/server/db/index'
 import { createLogger } from '@/server/logger'
-import { projectKnowledge, kins } from '@/server/db/schema'
+import { projectKnowledge, agents } from '@/server/db/schema'
 import { generateEmbedding } from '@/server/services/embeddings'
 import { config } from '@/server/config'
 import type { ProjectKnowledge, ProjectKnowledgeSearchHit, ProjectKnowledgeIndexEntry } from '@/shared/types'
@@ -10,8 +10,8 @@ import type { ProjectKnowledge, ProjectKnowledgeSearchHit, ProjectKnowledgeIndex
 const log = createLogger('project-knowledge')
 
 /** Max chars accepted for a knowledge title. Kept short on purpose — the
- *  title lands in every Kin's system-prompt index, so a runaway title from
- *  a single entry would inflate every Kin's prompt forever. */
+ *  title lands in every Agent's system-prompt index, so a runaway title from
+ *  a single entry would inflate every Agent's prompt forever. */
 export const PROJECT_KNOWLEDGE_TITLE_MAX = 200
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -22,7 +22,7 @@ interface CreateInput {
   content: string
   category?: string | null
   pinned?: boolean
-  authorKinId?: string | null
+  authorAgentId?: string | null
 }
 
 interface UpdateInput {
@@ -76,17 +76,17 @@ function normalizeTitle(raw: string): string {
 
 type DbRow = typeof projectKnowledge.$inferSelect
 
-async function resolveAuthorKinName(authorKinId: string | null): Promise<string | null> {
-  if (!authorKinId) return null
+async function resolveAuthorAgentName(authorAgentId: string | null): Promise<string | null> {
+  if (!authorAgentId) return null
   try {
-    const row = db.select({ name: kins.name }).from(kins).where(eq(kins.id, authorKinId)).get()
+    const row = db.select({ name: agents.name }).from(agents).where(eq(agents.id, authorAgentId)).get()
     return row?.name ?? null
   } catch {
     return null
   }
 }
 
-function rowToProjectKnowledge(row: DbRow, authorKinName: string | null = null): ProjectKnowledge {
+function rowToProjectKnowledge(row: DbRow, authorAgentName: string | null = null): ProjectKnowledge {
   return {
     id: row.id,
     projectId: row.projectId,
@@ -94,30 +94,30 @@ function rowToProjectKnowledge(row: DbRow, authorKinName: string | null = null):
     content: row.content,
     category: row.category,
     pinned: row.pinned,
-    authorKinId: row.authorKinId,
-    authorKinName,
+    authorAgentId: row.authorAgentId,
+    authorAgentName,
     createdAt: row.createdAt.getTime(),
     updatedAt: row.updatedAt.getTime(),
   }
 }
 
 async function hydrateAuthorNames(rows: DbRow[]): Promise<ProjectKnowledge[]> {
-  const kinIds = [...new Set(rows.map((r) => r.authorKinId).filter((id): id is string => !!id))]
-  let kinNameMap = new Map<string, string>()
-  if (kinIds.length > 0) {
+  const agentIds = [...new Set(rows.map((r) => r.authorAgentId).filter((id): id is string => !!id))]
+  let agentNameMap = new Map<string, string>()
+  if (agentIds.length > 0) {
     try {
-      const placeholders = kinIds.map(() => '?').join(', ')
-      const kinRows = sqlite
+      const placeholders = agentIds.map(() => '?').join(', ')
+      const agentRows = sqlite
         .query<{ id: string; name: string }, string[]>(
-          `SELECT id, name FROM kins WHERE id IN (${placeholders})`,
+          `SELECT id, name FROM agents WHERE id IN (${placeholders})`,
         )
-        .all(...kinIds)
-      kinNameMap = new Map(kinRows.map((k) => [k.id, k.name]))
+        .all(...agentIds)
+      agentNameMap = new Map(agentRows.map((k) => [k.id, k.name]))
     } catch {
       // ignore — names fall back to null
     }
   }
-  return rows.map((r) => rowToProjectKnowledge(r, r.authorKinId ? kinNameMap.get(r.authorKinId) ?? null : null))
+  return rows.map((r) => rowToProjectKnowledge(r, r.authorAgentId ? agentNameMap.get(r.authorAgentId) ?? null : null))
 }
 
 // ─── CRUD ────────────────────────────────────────────────────────────────────
@@ -125,8 +125,8 @@ async function hydrateAuthorNames(rows: DbRow[]): Promise<ProjectKnowledge[]> {
 export async function getProjectKnowledge(id: string): Promise<ProjectKnowledge | null> {
   const row = db.select().from(projectKnowledge).where(eq(projectKnowledge.id, id)).get()
   if (!row) return null
-  const authorKinName = await resolveAuthorKinName(row.authorKinId)
-  return rowToProjectKnowledge(row, authorKinName)
+  const authorAgentName = await resolveAuthorAgentName(row.authorAgentId)
+  return rowToProjectKnowledge(row, authorAgentName)
 }
 
 export async function countProjectKnowledge(projectId: string): Promise<number> {
@@ -211,7 +211,7 @@ export async function listKnowledgeIndex(
       title: projectKnowledge.title,
       category: projectKnowledge.category,
       pinned: projectKnowledge.pinned,
-      authorKinId: projectKnowledge.authorKinId,
+      authorAgentId: projectKnowledge.authorAgentId,
     })
     .from(projectKnowledge)
     .where(eq(projectKnowledge.projectId, projectId))
@@ -219,17 +219,17 @@ export async function listKnowledgeIndex(
     .limit(limit)
     .all()
 
-  const kinIds = [...new Set(rows.map((r) => r.authorKinId).filter((id): id is string => !!id))]
-  let kinNameMap = new Map<string, string>()
-  if (kinIds.length > 0) {
+  const agentIds = [...new Set(rows.map((r) => r.authorAgentId).filter((id): id is string => !!id))]
+  let agentNameMap = new Map<string, string>()
+  if (agentIds.length > 0) {
     try {
-      const placeholders = kinIds.map(() => '?').join(', ')
-      const kinRows = sqlite
+      const placeholders = agentIds.map(() => '?').join(', ')
+      const agentRows = sqlite
         .query<{ id: string; name: string }, string[]>(
-          `SELECT id, name FROM kins WHERE id IN (${placeholders})`,
+          `SELECT id, name FROM agents WHERE id IN (${placeholders})`,
         )
-        .all(...kinIds)
-      kinNameMap = new Map(kinRows.map((k) => [k.id, k.name]))
+        .all(...agentIds)
+      agentNameMap = new Map(agentRows.map((k) => [k.id, k.name]))
     } catch {
       // ignore — names fall back to null
     }
@@ -240,7 +240,7 @@ export async function listKnowledgeIndex(
     title: r.title,
     category: r.category,
     pinned: r.pinned,
-    authorKinName: r.authorKinId ? kinNameMap.get(r.authorKinId) ?? null : null,
+    authorAgentName: r.authorAgentId ? agentNameMap.get(r.authorAgentId) ?? null : null,
   }))
 }
 
@@ -253,7 +253,7 @@ export async function createProjectKnowledge(input: CreateInput): Promise<Projec
   if (!title) throw new InvalidKnowledgeTitleError()
 
   // Enforce pin cap up front: a single race window is fine — concurrent pins
-  // from two different Kin tool calls are exceedingly rare and the worst case
+  // from two different Agent tool calls are exceedingly rare and the worst case
   // is one extra pin which is harmless.
   if (wantsPin) {
     const current = await countPinnedKnowledge(input.projectId)
@@ -282,7 +282,7 @@ export async function createProjectKnowledge(input: CreateInput): Promise<Projec
     embedding: embeddingBuf,
     category: input.category ?? null,
     pinned: wantsPin,
-    authorKinId: input.authorKinId ?? null,
+    authorAgentId: input.authorAgentId ?? null,
     createdAt: now,
     updatedAt: now,
   })
@@ -304,8 +304,8 @@ export async function createProjectKnowledge(input: CreateInput): Promise<Projec
   )
 
   const created = db.select().from(projectKnowledge).where(eq(projectKnowledge.id, id)).get()!
-  const authorKinName = await resolveAuthorKinName(created.authorKinId)
-  return rowToProjectKnowledge(created, authorKinName)
+  const authorAgentName = await resolveAuthorAgentName(created.authorAgentId)
+  return rowToProjectKnowledge(created, authorAgentName)
 }
 
 export async function updateProjectKnowledge(
@@ -359,8 +359,8 @@ export async function updateProjectKnowledge(
   await db.update(projectKnowledge).set(setValues).where(eq(projectKnowledge.id, id))
 
   const updated = db.select().from(projectKnowledge).where(eq(projectKnowledge.id, id)).get()!
-  const authorKinName = await resolveAuthorKinName(updated.authorKinId)
-  return rowToProjectKnowledge(updated, authorKinName)
+  const authorAgentName = await resolveAuthorAgentName(updated.authorAgentId)
+  return rowToProjectKnowledge(updated, authorAgentName)
 }
 
 export async function deleteProjectKnowledge(id: string): Promise<boolean> {

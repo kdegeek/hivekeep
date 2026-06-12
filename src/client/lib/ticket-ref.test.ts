@@ -7,7 +7,7 @@ describe('formatTicketRef', () => {
   })
 
   it('qualifies the ref with the slug when provided', () => {
-    expect(formatTicketRef(42, 'kinbot')).toBe('kinbot#42')
+    expect(formatTicketRef(42, 'hivekeep')).toBe('hivekeep#42')
   })
 
   it('treats an empty slug as absent (legacy projects)', () => {
@@ -17,7 +17,7 @@ describe('formatTicketRef', () => {
   it('returns null when the number is missing (legacy tickets)', () => {
     expect(formatTicketRef(null)).toBeNull()
     expect(formatTicketRef(undefined)).toBeNull()
-    expect(formatTicketRef(null, 'kinbot')).toBeNull()
+    expect(formatTicketRef(null, 'hivekeep')).toBeNull()
   })
 
   it('handles number zero as a valid ref', () => {

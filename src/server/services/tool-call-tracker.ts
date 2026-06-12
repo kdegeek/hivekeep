@@ -1,7 +1,7 @@
 /**
  * Per-task tracker of read-style tool calls (read_file / grep).
  *
- * On real prod tasks the sub-Kin agent often re-issues the same `read_file`
+ * On real prod tasks the sub-Agent agent often re-issues the same `read_file`
  * or `grep` it just did a few steps ago — the prompt rule "don't re-read
  * what's already in your context" only catches part of it. This tracker
  * decorates the tool response with a `previousCallCount` hint when the
@@ -11,8 +11,8 @@
  * in the conversation.
  *
  * State lives in-process; it's cleared when a task resolves (completed /
- * failed / cancelled). For non-task contexts (main Kin conversation) the
- * tracker silently no-ops, since main-Kin context is conversational and
+ * failed / cancelled). For non-task contexts (main Agent conversation) the
+ * tracker silently no-ops, since main-Agent context is conversational and
  * the same prompt rule applies less cleanly there.
  */
 
@@ -32,7 +32,7 @@ interface PerTaskCounts {
   counts: Map<string, number>
   // Set of file paths the task has already read via read_file. Used by the
   // edit/multi-edit "read-before-edit" guard (ported from opencode) to
-  // prevent hallucinated edits on files the sub-Kin hasn't actually seen.
+  // prevent hallucinated edits on files the sub-Agent hasn't actually seen.
   readPaths: Set<string>
   // path → list of every range the task has read for that path. Used by
   // the soft `duplicate` hint so the model sees ALL prior windows, not
@@ -136,7 +136,7 @@ export function formatReadRange(range: ReadFileRange): string {
  * signature in this task; 0 means it's a fresh call. The caller decides
  * how to surface this to the model.
  *
- * When `taskId` is undefined (main Kin contexts), the tracker no-ops and
+ * When `taskId` is undefined (main Agent contexts), the tracker no-ops and
  * always returns 0 — see module doc.
  */
 export function noteCall(
@@ -213,7 +213,7 @@ export function recordReadPath(taskId: string | undefined, path: string): void {
 /**
  * Did this task ever successfully read `path` via read_file? Used by the
  * read-before-edit guard. Returns true when there's no task context (main
- * Kin) so the guard becomes a sub-Kin-only safeguard — main Kin runs in a
+ * Agent) so the guard becomes a sub-Agent-only safeguard — main Agent runs in a
  * conversation with the user, who's already in the loop.
  */
 export function hasReadPath(taskId: string | undefined, path: string): boolean {

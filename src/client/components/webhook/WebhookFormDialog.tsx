@@ -13,8 +13,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/client/components/ui/collapsible'
-import { KinSelector } from '@/client/components/common/KinSelector'
-import type { KinOption } from '@/client/components/common/KinSelectItem'
+import { AgentSelector } from '@/client/components/common/AgentSelector'
+import type { AgentOption } from '@/client/components/common/AgentSelectItem'
 import { Loader2, ChevronDown, Filter, X, Check, CircleX, FlaskConical, MessageSquare, ListTodo } from 'lucide-react'
 import type { WebhookSummary, WebhookFilterMode, WebhookDispatchMode, WebhookFilterTestResult } from '@/shared/types'
 import { api } from '@/client/lib/api'
@@ -22,7 +22,7 @@ import { api } from '@/client/lib/api'
 interface WebhookFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSave: (kinId: string, data: {
+  onSave: (agentId: string, data: {
     name: string
     description?: string
     dispatchMode?: WebhookDispatchMode
@@ -44,7 +44,7 @@ interface WebhookFormDialogProps {
     maxConcurrentTasks?: number
   }) => Promise<void>
   webhook?: WebhookSummary | null
-  kins: KinOption[]
+  agents: AgentOption[]
 }
 
 export function WebhookFormDialog({
@@ -53,12 +53,12 @@ export function WebhookFormDialog({
   onSave,
   onUpdate,
   webhook,
-  kins,
+  agents,
 }: WebhookFormDialogProps) {
   const { t } = useTranslation()
   const isEdit = !!webhook
 
-  const [selectedKinId, setSelectedKinId] = useState('')
+  const [selectedAgentId, setSelectedAgentId] = useState('')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [isActive, setIsActive] = useState(true)
@@ -96,7 +96,7 @@ export function WebhookFormDialog({
       setName(webhook.name)
       setDescription(webhook.description ?? '')
       setIsActive(webhook.isActive)
-      setSelectedKinId(webhook.kinId)
+      setSelectedAgentId(webhook.agentId)
       setFilterMode(webhook.filterMode)
       setFilterField(webhook.filterField ?? '')
       setFilterAllowedValues(webhook.filterAllowedValues ?? [])
@@ -110,7 +110,7 @@ export function WebhookFormDialog({
       setName('')
       setDescription('')
       setIsActive(true)
-      setSelectedKinId('')
+      setSelectedAgentId('')
       setFilterMode(null)
       setFilterField('')
       setFilterAllowedValues([])
@@ -194,9 +194,9 @@ export function WebhookFormDialog({
           maxConcurrentTasks: dispatchMode === 'task' ? maxConcurrentTasks : 1,
         })
       } else {
-        const targetKinId = selectedKinId
-        if (!targetKinId) return
-        await onSave(targetKinId, {
+        const targetAgentId = selectedAgentId
+        if (!targetAgentId) return
+        await onSave(targetAgentId, {
           name,
           description: description || undefined,
           dispatchMode,
@@ -279,7 +279,7 @@ export function WebhookFormDialog({
     })
   }, [])
 
-  const canSubmit = !!(name.trim() && (isEdit || selectedKinId))
+  const canSubmit = !!(name.trim() && (isEdit || selectedAgentId))
 
   return (
     <FormDialog
@@ -293,14 +293,14 @@ export function WebhookFormDialog({
       submitDisabled={!canSubmit}
       submitLabel={t('common.save')}
     >
-      {/* Kin selector (only for create) */}
+      {/* Agent selector (only for create) */}
       {!isEdit && (
-        <FormField label={t('settings.webhooks.kin')}>
-          <KinSelector
-            value={selectedKinId}
-            onValueChange={setSelectedKinId}
-            kins={kins}
-            placeholder={t('settings.webhooks.kinPlaceholder')}
+        <FormField label={t('settings.webhooks.agent')}>
+          <AgentSelector
+            value={selectedAgentId}
+            onValueChange={setSelectedAgentId}
+            agents={agents}
+            placeholder={t('settings.webhooks.agentPlaceholder')}
           />
         </FormField>
       )}

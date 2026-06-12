@@ -4,7 +4,7 @@
  * A ticket can be addressed via three formats (see projects.md § Slug projet + numéro):
  *
  *   1. UUID legacy            — `9ba56654-c252-4a23-afa9-d6d227f2d05b`
- *   2. Qualified slug#number  — `kinbot#42`
+ *   2. Qualified slug#number  — `hivekeep#42`
  *   3. Bare number            — `42` or `#42` (resolved against an active project)
  *
  * Resolution order: UUID → qualified slug → bare number with active project.
@@ -80,7 +80,7 @@ export function ticketResolutionMessage(
 ): string {
   switch (code) {
     case 'INVALID_TICKET_REF':
-      return `Invalid ticket reference "${context.raw ?? ''}". Expected a UUID, a qualified id like "kinbot#42", or a bare number like "#42".`
+      return `Invalid ticket reference "${context.raw ?? ''}". Expected a UUID, a qualified id like "hivekeep#42", or a bare number like "#42".`
     case 'PROJECT_NOT_FOUND':
       return `Project '${context.slug ?? ''}' not found.`
     case 'NO_ACTIVE_PROJECT':

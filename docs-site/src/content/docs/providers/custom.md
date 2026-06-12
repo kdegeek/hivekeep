@@ -1,11 +1,11 @@
 ---
 title: Adding Custom Providers
-description: Extend KinBot with custom AI providers via plugins.
+description: Extend Hivekeep with custom AI providers via plugins.
 ---
 
 Beyond the built-in providers, you can ship your own through the **plugin system**. Plugin providers register into the same four native registries as built-ins (LLM, embedding, image, search) and appear alongside them in the Settings UI — there is no second-class plugin shape.
 
-This page is a quick orientation. The full author guide is on the [Developing Plugins](/kinbot/docs/plugins/developing/) page, including a complete `SearchProvider` example.
+This page is a quick orientation. The full author guide is on the [Developing Plugins](/docs/plugins/developing/) page, including a complete `SearchProvider` example.
 
 ## When you need a plugin
 
@@ -22,7 +22,7 @@ A plugin exports a `providers` array. Each entry implements one of the four nati
 
 ```typescript
 // In your plugin's main file
-import type { SearchProvider, PluginContext } from '@kinbot-developer/sdk'
+import type { SearchProvider, PluginContext } from '@hivekeep/sdk'
 
 class MySearchProvider implements SearchProvider {
   readonly type = 'my-search'
@@ -50,7 +50,7 @@ export default function (ctx: PluginContext) {
 
 The plugin loader inspects which method each provider exposes (`chat` → LLM, `embed` → embedding, `generate` → image, `search` → search) and registers it into the matching registry. The provider's `type` is prefixed internally to `plugin:<your-plugin-name>:<type>` so it can't collide with built-ins.
 
-Once your plugin is enabled, the provider appears in **Settings > Providers** and Kins can use it through the standard tools (`web_search`, `generate_image`, etc.) — no further wiring needed on the host side.
+Once your plugin is enabled, the provider appears in **Settings > Providers** and Agents can use it through the standard tools (`web_search`, `generate_image`, etc.) — no further wiring needed on the host side.
 
 ## OpenAI-Compatible Endpoints
 

@@ -42,7 +42,7 @@ export interface CreateTypeData {
   slug: string
   icon?: string
   fields: VaultTypeField[]
-  createdByKinId?: string
+  createdByAgentId?: string
 }
 
 export async function createType(data: CreateTypeData) {
@@ -56,7 +56,7 @@ export async function createType(data: CreateTypeData) {
     icon: data.icon ?? null,
     fields: JSON.stringify(data.fields),
     isBuiltIn: false,
-    createdByKinId: data.createdByKinId ?? null,
+    createdByAgentId: data.createdByAgentId ?? null,
     createdAt: now,
     updatedAt: now,
   })

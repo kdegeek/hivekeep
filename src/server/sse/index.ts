@@ -59,11 +59,11 @@ class SSEManager {
   }
 
   /**
-   * Send an event to all clients that care about a specific kinId.
-   * For now, broadcast to all — future: track which clients are watching which kins.
+   * Send an event to all clients that care about a specific agentId.
+   * For now, broadcast to all — future: track which clients are watching which agents.
    */
-  sendToKin(kinId: string, event: SSEEvent): void {
-    const payload = formatSSE({ ...event, kinId })
+  sendToAgent(agentId: string, event: SSEEvent): void {
+    const payload = formatSSE({ ...event, agentId })
     for (const [, writer] of this.connections) {
       try {
         writer.write(payload)
@@ -79,7 +79,7 @@ class SSEManager {
 }
 
 function formatSSE(event: SSEEvent): string {
-  return JSON.stringify({ type: event.type, kinId: event.kinId, ...event.data })
+  return JSON.stringify({ type: event.type, agentId: event.agentId, ...event.data })
 }
 
 export const sseManager = new SSEManager()

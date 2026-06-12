@@ -6,7 +6,7 @@ test.describe.serial('Login flow', () => {
     // Onboarding already completed by 01-onboarding, so we should see login page
     await page.goto('/')
 
-    await expect(page.getByText('Sign in to your KinBot workspace')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Sign in to your Hivekeep workspace')).toBeVisible({ timeout: 10_000 })
 
     // Verify login page renders correctly before logging in
     await expect(page.getByLabel('Email')).toBeVisible()
@@ -17,30 +17,30 @@ test.describe.serial('Login flow', () => {
     await loginAs(page)
 
     // Should redirect to main app after login
-    await expect(page.getByText('Kins', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Agents', { exact: true })).toBeVisible({ timeout: 10_000 })
   })
 
   test('session persists after page reload', async ({ page }) => {
     // Login first
     await page.goto('/')
-    await expect(page.getByText('Sign in to your KinBot workspace')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Sign in to your Hivekeep workspace')).toBeVisible({ timeout: 10_000 })
     await loginAs(page)
-    await expect(page.getByText('Kins', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Agents', { exact: true })).toBeVisible({ timeout: 10_000 })
 
     // Reload the page
     await page.reload()
 
     // Should still be in the app, not redirected to login
-    await expect(page.getByText('Kins', { exact: true })).toBeVisible({ timeout: 10_000 })
-    await expect(page.getByText('Sign in to your KinBot workspace')).not.toBeVisible()
+    await expect(page.getByText('Agents', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Sign in to your Hivekeep workspace')).not.toBeVisible()
   })
 
   test('logout redirects to login page', async ({ page }) => {
     // Login first
     await page.goto('/')
-    await expect(page.getByText('Sign in to your KinBot workspace')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Sign in to your Hivekeep workspace')).toBeVisible({ timeout: 10_000 })
     await loginAs(page)
-    await expect(page.getByText('Kins', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Agents', { exact: true })).toBeVisible({ timeout: 10_000 })
 
     // Open user menu (avatar button showing initials "TU" for Test User)
     await page.locator('button:has([data-slot="avatar"])').first().click()
@@ -49,14 +49,14 @@ test.describe.serial('Login flow', () => {
     await page.getByText('Sign out').click()
 
     // Should be back on login page
-    await expect(page.getByText('Sign in to your KinBot workspace')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Sign in to your Hivekeep workspace')).toBeVisible({ timeout: 10_000 })
   })
 
   test('login with invalid credentials shows error', async ({ page }) => {
     await page.context().clearCookies()
     await page.goto('/')
 
-    await expect(page.getByText('Sign in to your KinBot workspace')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Sign in to your Hivekeep workspace')).toBeVisible({ timeout: 10_000 })
 
     // Fill with wrong password
     await loginAs(page, TEST_USER.email, 'WrongPassword123!')
@@ -72,9 +72,9 @@ test.describe.serial('Login flow', () => {
     await page.context().clearCookies()
     await page.goto('/')
 
-    await expect(page.getByText('Sign in to your KinBot workspace')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Sign in to your Hivekeep workspace')).toBeVisible({ timeout: 10_000 })
 
-    await loginAs(page, 'nobody@kinbot.local', 'SomePassword123!')
+    await loginAs(page, 'nobody@hivekeep.local', 'SomePassword123!')
 
     await expect(page.getByText('Invalid email or password')).toBeVisible({ timeout: 5_000 })
   })
@@ -83,7 +83,7 @@ test.describe.serial('Login flow', () => {
     await page.context().clearCookies()
     await page.goto('/')
 
-    await expect(page.getByText('Sign in to your KinBot workspace')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Sign in to your Hivekeep workspace')).toBeVisible({ timeout: 10_000 })
 
     // First attempt: wrong password
     await loginAs(page, TEST_USER.email, 'WrongPassword123!')
@@ -95,21 +95,21 @@ test.describe.serial('Login flow', () => {
     await page.getByRole('button', { name: 'Sign in' }).click()
 
     // Should succeed and redirect
-    await expect(page.getByText('Kins', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Agents', { exact: true })).toBeVisible({ timeout: 10_000 })
   })
 
   test('cleared cookies force re-login', async ({ page }) => {
     // Login first
     await page.goto('/')
-    await expect(page.getByText('Sign in to your KinBot workspace')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Sign in to your Hivekeep workspace')).toBeVisible({ timeout: 10_000 })
     await loginAs(page)
-    await expect(page.getByText('Kins', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Agents', { exact: true })).toBeVisible({ timeout: 10_000 })
 
     // Clear cookies (simulates session expiry)
     await page.context().clearCookies()
     await page.reload()
 
     // Should be redirected to login
-    await expect(page.getByText('Sign in to your KinBot workspace')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Sign in to your Hivekeep workspace')).toBeVisible({ timeout: 10_000 })
   })
 })

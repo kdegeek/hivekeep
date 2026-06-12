@@ -2,9 +2,9 @@ import { test, expect, type Page } from '@playwright/test'
 import { loginAs, mockProviderModels } from './helpers/auth'
 
 /**
- * Navigate to the Test Assistant kin chat and wait for the message input.
+ * Navigate to the Test Assistant agent chat and wait for the message input.
  */
-async function openKinChat(page: Page) {
+async function openAgentChat(page: Page) {
   await page.getByText('Test Assistant').first().click()
   const input = page.getByPlaceholder('Send a message...')
   await expect(input).toBeVisible({ timeout: 10_000 })
@@ -16,22 +16,22 @@ test.describe.serial('Conversation statistics popover', () => {
     await mockProviderModels(page)
     await page.goto('/')
     const signIn = page.getByRole('button', { name: 'Sign in' })
-    const kins = page.getByText('Kins', { exact: true })
-    await expect(signIn.or(kins)).toBeVisible({ timeout: 10_000 })
+    const agents = page.getByText('Agents', { exact: true })
+    await expect(signIn.or(agents)).toBeVisible({ timeout: 10_000 })
     if (await signIn.isVisible().catch(() => false)) {
       await loginAs(page)
     }
-    await expect(kins).toBeVisible({ timeout: 10_000 })
+    await expect(agents).toBeVisible({ timeout: 10_000 })
   })
 
-  test('create kin and send a message so stats have data', async ({ page }) => {
-    // Create a kin if it doesn't exist
+  test('create agent and send a message so stats have data', async ({ page }) => {
+    // Create an agent if it doesn't exist
     const testAssistant = page.getByText('Test Assistant').first()
-    const isKinVisible = await testAssistant.isVisible({ timeout: 3_000 }).catch(() => false)
+    const isAgentVisible = await testAssistant.isVisible({ timeout: 3_000 }).catch(() => false)
 
-    if (!isKinVisible) {
-      // Click the sidebar "New Kin" button (the small one with title attribute)
-      await page.getByTitle('New Kin').click()
+    if (!isAgentVisible) {
+      // Click the sidebar "New Agent" button (the small one with title attribute)
+      await page.getByTitle('New Agent').click()
 
       // The wizard dialog should open
       await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 })
@@ -40,21 +40,21 @@ test.describe.serial('Conversation statistics popover', () => {
       await page.getByRole('button', { name: 'Create manually' }).click()
 
       // Fill the form
-      await page.fill('#kinFormName', 'Test Assistant')
-      await page.fill('#kinFormRole', 'General helper for testing')
+      await page.fill('#agentFormName', 'Test Assistant')
+      await page.fill('#agentFormRole', 'General helper for testing')
 
       // Select a model
       const modelPicker = page.getByRole('combobox').first()
       await modelPicker.click()
       await page.getByRole('option', { name: /GPT-4o/i }).click()
-      await page.locator('#kinFormName').click()
+      await page.locator('#agentFormName').click()
 
       // Submit
-      await page.getByRole('button', { name: 'Create Kin' }).click()
+      await page.getByRole('button', { name: 'Create Agent' }).click()
       await expect(testAssistant).toBeVisible({ timeout: 15_000 })
     }
 
-    const input = await openKinChat(page)
+    const input = await openAgentChat(page)
     await input.fill('Hello stats test message')
     await page.keyboard.press('Enter')
     // Wait for the user message to appear in the conversation
@@ -62,7 +62,7 @@ test.describe.serial('Conversation statistics popover', () => {
   })
 
   test('stats button is visible in conversation header', async ({ page }) => {
-    await openKinChat(page)
+    await openAgentChat(page)
     // Wait for the message to be loaded
     await expect(
       page.getByText('Hello stats test message').first(),
@@ -74,7 +74,7 @@ test.describe.serial('Conversation statistics popover', () => {
   })
 
   test('clicking stats button opens popover with title', async ({ page }) => {
-    await openKinChat(page)
+    await openAgentChat(page)
     await expect(
       page.getByText('Hello stats test message').first(),
     ).toBeVisible({ timeout: 10_000 })
@@ -86,7 +86,7 @@ test.describe.serial('Conversation statistics popover', () => {
   })
 
   test('stats popover shows message counts', async ({ page }) => {
-    await openKinChat(page)
+    await openAgentChat(page)
     await expect(
       page.getByText('Hello stats test message').first(),
     ).toBeVisible({ timeout: 10_000 })
@@ -101,7 +101,7 @@ test.describe.serial('Conversation statistics popover', () => {
   })
 
   test('stats popover shows tool calls and word count', async ({ page }) => {
-    await openKinChat(page)
+    await openAgentChat(page)
     await expect(
       page.getByText('Hello stats test message').first(),
     ).toBeVisible({ timeout: 10_000 })
@@ -114,7 +114,7 @@ test.describe.serial('Conversation statistics popover', () => {
   })
 
   test('stats popover shows duration', async ({ page }) => {
-    await openKinChat(page)
+    await openAgentChat(page)
     await expect(
       page.getByText('Hello stats test message').first(),
     ).toBeVisible({ timeout: 10_000 })
@@ -126,7 +126,7 @@ test.describe.serial('Conversation statistics popover', () => {
   })
 
   test('stats popover closes when clicking outside', async ({ page }) => {
-    await openKinChat(page)
+    await openAgentChat(page)
     await expect(
       page.getByText('Hello stats test message').first(),
     ).toBeVisible({ timeout: 10_000 })
@@ -140,7 +140,7 @@ test.describe.serial('Conversation statistics popover', () => {
   })
 
   test('stats popover closes with Escape key', async ({ page }) => {
-    await openKinChat(page)
+    await openAgentChat(page)
     await expect(
       page.getByText('Hello stats test message').first(),
     ).toBeVisible({ timeout: 10_000 })
@@ -153,7 +153,7 @@ test.describe.serial('Conversation statistics popover', () => {
   })
 
   test('stats popover can be toggled open and closed', async ({ page }) => {
-    await openKinChat(page)
+    await openAgentChat(page)
     await expect(
       page.getByText('Hello stats test message').first(),
     ).toBeVisible({ timeout: 10_000 })

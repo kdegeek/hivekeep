@@ -3,120 +3,94 @@ import { eq } from 'drizzle-orm'
 import { db } from '@/server/db/index'
 import { userProfiles } from '@/server/db/schema'
 import { config } from '@/server/config'
-import { checkForUpdates, getCachedVersionInfo } from '@/server/services/version-check'
+import {
+  checkForUpdates,
+  getCachedVersionInfo,
+  getUpdateChannel,
+  setUpdateChannel,
+} from '@/server/services/version-check'
+import { getLastUpdateRun, startSelfUpdate } from '@/server/services/self-update'
 import type { AppVariables } from '@/server/app'
+import type { Context, Next } from 'hono'
 
 const versionCheckRoutes = new Hono<{ Variables: AppVariables }>()
 
-// GET /api/version-check — cached version info (all authenticated users)
-versionCheckRoutes.get('/', async (c) => {
-  const currentVersion = config.version
+const requireAdmin = async (c: Context<{ Variables: AppVariables }>, next: Next) => {
+  const currentUser = c.get('user')
+  const profile = db
+    .select({ role: userProfiles.role })
+    .from(userProfiles)
+    .where(eq(userProfiles.userId, currentUser.id))
+    .get()
 
+  if (!profile || profile.role !== 'admin') {
+    return c.json({ error: { code: 'FORBIDDEN', message: 'Admin access required' } }, 403)
+  }
+  await next()
+}
+
+// GET /api/version-check — cached version info + changelog (all authenticated users)
+versionCheckRoutes.get('/', async (c) => {
   if (!config.versionCheck.enabled) {
+    const channel = await getUpdateChannel()
     return c.json({
-      currentVersion,
+      currentVersion: config.version,
+      currentSha: null,
+      channel,
+      installationType: config.environment.installationType,
       latestVersion: null,
       isUpdateAvailable: false,
+      canSelfUpdate: false,
+      selfUpdateBlockedReason: null,
       releaseUrl: null,
-      releaseNotes: null,
+      changelog: [],
       publishedAt: null,
       lastCheckedAt: null,
     })
   }
 
-  const info = await getCachedVersionInfo(currentVersion)
-  return c.json(info)
+  return c.json(await getCachedVersionInfo())
 })
 
 // POST /api/version-check/check — force a fresh check (admin only)
-versionCheckRoutes.post('/check', async (c) => {
-  const currentUser = c.get('user')
-  const profile = db
-    .select({ role: userProfiles.role })
-    .from(userProfiles)
-    .where(eq(userProfiles.userId, currentUser.id))
-    .get()
-
-  if (!profile || profile.role !== 'admin') {
-    return c.json(
-      { error: { code: 'FORBIDDEN', message: 'Admin access required' } },
-      403,
-    )
-  }
-
+versionCheckRoutes.post('/check', requireAdmin, async (c) => {
   if (!config.versionCheck.enabled) {
+    return c.json({ error: { code: 'DISABLED', message: 'Version check is disabled' } }, 400)
+  }
+  return c.json(await checkForUpdates())
+})
+
+// PUT /api/version-check/channel — switch stable/edge (admin only)
+versionCheckRoutes.put('/channel', requireAdmin, async (c) => {
+  const body = await c.req.json().catch(() => null)
+  const channel = body?.channel
+  if (channel !== 'stable' && channel !== 'edge') {
     return c.json(
-      { error: { code: 'DISABLED', message: 'Version check is disabled' } },
+      { error: { code: 'INVALID_CHANNEL', message: "channel must be 'stable' or 'edge'" } },
       400,
     )
   }
-
-  const info = await checkForUpdates()
+  await setUpdateChannel(channel)
+  // Refresh against the new channel right away so the response is coherent.
+  const info = config.versionCheck.enabled ? await checkForUpdates() : await getCachedVersionInfo()
   return c.json(info)
 })
 
-// POST /api/version-check/update — self-update (admin only, non-Docker)
-versionCheckRoutes.post('/update', async (c) => {
-  const currentUser = c.get('user')
-  const profile = db
-    .select({ role: userProfiles.role })
-    .from(userProfiles)
-    .where(eq(userProfiles.userId, currentUser.id))
-    .get()
-
-  if (!profile || profile.role !== 'admin') {
-    return c.json(
-      { error: { code: 'FORBIDDEN', message: 'Admin access required' } },
-      403,
-    )
+// POST /api/version-check/update — apply the available update (admin only).
+// Returns immediately; progress flows over SSE (`update:progress`) and the
+// final outcome survives the restart in GET /last-update.
+versionCheckRoutes.post('/update', requireAdmin, async (c) => {
+  const result = await startSelfUpdate()
+  if (!result.ok) {
+    const status = result.error?.code === 'UPDATE_IN_PROGRESS' ? 409 : 400
+    return c.json({ error: result.error }, status)
   }
+  return c.json({ started: true, runId: result.runId })
+})
 
-  if (config.isDocker) {
-    return c.json(
-      { error: { code: 'DOCKER_MODE', message: 'Use docker compose pull to update in Docker mode' } },
-      400,
-    )
-  }
-
-  try {
-    const gitPull = Bun.spawnSync(['git', 'pull'], { cwd: process.cwd() })
-    if (gitPull.exitCode !== 0) {
-      const stderr = gitPull.stderr.toString().trim()
-      return c.json(
-        { error: { code: 'UPDATE_FAILED', message: `git pull failed: ${stderr}` } },
-        500,
-      )
-    }
-
-    const bunInstall = Bun.spawnSync([process.execPath, 'install'], { cwd: process.cwd() })
-    if (bunInstall.exitCode !== 0) {
-      const stderr = bunInstall.stderr.toString().trim()
-      return c.json(
-        { error: { code: 'UPDATE_FAILED', message: `bun install failed: ${stderr}` } },
-        500,
-      )
-    }
-
-    const bunBuild = Bun.spawnSync([process.execPath, 'run', 'build'], { cwd: process.cwd() })
-    if (bunBuild.exitCode !== 0) {
-      const stderr = bunBuild.stderr.toString().trim()
-      return c.json(
-        { error: { code: 'UPDATE_FAILED', message: `Build failed: ${stderr}` } },
-        500,
-      )
-    }
-
-    // Schedule restart after response is sent
-    setTimeout(() => process.exit(1), 2000)
-
-    return c.json({ success: true, message: 'Update applied. Server will restart shortly.' })
-  } catch (err) {
-    console.error('Self-update process failed:', err)
-    return c.json(
-      { error: { code: 'UPDATE_FAILED', message: err instanceof Error ? err.message : 'Update process failed' } },
-      500,
-    )
-  }
+// GET /api/version-check/last-update — latest update attempt (poll across restart)
+versionCheckRoutes.get('/last-update', async (c) => {
+  return c.json({ run: getLastUpdateRun() })
 })
 
 export { versionCheckRoutes }

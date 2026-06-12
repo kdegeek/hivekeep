@@ -16,7 +16,7 @@ describe('PluginRegistryService', () => {
       ;(globalThis as any).fetch = originalFetch
     }
 
-    test('queries the npm search API with the kinbot-plugin keyword filter', async () => {
+    test('queries the npm search API with the hivekeep-plugin keyword filter', async () => {
       let capturedUrl = ''
       ;(globalThis as any).fetch = async (url: string) => {
         capturedUrl = url
@@ -28,7 +28,7 @@ describe('PluginRegistryService', () => {
         restore()
       }
       expect(capturedUrl).toContain('registry.npmjs.org')
-      expect(decodeURIComponent(capturedUrl)).toContain('keywords:kinbot-plugin')
+      expect(decodeURIComponent(capturedUrl)).toContain('keywords:hivekeep-plugin')
       expect(decodeURIComponent(capturedUrl)).toContain('weather')
     })
 
@@ -38,17 +38,17 @@ describe('PluginRegistryService', () => {
           objects: [
             {
               package: {
-                name: '@marlburrow/kinbot-plugin-weather',
+                name: '@marlburrow/hivekeep-plugin-weather',
                 version: '1.2.3',
                 description: 'Weather lookups',
-                keywords: ['kinbot-plugin', 'weather'],
+                keywords: ['hivekeep-plugin', 'weather'],
                 date: '2026-05-01T00:00:00Z',
                 author: { name: 'MarlBurroW' },
                 publisher: { username: 'marlburrow' },
                 links: {
-                  npm: 'https://www.npmjs.com/package/@marlburrow/kinbot-plugin-weather',
-                  homepage: 'https://github.com/marlburrow/kinbot-plugin-weather',
-                  repository: 'https://github.com/marlburrow/kinbot-plugin-weather',
+                  npm: 'https://www.npmjs.com/package/@marlburrow/hivekeep-plugin-weather',
+                  homepage: 'https://github.com/marlburrow/hivekeep-plugin-weather',
+                  repository: 'https://github.com/marlburrow/hivekeep-plugin-weather',
                 },
               },
               score: { final: 0.42 },
@@ -59,12 +59,12 @@ describe('PluginRegistryService', () => {
         const results = await registry.searchNpm('weather')
         expect(results).toHaveLength(1)
         expect(results[0]).toMatchObject({
-          name: '@marlburrow/kinbot-plugin-weather',
+          name: '@marlburrow/hivekeep-plugin-weather',
           version: '1.2.3',
           description: 'Weather lookups',
           author: 'MarlBurroW',
           publisherUsername: 'marlburrow',
-          keywords: ['kinbot-plugin', 'weather'],
+          keywords: ['hivekeep-plugin', 'weather'],
           score: 0.42,
         })
       } finally {

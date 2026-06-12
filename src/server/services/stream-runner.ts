@@ -1,5 +1,5 @@
 /**
- * Per-step consumer for a kinbot `LLMProvider.chat()` stream that buffers
+ * Per-step consumer for a hivekeep `LLMProvider.chat()` stream that buffers
  * text-delta chunks server-side until the model's `finishReason` is known,
  * so pre-narration written before tool_use blocks in the same step never
  * reaches the client or the database.
@@ -118,15 +118,15 @@ export interface StreamStepOutcome {
 }
 
 export interface StreamStepAttribution {
-  sourceType: 'kin'
+  sourceType: 'agent'
   sourceId: string
   sourceName: string
   sourceAvatarUrl: string | null
 }
 
 export interface StreamStepContext {
-  /** SSE channel — events are sent via `sseManager.sendToKin(kinId, ...)`. */
-  kinId: string
+  /** SSE channel — events are sent via `sseManager.sendToAgent(agentId, ...)`. */
+  agentId: string
   /** Identifier of the assistant message being streamed. */
   assistantMessageId: string
   /** Signal whose abortion gracefully terminates the loop. */
@@ -135,7 +135,7 @@ export interface StreamStepContext {
    *  `{ taskId }`, or `{}`). */
   extraSseFields?: Record<string, unknown>
   /** First committed `chat:token` event of the message includes these
-   *  attribution fields. Used by the main Kin path so the client can render
+   *  attribution fields. Used by the main Agent path so the client can render
    *  correct attribution from the first frame. */
   firstTokenAttribution?: StreamStepAttribution
   /** Mutated in place when a thinking block ends (one entry per segment). */
@@ -145,7 +145,7 @@ export interface StreamStepContext {
    *  the real provider-reported total from completed prior steps — used as the
    *  base for the live token estimate emitted during the current step. */
   contentSnapshot?: { content: string; outputTokens?: number }
-  /** Optional periodic persistence (sub-Kin only). Fires every `intervalMs`
+  /** Optional periodic persistence (sub-Agent only). Fires every `intervalMs`
    *  while the step runs. */
   checkpoint?: { intervalMs: number; persist: () => void | Promise<void> }
   /** Called when this step's buffered text is committed (final pure-text step). */
@@ -189,9 +189,9 @@ export async function runStreamStep(
     : null
 
   const send = (type: string, data: Record<string, unknown>) => {
-    sseManager.sendToKin(ctx.kinId, {
+    sseManager.sendToAgent(ctx.agentId, {
       type: type as any,
-      kinId: ctx.kinId,
+      agentId: ctx.agentId,
       data: { ...data, ...ctx.extraSseFields },
     })
   }

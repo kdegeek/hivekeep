@@ -7,6 +7,7 @@ import { MarkdownContent } from '@/client/components/chat/MarkdownContent'
 import { InlineToolCall } from '@/client/components/chat/InlineToolCall'
 import { TaskResultCard } from '@/client/components/chat/TaskResultCard'
 import { WebhookMessageCard } from '@/client/components/chat/WebhookMessageCard'
+import { TriggerMessageCard } from '@/client/components/chat/TriggerMessageCard'
 import { ImageLightbox } from '@/client/components/chat/ImageLightbox'
 import { TokenUsageIndicator } from '@/client/components/chat/TokenUsageIndicator'
 import { ChatAvatar } from '@/client/components/chat/ChatAvatar'
@@ -19,7 +20,13 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from '@/client/components/ui/context-menu'
-import { FileIcon, Download, Brain, ChevronDown, Copy, Check, RefreshCw, Quote, Pencil, Volume2, VolumeX, BookOpen, SmilePlus, EyeOff } from 'lucide-react'
+import { FileIcon, Download, Brain, ChevronDown, Copy, Check, RefreshCw, Quote, Pencil, Volume2, VolumeX, BookOpen, SmilePlus, EyeOff, History, Trash2, MoreHorizontal } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/client/components/ui/dropdown-menu'
 import type { ToolCallViewItem } from '@/client/hooks/useToolCalls'
 import { RelativeTimestamp } from '@/client/components/chat/RelativeTimestamp'
 import type { MessageFile, MessageTokenUsage } from '@/shared/types'
@@ -47,6 +54,12 @@ interface MessageBubbleProps {
   toolCalls?: ToolCallViewItem[]
   injectedMemories?: InjectedMemory[] | null
   stepLimitReached?: boolean
+  /** Turn ended with no content and no tool calls — show a localized notice instead of the sentinel text. */
+  emptyTurn?: boolean
+  /** Normalized finish reason carried with emptyTurn (content-filter, length, …). */
+  finishReason?: string | null
+  /** Stream closed with no text after tool execution — localized notice replaces the sentinel. */
+  silentStop?: boolean
   files?: MessageFile[]
   reactions?: MessageReaction[]
   currentUserId?: string
@@ -63,11 +76,21 @@ interface MessageBubbleProps {
   onQuoteReply?: (text: string) => void
   onEditResend?: (text: string) => void
   onToggleReaction?: (messageId: string, emoji: string) => void
+  /** Delete this single message (context savings). Hidden when undefined. */
+  onDeleteMessage?: (messageId: string) => void
+  /** Rewind: make this message the newest — everything after it is deleted.
+   *  The parent owns the confirmation dialog. Hidden when undefined. */
+  onRewindHere?: (messageId: string) => void
   /** Token usage data for this message (assistant messages only). */
   tokenUsage?: MessageTokenUsage | null
   /** Distraction-less variant (onboarding modal): hides the per-message footer
    *  (timestamp, reading time, token usage, reactions/actions). */
   compact?: boolean
+  /** When true, reasoning/thinking blocks are not rendered at all. Used by the
+   *  onboarding modal: the meta-reasoning ("the prompt tells me to ask X, I'll
+   *  call tool Y…") breaks the magic of first use. The same thread still shows
+   *  thinking normally when reopened later in the regular chat. */
+  hideThinking?: boolean
   /** Reasoning/thinking segments with offsets into content */
   reasoning?: Array<{ offset: number; text: string }> | string
   /** Adapter-provided, already-localized line of context describing how the
@@ -82,10 +105,10 @@ interface MessageBubbleProps {
    *  set, the bubble renders a dedicated handoff card instead of the
    *  generic gray banner used for other system messages. */
   systemEvent?: SystemEvent | null
-  /** Current Kin's avatar URL (for the "self" side of the transfer card). */
-  currentKinAvatarUrl?: string | null
-  /** Current Kin's display name (for the "self" side of the transfer card). */
-  currentKinName?: string | null
+  /** Current Agent's avatar URL (for the "self" side of the transfer card). */
+  currentAgentAvatarUrl?: string | null
+  /** Current Agent's display name (for the "self" side of the transfer card). */
+  currentAgentName?: string | null
 }
 
 /** A content part is either a text segment, a group of tool calls, or a reasoning block at the same offset. */
@@ -321,6 +344,54 @@ function ReasoningBlock({ reasoning }: { reasoning: string }) {
         </div>
       </CollapsibleContent>
     </Collapsible>
+  )
+}
+
+// ─── Message "more" menu (hover ⋯ — delete / rewind) ─────────────────────────
+
+/**
+ * Visible hover entry point for the destructive message actions (rewind /
+ * delete). The same actions also live in the right-click context menu, but a
+ * context menu alone is invisible — this makes them discoverable.
+ */
+function MessageMoreMenu({ messageId, onDeleteMessage, onRewindHere }: {
+  messageId: string
+  onDeleteMessage?: (messageId: string) => void
+  onRewindHere?: (messageId: string) => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'opacity-0 group-hover/msg:opacity-100 transition-opacity',
+            'rounded-md p-1 hover:bg-muted/80 active:scale-95',
+            'text-muted-foreground hover:text-foreground',
+            'data-[state=open]:opacity-100',
+          )}
+          title={t('chat.moreActions', 'More actions')}
+          aria-label={t('chat.moreActions', 'More actions')}
+        >
+          <MoreHorizontal className="size-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-52">
+        {onRewindHere && (
+          <DropdownMenuItem onClick={() => onRewindHere(messageId)}>
+            <History className="size-4" />
+            {t('chat.contextMenu.rewindHere', 'Rewind to here')}
+          </DropdownMenuItem>
+        )}
+        {onDeleteMessage && (
+          <DropdownMenuItem variant="destructive" onClick={() => onDeleteMessage(messageId)}>
+            <Trash2 className="size-4" />
+            {t('chat.contextMenu.deleteMessage', 'Delete message')}
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -627,6 +698,9 @@ function MessageContextMenu({
   onRegenerate,
   onQuoteReply,
   onEditResend,
+  messageId,
+  onDeleteMessage,
+  onRewindHere,
 }: {
   children: React.ReactNode
   content: string
@@ -634,6 +708,9 @@ function MessageContextMenu({
   onRegenerate?: () => void
   onQuoteReply?: (text: string) => void
   onEditResend?: (text: string) => void
+  messageId?: string
+  onDeleteMessage?: (messageId: string) => void
+  onRewindHere?: (messageId: string) => void
 }) {
   const { t } = useTranslation()
   const { copy } = useCopyToClipboard()
@@ -708,6 +785,23 @@ function MessageContextMenu({
             </ContextMenuItem>
           </>
         )}
+        {messageId && (onRewindHere || onDeleteMessage) && (
+          <>
+            <ContextMenuSeparator />
+            {onRewindHere && (
+              <ContextMenuItem onClick={() => onRewindHere(messageId)}>
+                <History className="size-4" />
+                {t('chat.contextMenu.rewindHere', 'Rewind to here')}
+              </ContextMenuItem>
+            )}
+            {onDeleteMessage && (
+              <ContextMenuItem variant="destructive" onClick={() => onDeleteMessage(messageId)}>
+                <Trash2 className="size-4" />
+                {t('chat.contextMenu.deleteMessage', 'Delete message')}
+              </ContextMenuItem>
+            )}
+          </>
+        )}
       </ContextMenuContent>
     </ContextMenu>
   )
@@ -716,7 +810,7 @@ function MessageContextMenu({
 // ─── Message bubble ───────────────────────────────────────────────────────────
 
 /** A small avatar tile rendered inside the transfer card. Small when the
- *  Kin is the "other" side of the handoff, big when it's the current Kin
+ *  Agent is the "other" side of the handoff, big when it's the current Agent
  *  (the one whose history the user is viewing). */
 function TransferAvatar({ name, avatarUrl, size }: { name: string; avatarUrl: string | null; size: 'big' | 'small' }) {
   const dim = size === 'big' ? 'size-10' : 'size-7'
@@ -738,7 +832,7 @@ function TransferAvatar({ name, avatarUrl, size }: { name: string; avatarUrl: st
  *  avatars, platform icon + channel name, optional reason, timestamp)
  *  but differ in accent color, directional arrow, verb, and the relative
  *  sizes of the two avatars so the user perceives the state in one
- *  glance (out: this Kin LOST the channel, in: this Kin GAINED it). */
+ *  glance (out: this Agent LOST the channel, in: this Agent GAINED it). */
 function ChannelTransferCard({
   event,
   currentName,
@@ -775,21 +869,21 @@ function ChannelTransferCard({
       }
   // Both arrows point RIGHT (channel moves source → destination in both views;
   // only "who is on the line" flips). OUT uses ArrowRightFromLine (line on the
-  // left, current Kin = source); IN uses ArrowRightToLine (line on the right,
-  // current Kin = destination).
+  // left, current Agent = source); IN uses ArrowRightToLine (line on the right,
+  // current Agent = destination).
   const DirectionalIcon = isOut ? ArrowRightFromLine : ArrowRightToLine
   // Avatar sizing reflects who "owns" the action in this row:
-  //   out: current Kin (left, big) handed off to other Kin (right, small)
-  //   in:  current Kin (right, big) received from other Kin (left, small)
+  //   out: current Agent (left, big) handed off to other Agent (right, small)
+  //   in:  current Agent (right, big) received from other Agent (left, small)
   const leftIsCurrent = isOut
   const titleKey = isOut ? 'chat.transfer.outTitle' : 'chat.transfer.inTitle'
   const titleDefault = isOut
-    ? 'Channel transferred to {{kinName}}'
-    : 'Channel received from {{kinName}}'
+    ? 'Channel transferred to {{agentName}}'
+    : 'Channel received from {{agentName}}'
   const subKey = isOut ? 'chat.transfer.outSubtext' : 'chat.transfer.inSubtext'
   const subDefault = isOut
-    ? 'This Kin no longer has this channel.'
-    : 'This Kin now has this channel.'
+    ? 'This Agent no longer has this channel.'
+    : 'This Agent now has this channel.'
 
   return (
     <div className={cn('flex justify-center px-4 py-2', 'animate-fade-in')}>
@@ -800,7 +894,7 @@ function ChannelTransferCard({
           accent.bg,
         )}
         role="article"
-        aria-label={t(titleKey, titleDefault, { kinName: event.otherKin.name })}
+        aria-label={t(titleKey, titleDefault, { agentName: event.otherAgent.name })}
       >
         {/* Top accent chip */}
         <div className={cn('flex items-center justify-between px-3 py-1 text-[10px] font-semibold uppercase tracking-wider', accent.chipBg, accent.chipText)}>
@@ -819,19 +913,19 @@ function ChannelTransferCard({
           {/* Avatars row with directional arrow */}
           <div className="flex items-center gap-2">
             <TransferAvatar
-              name={leftIsCurrent ? (currentName ?? 'Kin') : event.otherKin.name}
-              avatarUrl={leftIsCurrent ? currentAvatarUrl ?? null : event.otherKin.avatarUrl}
+              name={leftIsCurrent ? (currentName ?? 'Agent') : event.otherAgent.name}
+              avatarUrl={leftIsCurrent ? currentAvatarUrl ?? null : event.otherAgent.avatarUrl}
               size={leftIsCurrent ? 'big' : 'small'}
             />
             <DirectionalIcon className={cn('size-4 shrink-0', accent.iconColor)} />
             <TransferAvatar
-              name={leftIsCurrent ? event.otherKin.name : (currentName ?? 'Kin')}
-              avatarUrl={leftIsCurrent ? event.otherKin.avatarUrl : currentAvatarUrl ?? null}
+              name={leftIsCurrent ? event.otherAgent.name : (currentName ?? 'Agent')}
+              avatarUrl={leftIsCurrent ? event.otherAgent.avatarUrl : currentAvatarUrl ?? null}
               size={leftIsCurrent ? 'small' : 'big'}
             />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold truncate">
-                {t(titleKey, titleDefault, { kinName: event.otherKin.name })}
+                {t(titleKey, titleDefault, { agentName: event.otherAgent.name })}
               </p>
               <p className="text-[11px] text-muted-foreground truncate">
                 {t(subKey, subDefault)}
@@ -887,6 +981,9 @@ export const MessageBubble = memo(function MessageBubble({
   toolCalls,
   injectedMemories,
   stepLimitReached = false,
+  emptyTurn = false,
+  finishReason = null,
+  silentStop = false,
   files,
   reactions,
   currentUserId,
@@ -900,15 +997,18 @@ export const MessageBubble = memo(function MessageBubble({
   onQuoteReply,
   onEditResend,
   onToggleReaction,
+  onDeleteMessage,
+  onRewindHere,
   tokenUsage,
   compact = false,
+  hideThinking = false,
   reasoning,
   channelContextLine,
   channelBrandColor,
   channelPlatformOverride,
   systemEvent,
-  currentKinAvatarUrl,
-  currentKinName,
+  currentAgentAvatarUrl,
+  currentAgentName,
 }: MessageBubbleProps) {
   const handleToggleReaction = useCallback((emoji: string) => {
     if (onToggleReaction && messageId) onToggleReaction(messageId, emoji)
@@ -919,19 +1019,20 @@ export const MessageBubble = memo(function MessageBubble({
   }, [onOpenTaskDetail, resolvedTaskId])
 
   const isUser = role === 'user' && sourceType === 'user'
-  const isFromOtherKin = sourceType === 'kin' && role === 'user'
+  const isFromOtherAgent = sourceType === 'agent' && role === 'user'
   const isFromChannel = sourceType === 'channel'
   const { t } = useTranslation()
   // Server-provided platform takes precedence; fall back to legacy regex
   // extraction so old persisted messages keep their icon.
   const channelPlatform = channelPlatformOverride
     ?? (isFromChannel ? content.match(/^\[(\w+):/)?.[1] ?? 'channel' : null)
-  // Also surface the platform brand on outbound kin messages that were sent
+  // Also surface the platform brand on outbound agent messages that were sent
   // through a channel (channelBrandColor is populated server-side via
   // channel_message_links).
   const hasChannelBrand = Boolean(channelBrandColor)
   const isTaskResult = sourceType === 'task'
   const isWebhook = sourceType === 'webhook'
+  const isTrigger = sourceType === 'trigger'
   const isSystem = sourceType === 'system' || sourceType === 'cron'
   // Deduplicate tool calls by ID (safety net for race conditions between
   // streaming and fetched state that can produce the same call twice)
@@ -950,10 +1051,10 @@ export const MessageBubble = memo(function MessageBubble({
 
   // Normalize reasoning prop: string (streaming) → single segment at offset 0, array → as-is
   const reasoningSegments = useMemo(() => {
-    if (!reasoning) return undefined
+    if (hideThinking || !reasoning) return undefined
     if (typeof reasoning === 'string') return [{ offset: 0, text: reasoning }]
     return reasoning
-  }, [reasoning])
+  }, [reasoning, hideThinking])
   const hasReasoning = reasoningSegments && reasoningSegments.length > 0
 
   const contentParts = useMemo(
@@ -971,6 +1072,11 @@ export const MessageBubble = memo(function MessageBubble({
     return <WebhookMessageCard content={content} timestamp={timestamp} />
   }
 
+  // Email trigger message cards
+  if (isTrigger) {
+    return <TriggerMessageCard content={content} timestamp={timestamp} />
+  }
+
   // System messages centered. Channel-transfer audit events (out/in) get
   // a dedicated colored card to make the handoff direction perceivable at
   // a glance; everything else falls through to the generic gray banner.
@@ -979,8 +1085,8 @@ export const MessageBubble = memo(function MessageBubble({
       return (
         <ChannelTransferCard
           event={systemEvent}
-          currentName={currentKinName ?? null}
-          currentAvatarUrl={currentKinAvatarUrl ?? null}
+          currentName={currentAgentName ?? null}
+          currentAvatarUrl={currentAgentAvatarUrl ?? null}
           timestamp={timestamp}
         />
       )
@@ -1011,14 +1117,14 @@ export const MessageBubble = memo(function MessageBubble({
 
   const initials = (isUser && userInitials) ? userInitials : (senderName?.slice(0, 2).toUpperCase() ?? 'K')
 
-  const bubbleClass = isFromOtherKin
+  const bubbleClass = isFromOtherAgent
     ? 'bg-accent text-accent-foreground border border-border'
     : 'bg-muted text-foreground'
 
   // Assistant messages with tool calls: interleaved layout
   if (!isUser && contentParts) {
     return (
-      <MessageContextMenu content={content} isUser={false} onRegenerate={onRegenerate} onQuoteReply={onQuoteReply} onEditResend={onEditResend}>
+      <MessageContextMenu content={content} isUser={false} onRegenerate={onRegenerate} onQuoteReply={onQuoteReply} onEditResend={onEditResend} messageId={messageId} onDeleteMessage={onDeleteMessage} onRewindHere={onRewindHere}>
       <div className={cn('flex gap-2 px-2.5 sm:gap-3 sm:px-4', isNew && 'animate-fade-in-up', isGrouped ? 'py-0.5' : 'py-2')}>
         {isGrouped ? (
           <div className="size-8 shrink-0 sm:size-10 lg:size-20" />
@@ -1036,6 +1142,10 @@ export const MessageBubble = memo(function MessageBubble({
           {/* Interleaved content parts */}
           {contentParts.map((part, i) =>
             part.type === 'text' ? (
+              // The server persists a short English sentinel for empty/silent
+              // turns (kept for channels + LLM replay); the web UI shows the
+              // localized notice below instead.
+              emptyTurn || silentStop ? null : (
               <div
                 key={`text-${i}`}
                 className={cn('rounded-2xl px-4 py-2.5', bubbleClass, i === 0 && 'rounded-tl-md')}
@@ -1043,6 +1153,7 @@ export const MessageBubble = memo(function MessageBubble({
               >
                 {isRedacted ? redactedContent : <MarkdownContent content={part.text} isUser={false} />}
               </div>
+              )
             ) : part.type === 'reasoning' ? (
               <ReasoningBlock key={`reasoning-${i}`} reasoning={part.text} />
             ) : (
@@ -1069,6 +1180,22 @@ export const MessageBubble = memo(function MessageBubble({
           {/* Injected memories indicator */}
           {hasMemories && <InjectedMemoriesIndicator memories={injectedMemories} />}
 
+          {/* Empty-turn / silent-stop notice (replaces the sentinel text) */}
+          {(emptyTurn || silentStop) && (
+            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-warning">
+              <span>⚠️</span>
+              <span className="text-muted-foreground">
+                {emptyTurn
+                  ? finishReason === 'content-filter'
+                    ? t('chat.emptyTurn.contentFilter')
+                    : finishReason === 'length'
+                      ? t('chat.emptyTurn.length')
+                      : t('chat.emptyTurn.generic', { reason: finishReason ?? 'unknown' })
+                  : t('chat.silentStop')}
+              </span>
+            </div>
+          )}
+
           {/* Step limit indicator */}
           {stepLimitReached && (
             <div className="flex items-center gap-1.5 mt-1 text-[11px] text-warning">
@@ -1090,6 +1217,9 @@ export const MessageBubble = memo(function MessageBubble({
                 {onRegenerate && <RegenerateButton onRegenerate={onRegenerate} />}
                 <ReadAloudButton content={content} />
                 {onToggleReaction && <ReactionPicker onSelect={handleToggleReaction} isUser={false} />}
+                {messageId && (onDeleteMessage || onRewindHere) && (
+                  <MessageMoreMenu messageId={messageId} onDeleteMessage={onDeleteMessage} onRewindHere={onRewindHere} />
+                )}
               </div>
             </>
           )}
@@ -1101,7 +1231,7 @@ export const MessageBubble = memo(function MessageBubble({
 
   // Standard message (user or assistant without tool calls)
   return (
-    <MessageContextMenu content={content} isUser={isUser} onRegenerate={isUser ? undefined : onRegenerate} onQuoteReply={onQuoteReply} onEditResend={isUser ? onEditResend : undefined}>
+    <MessageContextMenu content={content} isUser={isUser} onRegenerate={isUser ? undefined : onRegenerate} onQuoteReply={onQuoteReply} onEditResend={isUser ? onEditResend : undefined} messageId={messageId} onDeleteMessage={onDeleteMessage} onRewindHere={onRewindHere}>
     <div
       className={cn(
         'flex gap-2 px-2.5 sm:gap-3 sm:px-4',
@@ -1122,7 +1252,7 @@ export const MessageBubble = memo(function MessageBubble({
           'group/msg relative min-w-0 max-w-[94%] sm:max-w-[88%] md:max-w-[80%] rounded-2xl px-4 py-2.5',
           isUser
             ? cn('bg-primary text-primary-foreground', !isGrouped && 'rounded-tr-md')
-            : isFromOtherKin
+            : isFromOtherAgent
               ? cn('bg-accent text-accent-foreground border border-border', !isGrouped && 'rounded-tl-md')
               : isFromChannel
                 ? cn('bg-accent text-accent-foreground border border-chart-4/30', !isGrouped && 'rounded-tl-md')
@@ -1179,6 +1309,9 @@ export const MessageBubble = memo(function MessageBubble({
           {!isUser && onRegenerate && <RegenerateButton onRegenerate={onRegenerate} />}
           {!isUser && <ReadAloudButton content={content} />}
           {onToggleReaction && <ReactionPicker onSelect={handleToggleReaction} isUser={isUser} />}
+          {messageId && (onDeleteMessage || onRewindHere) && (
+            <MessageMoreMenu messageId={messageId} onDeleteMessage={onDeleteMessage} onRewindHere={onRewindHere} />
+          )}
         </div>
       </div>
     </div>

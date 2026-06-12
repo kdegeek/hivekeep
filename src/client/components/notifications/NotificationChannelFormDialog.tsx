@@ -139,7 +139,7 @@ export function NotificationChannelFormDialog({ open, onOpenChange, editChannel,
                   <div className="flex items-center gap-2">
                     <PlatformIcon platform={ch.platform} variant="color" className="size-4" />
                     <span>{ch.channelName}</span>
-                    <span className="text-muted-foreground text-xs">({ch.kinName})</span>
+                    <span className="text-muted-foreground text-xs">({ch.agentName})</span>
                   </div>
                 </SelectItem>
               ))}

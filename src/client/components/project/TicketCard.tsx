@@ -79,16 +79,16 @@ export function TicketCard({ ticket, onClick, isOverlay = false, highlightQuery,
   // Defensive defaults — SSE / optimistic update paths can occasionally produce
   // partial tickets without these arrays. Falling back to empty values keeps the
   // kanban from crashing instead of failing the whole page.
-  const runningKins = ticket.runningKins ?? []
+  const runningAgents = ticket.runningAgents ?? []
   const tags = ticket.tags ?? []
   const description = ticket.description ?? ''
 
-  const hasRunning = runningKins.length > 0
+  const hasRunning = runningAgents.length > 0
   const awaitingInput = ticket.awaitingHumanInputCount ?? 0
   const hasAwaitingInput = awaitingInput > 0
   const attachmentCount = ticket.attachmentCount ?? 0
-  const visibleRunning = runningKins.slice(0, 3)
-  const overflowRunning = runningKins.length - visibleRunning.length
+  const visibleRunning = runningAgents.slice(0, 3)
+  const overflowRunning = runningAgents.length - visibleRunning.length
   const normalizedQuery = (highlightQuery ?? '').trim().toLowerCase()
 
   // Short snippet of the description, shown in a tooltip on title hover so users
@@ -290,7 +290,7 @@ export function TicketCard({ ticket, onClick, isOverlay = false, highlightQuery,
             <span />
           )}
 
-          {/* Right side: running timer (if any) + running Kins avatar stack OR
+          {/* Right side: running timer (if any) + running Agents avatar stack OR
               timestamp. The "running since" timer is shown whenever the ticket
               has at least one task being processed, live-ticking from when the
               earliest running task started. It is independent of the kanban
@@ -319,20 +319,20 @@ export function TicketCard({ ticket, onClick, isOverlay = false, highlightQuery,
               onClick={(e) => e.stopPropagation()}
             >
               {visibleRunning.map((rk, i) => {
-                const initials = rk.kinName.slice(0, 2).toUpperCase()
+                const initials = rk.agentName.slice(0, 2).toUpperCase()
                 return (
                   <Tooltip key={`${rk.taskId}-${i}`}>
                     <TooltipTrigger asChild>
                       <span>
                         <Avatar className="size-5 ring-2 ring-card">
-                          {rk.avatarUrl && <AvatarImage src={rk.avatarUrl} alt={rk.kinName} />}
+                          {rk.avatarUrl && <AvatarImage src={rk.avatarUrl} alt={rk.agentName} />}
                           <AvatarFallback className="text-[9px] bg-secondary">{initials}</AvatarFallback>
                         </Avatar>
                       </span>
                     </TooltipTrigger>
                     <TooltipContent side="top">
                       <span className="text-xs">
-                        {t('projects.ticketCard.kinRunning', { name: rk.kinName })}
+                        {t('projects.ticketCard.agentRunning', { name: rk.agentName })}
                       </span>
                     </TooltipContent>
                   </Tooltip>

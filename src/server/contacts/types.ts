@@ -11,4 +11,4 @@ export type {
   ContactListOptions,
   ContactListResult,
   ContactsProvider,
-} from '@kinbot-developer/sdk'
+} from '@hivekeep/sdk'

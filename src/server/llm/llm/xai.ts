@@ -47,16 +47,17 @@ import {
   InvalidRequestError,
   NetworkError,
   ProviderServerError,
-  KinbotProviderError,
+  HivekeepProviderError,
 } from '@/server/llm/core/types'
 import type {
   LLMProvider,
   LLMModel,
   ChatRequest,
   ChatChunk,
-  KinbotMessage,
+  HivekeepMessage,
   ThinkingEffort,
 } from '@/server/llm/llm/types'
+import { downgradeEffort } from '@/server/llm/llm/types'
 
 const BASE_URL = 'https://api.x.ai/v1'
 
@@ -94,56 +95,6 @@ export interface XaiLanguageModel {
 
 // ─── Metadata-driven model classification ────────────────────────────────────
 
-/** Default context window when no family prefix matches. */
-const DEFAULT_CONTEXT_WINDOW = 131_072
-
-/**
- * Context windows by family. xAI's catalogue endpoint omits the window, so we
- * map it from the model id / aliases. First match wins. Values follow xAI's
- * published model pages (grok-4.3 / grok-4.20 = 1M, grok-4-fast = 2M,
- * grok-4 / grok-build / grok-code = 256k, grok-3 = 131k).
- */
-const CONTEXT_BY_PREFIX: Array<[RegExp, number]> = [
-  [/grok-4\.3/, 1_000_000],
-  // xAI's docs spell this both ways: grok-4.20-… and grok-420-….
-  [/grok-4\.?20/, 1_000_000],
-  [/grok-4-fast/, 2_000_000],
-  [/grok-4/, 256_000],
-  [/grok-build/, 256_000],
-  [/grok-code/, 256_000],
-  [/grok-3/, 131_072],
-]
-
-/**
- * Reasoning families that accept the OpenAI-compatible `reasoning_effort`
- * parameter. Plain `grok-4` is intentionally absent: it reasons internally
- * but rejects `reasoning_effort` (400). The `grok-4-` prefix here only
- * matches the fast/reasoning variants because plain `grok-4` has no trailing
- * segment.
- */
-const REASONING_PATTERN =
-  /(grok-4\.3|grok-4\.20|grok-3-mini|grok-4-fast|grok-build|reasoning)/
-
-/**
- * Names to test for classification: the id plus every alias. xAI sometimes
- * returns an obfuscated canonical id (e.g. `"latest"`) whose aliases carry
- * the recognizable family name (`"grok-4.3-latest"`).
- *
- * @internal exported for tests.
- */
-export function modelNames(model: XaiLanguageModel): string[] {
-  return [model.id, ...(model.aliases ?? [])].filter((n): n is string => !!n)
-}
-
-/** @internal exported for tests. */
-export function inferContextWindow(model: XaiLanguageModel): number {
-  const names = modelNames(model)
-  for (const [pattern, value] of CONTEXT_BY_PREFIX) {
-    if (names.some((n) => pattern.test(n))) return value
-  }
-  return DEFAULT_CONTEXT_WINDOW
-}
-
 /**
  * Vision support: xAI exposes `input_modalities`. A model accepts image
  * blocks iff that array contains `"image"`.
@@ -155,20 +106,7 @@ export function inferImageInput(model: XaiLanguageModel): boolean {
 }
 
 /**
- * Reasoning support: Grok reasoning families accept `reasoning_effort`
- * (`low | medium | high`; xAI also has `none`, expressed in KinBot as the
- * absence of an effort). KinBot's `max` downgrades to `high` at request time.
- *
- * @internal exported for tests.
- */
-export function inferThinking(model: XaiLanguageModel): LLMModel['thinking'] | undefined {
-  const names = modelNames(model)
-  if (!names.some((n) => REASONING_PATTERN.test(n))) return undefined
-  return { efforts: ['low', 'medium', 'high'] }
-}
-
-/**
- * A model is usable as a KinBot LLM iff it produces text output. The
+ * A model is usable as a Hivekeep LLM iff it produces text output. The
  * language-models endpoint only lists chat / image-understanding models, but
  * we still guard on `output_modalities` for forward compatibility.
  *
@@ -181,7 +119,7 @@ export function isTextOutputModel(model: XaiLanguageModel): boolean {
 }
 
 /**
- * Convert xAI pricing (USD cents per 100 million tokens) to KinBot's USD per
+ * Convert xAI pricing (USD cents per 100 million tokens) to Hivekeep's USD per
  * million tokens. `12500` → `1.25`. Drops absent / negative values.
  *
  * @internal exported for tests.
@@ -205,7 +143,7 @@ export function convertPricing(model: XaiLanguageModel): LLMModel['pricing'] | u
 }
 
 /**
- * Map an xAI language-model entry to a KinBot `LLMModel`, or null if it isn't
+ * Map an xAI language-model entry to a Hivekeep `LLMModel`, or null if it isn't
  * a text-output chat model. Classification is purely metadata-driven, with
  * context windows inferred from family naming.
  *
@@ -218,15 +156,14 @@ export function mapModel(model: XaiLanguageModel): LLMModel | null {
   const out: LLMModel = {
     id: model.id,
     name: model.id,
-    contextWindow: inferContextWindow(model),
     // OpenAI-compatible upstreams cache prompts transparently; xAI forwards
     // cache hits in usage. No per-block cache control to send.
     supportsPromptCaching: true,
     supportsParallelTools: true,
   }
+  // Image input + pricing come from the real xAI API (kept as seed hints);
+  // context window + reasoning are filled by the registry from models.dev.
   if (inferImageInput(model)) out.supportsImageInput = true
-  const thinking = inferThinking(model)
-  if (thinking) out.thinking = thinking
   const pricing = convertPricing(model)
   if (pricing) out.pricing = pricing
   return out
@@ -267,8 +204,8 @@ function mapFinishReason(
   }
 }
 
-function mapApiError(err: unknown): KinbotProviderError {
-  if (err instanceof KinbotProviderError) return err
+function mapApiError(err: unknown): HivekeepProviderError {
+  if (err instanceof HivekeepProviderError) return err
   if (err instanceof APIError) {
     const status = err.status
     const message = err.message
@@ -305,17 +242,6 @@ function parseRetryAfter(header: string | string[] | undefined): number | undefi
   return undefined
 }
 
-function downgradeEffort(
-  requested: ThinkingEffort,
-  supported: readonly ThinkingEffort[],
-): ThinkingEffort | undefined {
-  const order: ThinkingEffort[] = ['low', 'medium', 'high', 'max']
-  const idx = order.indexOf(requested)
-  for (let i = idx; i >= 0; i--) {
-    if (supported.includes(order[i]!)) return order[i]
-  }
-  return supported[0]
-}
 
 function uint8ToBase64(bytes: Uint8Array): string {
   let binary = ''
@@ -323,7 +249,7 @@ function uint8ToBase64(bytes: Uint8Array): string {
   return globalThis.btoa(binary)
 }
 
-// ─── Message conversion (kinbot → OpenAI-compatible) ─────────────────────────
+// ─── Message conversion (hivekeep → OpenAI-compatible) ─────────────────────────
 
 function systemPromptToMessage(
   system: ChatRequest['system'],
@@ -335,7 +261,7 @@ function systemPromptToMessage(
 }
 
 function userBlocksToContent(
-  blocks: KinbotMessage['content'],
+  blocks: HivekeepMessage['content'],
 ): ChatCompletionUserMessageParam['content'] | null {
   const parts: ChatCompletionContentPart[] = []
   for (const b of blocks) {
@@ -354,7 +280,7 @@ function userBlocksToContent(
 }
 
 function assistantMessage(
-  blocks: KinbotMessage['content'],
+  blocks: HivekeepMessage['content'],
 ): ChatCompletionAssistantMessageParam {
   let text = ''
   const toolCalls: ChatCompletionMessageToolCall[] = []
@@ -379,7 +305,7 @@ function assistantMessage(
 }
 
 function messagesToOpenAI(
-  messages: KinbotMessage[],
+  messages: HivekeepMessage[],
   system: ChatCompletionSystemMessageParam | undefined,
 ): ChatCompletionMessageParam[] {
   const out: ChatCompletionMessageParam[] = []

@@ -22,8 +22,8 @@ const UPDATABLE_KEYS = new Set([
   'PORT',
   'HOST',
   'LOG_LEVEL',
-  'KINBOT_DATA_DIR',
-  'KINBOT_TIMEZONE',
+  'HIVEKEEP_DATA_DIR',
+  'HIVEKEEP_TIMEZONE',
   'COMPACTING_MODEL',
   'COMPACTING_MAX_SUMMARIES',
   'HISTORY_TOKEN_BUDGET',
@@ -74,7 +74,7 @@ export const getPlatformLogsTool: ToolRegistration = {
         module: z
           .string()
           .optional()
-          .describe('Partial match (e.g. "kin-engine", "queue", "cron")'),
+          .describe('Partial match (e.g. "agent-engine", "queue", "cron")'),
         search: z
           .string()
           .optional()
@@ -95,7 +95,7 @@ export const getPlatformLogsTool: ToolRegistration = {
           .describe('Default: 50'),
       }),
       execute: async ({ level, module, search, minutes_ago, limit }) => {
-        log.debug({ kinId: ctx.kinId, level, module, search }, 'Platform logs queried')
+        log.debug({ agentId: ctx.agentId, level, module, search }, 'Platform logs queried')
 
         const entries = logStore.query({
           level,
@@ -120,7 +120,7 @@ export const getPlatformLogsTool: ToolRegistration = {
 }
 
 /**
- * get_platform_config — read the current KinBot configuration.
+ * get_platform_config — read the current Hivekeep configuration.
  * Sensitive values (encryption keys, auth secrets) are redacted.
  */
 export const getPlatformConfigTool: ToolRegistration = {
@@ -130,16 +130,16 @@ export const getPlatformConfigTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Read the current KinBot platform configuration. Sensitive values are redacted.',
+        'Read the current Hivekeep platform configuration. Sensitive values are redacted.',
       inputSchema: z.object({}),
       execute: async () => {
-        log.debug({ kinId: ctx.kinId }, 'Platform config queried')
+        log.debug({ agentId: ctx.agentId }, 'Platform config queried')
 
         // Collect environment variables that are currently set
         const envVars: Record<string, string> = {}
         const envPrefixes = [
           'PORT', 'HOST', 'PUBLIC_URL', 'TRUSTED_ORIGINS', 'LOG_LEVEL',
-          'KINBOT_', 'DB_PATH',
+          'HIVEKEEP_', 'DB_PATH',
           'COMPACTING_', 'HISTORY_TOKEN_BUDGET',
           'MEMORY_', 'QUEUE_', 'TASKS_', 'CRONS_', 'TOOLS_',
           'HUMAN_PROMPTS_', 'INTER_KIN_', 'MCP_',
@@ -298,10 +298,10 @@ export const listPlatformConfigOptionsTool: ToolRegistration = {
         key: z
           .string()
           .optional()
-          .describe('Filter by exact key name (e.g. "KINBOT_TIMEZONE").'),
+          .describe('Filter by exact key name (e.g. "HIVEKEEP_TIMEZONE").'),
       }),
       execute: async ({ section, key }) => {
-        log.debug({ kinId: ctx.kinId, section, key }, 'Platform config options listed')
+        log.debug({ agentId: ctx.agentId, section, key }, 'Platform config options listed')
         const { path, options } = loadConfigOptions()
 
         if (!path) {
@@ -380,13 +380,13 @@ export const updatePlatformConfigTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Update a KinBot config value in the .env file. Restart required. Security-critical keys are blocked.',
+        'Update a Hivekeep config value in the .env file. Restart required. Security-critical keys are blocked.',
       inputSchema: z.object({
         key: z.string().describe('Environment variable key (e.g. "PUBLIC_URL", "LOG_LEVEL")'),
         value: z.string(),
       }),
       execute: async ({ key, value }) => {
-        log.info({ kinId: ctx.kinId, key }, 'Platform config update requested')
+        log.info({ agentId: ctx.agentId, key }, 'Platform config update requested')
 
         // Validate key
         if (SENSITIVE_KEYS.has(key)) {
@@ -423,7 +423,7 @@ export const updatePlatformConfigTool: ToolRegistration = {
         // No env file found
         if (!envFilePath) {
           if (installType === 'systemd-system') {
-            const servicePath = config.environment.serviceFilePath ?? '/etc/systemd/system/kinbot.service'
+            const servicePath = config.environment.serviceFilePath ?? '/etc/systemd/system/hivekeep.service'
             return {
               success: false,
               error: 'No env file found for this systemd system service.',
@@ -431,10 +431,10 @@ export const updatePlatformConfigTool: ToolRegistration = {
                 `The service file is at: ${servicePath}\n` +
                 'Options:\n' +
                 `1. Add an EnvironmentFile to the service unit and set ${key}=${value} there.\n` +
-                `2. Or run: sudo systemctl edit kinbot --force and add:\n` +
+                `2. Or run: sudo systemctl edit hivekeep --force and add:\n` +
                 `   [Service]\n` +
                 `   Environment="${key}=${value}"\n` +
-                'Then: sudo systemctl daemon-reload && sudo systemctl restart kinbot',
+                'Then: sudo systemctl daemon-reload && sudo systemctl restart hivekeep',
             }
           }
           if (installType === 'systemd-user') {
@@ -443,9 +443,9 @@ export const updatePlatformConfigTool: ToolRegistration = {
               error: 'No env file found for this systemd user service.',
               guidance:
                 'Options:\n' +
-                `1. Create an env file (e.g., ~/.local/share/kinbot/kinbot.env) with ${key}=${value}\n` +
+                `1. Create an env file (e.g., ~/.local/share/hivekeep/hivekeep.env) with ${key}=${value}\n` +
                 `2. Add EnvironmentFile= to your service unit pointing to that file.\n` +
-                '3. Run: systemctl --user daemon-reload && systemctl --user restart kinbot',
+                '3. Run: systemctl --user daemon-reload && systemctl --user restart hivekeep',
             }
           }
           // Manual: suggest creating .env
@@ -453,9 +453,9 @@ export const updatePlatformConfigTool: ToolRegistration = {
             success: false,
             error: 'No persistent configuration file found.',
             guidance:
-              `Create a .env file in the KinBot working directory (${config.environment.workingDir}):\n` +
+              `Create a .env file in the Hivekeep working directory (${config.environment.workingDir}):\n` +
               `echo '${key}=${value}' >> ${resolve(config.environment.workingDir, '.env')}\n` +
-              'Then restart KinBot for the change to take effect.',
+              'Then restart Hivekeep for the change to take effect.',
           }
         }
 
@@ -474,7 +474,7 @@ export const updatePlatformConfigTool: ToolRegistration = {
           }
 
           writeFileSync(envFilePath, lines.join('\n'))
-          log.info({ kinId: ctx.kinId, key, envFilePath }, 'Platform config updated in env file')
+          log.info({ agentId: ctx.agentId, key, envFilePath }, 'Platform config updated in env file')
 
           return {
             success: true,
@@ -486,13 +486,13 @@ export const updatePlatformConfigTool: ToolRegistration = {
               `Updated ${key}=${value} in ${envFilePath}. ` +
               'A restart is required for this change to take effect.' +
               (installType === 'systemd-user'
-                ? ' Run: systemctl --user restart kinbot'
+                ? ' Run: systemctl --user restart hivekeep'
                 : installType === 'systemd-system'
-                  ? ' Run: sudo systemctl restart kinbot'
-                  : ' Restart the KinBot process.'),
+                  ? ' Run: sudo systemctl restart hivekeep'
+                  : ' Restart the Hivekeep process.'),
           }
         } catch (err) {
-          log.error({ kinId: ctx.kinId, key, envFilePath, err }, 'Failed to update env file')
+          log.error({ agentId: ctx.agentId, key, envFilePath, err }, 'Failed to update env file')
           return {
             success: false,
             error: `Failed to write to ${envFilePath}: ${err instanceof Error ? err.message : String(err)}`,
@@ -503,7 +503,7 @@ export const updatePlatformConfigTool: ToolRegistration = {
 }
 
 /**
- * restart_platform — trigger a graceful restart of KinBot.
+ * restart_platform — trigger a graceful restart of Hivekeep.
  * Works by exiting the process and relying on the service manager to restart it.
  * Opt-in tool: disabled by default.
  */
@@ -514,7 +514,7 @@ export const restartPlatformTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Trigger a graceful restart of KinBot. Always use prompt_human() for user confirmation first.',
+        'Trigger a graceful restart of Hivekeep. Always use prompt_human() for user confirmation first.',
       inputSchema: z.object({
         reason: z.string(),
         confirmed: z.boolean().describe('Must be true after explicit user confirmation via prompt_human()'),
@@ -533,13 +533,13 @@ export const restartPlatformTool: ToolRegistration = {
         if (installType === 'manual') {
           return {
             success: false,
-            error: 'KinBot is running manually (not managed by a service manager). ' +
+            error: 'Hivekeep is running manually (not managed by a service manager). ' +
               'Exiting would stop the process without automatic restart. ' +
-              'Please ask the user to restart KinBot manually.',
+              'Please ask the user to restart Hivekeep manually.',
           }
         }
 
-        log.warn({ kinId: ctx.kinId, reason, installType }, 'Platform restart triggered by Kin')
+        log.warn({ agentId: ctx.agentId, reason, installType }, 'Platform restart triggered by Agent')
 
         // Schedule exit after a short delay to allow the response to be sent
         setTimeout(() => {
@@ -549,7 +549,7 @@ export const restartPlatformTool: ToolRegistration = {
 
         return {
           success: true,
-          message: `KinBot is restarting (${installType} will bring it back up). Reason: ${reason}`,
+          message: `Hivekeep is restarting (${installType} will bring it back up). Reason: ${reason}`,
           installationType: installType,
         }
       },

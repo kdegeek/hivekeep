@@ -18,7 +18,7 @@ export const executeSqlTool: ToolRegistration = {
   create: (_ctx) =>
     tool({
       description:
-        'Execute raw SQL against the KinBot SQLite database. Write queries have no undo.',
+        'Execute raw SQL against the Hivekeep SQLite database. Write queries have no undo.',
       inputSchema: z.object({
         sql: z.string(),
         params: z

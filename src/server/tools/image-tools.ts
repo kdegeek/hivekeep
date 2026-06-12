@@ -17,19 +17,19 @@ const log = createLogger('tools:image')
 
 /**
  * list_image_models — list available image generation models.
- * Available to main agents and sub-kins. Lean payload on purpose:
+ * Available to main agents and sub-agents. Lean payload on purpose:
  * id, name, providerName, and maxImageInputs — no per-model param
  * schemas (those go through describe_image_model on demand so the
  * system prompt token cost stays bounded as the model catalogue grows).
  */
 export const listImageModelsTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (_ctx) =>
     tool({
       description:
-        'List image generation models available to KinBot, with how many source images each can accept (`maxImageInputs`: 0 = text-to-image only, 1 = single-image edit/inpainting, N>1 = multi-reference like Nano Banana Pro). Call describe_image_model to discover the per-model parameters before generate_image.',
+        'List image generation models available to Hivekeep, with how many source images each can accept (`maxImageInputs`: 0 = text-to-image only, 1 = single-image edit/inpainting, N>1 = multi-reference like Nano Banana Pro). Call describe_image_model to discover the per-model parameters before generate_image.',
       inputSchema: z.object({}),
       execute: async () => {
         const allProviders = await db.select().from(providers).all()
@@ -92,7 +92,7 @@ export const listImageModelsTool: ToolRegistration = {
  * round-trips back as a tool error, triggering self-correction.
  */
 export const describeImageModelTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (_ctx) =>
@@ -142,7 +142,7 @@ export const describeImageModelTool: ToolRegistration = {
  *
  * Note: The tool always registers, but returns an error at runtime
  * if no image provider is configured. This keeps the tool visible
- * in the system prompt so the Kin knows the capability exists.
+ * in the system prompt so the Agent knows the capability exists.
  */
 export const generateImageTool: ToolRegistration = {
   availability: ['main'],
@@ -174,7 +174,7 @@ export const generateImageTool: ToolRegistration = {
           .optional(),
       }),
       execute: async ({ prompt, modelId, providerId, imageUrls, params, filename }) => {
-        log.debug({ kinId: ctx.kinId, modelId, providerId, imageCount: imageUrls?.length ?? 0, hasParams: !!params }, 'Image generation requested')
+        log.debug({ agentId: ctx.agentId, modelId, providerId, imageCount: imageUrls?.length ?? 0, hasParams: !!params }, 'Image generation requested')
 
         // Check if image generation is available
         const available = await hasImageCapability()
@@ -196,7 +196,7 @@ export const generateImageTool: ToolRegistration = {
           const storedName = filename
             ? `${fileId}-${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`
             : `${fileId}-generated.${ext}`
-          const dir = join(config.upload.dir, 'messages', ctx.kinId)
+          const dir = join(config.upload.dir, 'messages', ctx.agentId)
           const storedPath = join(dir, storedName)
 
           // Ensure directory exists
@@ -209,7 +209,7 @@ export const generateImageTool: ToolRegistration = {
           // Save to files table
           await db.insert(files).values({
             id: fileId,
-            kinId: ctx.kinId,
+            agentId: ctx.agentId,
             originalName: filename ?? `generated.${ext}`,
             storedPath,
             mimeType: result.mediaType,
@@ -217,7 +217,7 @@ export const generateImageTool: ToolRegistration = {
             createdAt: new Date(),
           })
 
-          const url = `/api/uploads/messages/${ctx.kinId}/${storedName}`
+          const url = `/api/uploads/messages/${ctx.agentId}/${storedName}`
 
           return {
             success: true,

@@ -17,6 +17,7 @@ import { loadProviderConfig } from '@/server/services/provider-config'
 import { listModelsForProvider, getCapabilitiesForType } from '@/server/providers/index'
 import { createLogger } from '@/server/logger'
 import { setModelInfoLookup } from '@/shared/model-context-windows'
+import { reconcileAllProviders, listRegistry } from '@/server/services/model-registry'
 import { config } from '@/server/config'
 
 const log = createLogger('model-info-cache')
@@ -132,6 +133,29 @@ export async function refreshAllProviderModels(): Promise<void> {
         }
       })
     await Promise.allSettled(tasks)
+
+    // Reconcile every provider's models into the registry (source of truth).
+    // This runs ALWAYS (even with the flag off) so the Models view is populated
+    // and admins can review/edit before enabling consumption — it only writes a
+    // data table, no behavior change. The CONTEXT-CACHE OVERLAY below is what
+    // changes behavior, so it stays flag-gated. (Phase 1: a no-op overlay since
+    // apiSeed wins; once heuristics are removed in phase 3 the registry keeps
+    // the cache correct.)
+    try {
+      await reconcileAllProviders()
+      if (config.modelRegistry.enabled) {
+        for (const row of listRegistry()) {
+          if (row.stale) continue
+          setModelInfo(row.modelId, {
+            contextWindow: row.contextWindow ?? undefined,
+            maxOutput: row.maxOutput ?? undefined,
+          })
+        }
+      }
+    } catch (err) {
+      log.warn({ err }, 'Model registry reconcile failed')
+    }
+
     log.info({ providerCount: tasks.length, totalCached: cache.size }, 'Model-info cache refresh complete')
   } catch (err) {
     log.warn({ err }, 'Model-info cache refresh failed')

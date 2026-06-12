@@ -2,17 +2,20 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { ScrollArea } from '@/client/components/ui/scroll-area'
 import { Button } from '@/client/components/ui/button'
-import { X, SearchX } from 'lucide-react'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/client/components/ui/tooltip'
+import { X, SearchX, Wrench } from 'lucide-react'
 import { ToolCallItem } from '@/client/components/chat/ToolCallItem'
 import type { ToolCallViewItem } from '@/client/hooks/useToolCalls'
 
 interface ToolCallsViewerProps {
+  /** Opens the agent's available-tools listing (the composer badge's modal). */
+  onShowAvailableTools?: () => void
   toolCalls: ToolCallViewItem[]
   toolCallCount: number
   onClose: () => void
 }
 
-export const ToolCallsViewer = React.memo(function ToolCallsViewer({ toolCalls, toolCallCount, onClose }: ToolCallsViewerProps) {
+export const ToolCallsViewer = React.memo(function ToolCallsViewer({ toolCalls, toolCallCount, onClose, onShowAvailableTools }: ToolCallsViewerProps) {
   const { t } = useTranslation()
 
   return (
@@ -25,9 +28,21 @@ export const ToolCallsViewer = React.memo(function ToolCallsViewer({ toolCalls, 
             {t('tools.viewer.description', { count: toolCallCount })}
           </p>
         </div>
-        <Button variant="ghost" size="icon-xs" onClick={onClose}>
-          <X className="size-3.5" />
-        </Button>
+        <div className="flex items-center gap-0.5">
+          {onShowAvailableTools && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon-xs" onClick={onShowAvailableTools}>
+                  <Wrench className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{t('tools.viewer.showAvailable', 'View available tools')}</TooltipContent>
+            </Tooltip>
+          )}
+          <Button variant="ghost" size="icon-xs" onClick={onClose}>
+            <X className="size-3.5" />
+          </Button>
+        </div>
       </div>
 
       {/* Content */}

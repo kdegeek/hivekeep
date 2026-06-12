@@ -107,9 +107,9 @@ const { listImageModelsTool, generateImageTool, describeImageModelTool } = await
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const makeCtx = (overrides: Partial<ToolExecutionContext> = {}): ToolExecutionContext => ({
-  kinId: 'kin-test-1',
+  agentId: 'agent-test-1',
   userId: 'user-1',
-  isSubKin: false,
+  isSubAgent: false,
   ...overrides,
 })
 
@@ -117,7 +117,7 @@ const makeCtx = (overrides: Partial<ToolExecutionContext> = {}): ToolExecutionCo
 
 describe('listImageModelsTool', () => {
   it('has correct availability', () => {
-    expect(listImageModelsTool.availability).toEqual(['main', 'sub-kin'])
+    expect(listImageModelsTool.availability).toEqual(['main', 'sub-agent'])
   })
 
   it('returns models from valid image-capable providers', async () => {
@@ -294,7 +294,7 @@ describe('generateImageTool', () => {
 
     expect(result.success).toBe(true)
     expect(result.fileId).toBeDefined()
-    expect(result.url).toContain('/api/uploads/messages/kin-test-1/')
+    expect(result.url).toContain('/api/uploads/messages/agent-test-1/')
     expect(result.mimeType).toBe('image/png')
     expect(result.size).toBeGreaterThan(0)
     expect(mockGenerateImage).toHaveBeenCalledWith('a beautiful sunset', {
@@ -389,14 +389,14 @@ describe('generateImageTool', () => {
     const ctx = makeCtx()
     const t = generateImageTool.create(ctx)
     await (t as any).execute(
-      { prompt: 'make it blue', imageUrls: ['/api/uploads/messages/kin-1/img.png'] },
+      { prompt: 'make it blue', imageUrls: ['/api/uploads/messages/agent-1/img.png'] },
       { toolCallId: 'tc-1', messages: [] },
     )
 
     expect(mockGenerateImage).toHaveBeenCalledWith('make it blue', {
       providerId: undefined,
       modelId: undefined,
-      imageUrls: ['/api/uploads/messages/kin-1/img.png'],
+      imageUrls: ['/api/uploads/messages/agent-1/img.png'],
       params: undefined,
     })
   })
@@ -464,7 +464,7 @@ describe('generateImageTool', () => {
   })
 
   it('creates directory recursively before writing', async () => {
-    const ctx = makeCtx({ kinId: 'kin-special' })
+    const ctx = makeCtx({ agentId: 'agent-special' })
     const t = generateImageTool.create(ctx)
     await (t as any).execute(
       { prompt: 'test' },
@@ -472,7 +472,7 @@ describe('generateImageTool', () => {
     )
 
     expect(mockMkdir).toHaveBeenCalledWith(
-      '/tmp/test-uploads/messages/kin-special',
+      '/tmp/test-uploads/messages/agent-special',
       { recursive: true },
     )
   })
@@ -528,7 +528,7 @@ describe('describeImageModelTool', () => {
   })
 
   it('has correct availability', () => {
-    expect(describeImageModelTool.availability).toEqual(['main', 'sub-kin'])
+    expect(describeImageModelTool.availability).toEqual(['main', 'sub-agent'])
   })
 
   it('returns an error when the provider id is unknown', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, mock } from 'bun:test'
-import type { KinBotEvent } from './events'
+import type { HivekeepEvent } from './events'
 
 // Mock the logger before importing the module
 mock.module('@/server/logger', () => ({
@@ -19,13 +19,13 @@ const { eventBus } = await import('./events')
 
 describe('EventBus', () => {
   // Helper to create an event
-  function makeEvent(type: string, data: Record<string, unknown> = {}): KinBotEvent {
+  function makeEvent(type: string, data: Record<string, unknown> = {}): HivekeepEvent {
     return { type, data, timestamp: Date.now() }
   }
 
   describe('on / emit', () => {
     it('calls handler when matching event is emitted', () => {
-      const received: KinBotEvent[] = []
+      const received: HivekeepEvent[] = []
       const unsub = eventBus.on('test:basic', (e) => { received.push(e) })
 
       const event = makeEvent('test:basic', { foo: 'bar' })
@@ -39,7 +39,7 @@ describe('EventBus', () => {
     })
 
     it('does not call handler for non-matching event types', () => {
-      const received: KinBotEvent[] = []
+      const received: HivekeepEvent[] = []
       const unsub = eventBus.on('test:match', (e) => { received.push(e) })
 
       eventBus.emit(makeEvent('test:other'))
@@ -62,8 +62,8 @@ describe('EventBus', () => {
     })
 
     it('supports multiple event types independently', () => {
-      const aEvents: KinBotEvent[] = []
-      const bEvents: KinBotEvent[] = []
+      const aEvents: HivekeepEvent[] = []
+      const bEvents: HivekeepEvent[] = []
 
       const unsub1 = eventBus.on('test:typeA', (e) => { aEvents.push(e) })
       const unsub2 = eventBus.on('test:typeB', (e) => { bEvents.push(e) })

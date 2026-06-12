@@ -10,14 +10,14 @@ import { decrypt } from '@/server/services/encryption'
 import { getCalendarProvider } from '@/server/calendar/registry'
 import { getFreshAccessToken } from '@/server/services/email-token-manager'
 import type { CalendarProvider } from '@/server/calendar/types'
-import type { ProviderConfig } from '@kinbot-developer/sdk'
+import type { ProviderConfig } from '@hivekeep/sdk'
 
 interface AccountConfig {
   account_label?: string
   email_address?: string
   refresh_token?: string
   credentials?: Record<string, string>
-  allowed_kin_ids?: string[] | null
+  allowed_agent_ids?: string[] | null
 }
 
 export interface CalendarAccount {
@@ -26,7 +26,7 @@ export interface CalendarAccount {
   name: string
   type: string
   accountLabel: string
-  allowedKinIds: string[] | null
+  allowedAgentIds: string[] | null
   isValid: boolean
   lastError: string | null
 }
@@ -53,31 +53,31 @@ function labelOf(cfg: AccountConfig): string {
   return cfg.account_label || cfg.email_address || ''
 }
 
-function kinAllowed(cfg: AccountConfig, kinId?: string): boolean {
-  if (!cfg.allowed_kin_ids || cfg.allowed_kin_ids.length === 0) return true
-  return kinId != null && cfg.allowed_kin_ids.includes(kinId)
+function agentAllowed(cfg: AccountConfig, agentId?: string): boolean {
+  if (!cfg.allowed_agent_ids || cfg.allowed_agent_ids.length === 0) return true
+  return agentId != null && cfg.allowed_agent_ids.includes(agentId)
 }
 
 function toAccount(row: ProviderRow, cfg: AccountConfig): CalendarAccount {
-  const allowed = cfg.allowed_kin_ids && cfg.allowed_kin_ids.length > 0 ? cfg.allowed_kin_ids : null
+  const allowed = cfg.allowed_agent_ids && cfg.allowed_agent_ids.length > 0 ? cfg.allowed_agent_ids : null
   return {
     id: row.id,
     slug: row.slug,
     name: row.name,
     type: row.type,
     accountLabel: labelOf(cfg),
-    allowedKinIds: allowed,
+    allowedAgentIds: allowed,
     isValid: row.isValid,
     lastError: row.lastError,
   }
 }
 
-/** List calendar accounts. With a `kinId`, only the accounts that Kin may use. */
-export async function listCalendarAccounts(kinId?: string): Promise<CalendarAccount[]> {
+/** List calendar accounts. With a `agentId`, only the accounts that Agent may use. */
+export async function listCalendarAccounts(agentId?: string): Promise<CalendarAccount[]> {
   const out: CalendarAccount[] = []
   for (const row of loadCalendarRows()) {
     const cfg = await decryptConfig(row)
-    if (!kinAllowed(cfg, kinId)) continue
+    if (!agentAllowed(cfg, agentId)) continue
     out.push(toAccount(row, cfg))
   }
   return out
@@ -91,7 +91,7 @@ export interface ResolvedCalendar {
 
 /** Resolve a calendar account for a tool call (explicit slug → first valid),
  *  enforce the allow-list, inject a fresh access token or the credentials. */
-export async function resolveCalendarProvider(opts: { slug?: string; kinId?: string }): Promise<ResolvedCalendar> {
+export async function resolveCalendarProvider(opts: { slug?: string; agentId?: string }): Promise<ResolvedCalendar> {
   const rows = loadCalendarRows()
   if (rows.length === 0) throw new Error('No calendar account is connected')
 
@@ -105,8 +105,8 @@ export async function resolveCalendarProvider(opts: { slug?: string; kinId?: str
   if (!row) throw new Error('No usable calendar account')
 
   const cfg = await decryptConfig(row)
-  if (!kinAllowed(cfg, opts.kinId)) {
-    throw new Error(`This Kin is not allowed to use the calendar account "${row.slug}"`)
+  if (!agentAllowed(cfg, opts.agentId)) {
+    throw new Error(`This Agent is not allowed to use the calendar account "${row.slug}"`)
   }
   const provider = getCalendarProvider(row.type)
   if (!provider) throw new Error(`Calendar provider not registered: ${row.type}`)

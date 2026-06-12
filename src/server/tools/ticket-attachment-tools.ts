@@ -16,26 +16,26 @@ import {
 } from '@/server/services/ticket-attachments'
 import { resolveTicketRef } from '@/server/services/tickets'
 import { db } from '@/server/db/index'
-import { kins, ticketAttachments } from '@/server/db/schema'
+import { agents, ticketAttachments } from '@/server/db/schema'
 import { eq } from 'drizzle-orm'
 
 const log = createLogger('tools:ticket-attachment')
 
-function getActiveProjectIdFor(kinId: string): string | null {
+function getActiveProjectIdFor(agentId: string): string | null {
   const row = db
-    .select({ activeProjectId: kins.activeProjectId })
-    .from(kins)
-    .where(eq(kins.id, kinId))
+    .select({ activeProjectId: agents.activeProjectId })
+    .from(agents)
+    .where(eq(agents.id, agentId))
     .get()
   return row?.activeProjectId ?? null
 }
 
-/** Same gating model as `project-tools.ts`: main agents always, sub-Kins only
+/** Same gating model as `project-tools.ts`: main agents always, sub-Agents only
  *  when the task is bound to a ticket. */
 const mainOrTicketBoundCondition = (ctx: ToolExecutionContext): boolean =>
   !ctx.taskId || !!ctx.ticketId
 
-function serializeAttachmentForKin(att: Awaited<ReturnType<typeof getAttachment>>) {
+function serializeAttachmentForAgent(att: Awaited<ReturnType<typeof getAttachment>>) {
   if (!att) return null
   return {
     id: att.id,
@@ -63,15 +63,15 @@ export const listTicketAttachmentsTool: ToolRegistration = {
       description:
         'List files attached to a ticket. Each entry includes id, name, mime type, size, ' +
         'description, uploader, and a URL for download. ' +
-        'Accepts a UUID, a qualified id like "kinbot#42", or a bare "#42".',
+        'Accepts a UUID, a qualified id like "hivekeep#42", or a bare "#42".',
       inputSchema: z.object({ ticket_id: z.string() }),
       execute: async ({ ticket_id }) => {
         const resolved = await resolveTicketRef(ticket_id, {
-          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+          activeProjectId: getActiveProjectIdFor(ctx.agentId),
         })
         if (!resolved.ok) return { error: resolved.code, message: resolved.message }
         const attachments = await listAttachments(resolved.ticketId)
-        return { attachments: attachments.map(serializeAttachmentForKin) }
+        return { attachments: attachments.map(serializeAttachmentForAgent) }
       },
     }),
 }
@@ -88,7 +88,7 @@ export const readTicketAttachmentTool: ToolRegistration = {
         'source code) returns the decoded content inline (capped at ~200 KB; use max_bytes ' +
         'to raise/lower). For binary files (images, PDFs, archives), returns the on-disk path ' +
         'so you can call `read_file` on it directly or open it externally. ' +
-        'Accepts a UUID, a qualified ticket id like "kinbot#42", or a bare "#42".',
+        'Accepts a UUID, a qualified ticket id like "hivekeep#42", or a bare "#42".',
       inputSchema: z.object({
         ticket_id: z.string(),
         attachment_id: z.string(),
@@ -97,7 +97,7 @@ export const readTicketAttachmentTool: ToolRegistration = {
       }),
       execute: async ({ ticket_id, attachment_id, max_bytes }) => {
         const resolved = await resolveTicketRef(ticket_id, {
-          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+          activeProjectId: getActiveProjectIdFor(ctx.agentId),
         })
         if (!resolved.ok) return { error: resolved.code, message: resolved.message }
 
@@ -146,24 +146,24 @@ export const addTicketAttachmentTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Attach a file to a ticket. The `source` accepts: a workspace path (relative to your Kin workspace), ' +
+        'Attach a file to a ticket. The `source` accepts: a workspace path (relative to your Agent workspace), ' +
         'an internal URL like `/api/uploads/...` or `/api/file-storage/...`, or an external `https://` URL. ' +
-        'Accepts a UUID, a qualified ticket id like "kinbot#42", or a bare "#42".',
+        'Accepts a UUID, a qualified ticket id like "hivekeep#42", or a bare "#42".',
       inputSchema: z.object({
         ticket_id: z.string(),
         source: z.string().describe(
           'Workspace path, /api/uploads/... or /api/file-storage/... URL, or https:// URL.',
         ),
         name: z.string().optional().describe('Override the stored filename. Defaults to the source basename.'),
-        description: z.string().optional().describe('Optional context for future readers (other kins / users).'),
+        description: z.string().optional().describe('Optional context for future readers (other agents / users).'),
       }),
       execute: async ({ ticket_id, source, name, description }) => {
         const resolved = await resolveTicketRef(ticket_id, {
-          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+          activeProjectId: getActiveProjectIdFor(ctx.agentId),
         })
         if (!resolved.ok) return { error: resolved.code, message: resolved.message }
 
-        const sourceResolved = resolveAttachmentSource(ctx.kinId, source)
+        const sourceResolved = resolveAttachmentSource(ctx.agentId, source)
         if (sourceResolved.kind === 'error') {
           return { error: 'INVALID_SOURCE', message: sourceResolved.message }
         }
@@ -175,9 +175,9 @@ export const addTicketAttachmentTool: ToolRegistration = {
               sourcePath: sourceResolved.path,
               originalName: name ?? basename(sourceResolved.path),
               description: description ?? null,
-              uploader: { type: 'kin', id: ctx.kinId },
+              uploader: { type: 'agent', id: ctx.agentId },
             })
-            return { attachment: serializeAttachmentForKin(attachment) }
+            return { attachment: serializeAttachmentForAgent(attachment) }
           }
           // URL: download into memory.
           const response = await fetch(sourceResolved.url)
@@ -208,9 +208,9 @@ export const addTicketAttachmentTool: ToolRegistration = {
             buffer,
             mimeType,
             description: description ?? null,
-            uploader: { type: 'kin', id: ctx.kinId },
+            uploader: { type: 'agent', id: ctx.agentId },
           })
-          return { attachment: serializeAttachmentForKin(attachment) }
+          return { attachment: serializeAttachmentForAgent(attachment) }
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'Unknown error'
           log.warn({ err }, 'add_ticket_attachment failed')
@@ -240,7 +240,7 @@ export const updateTicketAttachmentTool: ToolRegistration = {
       }),
       execute: async ({ ticket_id, attachment_id, name, description }) => {
         const resolved = await resolveTicketRef(ticket_id, {
-          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+          activeProjectId: getActiveProjectIdFor(ctx.agentId),
         })
         if (!resolved.ok) return { error: resolved.code, message: resolved.message }
 
@@ -255,7 +255,7 @@ export const updateTicketAttachmentTool: ToolRegistration = {
 
         const updated = await updateAttachment(attachment_id, { name, description })
         if (!updated) return { error: 'ATTACHMENT_NOT_FOUND' }
-        return { attachment: serializeAttachmentForKin(updated) }
+        return { attachment: serializeAttachmentForAgent(updated) }
       },
     }),
 }
@@ -275,7 +275,7 @@ export const deleteTicketAttachmentTool: ToolRegistration = {
       }),
       execute: async ({ ticket_id, attachment_id }) => {
         const resolved = await resolveTicketRef(ticket_id, {
-          activeProjectId: getActiveProjectIdFor(ctx.kinId),
+          activeProjectId: getActiveProjectIdFor(ctx.agentId),
         })
         if (!resolved.ok) return { error: resolved.code, message: resolved.message }
 

@@ -1,7 +1,7 @@
 /**
- * Native email tools exposed to Kins.
+ * Native email tools exposed to Agents.
  *
- *  - list_email_accounts — discovery: accounts this Kin may use.
+ *  - list_email_accounts — discovery: accounts this Agent may use.
  *  - list_emails         — list a folder (compact summaries).
  *  - read_email          — full message by id.
  *  - search_emails       — structured / raw provider search.
@@ -9,7 +9,7 @@
  *
  * Every tool resolves an account via `resolveEmailProvider` (explicit slug →
  * default → first valid), which enforces the per-account allow-list against the
- * calling Kin and injects a fresh OAuth access token. Provider-agnostic: the
+ * calling Agent and injects a fresh OAuth access token. Provider-agnostic: the
  * tools never know whether the account is Gmail, IMAP, etc.
  */
 import { z } from 'zod'
@@ -18,6 +18,7 @@ import { basename, dirname, extname } from 'node:path'
 import { tool } from '@/server/tools/tool-helper'
 import { resolveEmailProvider, listEmailAccounts } from '@/server/services/email-accounts'
 import { resolveToolWorkspace } from '@/server/tools/workspace'
+import { emitWorkspaceChangedForTool } from '@/server/services/workspace-files'
 import { resolveAndValidate } from '@/server/tools/filesystem-tools'
 import type { EmailAddress, EmailSearchQuery, OutgoingAttachment } from '@/server/email/types'
 import type { ToolExecutionContext } from '@/server/tools/types'
@@ -102,18 +103,18 @@ function toErr(err: unknown): { error: string } {
 // ─── list_email_accounts ─────────────────────────────────────────────────────
 
 export const listEmailAccountsTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (ctx) =>
     tool({
       description:
-        'List the email accounts this Kin can use (slug, address, type, send mode). ' +
+        'List the email accounts this Agent can use (slug, address, type, send mode). ' +
         'Call this when there is more than one account, or to pass the right `account` ' +
         'to the other email tools.',
       inputSchema: z.object({}),
       execute: async () => {
-        const accounts = await listEmailAccounts(ctx.kinId)
+        const accounts = await listEmailAccounts(ctx.agentId)
         return {
           accounts: accounts.map((a) => ({
             slug: a.slug,
@@ -130,7 +131,7 @@ export const listEmailAccountsTool: ToolRegistration = {
 // ─── list_emails ─────────────────────────────────────────────────────────────
 
 export const listEmailsTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (ctx) =>
@@ -148,7 +149,7 @@ export const listEmailsTool: ToolRegistration = {
       }),
       execute: async (args) => {
         try {
-          const { provider, config, account } = await resolveEmailProvider({ slug: args.account, kinId: ctx.kinId })
+          const { provider, config, account } = await resolveEmailProvider({ slug: args.account, agentId: ctx.agentId })
           const query: EmailSearchQuery | undefined =
             args.query || args.unread_only ? { text: args.query, unread: args.unread_only } : undefined
           const res = await provider.listMessages({ folder: args.folder, limit: args.limit, query }, config)
@@ -163,7 +164,7 @@ export const listEmailsTool: ToolRegistration = {
 // ─── read_email ──────────────────────────────────────────────────────────────
 
 export const readEmailTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (ctx) =>
@@ -177,7 +178,7 @@ export const readEmailTool: ToolRegistration = {
       }),
       execute: async (args) => {
         try {
-          const { provider, config, account } = await resolveEmailProvider({ slug: args.account, kinId: ctx.kinId })
+          const { provider, config, account } = await resolveEmailProvider({ slug: args.account, agentId: ctx.agentId })
           const message = await provider.getMessage(args.message_id, config)
           return { account: account.slug, message }
         } catch (err) {
@@ -190,7 +191,7 @@ export const readEmailTool: ToolRegistration = {
 // ─── search_emails ───────────────────────────────────────────────────────────
 
 export const searchEmailsTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (ctx) =>
@@ -217,7 +218,7 @@ export const searchEmailsTool: ToolRegistration = {
       }),
       execute: async (args) => {
         try {
-          const { provider, config, account } = await resolveEmailProvider({ slug: args.account, kinId: ctx.kinId })
+          const { provider, config, account } = await resolveEmailProvider({ slug: args.account, agentId: ctx.agentId })
           const query: EmailSearchQuery = {
             from: args.from,
             to: args.to,
@@ -241,7 +242,7 @@ export const searchEmailsTool: ToolRegistration = {
 // ─── send_email ──────────────────────────────────────────────────────────────
 
 export const sendEmailTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   destructive: true,
   create: (ctx) =>
     tool({
@@ -267,7 +268,7 @@ export const sendEmailTool: ToolRegistration = {
         try {
           const { provider, config, account, sendMode } = await resolveEmailProvider({
             slug: args.account,
-            kinId: ctx.kinId,
+            agentId: ctx.agentId,
           })
           const attachments = args.attachments?.length
             ? await readAttachments(args.attachments, ctx, provider.capabilities.maxAttachmentMb ?? 25)
@@ -288,11 +289,11 @@ export const sendEmailTool: ToolRegistration = {
             const { createPendingSend } = await import('@/server/services/pending-email-sends')
             const pendingId = await createPendingSend({
               accountId: account.id,
-              kinId: ctx.kinId,
+              agentId: ctx.agentId,
               taskId: ctx.taskId,
               params: sendParams,
             })
-            log.info({ kinId: ctx.kinId, account: account.slug, pendingId }, 'send_email queued for approval')
+            log.info({ agentId: ctx.agentId, account: account.slug, pendingId }, 'send_email queued for approval')
             return {
               account: account.slug,
               queued: true,
@@ -303,7 +304,7 @@ export const sendEmailTool: ToolRegistration = {
             }
           }
           const sent = await provider.sendMessage(sendParams, config)
-          log.info({ kinId: ctx.kinId, account: account.slug, recipients: args.to.length }, 'send_email')
+          log.info({ agentId: ctx.agentId, account: account.slug, recipients: args.to.length }, 'send_email')
           return { account: account.slug, sent: { id: sent.id, threadId: sent.threadId } }
         } catch (err) {
           return toErr(err)
@@ -315,7 +316,7 @@ export const sendEmailTool: ToolRegistration = {
 // ─── download_email_attachment ───────────────────────────────────────────────
 
 export const downloadEmailAttachmentTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   create: (ctx) =>
     tool({
       description:
@@ -333,7 +334,7 @@ export const downloadEmailAttachmentTool: ToolRegistration = {
       }),
       execute: async (args) => {
         try {
-          const { provider, config, account } = await resolveEmailProvider({ slug: args.account, kinId: ctx.kinId })
+          const { provider, config, account } = await resolveEmailProvider({ slug: args.account, agentId: ctx.agentId })
           if (!provider.getAttachment) {
             return { error: `Account "${account.slug}" does not support downloading attachments.` }
           }
@@ -344,8 +345,9 @@ export const downloadEmailAttachmentTool: ToolRegistration = {
           const abs = resolveAndValidate(rel, workspace)
           await mkdir(dirname(abs), { recursive: true })
           await writeFile(abs, bytes)
+          emitWorkspaceChangedForTool(ctx, abs, 'created')
           log.info(
-            { kinId: ctx.kinId, account: account.slug, path: rel, bytes: bytes.length },
+            { agentId: ctx.agentId, account: account.slug, path: rel, bytes: bytes.length },
             'download_email_attachment',
           )
           return { account: account.slug, savedPath: rel, bytes: bytes.length }

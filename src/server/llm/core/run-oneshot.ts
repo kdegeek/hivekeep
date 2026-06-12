@@ -1,7 +1,7 @@
 /**
  * Collect a complete `provider.chat()` stream into a single result object.
  * Used by call sites that don't need streaming (avatar prompts, memory
- * scoring, kin-generate, etc.) and just want "send these messages, get the
+ * scoring, agent-generate, etc.) and just want "send these messages, get the
  * final text + tool calls back".
  */
 

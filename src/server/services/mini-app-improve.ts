@@ -1,10 +1,10 @@
 /**
  * Format a mini-app "improve this app" request into a message that is enqueued
- * into the maintainer Kin's main conversation. Pure function (no I/O) so it can
+ * into the maintainer Agent's main conversation. Pure function (no I/O) so it can
  * be unit-tested without touching the DB/queue.
  *
  * The message frames the request for the maintainer and includes the app's
- * name/slug/id so the Kin can immediately act on it with its mini-app tools.
+ * name/slug/id so the Agent can immediately act on it with its mini-app tools.
  */
 export interface MiniAppImproveRequest {
   appName: string

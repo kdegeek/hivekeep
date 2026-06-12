@@ -4,11 +4,11 @@ import type { NpmPlugin } from '@/shared/types/plugin'
 const log = createLogger('plugin-registry')
 
 /**
- * The keyword every KinBot plugin published to npm should declare in
+ * The keyword every Hivekeep plugin published to npm should declare in
  * its `package.json`. The scaffolder generates it by default; the
  * Browse tab searches against it to surface only relevant packages.
  */
-const NPM_KINBOT_PLUGIN_KEYWORD = 'kinbot-plugin'
+const NPM_HIVEKEEP_PLUGIN_KEYWORD = 'hivekeep-plugin'
 
 /** Short cache to avoid hammering registry.npmjs.org on every keystroke. */
 const NPM_SEARCH_CACHE_TTL_MS = 5 * 60 * 1000
@@ -45,7 +45,7 @@ export class PluginRegistryService {
   private npmSearchCache = new Map<string, NpmSearchCacheEntry>()
 
   /**
-   * Search npm for packages tagged with the `kinbot-plugin` keyword.
+   * Search npm for packages tagged with the `hivekeep-plugin` keyword.
    * Goes through the public registry search API
    * (`registry.npmjs.org/-/v1/search`). Combines the keyword filter
    * with the user's free-form query so authors can search by name /
@@ -66,7 +66,7 @@ export class PluginRegistryService {
 
     // The npm search API treats `text` as a space-separated set of
     // qualifiers. `keywords:<kw>` filters; the rest is fuzzy search.
-    const textParts = [`keywords:${NPM_KINBOT_PLUGIN_KEYWORD}`]
+    const textParts = [`keywords:${NPM_HIVEKEEP_PLUGIN_KEYWORD}`]
     if (cacheKey) textParts.push(cacheKey)
     const url =
       `https://registry.npmjs.org/-/v1/search?` +
@@ -122,7 +122,7 @@ export class PluginRegistryService {
    * from unpkg in a single round-trip, then enriches the search-result
    * shape with anything the npm index doesn't already expose:
    *   - logoUrl (resolved from manifest.iconUrl)
-   *   - displayName (so the card shows "Mistral AI" not "kinbot-plugin-mistral")
+   *   - displayName (so the card shows "Mistral AI" not "hivekeep-plugin-mistral")
    *
    * Returns the input plugin unchanged on any failure (timeout, 404,
    * malformed manifest). 3s timeout — search latency matters more than

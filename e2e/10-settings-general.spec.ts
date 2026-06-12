@@ -30,7 +30,7 @@ test.describe.serial('Settings — General & Navigation', () => {
 
     // General section should be visible — check for the description text
     await expect(
-      page.getByText('Platform-wide settings that apply to all Kins.')
+      page.getByText('Platform-wide settings that apply to all Agents.')
     ).toBeVisible({ timeout: 5_000 })
 
     // Should show the global prompt label
@@ -114,7 +114,7 @@ test.describe.serial('Settings — General & Navigation', () => {
 
     // Navigate to Vault
     await navigateToSection(page, 'Vault')
-    await expect(page.getByText('Manage encrypted entries accessible by all Kins.').first()).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByText('Manage encrypted entries accessible by all Agents.').first()).toBeVisible({ timeout: 5_000 })
 
     // Navigate to Users
     await navigateToSection(page, 'Users')
@@ -122,14 +122,14 @@ test.describe.serial('Settings — General & Navigation', () => {
 
     // Navigate back to General
     await navigateToSection(page, 'General')
-    await expect(page.getByText('Platform-wide settings that apply to all Kins.').first()).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByText('Platform-wide settings that apply to all Agents.').first()).toBeVisible({ timeout: 5_000 })
   })
 
   test('should display system info in settings footer', async ({ page }) => {
     await openSettings(page)
 
-    // Footer should show KinBot version
-    await expect(page.getByText(/kinbot v/i)).toBeVisible({ timeout: 5_000 })
+    // Footer should show Hivekeep version
+    await expect(page.getByText(/hivekeep v/i)).toBeVisible({ timeout: 5_000 })
   })
 
   test('should close settings with Close button', async ({ page }) => {
@@ -152,31 +152,31 @@ test.describe.serial('Settings — General & Navigation', () => {
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 })
   })
 
-  test('should show Hub Kin selector when kins exist', async ({ page }) => {
+  test('should show Hub Agent selector when agents exist', async ({ page }) => {
     await openSettings(page)
 
-    // Hub Kin label should be visible (kins exist from onboarding)
-    await expect(page.getByText('Hub Kin', { exact: true })).toBeVisible({ timeout: 5_000 })
+    // Hub Agent label should be visible (agents exist from onboarding)
+    await expect(page.getByText('Hub Agent', { exact: true })).toBeVisible({ timeout: 5_000 })
 
     // Hint text should be visible
     await expect(
-      page.getByText('The Hub Kin receives messages by default')
+      page.getByText('The Hub Agent receives messages by default')
     ).toBeVisible()
 
-    // Select trigger should show placeholder or a kin name
-    // Scroll to Hub Kin section first (may be below fold in CI viewports)
-    const hubKinLabel = page.getByText('Hub Kin', { exact: true })
-    await hubKinLabel.scrollIntoViewIfNeeded()
+    // Select trigger should show placeholder or an agent name
+    // Scroll to Hub Agent section first (may be below fold in CI viewports)
+    const hubAgentLabel = page.getByText('Hub Agent', { exact: true })
+    await hubAgentLabel.scrollIntoViewIfNeeded()
     const selectTrigger = page.getByRole('dialog').getByRole('combobox').first()
     await expect(selectTrigger).toBeVisible({ timeout: 10_000 })
   })
 
-  test('should select a Hub Kin and see success toast', async ({ page }) => {
+  test('should select a Hub Agent and see success toast', async ({ page }) => {
     await openSettings(page)
 
-    // Open the Hub Kin dropdown
-    const hubKinLabel = page.getByText('Hub Kin', { exact: true })
-    await hubKinLabel.scrollIntoViewIfNeeded()
+    // Open the Hub Agent dropdown
+    const hubAgentLabel = page.getByText('Hub Agent', { exact: true })
+    await hubAgentLabel.scrollIntoViewIfNeeded()
     const selectTrigger = page.getByRole('dialog').getByRole('combobox').first()
     await expect(selectTrigger).toBeVisible({ timeout: 10_000 })
 
@@ -189,13 +189,13 @@ test.describe.serial('Settings — General & Navigation', () => {
     await expect(options.first()).toBeVisible({ timeout: 3_000 })
     const count = await options.count()
     let option = options.first()
-    let kinName = await option.textContent()
+    let agentName = await option.textContent()
     for (let i = 0; i < count; i++) {
       const candidate = options.nth(i)
       const text = await candidate.textContent()
       if (text && text !== currentText) {
         option = candidate
-        kinName = text
+        agentName = text
         break
       }
     }
@@ -207,10 +207,10 @@ test.describe.serial('Settings — General & Navigation', () => {
     await saveButton.click()
 
     // Should show success toast
-    await expect(page.getByText('Hub Kin updated').first()).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByText('Hub Agent updated').first()).toBeVisible({ timeout: 5_000 })
 
-    // The select should now display the chosen kin name
-    await expect(selectTrigger).toContainText(kinName!)
+    // The select should now display the chosen agent name
+    await expect(selectTrigger).toContainText(agentName!)
   })
 
   test('should toggle help panel', async ({ page }) => {
@@ -228,7 +228,7 @@ test.describe.serial('Settings — General & Navigation', () => {
 
     // Bullet point should be visible
     await expect(
-      page.getByText('The global prompt is injected into every Kin')
+      page.getByText('The global prompt is injected into every Agent')
     ).toBeVisible()
 
     // Toggle off

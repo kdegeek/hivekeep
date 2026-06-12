@@ -20,7 +20,7 @@ export interface ContactNicknameData {
 
 export interface ContactNoteData {
   id: string
-  kinId: string | null
+  agentId: string | null
   userId: string | null
   scope: string
   content: string
@@ -51,20 +51,20 @@ export interface ContactData {
   updatedAt: number
 }
 
-export interface KinInfo {
+export interface AgentInfo {
   name: string
   avatarUrl: string | null
 }
 
 interface ContactCardProps {
   contact: ContactData
-  kinInfo?: Map<string, KinInfo>
+  agentInfo?: Map<string, AgentInfo>
   onEdit?: () => void
   onDelete?: () => void
   onRefresh?: () => void
 }
 
-export function ContactCard({ contact, kinInfo, onEdit, onDelete, onRefresh }: ContactCardProps) {
+export function ContactCard({ contact, agentInfo, onEdit, onDelete, onRefresh }: ContactCardProps) {
   const { t } = useTranslation()
 
   const platformCount = contact.platformIds?.length ?? 0
@@ -135,7 +135,7 @@ export function ContactCard({ contact, kinInfo, onEdit, onDelete, onRefresh }: C
         <ContactNotes
           contactId={contact.id}
           notes={contact.notes}
-          kinInfo={kinInfo}
+          agentInfo={agentInfo}
           onRefresh={onRefresh}
         />
       </CardContent>

@@ -3,7 +3,7 @@
  * (icon + color + label).
  *
  * The 26 built-in domains mirror `TOOL_DOMAIN_META` (shared/constants.ts) and
- * are seeded idempotently at boot (builtin=1, read-only). Users/Kins can create
+ * are seeded idempotently at boot (builtin=1, read-only). Users/Agents can create
  * custom domains to organize their custom tools. A domain's `slug` is the
  * stable key referenced by `custom_tools.domain_slug` and by the registry's
  * name→domain map.

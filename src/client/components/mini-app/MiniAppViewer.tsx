@@ -17,7 +17,7 @@ import { Textarea } from '@/client/components/ui/textarea'
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/client/components/ui/sheet'
 import { VisuallyHidden } from 'radix-ui'
 import { useIsMobile } from '@/client/hooks/use-mobile'
-import { X, RotateCw, Maximize2, Minimize2, Sparkles, Wand2, Loader2, AlertTriangle, ClipboardList } from 'lucide-react'
+import { X, RotateCw, Maximize2, Minimize2, Sparkles, Wand2, Loader2, AlertTriangle, ClipboardList, ShieldAlert } from 'lucide-react'
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/client/lib/lazy-with-retry'
 import { api, getErrorMessage } from '@/client/lib/api'
@@ -40,13 +40,13 @@ export interface MiniAppConsoleEntry {
 const consoleBuffers = new Map<string, MiniAppConsoleEntry[]>()
 const CONSOLE_BUFFER_MAX = 50
 
-/** Get console entries for a specific app (used by tools via window.__kinbot_getConsole) */
+/** Get console entries for a specific app (used by tools via window.__hivekeep_getConsole) */
 function getConsoleEntries(appId: string): MiniAppConsoleEntry[] {
   return consoleBuffers.get(appId) ?? []
 }
 
 // Expose globally so the server-side tool can read console entries via SSE/API
-;(window as unknown as Record<string, unknown>).__kinbot_getConsole = getConsoleEntries
+;(window as unknown as Record<string, unknown>).__hivekeep_getConsole = getConsoleEntries
 
 export function MiniAppViewer() {
   const { t, i18n } = useTranslation()
@@ -78,7 +78,7 @@ export function MiniAppViewer() {
   const sendDialogResult = useCallback((callbackId: string, value: unknown) => {
     if (!iframeRef.current?.contentWindow) return
     iframeRef.current.contentWindow.postMessage({
-      source: 'kinbot-parent',
+      source: 'hivekeep-parent',
       type: 'dialog-result',
       callbackId,
       value,
@@ -117,6 +117,42 @@ export function MiniAppViewer() {
     return () => { cancelled = true }
   }, [activeAppId])
 
+  // Capability permissions: backends may request access (app.json "permissions")
+  // that the user has to approve before the matching ctx capabilities work.
+  const [permissions, setPermissions] = useState<{ requested: string[]; granted: string[]; missing: string[] } | null>(null)
+  const [granting, setGranting] = useState(false)
+
+  useEffect(() => {
+    setPermissions(null)
+    if (!activeAppId || !app?.hasBackend) return
+    let cancelled = false
+    api.get<{ requested: string[]; granted: string[]; missing: string[] }>(`/mini-apps/${activeAppId}/permissions`)
+      .then((data) => { if (!cancelled) setPermissions(data) })
+      .catch(() => { if (!cancelled) setPermissions(null) })
+    return () => { cancelled = true }
+  }, [activeAppId, app?.hasBackend, app?.version])
+
+  const handleGrantPermissions = useCallback(async () => {
+    if (!activeAppId || !permissions || permissions.missing.length === 0 || granting) return
+    setGranting(true)
+    try {
+      const result = await api.post<{ requested: string[]; granted: string[] }>(
+        `/mini-apps/${activeAppId}/permissions`,
+        { grant: permissions.missing },
+      )
+      setPermissions({
+        requested: result.requested,
+        granted: result.granted,
+        missing: result.requested.filter((p) => !result.granted.includes(p)),
+      })
+      toast.success(t('miniApps.permissions.granted'))
+    } catch (err) {
+      toast.error(getErrorMessage(err))
+    } finally {
+      setGranting(false)
+    }
+  }, [activeAppId, permissions, granting, t])
+
   // Reload iframe when version changes
   useEffect(() => {
     if (activeAppVersion > 0) {
@@ -135,7 +171,7 @@ export function MiniAppViewer() {
   const sendAppMeta = useCallback(() => {
     if (!iframeRef.current?.contentWindow || !app) return
     iframeRef.current.contentWindow.postMessage({
-      source: 'kinbot-parent',
+      source: 'hivekeep-parent',
       type: 'app-meta',
       data: {
         id: app.id,
@@ -143,9 +179,9 @@ export function MiniAppViewer() {
         slug: app.slug,
         description: app.description,
         icon: app.icon,
-        kinId: app.maintainerKinId,
-        kinName: app.maintainerKinName,
-        kinAvatarUrl: app.maintainerKinAvatarUrl,
+        agentId: app.maintainerAgentId,
+        agentName: app.maintainerAgentName,
+        agentAvatarUrl: app.maintainerAgentAvatarUrl,
         version: app.version,
         isFullPage,
         locale: i18n.language,
@@ -165,7 +201,7 @@ export function MiniAppViewer() {
   useEffect(() => {
     if (!iframeRef.current?.contentWindow) return
     iframeRef.current.contentWindow.postMessage({
-      source: 'kinbot-parent',
+      source: 'hivekeep-parent',
       type: 'fullpage-changed',
       data: { isFullPage },
     }, '*')
@@ -175,7 +211,7 @@ export function MiniAppViewer() {
   useEffect(() => {
     if (!iframeRef.current?.contentWindow) return
     iframeRef.current.contentWindow.postMessage({
-      source: 'kinbot-parent',
+      source: 'hivekeep-parent',
       type: 'locale-changed',
       data: { locale: i18n.language },
     }, '*')
@@ -185,7 +221,7 @@ export function MiniAppViewer() {
   useEffect(() => {
     function handleMessage(ev: MessageEvent) {
       const msg = ev.data
-      if (!msg || msg.source !== 'kinbot-sdk') return
+      if (!msg || msg.source !== 'hivekeep-sdk') return
 
       switch (msg.type) {
         case 'console': {
@@ -203,7 +239,7 @@ export function MiniAppViewer() {
             if (entry.level === 'error') {
               setErrorCount((c) => c + 1)
             }
-            // Forward to server for Kin tool access
+            // Forward to server for Agent tool access
             fetch(`/api/mini-apps/${activeAppId}/console`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -232,7 +268,7 @@ export function MiniAppViewer() {
           // Forward any pending shared data from another mini-app
           if (pendingShareData.current && iframeRef.current?.contentWindow) {
             iframeRef.current.contentWindow.postMessage({
-              source: 'kinbot-parent',
+              source: 'hivekeep-parent',
               type: 'shared-data',
               data: pendingShareData.current,
             }, '*')
@@ -290,7 +326,7 @@ export function MiniAppViewer() {
             .then(() => {
               if (iframeRef.current?.contentWindow) {
                 iframeRef.current.contentWindow.postMessage({
-                  source: 'kinbot-parent',
+                  source: 'hivekeep-parent',
                   type: 'dialog-result',
                   callbackId,
                   value: true,
@@ -300,7 +336,7 @@ export function MiniAppViewer() {
             .catch(() => {
               if (iframeRef.current?.contentWindow) {
                 iframeRef.current.contentWindow.postMessage({
-                  source: 'kinbot-parent',
+                  source: 'hivekeep-parent',
                   type: 'dialog-result',
                   callbackId,
                   value: false,
@@ -315,7 +351,7 @@ export function MiniAppViewer() {
             .then((text) => {
               if (iframeRef.current?.contentWindow) {
                 iframeRef.current.contentWindow.postMessage({
-                  source: 'kinbot-parent',
+                  source: 'hivekeep-parent',
                   type: 'dialog-result',
                   callbackId: cbId,
                   value: text,
@@ -325,7 +361,7 @@ export function MiniAppViewer() {
             .catch(() => {
               if (iframeRef.current?.contentWindow) {
                 iframeRef.current.contentWindow.postMessage({
-                  source: 'kinbot-parent',
+                  source: 'hivekeep-parent',
                   type: 'dialog-result',
                   callbackId: cbId,
                   value: null,
@@ -336,9 +372,9 @@ export function MiniAppViewer() {
         }
         case 'open-app': {
           const slug = String(msg.slug || '')
-          if (!slug || !app?.maintainerKinId) break
+          if (!slug || !app?.maintainerAgentId) break
           // Resolve slug to appId via API, then open
-          api.get<{ app: MiniAppSummary }>(`/mini-apps/by-slug/${app.maintainerKinId}/${encodeURIComponent(slug)}`)
+          api.get<{ app: MiniAppSummary }>(`/mini-apps/by-slug/${app.maintainerAgentId}/${encodeURIComponent(slug)}`)
             .then((data) => {
               if (data.app?.id) {
                 openApp(data.app.id)
@@ -353,10 +389,10 @@ export function MiniAppViewer() {
         }
         case 'share': {
           const targetSlug = String(msg.targetSlug || '')
-          if (!targetSlug || !app?.maintainerKinId) break
+          if (!targetSlug || !app?.maintainerAgentId) break
           const sharePayload = msg.shareData
           // Resolve target app, open it, and forward shared data once it's ready
-          api.get<{ app: MiniAppSummary }>(`/mini-apps/by-slug/${app.maintainerKinId}/${encodeURIComponent(targetSlug)}`)
+          api.get<{ app: MiniAppSummary }>(`/mini-apps/by-slug/${app.maintainerAgentId}/${encodeURIComponent(targetSlug)}`)
             .then((data) => {
               if (data.app?.id) {
                 pendingShareData.current = sharePayload
@@ -457,7 +493,7 @@ export function MiniAppViewer() {
           const text = String(msg.text || '').trim()
           const silent = Boolean(msg.silent)
 
-          if (!text || !app?.maintainerKinId) {
+          if (!text || !app?.maintainerAgentId) {
             sendDialogResult(callbackId, false)
             break
           }
@@ -478,7 +514,7 @@ export function MiniAppViewer() {
           // Prefix message with app context
           const prefixed = `[${app.icon || '📦'} ${app.name}] ${text}`
 
-          api.post<{ messageId: string }>(`/kins/${app.maintainerKinId}/messages`, { content: prefixed })
+          api.post<{ messageId: string }>(`/agents/${app.maintainerAgentId}/messages`, { content: prefixed })
             .then(() => {
               if (!silent) toast.success(t('miniApps.sendMessage.sent'))
               sendDialogResult(callbackId, true)
@@ -521,7 +557,7 @@ export function MiniAppViewer() {
     </div>
   ) : null
 
-  // ─── "Improve this app" → message the maintainer Kin ────────────────────────
+  // ─── "Improve this app" → message the maintainer Agent ────────────────────────
   const [improveOpen, setImproveOpen] = useState(false)
   const [improveText, setImproveText] = useState('')
   const [improveSubmitting, setImproveSubmitting] = useState(false)
@@ -531,11 +567,11 @@ export function MiniAppViewer() {
     if (!app || !description) return
     setImproveSubmitting(true)
     try {
-      const res = await api.post<{ maintainerKinId: string; maintainerKinName: string }>(
+      const res = await api.post<{ maintainerAgentId: string; maintainerAgentName: string }>(
         `/mini-apps/${app.id}/improve`,
         { description },
       )
-      toast.success(t('miniApps.improve.sent', { kin: res.maintainerKinName }))
+      toast.success(t('miniApps.improve.sent', { agent: res.maintainerAgentName }))
       setImproveText('')
       setImproveOpen(false)
     } catch (err) {
@@ -564,7 +600,7 @@ export function MiniAppViewer() {
         <AlertDialogHeader>
           <AlertDialogTitle>{t('miniApps.improve.modalTitle', { name: app?.name ?? '' })}</AlertDialogTitle>
           <AlertDialogDescription>
-            {t('miniApps.improve.modalDescription', { kin: app?.maintainerKinName ?? '' })}
+            {t('miniApps.improve.modalDescription', { agent: app?.maintainerAgentName ?? '' })}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <Textarea
@@ -635,6 +671,25 @@ export function MiniAppViewer() {
     </AlertDialog>
   )
 
+  // Approval banner shown above the iframe while the backend has ungranted permissions
+  const permissionsBanner = app?.hasBackend && permissions && permissions.missing.length > 0 ? (
+    <div className="flex flex-wrap items-center gap-2 border-b border-warning/30 bg-warning/10 px-3 py-2">
+      <ShieldAlert className="size-4 shrink-0 text-warning" />
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-medium">{t('miniApps.permissions.title')}</div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-1">
+          {permissions.missing.map((p) => (
+            <code key={p} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">{p}</code>
+          ))}
+        </div>
+      </div>
+      <Button size="sm" className="h-7 text-xs" onClick={handleGrantPermissions} disabled={granting}>
+        {granting ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+        {t('miniApps.permissions.approve')}
+      </Button>
+    </div>
+  ) : null
+
   // Full-page mode: render as overlay
   if (isFullPage && panelOpen && activeAppId) {
     return (
@@ -691,6 +746,8 @@ export function MiniAppViewer() {
             <X className="size-3.5" />
           </Button>
         </div>
+
+        {permissionsBanner}
 
         {/* Iframe */}
         <iframe
@@ -847,6 +904,8 @@ export function MiniAppViewer() {
               </div>
             )}
 
+            {permissionsBanner}
+
             {/* Iframe */}
             {activeAppId && (
               <iframe
@@ -885,8 +944,8 @@ export function MiniAppViewer() {
             <Suspense fallback={<div className="flex items-center justify-center py-8"><Loader2 className="size-4 animate-spin text-muted-foreground" /></div>}>
               <TaskPanelContent
                 taskId={activeTask.taskId}
-                kinName={activeTask.kinName}
-                kinAvatarUrl={activeTask.kinAvatarUrl}
+                agentName={activeTask.agentName}
+                agentAvatarUrl={activeTask.agentAvatarUrl}
               />
             </Suspense>
           </>

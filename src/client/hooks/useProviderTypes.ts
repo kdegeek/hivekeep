@@ -9,7 +9,7 @@ import {
   PROVIDERS_WITHOUT_API_KEY,
   PROVIDERS_WITH_OPTIONAL_API_KEY,
 } from '@/shared/constants'
-import type { ConfigField } from '@kinbot-developer/sdk'
+import type { ConfigField } from '@hivekeep/sdk'
 import {
   registerProviderLobehubIcon,
   registerProviderReactIcon,

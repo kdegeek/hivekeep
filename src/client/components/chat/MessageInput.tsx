@@ -1,23 +1,27 @@
 import { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHandle, memo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { Button } from '@/client/components/ui/button'
 import { Textarea } from '@/client/components/ui/textarea'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/client/components/ui/tooltip'
 import { cn } from '@/client/lib/utils'
-import { ArrowUp, Square, Paperclip, X, FileIcon, Loader2 } from 'lucide-react'
+import { ArrowUp, Square, Paperclip, X, FileIcon, Loader2, Wrench } from 'lucide-react'
 import { useInputHistory } from '@/client/hooks/useInputHistory'
 import { MAX_MESSAGE_LENGTH } from '@/shared/constants'
 import { MentionPopover, getMentionItemCount, getMentionItemAt, type MentionItem } from '@/client/components/chat/MentionPopover'
 import { CommandPopover, getFilteredCommands, SLASH_COMMANDS, type SlashCommand } from '@/client/components/chat/CommandPopover'
 import { TicketMentionPopover, TICKET_MENTION_MAX_VISIBLE } from '@/client/components/chat/TicketMentionPopover'
+import { useWorkspaceFileSearch } from '@/client/hooks/useWorkspaceFileSearch'
 import { useTicketSearch, type TicketSearchHit } from '@/client/hooks/useTicketSearch'
 import { getCaretCoordinates } from '@/client/lib/getCaretCoordinates'
 import { PROJECT_SLUG_REGEX } from '@/shared/constants'
-import type { MentionableUser, MentionableKin } from '@/client/hooks/useMentionables'
+import type { MentionableUser, MentionableAgent } from '@/client/hooks/useMentionables'
 import type { PendingFile } from '@/client/hooks/useFileUpload'
 import { ModelPicker, modelPickerValue } from '@/client/components/common/ModelPicker'
 import { ThinkingEffortPicker } from '@/client/components/chat/ThinkingEffortPicker'
-import type { KinThinkingEffort } from '@/shared/types'
+import type { AgentThinkingEffort } from '@/shared/types'
+import type { ProviderModel } from '@/client/hooks/useModels'
+import { modelReasoningInfo } from '@/client/lib/model-efforts'
 
 export interface MessageInputHandle {
   focus: () => void
@@ -27,7 +31,7 @@ interface MessageInputProps {
   onSend: (content: string, fileIds?: string[]) => void
   onStop?: () => void
   isStreaming?: boolean
-  /** Kin is processing (dequeued) but may not have started streaming tokens yet */
+  /** Agent is processing (dequeued) but may not have started streaming tokens yet */
   isProcessing?: boolean
   disabled?: boolean
   disabledReason?: string
@@ -47,12 +51,12 @@ interface MessageInputProps {
   onInject?: (content: string) => void
   /** Handle a slash command (name without /, optional arg) */
   onCommand?: (command: string, arg?: string) => void
-  /** Kin ID for input history (Up/Down arrow to cycle through sent messages) */
-  kinId?: string
+  /** Agent ID for input history (Up/Down arrow to cycle through sent messages) */
+  agentId?: string
   /** Users available for @mention autocomplete */
   mentionableUsers?: MentionableUser[]
-  /** Kins available for @mention autocomplete */
-  mentionableKins?: MentionableKin[]
+  /** Agents available for @mention autocomplete */
+  mentionableAgents?: MentionableAgent[]
   /** Active project UUID for the `#` ticket mention autocomplete. When null,
    *  bare `#N` searches return nothing — the user must use a `slug#` prefix. */
   activeProjectId?: string | null
@@ -61,7 +65,7 @@ interface MessageInputProps {
   activeProjectSlug?: string | null
   // ── Generation controls (relocated from the conversation header) ──
   /** Models available for the model picker. When omitted the picker is hidden. */
-  llmModels?: { id: string; name: string; providerId: string; providerName: string; providerType: string; capability: string }[]
+  llmModels?: ProviderModel[]
   /** Currently selected model id. */
   model?: string
   /** Provider id backing the selected model (disambiguates same-id models). */
@@ -71,9 +75,14 @@ interface MessageInputProps {
   /** Whether extended thinking is enabled. */
   thinkingEnabled?: boolean
   /** Current thinking effort level. */
-  thinkingEffort?: KinThinkingEffort | null
+  thinkingEffort?: AgentThinkingEffort | null
   /** Change thinking enabled/effort. When omitted the effort picker is hidden. */
-  onChangeThinking?: (next: { enabled: boolean; effort: KinThinkingEffort | null }) => void
+  onChangeThinking?: (next: { enabled: boolean; effort: AgentThinkingEffort | null }) => void
+  /** Number of tools currently exposed to the agent — shown as a badge next to
+   *  the effort picker. Hidden when undefined. */
+  toolCount?: number
+  /** Opens the tools listing modal (owned by the parent panel). */
+  onShowTools?: () => void
 }
 
 export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProps>(function MessageInput({
@@ -91,9 +100,9 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
   onRemoveFile,
   onInject,
   onCommand,
-  kinId,
+  agentId,
   mentionableUsers,
-  mentionableKins,
+  mentionableAgents,
   activeProjectId,
   activeProjectSlug,
   llmModels,
@@ -103,6 +112,8 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
   thinkingEnabled = false,
   thinkingEffort = null,
   onChangeThinking,
+  toolCount,
+  onShowTools,
 }, ref) {
   const { t } = useTranslation()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -115,7 +126,17 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
   const [mentionStartIndex, setMentionStartIndex] = useState(0)
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0)
   const [mentionPosition, setMentionPosition] = useState<{ top: number; left: number }>({ top: 8, left: 0 })
-  const isMentionOpen = mentionQuery !== null && (mentionableUsers?.length || mentionableKins?.length)
+
+  // Workspace files group of the @ palette (files.md § 5.1) — scoped to the
+  // conversation agent, server-side search-as-you-type.
+  const { hits: mentionFileHits } = useWorkspaceFileSearch({
+    query: mentionQuery ?? '',
+    agentId: agentId ?? null,
+    enabled: mentionQuery !== null && !!agentId,
+  })
+  const isMentionOpen =
+    mentionQuery !== null &&
+    ((mentionableUsers?.length ?? 0) > 0 || (mentionableAgents?.length ?? 0) > 0 || mentionFileHits.length > 0)
 
   // Slash command autocomplete state
   const [commandQuery, setCommandQuery] = useState<string | null>(null)
@@ -156,13 +177,15 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
     focus: () => textareaRef.current?.focus(),
   }))
 
-  const history = useInputHistory(kinId ?? '__default__')
+  const history = useInputHistory(agentId ?? '__default__')
 
   /** Detect @mention trigger from the current cursor position */
   const detectMention = useCallback((text: string, cursorPos: number) => {
-    // Walk backwards from cursor to find @ that starts this mention
+    // Walk backwards from cursor to find @ that starts this mention.
+    // `.` and `/` are allowed inside the query so file paths (`@docs/report.md`)
+    // keep the palette open — user/agent handles never contain them anyway.
     let i = cursorPos - 1
-    while (i >= 0 && /[a-zA-Z0-9_-]/.test(text[i]!)) i--
+    while (i >= 0 && /[a-zA-Z0-9_./-]/.test(text[i]!)) i--
 
     if (i >= 0 && text[i] === '@') {
       // Check that @ is at start of text or preceded by whitespace
@@ -279,12 +302,16 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
   const handleMentionSelect = useCallback((item: MentionItem) => {
     const before = value.slice(0, mentionStartIndex)
     const after = value.slice(mentionStartIndex + 1 + (mentionQuery?.length ?? 0)) // +1 for the @
-    const newValue = `${before}@${item.handle} ${after}`
+    // Files drop the @ and insert the relative path in backticks: agents read
+    // the path with their filesystem tools and the renderer turns it into a
+    // clickable chip; backticks delimit spaces/accents (files.md § 5.1).
+    const insertion = item.type === 'file' ? `\`${item.handle}\`` : `@${item.handle}`
+    const newValue = `${before}${insertion} ${after}`
     onChange(newValue)
     setMentionQuery(null)
 
     // Place cursor right after the inserted mention
-    const cursorPos = mentionStartIndex + 1 + item.handle.length + 1
+    const cursorPos = before.length + insertion.length + 1
     requestAnimationFrame(() => {
       textareaRef.current?.setSelectionRange(cursorPos, cursorPos)
       textareaRef.current?.focus()
@@ -434,8 +461,8 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
     }
 
     // Mention popover keyboard navigation
-    if (isMentionOpen && mentionableUsers && mentionableKins) {
-      const count = getMentionItemCount(mentionQuery!, mentionableUsers, mentionableKins)
+    if (isMentionOpen) {
+      const count = getMentionItemCount(mentionQuery!, mentionableUsers ?? [], mentionableAgents ?? [], mentionFileHits)
       if (count > 0) {
         if (e.key === 'ArrowDown') {
           e.preventDefault()
@@ -449,7 +476,7 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
         }
         if (e.key === 'Enter' || e.key === 'Tab') {
           e.preventDefault()
-          const item = getMentionItemAt(mentionSelectedIndex, mentionQuery!, mentionableUsers, mentionableKins)
+          const item = getMentionItemAt(mentionSelectedIndex, mentionQuery!, mentionableUsers ?? [], mentionableAgents ?? [], mentionFileHits)
           if (item) handleMentionSelect(item)
           return
         }
@@ -503,15 +530,45 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
     }
   }
 
+  // Gate image/PDF attachments the selected model explicitly can't accept (the
+  // registry exposes the capability). Fail-open on unknown — only block on a hard
+  // `false`. Text files always pass (they're inlined as text).
+  const addFilesGated = useCallback(
+    (files: FileList | File[]) => {
+      if (!onAddFiles) return
+      const selected = llmModels?.find((m) => m.id === model && (!providerId || m.providerId === providerId))
+      const imageBlocked = selected?.supportsImageInput === false
+      const pdfBlocked = selected?.supportsPdfInput === false
+      const arr = Array.from(files)
+      if (!imageBlocked && !pdfBlocked) { onAddFiles(arr); return }
+      const accepted: File[] = []
+      const rejected: string[] = []
+      for (const f of arr) {
+        if (imageBlocked && f.type.startsWith('image/')) rejected.push(f.name)
+        else if (pdfBlocked && f.type === 'application/pdf') rejected.push(f.name)
+        else accepted.push(f)
+      }
+      if (rejected.length > 0) {
+        toast.warning(t('chat.attachmentUnsupported', {
+          model: selected?.name ?? model,
+          files: rejected.join(', '),
+          defaultValue: "{{model}} can't read these — skipped: {{files}}",
+        }))
+      }
+      if (accepted.length > 0) onAddFiles(accepted)
+    },
+    [onAddFiles, llmModels, model, providerId, t],
+  )
+
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files.length > 0 && onAddFiles) {
-        onAddFiles(e.target.files)
+      if (e.target.files && e.target.files.length > 0) {
+        addFilesGated(e.target.files)
       }
       // Reset so the same file can be re-selected
       e.target.value = ''
     },
-    [onAddFiles],
+    [addFilesGated],
   )
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
@@ -539,11 +596,11 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
       e.stopPropagation()
       dragCounterRef.current = 0
       setIsDragging(false)
-      if (e.dataTransfer.files && e.dataTransfer.files.length > 0 && onAddFiles) {
-        onAddFiles(e.dataTransfer.files)
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        addFilesGated(e.dataTransfer.files)
       }
     },
-    [onAddFiles],
+    [addFilesGated],
   )
 
   const handlePaste = useCallback(
@@ -562,10 +619,10 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
 
       if (files.length > 0) {
         e.preventDefault()
-        onAddFiles(files)
+        addFilesGated(files)
       }
     },
-    [onAddFiles],
+    [onAddFiles, addFilesGated],
   )
 
   /** Wrap the current selection (or insert at cursor) with markdown syntax */
@@ -694,11 +751,12 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
           />
 
           {/* @mention autocomplete popover */}
-          {isMentionOpen && mentionableUsers && mentionableKins && (
+          {isMentionOpen && (
             <MentionPopover
               query={mentionQuery!}
-              users={mentionableUsers}
-              kins={mentionableKins}
+              users={mentionableUsers ?? []}
+              agents={mentionableAgents ?? []}
+              files={mentionFileHits}
               selectedIndex={mentionSelectedIndex}
               position={mentionPosition}
               onSelect={handleMentionSelect}
@@ -767,8 +825,29 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
                 enabled={thinkingEnabled}
                 effort={thinkingEffort}
                 onChange={onChangeThinking}
+                reasoning={llmModels && model
+                  ? modelReasoningInfo(llmModels.find((m) => m.id === model && (!providerId || m.providerId === providerId)))
+                  : undefined}
                 compact
               />
+            )}
+
+            {onShowTools && toolCount !== undefined && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 shrink-0 gap-1 rounded-lg px-2 text-xs font-normal text-muted-foreground hover:text-foreground"
+                    onClick={onShowTools}
+                  >
+                    <Wrench className="size-3.5" />
+                    <span className="tabular-nums">{toolCount}</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t('chat.toolsBadge.tooltip', { count: toolCount, defaultValue: '{{count}} tools available — click to list them' })}</TooltipContent>
+              </Tooltip>
             )}
           </div>
 
@@ -793,7 +872,7 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
                   : '\u00A0'}
             </span>
 
-            {/* Send / Stop — one button that morphs with the Kin's state.
+            {/* Send / Stop — one button that morphs with the Agent's state.
                 Follow-ups can still be queued while streaming via the Enter key. */}
             {(isStreaming || isProcessing) ? (
               <Tooltip>

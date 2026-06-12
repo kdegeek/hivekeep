@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useContext, createContext } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '@/client/lib/api'
-import i18n from '@/client/lib/i18n'
+import i18n, { changeAppLanguage } from '@/client/lib/i18n'
 
 interface UserProfile {
   id: string
@@ -9,10 +9,13 @@ interface UserProfile {
   firstName: string
   lastName: string
   pseudonym: string
-  language: 'en' | 'fr' | 'de'
+  /** Interface (UI translation) language — one of SUPPORTED_LANGUAGES. */
+  language: string
+  /** Language Agents speak to this user (AGENT_LANGUAGES code). Null = follow `language`. */
+  agentLanguage?: string | null
   role: 'admin' | 'member'
   avatarUrl: string | null
-  kinOrder: string | null
+  agentOrder: string | null
   /** Set once the user dismisses the conversational onboarding modal (DB-backed
    *  so a fresh DB re-shows it; persists across devices/browsers). */
   onboardingModalDismissed?: boolean
@@ -52,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const user = await api.get<UserProfile>('/me')
       if (user.language && user.language !== i18n.language) {
-        await i18n.changeLanguage(user.language)
+        await changeAppLanguage(user.language)
       }
       setState({ user, isLoading: false, isAuthenticated: true })
     } catch {
@@ -80,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Verify the session was actually established — throws if not
     const user = await api.get<UserProfile>('/me')
     if (user.language && user.language !== i18n.language) {
-      await i18n.changeLanguage(user.language)
+      await changeAppLanguage(user.language)
     }
     setState({ user, isLoading: false, isAuthenticated: true })
   }

@@ -4,16 +4,17 @@ import { useTranslation } from 'react-i18next'
 import { Input } from '@/client/components/ui/input'
 import { PasswordInput } from '@/client/components/ui/password-input'
 import { Button } from '@/client/components/ui/button'
+import { HivekeepLogo } from '@/client/components/common/HivekeepLogo'
 import { Label } from '@/client/components/ui/label'
 import { Alert, AlertDescription } from '@/client/components/ui/alert'
 import { Avatar, AvatarFallback, AvatarImage } from '@/client/components/ui/avatar'
 import { AlertCircle, Camera, Loader2, ArrowLeft } from 'lucide-react'
-import { LanguageSelector } from '@/client/components/common/LanguageSelector'
+import { LanguageSelector, AgentLanguageSelector } from '@/client/components/common/LanguageSelector'
 import { getErrorMessage } from '@/client/lib/api'
 import { getUserInitials } from '@/client/lib/utils'
 
 export function InvitePage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { token } = useParams<{ token: string }>()
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -30,7 +31,10 @@ export function InvitePage() {
   const [pseudonym, setPseudonym] = useState('')
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
-  const [language, setLanguage] = useState('en')
+  // Defaults to the auto-detected browser language (see lib/i18n.ts)
+  const [language, setLanguage] = useState(i18n.language || 'en')
+  // null = Agents follow the UI language
+  const [agentLanguage, setAgentLanguage] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -114,6 +118,7 @@ export function InvitePage() {
           lastName,
           pseudonym,
           language,
+          agentLanguage,
           invitationToken: token,
         }),
       })
@@ -151,7 +156,8 @@ export function InvitePage() {
     return (
       <div className="surface-base flex min-h-screen items-center justify-center">
         <div className="text-center animate-fade-in">
-          <h1 className="gradient-primary-text text-4xl font-bold tracking-tight">KinBot</h1>
+          <HivekeepLogo size={56} title={null} className="mx-auto mb-3" />
+          <h1 className="text-4xl font-extrabold text-foreground">Hivekeep</h1>
           <p className="mt-3 text-muted-foreground">{t('common.loading')}</p>
         </div>
       </div>
@@ -167,7 +173,8 @@ export function InvitePage() {
 
         <div className="relative z-10 w-full max-w-md animate-fade-in-up">
           <div className="glass-strong rounded-2xl p-8 shadow-lg text-center space-y-4">
-            <h1 className="gradient-primary-text text-3xl font-bold tracking-tight">KinBot</h1>
+            <HivekeepLogo size={56} title={null} className="mx-auto" />
+            <h1 className="text-3xl font-extrabold text-foreground">Hivekeep</h1>
             <Alert variant="destructive">
               <AlertCircle className="size-4" />
               <AlertDescription>{t('invite.invalidToken')}</AlertDescription>
@@ -187,7 +194,8 @@ export function InvitePage() {
     return (
       <div className="surface-base flex min-h-screen items-center justify-center">
         <div className="text-center animate-fade-in space-y-2">
-          <h1 className="gradient-primary-text text-4xl font-bold tracking-tight">KinBot</h1>
+          <HivekeepLogo size={56} title={null} className="mx-auto" />
+          <h1 className="text-4xl font-extrabold text-foreground">Hivekeep</h1>
           <p className="text-muted-foreground">{t('invite.success')}</p>
         </div>
       </div>
@@ -205,9 +213,8 @@ export function InvitePage() {
         <div className="glass-strong rounded-2xl p-8 shadow-lg">
           {/* Header */}
           <div className="mb-6 text-center">
-            <h1 className="gradient-primary-text text-3xl font-bold tracking-tight">
-              KinBot
-            </h1>
+            <HivekeepLogo size={64} title={null} className="mx-auto mb-3" />
+            <h1 className="text-3xl font-extrabold text-foreground">Hivekeep</h1>
             <h2 className="mt-2 text-lg font-semibold text-foreground">
               {t('invite.title')}
             </h2>
@@ -326,10 +333,17 @@ export function InvitePage() {
               </div>
             </div>
 
-            {/* Language */}
+            {/* Interface language */}
             <div className="space-y-2">
               <Label>{t('invite.language')}</Label>
               <LanguageSelector value={language} onValueChange={setLanguage} />
+            </div>
+
+            {/* Agent communication language */}
+            <div className="space-y-2">
+              <Label>{t('invite.agentLanguage')}</Label>
+              <AgentLanguageSelector value={agentLanguage} onValueChange={setAgentLanguage} />
+              <p className="text-xs text-muted-foreground">{t('invite.agentLanguageHint')}</p>
             </div>
 
             {/* Submit */}

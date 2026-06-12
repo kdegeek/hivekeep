@@ -2,15 +2,15 @@ import { describe, expect, it } from 'bun:test'
 import { z } from 'zod'
 import { tool } from '@/server/tools/tool-helper'
 import {
-  vercelToolsToKinbot,
-  markLastKinbotToolCacheable,
-  modelMessagesToKinbot,
+  vercelToolsToHivekeep,
+  markLastHivekeepToolCacheable,
+  modelMessagesToHivekeep,
 } from './vercel-bridge'
-import type { KinbotTool } from '@/server/llm/llm/types'
+import type { HivekeepTool } from '@/server/llm/llm/types'
 
-// ─── vercelToolsToKinbot ─────────────────────────────────────────────────────
+// ─── vercelToolsToHivekeep ─────────────────────────────────────────────────────
 
-describe('vercelToolsToKinbot', () => {
+describe('vercelToolsToHivekeep', () => {
   it('converts a tool with a zod inputSchema to a JSON schema', async () => {
     const tools = {
       read_file: tool({
@@ -21,7 +21,7 @@ describe('vercelToolsToKinbot', () => {
         }),
       }),
     }
-    const result = await vercelToolsToKinbot(tools as never)
+    const result = await vercelToolsToHivekeep(tools as never)
     expect(result).toHaveLength(1)
     const t0 = result[0]!
     expect(t0.name).toBe('read_file')
@@ -41,7 +41,7 @@ describe('vercelToolsToKinbot', () => {
         inputSchema: z.object({}),
       }),
     }
-    const result = await vercelToolsToKinbot(tools as never)
+    const result = await vercelToolsToHivekeep(tools as never)
     expect(result[0]!.inputSchema.type).toBe('object')
     expect('properties' in result[0]!.inputSchema).toBe(true)
   })
@@ -51,47 +51,47 @@ describe('vercelToolsToKinbot', () => {
       tool_a: tool({ description: 'first', inputSchema: z.object({}) }),
       tool_b: tool({ description: 'second', inputSchema: z.object({}) }),
     }
-    const result = await vercelToolsToKinbot(tools as never)
+    const result = await vercelToolsToHivekeep(tools as never)
     expect(result.map((t) => t.description)).toEqual(['first', 'second'])
   })
 })
 
-// ─── markLastKinbotToolCacheable ─────────────────────────────────────────────
+// ─── markLastHivekeepToolCacheable ─────────────────────────────────────────────
 
-describe('markLastKinbotToolCacheable', () => {
+describe('markLastHivekeepToolCacheable', () => {
   it('adds cacheControl to the last tool only', () => {
-    const tools: KinbotTool[] = [
+    const tools: HivekeepTool[] = [
       { name: 'a', description: 'A', inputSchema: { type: 'object' } },
       { name: 'b', description: 'B', inputSchema: { type: 'object' } },
       { name: 'c', description: 'C', inputSchema: { type: 'object' } },
     ]
-    const out = markLastKinbotToolCacheable(tools)
+    const out = markLastHivekeepToolCacheable(tools)
     expect(out[0]!.cacheControl).toBeUndefined()
     expect(out[1]!.cacheControl).toBeUndefined()
     expect(out[2]!.cacheControl).toEqual({ type: 'ephemeral' })
   })
 
   it('returns the input unchanged when there are no tools', () => {
-    const tools: KinbotTool[] = []
-    expect(markLastKinbotToolCacheable(tools)).toEqual([])
+    const tools: HivekeepTool[] = []
+    expect(markLastHivekeepToolCacheable(tools)).toEqual([])
   })
 
   it('is pure — does not mutate the input array', () => {
-    const tools: KinbotTool[] = [
+    const tools: HivekeepTool[] = [
       { name: 'a', description: 'A', inputSchema: { type: 'object' } },
     ]
-    const out = markLastKinbotToolCacheable(tools)
+    const out = markLastHivekeepToolCacheable(tools)
     expect(out).not.toBe(tools)
     expect(tools[0]!.cacheControl).toBeUndefined()
     expect(out[0]!.cacheControl).toEqual({ type: 'ephemeral' })
   })
 })
 
-// ─── modelMessagesToKinbot ───────────────────────────────────────────────────
+// ─── modelMessagesToHivekeep ───────────────────────────────────────────────────
 
-describe('modelMessagesToKinbot', () => {
+describe('modelMessagesToHivekeep', () => {
   it('drops system messages (system prompts travel via the chat request `system` field, not history)', () => {
-    const out = modelMessagesToKinbot([
+    const out = modelMessagesToHivekeep([
       { role: 'system', content: 'sys' },
       { role: 'user', content: 'hi' },
     ])
@@ -100,7 +100,7 @@ describe('modelMessagesToKinbot', () => {
   })
 
   it('converts a string user message to a single text block', () => {
-    const out = modelMessagesToKinbot([{ role: 'user', content: 'hello' }])
+    const out = modelMessagesToHivekeep([{ role: 'user', content: 'hello' }])
     expect(out[0]!.content).toHaveLength(1)
     expect(out[0]!.content[0]).toMatchObject({ type: 'text', text: 'hello' })
   })
@@ -108,7 +108,7 @@ describe('modelMessagesToKinbot', () => {
   it('converts a tool-role message into a user message of tool-result blocks', () => {
     // OpenAI-style tool messages are flattened into Anthropic-style tool
     // results on a user turn.
-    const out = modelMessagesToKinbot([
+    const out = modelMessagesToHivekeep([
       {
         role: 'tool',
         content: [
@@ -125,7 +125,7 @@ describe('modelMessagesToKinbot', () => {
   })
 
   it('preserves assistant tool-call blocks', () => {
-    const out = modelMessagesToKinbot([
+    const out = modelMessagesToHivekeep([
       {
         role: 'assistant',
         content: [

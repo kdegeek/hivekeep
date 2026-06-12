@@ -102,7 +102,7 @@ mock.module('@/server/services/channels', () => ({
   countPendingApprovals: async () => 0,
   countPendingApprovalsForChannel: async () => 0,
   listChannelConversations: async () => [],
-  getActiveChannelsForKin: () => [],
+  getActiveChannelsForAgent: () => [],
   restoreActiveChannels: async () => {},
   listChannelUserMappings: () => [],
 }))
@@ -151,10 +151,10 @@ beforeEach(() => {
   mockUpdateContactNickname = mock(() => ({ id: 'nk1', contactId: 'c1', nickname: 'lily' }))
   mockRemoveContactNickname = mock(() => true)
   mockReplaceContactNicknames = mock(() => [])
-  mockSetContactNote = mock(() => ({ id: 'n1', contactId: 'c1', kinId: 'k1', scope: 'global', content: 'note' }))
+  mockSetContactNote = mock(() => ({ id: 'n1', contactId: 'c1', agentId: 'k1', scope: 'global', content: 'note' }))
   mockUpdateContactNote = mock(() => ({ id: 'n1', content: 'updated' }))
   mockDeleteContactNote = mock(() => true)
-  mockGetContactNoteById = mock(() => ({ id: 'n1', contactId: 'c1', kinId: 'k1', userId: null, scope: 'global', content: 'note' }))
+  mockGetContactNoteById = mock(() => ({ id: 'n1', contactId: 'c1', agentId: 'k1', userId: null, scope: 'global', content: 'note' }))
   mockSetUserContactNote = mock(() => ({ id: 'n1', contactId: 'c1', userId: 'u1', content: 'note' }))
   mockDeleteUserContactNote = mock(() => true)
   // Re-assert our mock so it wins over partial mocks from sibling test files.
@@ -603,45 +603,45 @@ describe('DELETE /api/contacts/:id/platform-ids/:pidId', () => {
 
 describe('POST /api/contacts/:id/notes', () => {
   itMocked('creates a note', async () => {
-    const res = await req('POST', '/c1/notes', { kinId: 'k1', scope: 'global', content: 'hello' })
+    const res = await req('POST', '/c1/notes', { agentId: 'k1', scope: 'global', content: 'hello' })
     expect(res.status).toBe(201)
     expect(mockSetContactNote).toHaveBeenCalledWith('c1', 'k1', 'global', 'hello')
   })
 
-  itMocked('returns 400 when kinId is missing', async () => {
+  itMocked('returns 400 when agentId is missing', async () => {
     const res = await req('POST', '/c1/notes', { scope: 'global', content: 'hello' })
     expect(res.status).toBe(400)
   })
 
   itMocked('returns 400 when scope is missing', async () => {
-    const res = await req('POST', '/c1/notes', { kinId: 'k1', content: 'hello' })
+    const res = await req('POST', '/c1/notes', { agentId: 'k1', content: 'hello' })
     expect(res.status).toBe(400)
   })
 
   itMocked('returns 400 when content is empty', async () => {
-    const res = await req('POST', '/c1/notes', { kinId: 'k1', scope: 'global', content: '   ' })
+    const res = await req('POST', '/c1/notes', { agentId: 'k1', scope: 'global', content: '   ' })
     expect(res.status).toBe(400)
   })
 
   itMocked('returns 400 when content exceeds 10000 characters', async () => {
-    const res = await req('POST', '/c1/notes', { kinId: 'k1', scope: 'global', content: 'x'.repeat(10001) })
+    const res = await req('POST', '/c1/notes', { agentId: 'k1', scope: 'global', content: 'x'.repeat(10001) })
     expect(res.status).toBe(400)
     const json = await res.json()
     expect(json.error.message).toContain('10,000')
   })
 
   itMocked('trims content whitespace', async () => {
-    await req('POST', '/c1/notes', { kinId: 'k1', scope: 'global', content: '  hello  ' })
+    await req('POST', '/c1/notes', { agentId: 'k1', scope: 'global', content: '  hello  ' })
     expect(mockSetContactNote).toHaveBeenCalledWith('c1', 'k1', 'global', 'hello')
   })
 
   itMocked('accepts content at exactly 10000 characters', async () => {
-    const res = await req('POST', '/c1/notes', { kinId: 'k1', scope: 'global', content: 'x'.repeat(10000) })
+    const res = await req('POST', '/c1/notes', { agentId: 'k1', scope: 'global', content: 'x'.repeat(10000) })
     expect(res.status).toBe(201)
   })
 
   itMocked('accepts private scope', async () => {
-    const res = await req('POST', '/c1/notes', { kinId: 'k1', scope: 'private', content: 'secret' })
+    const res = await req('POST', '/c1/notes', { agentId: 'k1', scope: 'private', content: 'secret' })
     expect(res.status).toBe(201)
     expect(mockSetContactNote).toHaveBeenCalledWith('c1', 'k1', 'private', 'secret')
   })

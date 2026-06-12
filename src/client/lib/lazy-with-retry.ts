@@ -4,7 +4,7 @@ import { lazy } from 'react'
  * Wraps React.lazy() with retry logic for failed dynamic imports.
  *
  * When a new build is deployed while users have the old page open,
- * chunk filenames change (e.g. KinFormModal-ZFPF247B.js → KinFormModal-ABC123.js)
+ * chunk filenames change (e.g. AgentFormModal-ZFPF247B.js → AgentFormModal-ABC123.js)
  * and the old import fails with "Failed to fetch dynamically imported module".
  *
  * This utility retries once (to handle transient network errors),

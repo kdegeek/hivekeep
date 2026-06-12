@@ -15,16 +15,16 @@ import { Label } from '@/client/components/ui/label'
 import { useSecretPrompts } from '@/client/hooks/useSecretPrompts'
 
 /**
- * Secure-input modal — appears when the configurator Kin requests a secret
+ * Secure-input modal: appears when the configurator Agent requests a secret
  * (API key, token) via request_provider_setup / prompt_secret. The value is
  * POSTed straight to the server (→ vault); it never goes through the LLM.
  *
- * Self-contained: pass the active Kin id; it subscribes to that Kin's pending
+ * Self-contained: pass the active Agent id; it subscribes to that Agent's pending
  * secret prompts and renders one at a time.
  */
-export function SecretPromptModal({ kinId }: { kinId: string | null }) {
+export function SecretPromptModal({ agentId }: { agentId: string | null }) {
   const { t } = useTranslation()
-  const { prompts, respond, isResponding } = useSecretPrompts(kinId)
+  const { prompts, respond, cancel, isResponding } = useSecretPrompts(agentId)
   const [values, setValues] = useState<Record<string, string>>({})
   const [dismissed, setDismissed] = useState<string | null>(null)
 
@@ -42,6 +42,18 @@ export function SecretPromptModal({ kinId }: { kinId: string | null }) {
   const handleSubmit = async () => {
     try {
       await respond(prompt.promptId, values)
+      setValues({})
+    } catch {
+      // toast handled in the hook
+    }
+  }
+
+  // Persistent dismiss: tell the server to cancel the prompt (resumes the Agent)
+  // so it never re-appears. The X / click-away below only hides it for this
+  // session.
+  const handleCancel = async () => {
+    try {
+      await cancel(prompt.promptId)
       setValues({})
     } catch {
       // toast handled in the hook
@@ -83,7 +95,7 @@ export function SecretPromptModal({ kinId }: { kinId: string | null }) {
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                 >
-                  {t('secretPrompt.getKey', 'Get your key here')}
+                  {t('secretPrompt.getKey')}
                   <ExternalLink className="size-3" />
                 </a>
               )}
@@ -92,16 +104,16 @@ export function SecretPromptModal({ kinId }: { kinId: string | null }) {
 
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Lock className="size-3 shrink-0" />
-            {t('secretPrompt.privacyNote', 'This goes straight to your encrypted vault — the AI never sees it.')}
+            {t('secretPrompt.privacyNote')}
           </p>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="ghost" onClick={() => setDismissed(prompt.promptId)} disabled={isResponding}>
-            {t('secretPrompt.later', 'Later')}
+          <Button variant="ghost" onClick={handleCancel} disabled={isResponding}>
+            {t('common.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={!canSubmit || isResponding}>
-            {isResponding ? t('secretPrompt.saving', 'Saving…') : t('secretPrompt.submit', 'Save securely')}
+            {isResponding ? t('secretPrompt.saving') : t('secretPrompt.submit')}
           </Button>
         </DialogFooter>
       </DialogContent>

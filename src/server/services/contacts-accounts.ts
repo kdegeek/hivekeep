@@ -3,7 +3,7 @@
  *
  * A contacts account is a row in the `providers` table with capability
  * `contacts` (type = 'icloud' | future Google/Microsoft). Read-only external
- * address books — these never enter KinBot's own contacts store. Credentials
+ * address books — these never enter Hivekeep's own contacts store. Credentials
  * live encrypted in the row's config; the tools resolve an account and hand the
  * provider a ProviderConfig with just what it needs.
  */
@@ -17,7 +17,7 @@ import { getContactsProvider } from '@/server/contacts/registry'
 import { getFreshAccessToken } from '@/server/services/email-token-manager'
 import { createLogger } from '@/server/logger'
 import type { ContactsProvider } from '@/server/contacts/types'
-import type { ProviderConfig } from '@kinbot-developer/sdk'
+import type { ProviderConfig } from '@hivekeep/sdk'
 
 const log = createLogger('contacts-accounts')
 
@@ -37,9 +37,9 @@ interface ContactsAccountConfig {
   scopes?: string[]
   /** Non-OAuth (CardDAV) connection credentials declared by `configSchema`. */
   credentials?: Record<string, string>
-  /** null / absent / empty = global (any Kin with the contacts toolbox). A
-   *  non-empty list restricts the account to those Kin ids. */
-  allowed_kin_ids?: string[] | null
+  /** null / absent / empty = global (any Agent with the contacts toolbox). A
+   *  non-empty list restricts the account to those Agent ids. */
+  allowed_agent_ids?: string[] | null
 }
 
 function accountLabelOf(cfg: ContactsAccountConfig): string {
@@ -53,7 +53,7 @@ export interface ContactsAccount {
   name: string
   type: string
   accountLabel: string
-  allowedKinIds: string[] | null
+  allowedAgentIds: string[] | null
   isValid: boolean
   lastError: string | null
 }
@@ -77,30 +77,30 @@ async function decryptConfig(row: ProviderRow): Promise<ContactsAccountConfig> {
 }
 
 function toAccount(row: ProviderRow, cfg: ContactsAccountConfig): ContactsAccount {
-  const allowed = cfg.allowed_kin_ids && cfg.allowed_kin_ids.length > 0 ? cfg.allowed_kin_ids : null
+  const allowed = cfg.allowed_agent_ids && cfg.allowed_agent_ids.length > 0 ? cfg.allowed_agent_ids : null
   return {
     id: row.id,
     slug: row.slug,
     name: row.name,
     type: row.type,
     accountLabel: accountLabelOf(cfg),
-    allowedKinIds: allowed,
+    allowedAgentIds: allowed,
     isValid: row.isValid,
     lastError: row.lastError,
   }
 }
 
-function kinAllowed(cfg: ContactsAccountConfig, kinId?: string): boolean {
-  if (!cfg.allowed_kin_ids || cfg.allowed_kin_ids.length === 0) return true
-  return kinId != null && cfg.allowed_kin_ids.includes(kinId)
+function agentAllowed(cfg: ContactsAccountConfig, agentId?: string): boolean {
+  if (!cfg.allowed_agent_ids || cfg.allowed_agent_ids.length === 0) return true
+  return agentId != null && cfg.allowed_agent_ids.includes(agentId)
 }
 
-/** List contacts accounts. With a `kinId`, only the accounts that Kin may use. */
-export async function listContactsAccounts(kinId?: string): Promise<ContactsAccount[]> {
+/** List contacts accounts. With a `agentId`, only the accounts that Agent may use. */
+export async function listContactsAccounts(agentId?: string): Promise<ContactsAccount[]> {
   const out: ContactsAccount[] = []
   for (const row of loadContactsRows()) {
     const cfg = await decryptConfig(row)
-    if (!kinAllowed(cfg, kinId)) continue
+    if (!agentAllowed(cfg, agentId)) continue
     out.push(toAccount(row, cfg))
   }
   return out
@@ -117,7 +117,7 @@ export interface ResolvedContacts {
  * first valid), enforce the allow-list, inject credentials. Throws with a clear
  * message when nothing usable resolves.
  */
-export async function resolveContactsProvider(opts: { slug?: string; kinId?: string }): Promise<ResolvedContacts> {
+export async function resolveContactsProvider(opts: { slug?: string; agentId?: string }): Promise<ResolvedContacts> {
   const rows = loadContactsRows()
   if (rows.length === 0) throw new Error('No contacts account is connected')
 
@@ -131,8 +131,8 @@ export async function resolveContactsProvider(opts: { slug?: string; kinId?: str
   if (!row) throw new Error('No usable contacts account')
 
   const cfg = await decryptConfig(row)
-  if (!kinAllowed(cfg, opts.kinId)) {
-    throw new Error(`This Kin is not allowed to use the contacts account "${row.slug}"`)
+  if (!agentAllowed(cfg, opts.agentId)) {
+    throw new Error(`This Agent is not allowed to use the contacts account "${row.slug}"`)
   }
   const provider = getContactsProvider(row.type)
   if (!provider) throw new Error(`Contacts provider not registered: ${row.type}`)
@@ -189,7 +189,7 @@ export async function createConfigContactsAccount(opts: {
   const cfg: ContactsAccountConfig = {
     account_label: opts.accountLabel,
     credentials: opts.credentials,
-    allowed_kin_ids: null,
+    allowed_agent_ids: null,
   }
   await db.insert(providers).values({
     id,
@@ -214,9 +214,9 @@ export async function deleteContactsAccount(id: string): Promise<void> {
   await db.delete(providers).where(eq(providers.id, id))
 }
 
-export function setAllowList(id: string, kinIds: string[] | null): Promise<ContactsAccount> {
+export function setAllowList(id: string, agentIds: string[] | null): Promise<ContactsAccount> {
   return mutateConfig(id, (cfg) => {
-    cfg.allowed_kin_ids = kinIds && kinIds.length > 0 ? kinIds : null
+    cfg.allowed_agent_ids = agentIds && agentIds.length > 0 ? agentIds : null
   })
 }
 

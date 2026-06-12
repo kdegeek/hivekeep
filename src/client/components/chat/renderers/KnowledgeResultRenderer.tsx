@@ -13,7 +13,7 @@ interface KnowledgeItem {
   category?: string
   importance?: number | string
   scope?: string
-  authorKinName?: string
+  authorAgentName?: string
   age?: string
   score?: number
   pinned?: boolean
@@ -105,14 +105,14 @@ export function KnowledgeResultRenderer({ args, result, status }: ToolResultRend
                     )}
                   </div>
                   {/* Metadata badges */}
-                  {(it.category || it.scope || it.importance !== undefined || it.authorKinName || it.age || updated) && (
+                  {(it.category || it.scope || it.importance !== undefined || it.authorAgentName || it.age || updated) && (
                     <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground/70">
                       {it.category && <span className="rounded bg-muted px-1 py-0.5">{it.category}</span>}
                       {it.scope && <span className="rounded bg-muted px-1 py-0.5">{it.scope}</span>}
                       {it.importance !== undefined && (
                         <span className="rounded bg-muted px-1 py-0.5">★ {String(it.importance)}</span>
                       )}
-                      {it.authorKinName && <span>{it.authorKinName}</span>}
+                      {it.authorAgentName && <span>{it.authorAgentName}</span>}
                       {it.age && <span>{it.age}</span>}
                       {updated && <span>{updated}</span>}
                     </div>

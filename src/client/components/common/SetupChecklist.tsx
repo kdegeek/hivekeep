@@ -16,8 +16,8 @@ interface SetupChecklistProps {
    *  when no section id is given). Wired by the host page so the
    *  checklist can navigate the user to the right place. */
   onOpenSettings: (section?: string) => void
-  /** Open the 'Create your first Kin' flow (handled by ChatPage). */
-  onCreateKin: () => void
+  /** Open the 'Create your first Agent' flow (handled by ChatPage). */
+  onCreateAgent: () => void
   /** Optional callback when the user clicks an item's CTA — used by
    *  the navbar popover to close itself after navigation. */
   onAction?: () => void
@@ -32,7 +32,7 @@ const SEVERITY_BADGE_VARIANT: Record<SetupItemSeverity, 'destructive' | 'default
 export function SetupChecklist({
   variant = 'inline',
   onOpenSettings,
-  onCreateKin,
+  onCreateAgent,
   onAction,
 }: SetupChecklistProps) {
   const { t } = useTranslation()
@@ -41,8 +41,8 @@ export function SetupChecklist({
   if (isLoading) return null
 
   const handleAction = (item: SetupItem) => {
-    if (item.target.createKin) {
-      onCreateKin()
+    if (item.target.createAgent) {
+      onCreateAgent()
     } else {
       onOpenSettings(item.target.section)
     }

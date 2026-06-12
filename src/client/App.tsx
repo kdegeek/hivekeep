@@ -8,6 +8,9 @@ import { api } from '@/client/lib/api'
 import { SidePanelProvider } from '@/client/contexts/SidePanelContext'
 import { TasksProvider } from '@/client/contexts/TasksContext'
 import { TicketMentionShell } from '@/client/contexts/TicketMentionShell'
+import { UpdateProvider } from '@/client/contexts/UpdateContext'
+import { UpdateOverlay } from '@/client/components/common/UpdateOverlay'
+import { GlobalUpdateDialog } from '@/client/components/common/GlobalUpdateDialog'
 import { ActivityBar } from '@/client/components/layout/ActivityBar'
 import { AppTopBar } from '@/client/components/layout/AppTopBar'
 import { TooltipProvider } from '@/client/components/ui/tooltip'
@@ -17,13 +20,16 @@ const ChatPage = lazy(() => import('@/client/pages/chat/ChatPage').then(m => ({ 
 const ProjectsPage = lazy(() => import('@/client/pages/projects/ProjectsPage').then(m => ({ default: m.ProjectsPage })))
 const TasksPage = lazy(() => import('@/client/pages/tasks/TasksPage').then(m => ({ default: m.TasksPage })))
 const CronsPage = lazy(() => import('@/client/pages/crons/CronsPage').then(m => ({ default: m.CronsPage })))
+const FilesPage = lazy(() => import('@/client/pages/files/FilesPage').then(m => ({ default: m.FilesPage })))
 const MiniAppsPage = lazy(() => import('@/client/pages/mini-apps/MiniAppsPage').then(m => ({ default: m.MiniAppsPage })))
+const ModelRegistryPage = lazy(() => import('@/client/pages/models/ModelRegistryPage').then(m => ({ default: m.ModelRegistryPage })))
+const TerminalPage = lazy(() => import('@/client/pages/terminal/TerminalPage').then(m => ({ default: m.TerminalPage })))
 const LoginPage = lazy(() => import('@/client/pages/login/LoginPage').then(m => ({ default: m.LoginPage })))
 const OnboardingPage = lazy(() => import('@/client/pages/onboarding/OnboardingPage').then(m => ({ default: m.OnboardingPage })))
 const DesignSystemPage = lazy(() => import('@/client/pages/design-system/DesignSystemPage').then(m => ({ default: m.DesignSystemPage })))
 const InvitePage = lazy(() => import('@/client/pages/invite/InvitePage').then(m => ({ default: m.InvitePage })))
 
-// Global modals rendered at App root so they survive navigation between Kins / Projets.
+// Global modals rendered at App root so they survive navigation between Agents / Projets.
 const SettingsModal = lazy(() => import('@/client/pages/settings/SettingsPage').then(m => ({ default: m.SettingsModal })))
 const AccountDialog = lazy(() => import('@/client/pages/account/AccountPage').then(m => ({ default: m.AccountDialog })))
 
@@ -33,7 +39,7 @@ function PageFallback() {
   return (
     <div className="surface-base flex min-h-screen items-center justify-center">
       <div className="text-center animate-fade-in">
-        <h1 className="gradient-primary-text text-4xl font-bold tracking-tight">KinBot</h1>
+        <h1 className="gradient-primary-text text-4xl font-bold tracking-tight">Hivekeep</h1>
       </div>
     </div>
   )
@@ -89,7 +95,7 @@ function AppRoot() {
     return (
       <div className="surface-base flex min-h-screen items-center justify-center">
         <div className="text-center animate-fade-in">
-          <h1 className="gradient-primary-text text-4xl font-bold tracking-tight">KinBot</h1>
+          <h1 className="gradient-primary-text text-4xl font-bold tracking-tight">Hivekeep</h1>
           <p className="mt-3 text-muted-foreground">{t('common.loading')}</p>
         </div>
       </div>
@@ -101,7 +107,7 @@ function AppRoot() {
     return (
       <div className="surface-base flex min-h-screen items-center justify-center">
         <div className="text-center animate-fade-in max-w-md space-y-4">
-          <h1 className="gradient-primary-text text-4xl font-bold tracking-tight">KinBot</h1>
+          <h1 className="gradient-primary-text text-4xl font-bold tracking-tight">Hivekeep</h1>
           <p className="text-muted-foreground">{t('errors.backendUnavailable')}</p>
           <button
             onClick={() => {
@@ -150,7 +156,7 @@ function AppRoot() {
 // ─── Authenticated shell ────────────────────────────────────────────────────
 //
 // Top-level layout when the user is authenticated. Owns:
-//  - The persistent top bar (visible across Kins / Projets / future modes)
+//  - The persistent top bar (visible across Agents / Projets / future modes)
 //  - The activity bar (left, 48px)
 //  - The global SettingsModal and AccountDialog
 //
@@ -164,10 +170,10 @@ function AppRoot() {
 function AuthenticatedShell() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialSection, setSettingsInitialSection] = useState<string | undefined>()
-  const [settingsFilters, setSettingsFilters] = useState<{ kinId?: string } | undefined>()
+  const [settingsFilters, setSettingsFilters] = useState<{ agentId?: string } | undefined>()
   const [accountOpen, setAccountOpen] = useState(false)
 
-  const handleOpenSettings = useCallback((section?: string, filters?: { kinId?: string }) => {
+  const handleOpenSettings = useCallback((section?: string, filters?: { agentId?: string }) => {
     setSettingsInitialSection(section)
     setSettingsFilters(filters)
     setSettingsOpen(true)
@@ -197,6 +203,7 @@ function AuthenticatedShell() {
     <TooltipProvider delayDuration={0}>
     <SidePanelProvider>
     <TasksProvider>
+    <UpdateProvider>
     <TicketMentionShell>
       <div className="flex h-dvh w-screen flex-col overflow-hidden">
         <AppTopBar
@@ -218,7 +225,11 @@ function AuthenticatedShell() {
                 />
                 <Route path="/tasks" element={<TasksPage />} />
                 <Route path="/crons" element={<CronsPage />} />
+                <Route path="/files" element={<FilesPage />} />
+                <Route path="/files/:agentId" element={<FilesPage />} />
                 <Route path="/mini-apps" element={<MiniAppsPage />} />
+                <Route path="/models" element={<ModelRegistryPage />} />
+                <Route path="/terminal" element={<TerminalPage />} />
                 <Route
                   path="*"
                   element={
@@ -248,8 +259,13 @@ function AuthenticatedShell() {
             onOpenChange={setAccountOpen}
           />
         </Suspense>
+
+        {/* Shared update dialog + full-screen self-update overlay (global) */}
+        <GlobalUpdateDialog />
+        <UpdateOverlay />
       </div>
     </TicketMentionShell>
+    </UpdateProvider>
     </TasksProvider>
     </SidePanelProvider>
     </TooltipProvider>

@@ -1,7 +1,12 @@
 import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test'
-import { fullMockSchema, fullMockDrizzleOrm } from '../../test-helpers'
+import { fullMockSchema, fullMockDrizzleOrm, fullMockConfig } from '../../test-helpers'
 
 // ─── Mock dependencies before importing the module ───────────────────────────
+
+// Pin a complete config mock: bun's mock.module is global, so a partial config
+// mock leaked from an earlier test file could otherwise strip config.upload,
+// which files.ts reads at module load. (mock.module isolation gotcha.)
+mock.module('@/server/config', () => ({ config: fullMockConfig }))
 
 // Mock logger
 mock.module('@/server/logger', () => ({
@@ -50,7 +55,7 @@ mock.module('@/server/db/schema', () => ({
   ...fullMockSchema,
   files: {
     id: 'id',
-    kinId: 'kinId',
+    agentId: 'agentId',
     messageId: 'messageId',
     uploadedBy: 'uploadedBy',
     originalName: 'originalName',
@@ -89,10 +94,10 @@ describe('serializeFile', () => {
   it('serializes a file with extension correctly', () => {
     const file = {
       id: 'abc-123',
-      kinId: 'kin-456',
+      agentId: 'agent-456',
       uploadedBy: 'user-1',
       originalName: 'report.pdf',
-      storedPath: '/tmp/uploads/messages/kin-456/abc-123.pdf',
+      storedPath: '/tmp/uploads/messages/agent-456/abc-123.pdf',
       mimeType: 'application/pdf',
       size: 1024,
       messageId: 'msg-1',
@@ -105,16 +110,16 @@ describe('serializeFile', () => {
     expect(result.name).toBe('report.pdf')
     expect(result.mimeType).toBe('application/pdf')
     expect(result.size).toBe(1024)
-    expect(result.url).toBe('/api/uploads/messages/kin-456/abc-123.pdf')
+    expect(result.url).toBe('/api/uploads/messages/agent-456/abc-123.pdf')
   })
 
   it('handles files without extension', () => {
     const file = {
       id: 'def-789',
-      kinId: 'kin-456',
+      agentId: 'agent-456',
       uploadedBy: 'user-1',
       originalName: 'Makefile',
-      storedPath: '/tmp/uploads/messages/kin-456/def-789',
+      storedPath: '/tmp/uploads/messages/agent-456/def-789',
       mimeType: 'application/octet-stream',
       size: 512,
       messageId: null,
@@ -125,16 +130,16 @@ describe('serializeFile', () => {
 
     expect(result.id).toBe('def-789')
     expect(result.name).toBe('Makefile')
-    expect(result.url).toBe('/api/uploads/messages/kin-456/def-789')
+    expect(result.url).toBe('/api/uploads/messages/agent-456/def-789')
   })
 
   it('handles files with multiple dots in name', () => {
     const file = {
       id: 'ghi-101',
-      kinId: 'kin-456',
+      agentId: 'agent-456',
       uploadedBy: 'user-1',
       originalName: 'my.backup.tar.gz',
-      storedPath: '/tmp/uploads/messages/kin-456/ghi-101.gz',
+      storedPath: '/tmp/uploads/messages/agent-456/ghi-101.gz',
       mimeType: 'application/gzip',
       size: 2048,
       messageId: 'msg-2',
@@ -143,16 +148,16 @@ describe('serializeFile', () => {
 
     const result = serializeFile(file as any)
 
-    expect(result.url).toBe('/api/uploads/messages/kin-456/ghi-101.gz')
+    expect(result.url).toBe('/api/uploads/messages/agent-456/ghi-101.gz')
   })
 
   it('handles dotfiles (hidden files)', () => {
     const file = {
       id: 'jkl-202',
-      kinId: 'kin-456',
+      agentId: 'agent-456',
       uploadedBy: 'user-1',
       originalName: '.gitignore',
-      storedPath: '/tmp/uploads/messages/kin-456/jkl-202.gitignore',
+      storedPath: '/tmp/uploads/messages/agent-456/jkl-202.gitignore',
       mimeType: 'text/plain',
       size: 64,
       messageId: null,
@@ -162,16 +167,16 @@ describe('serializeFile', () => {
     const result = serializeFile(file as any)
 
     // .gitignore splits to ['', 'gitignore'], so extension is 'gitignore'
-    expect(result.url).toBe('/api/uploads/messages/kin-456/jkl-202.gitignore')
+    expect(result.url).toBe('/api/uploads/messages/agent-456/jkl-202.gitignore')
   })
 
   it('preserves all metadata fields', () => {
     const file = {
       id: 'test-id',
-      kinId: 'test-kin',
+      agentId: 'test-agent',
       uploadedBy: 'user-1',
       originalName: 'image.png',
-      storedPath: '/tmp/uploads/messages/test-kin/test-id.png',
+      storedPath: '/tmp/uploads/messages/test-agent/test-id.png',
       mimeType: 'image/png',
       size: 999999,
       messageId: 'msg-x',
@@ -185,7 +190,7 @@ describe('serializeFile', () => {
       name: 'image.png',
       mimeType: 'image/png',
       size: 999999,
-      url: '/api/uploads/messages/test-kin/test-id.png',
+      url: '/api/uploads/messages/test-agent/test-id.png',
     })
   })
 })
@@ -195,7 +200,7 @@ describe('serializeFile', () => {
 describe('getExtension (via serializeFile)', () => {
   const makeFile = (name: string) => ({
     id: 'ext-test',
-    kinId: 'kin-1',
+    agentId: 'agent-1',
     uploadedBy: 'user-1',
     originalName: name,
     storedPath: '/tmp/test',
@@ -218,7 +223,7 @@ describe('getExtension (via serializeFile)', () => {
 
   it('returns no extension for extensionless files', () => {
     const result = serializeFile(makeFile('README') as any)
-    expect(result.url).toBe('/api/uploads/messages/kin-1/ext-test')
+    expect(result.url).toBe('/api/uploads/messages/agent-1/ext-test')
   })
 
   it('handles uppercase extensions', () => {
@@ -263,7 +268,7 @@ describe('uploadFile', () => {
     } as unknown as File
 
     await expect(
-      uploadFile({ kinId: 'kin-1', uploadedBy: 'user-1', file: fakeFile })
+      uploadFile({ agentId: 'agent-1', uploadedBy: 'user-1', file: fakeFile })
     ).rejects.toThrow('too large')
   })
 
@@ -273,7 +278,7 @@ describe('uploadFile', () => {
     const emptyFile = new File([], 'empty.txt', { type: 'text/plain' })
 
     await expect(
-      uploadFile({ kinId: 'kin-1', uploadedBy: 'user-1', file: emptyFile })
+      uploadFile({ agentId: 'agent-1', uploadedBy: 'user-1', file: emptyFile })
     ).rejects.toThrow('empty')
   })
 })

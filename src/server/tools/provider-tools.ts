@@ -14,30 +14,33 @@ const log = createLogger('tools:providers')
  * Does NOT expose API keys or encrypted config.
  */
 export const listProvidersTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (_ctx) =>
     tool({
       description:
         'List all configured AI providers with their capabilities. Use this to discover which providers are available before selecting models. ' +
-        'When calling another tool that takes a `provider_id` (e.g. spawn_self), pass the `slug` field below — it is stable and human-readable.',
+        'When calling another tool that takes a `provider_id` (e.g. spawn_self), pass the `slug` field below — it is stable and human-readable.\n' +
+        'Every configured provider is returned, including ones that are currently failing. Check `isValid`: when it is `false` the provider is configured but not working ' +
+        '(usually a bad/expired API key or unreachable endpoint), and `lastError` holds the most recent failure message so you can diagnose it. ' +
+        'A provider with `isValid: false` will not yield any usable models until it is fixed (re-enter the key, then re-test it).',
       inputSchema: z.object({}),
       execute: async () => {
         const allProviders = await db.select().from(providers).all()
-        const result = allProviders
-          .filter((p) => p.isValid)
-          .map((p) => {
-            let capabilities: string[] = []
-            try { capabilities = JSON.parse(p.capabilities) as string[] } catch { /* ignore */ }
-            return {
-              id: p.id,
-              slug: p.slug,
-              name: p.name,
-              type: p.type,
-              capabilities,
-            }
-          })
+        const result = allProviders.map((p) => {
+          let capabilities: string[] = []
+          try { capabilities = JSON.parse(p.capabilities) as string[] } catch { /* ignore */ }
+          return {
+            id: p.id,
+            slug: p.slug,
+            name: p.name,
+            type: p.type,
+            capabilities,
+            isValid: p.isValid,
+            lastError: p.lastError ?? null,
+          }
+        })
 
         return { providers: result }
       },
@@ -49,7 +52,7 @@ export const listProvidersTool: ToolRegistration = {
  * Returns provider+model combo for each model.
  */
 export const listModelsTool: ToolRegistration = {
-  availability: ['main', 'sub-kin'],
+  availability: ['main', 'sub-agent'],
   readOnly: true,
   concurrencySafe: true,
   create: (_ctx) =>
@@ -57,7 +60,10 @@ export const listModelsTool: ToolRegistration = {
       description:
         'List all available models across all providers. Optionally filter by capability (llm, image, embedding, search, rerank). ' +
         'Each model entry includes `providerId` (UUID), `providerSlug` (human-readable, stable, preferred for tool calls like spawn_self), ' +
-        'and `providerName` (display name). When calling spawn_self/spawn_kin or any other tool needing a `provider_id`, pass the `providerSlug`.',
+        'and `providerName` (display name). When calling spawn_self/spawn_agent or any other tool needing a `provider_id`, pass the `providerSlug`.\n' +
+        'Providers that are currently failing (bad/expired key, unreachable endpoint) contribute no models, but they are NOT hidden: they are reported in the ' +
+        '`invalidProviders` array with their `lastError` so you can explain why a model is missing and offer to fix the provider (re-enter the key, then re-test it) ' +
+        'instead of assuming nothing is configured.',
       inputSchema: z.object({
         capability: z
           .enum(['llm', 'image', 'embedding', 'search', 'rerank'])
@@ -75,9 +81,27 @@ export const listModelsTool: ToolRegistration = {
           providerType: string
           capability: string
         }> = []
+        const invalidProviders: Array<{
+          id: string
+          slug: string
+          name: string
+          type: string
+          lastError: string | null
+        }> = []
 
         for (const p of allProviders) {
-          if (!p.isValid) continue
+          if (!p.isValid) {
+            // Surface (don't silently drop) broken providers so the caller can
+            // diagnose a bad key instead of assuming nothing is configured.
+            invalidProviders.push({
+              id: p.id,
+              slug: p.slug,
+              name: p.name,
+              type: p.type,
+              lastError: p.lastError ?? null,
+            })
+            continue
+          }
           try {
             const providerConfig = await loadProviderConfig(p)
             const caps = JSON.parse(p.capabilities) as string[]
@@ -112,15 +136,19 @@ export const listModelsTool: ToolRegistration = {
         }
 
         if (models.length === 0) {
+          const invalidHint = invalidProviders.length > 0
+            ? ` ${invalidProviders.length} configured provider(s) are currently failing (see invalidProviders for the error) — they likely have a bad/expired key; offer to re-enter the key and re-test.`
+            : ''
           return {
             models: [],
+            invalidProviders,
             note: capability
-              ? `No models with capability '${capability}' found. Check provider configuration.`
-              : 'No models found. Check provider configuration.',
+              ? `No models with capability '${capability}' found. Check provider configuration.${invalidHint}`
+              : `No models found. Check provider configuration.${invalidHint}`,
           }
         }
 
-        return { models }
+        return { models, invalidProviders }
       },
     }),
 }

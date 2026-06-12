@@ -1,9 +1,9 @@
 import { Hono } from 'hono'
 import { eq, and, asc } from 'drizzle-orm'
 import { db } from '@/server/db/index'
-import { tasks, messages, kins, tickets, projects } from '@/server/db/schema'
+import { tasks, messages, agents, tickets, projects } from '@/server/db/schema'
 import { getTask, listTasksPaginated, cancelTask, forcePromoteTask, pauseTask, resumeTask, injectIntoTask, getActiveTaskSnapshot, retryTask, TaskNotRetryableError, TaskNotFoundError } from '@/server/services/tasks'
-import { resolveThinkingConfig } from '@/server/services/kin-engine'
+import { resolveThinkingConfig } from '@/server/services/agent-engine'
 import { fetchCronLearningsByTask } from '@/server/services/cron-learnings'
 import { getTodosForTask } from '@/server/services/task-todos'
 import { getTaskTotals, getTaskTotalsBatch } from '@/server/services/token-usage'
@@ -19,27 +19,27 @@ export const taskRoutes = new Hono<{ Variables: AppVariables }>()
 // GET /api/tasks — list tasks with pagination, search, and optional filters
 taskRoutes.get('/', async (c) => {
   const status = c.req.query('status') as TaskStatus | undefined
-  const kinId = c.req.query('kinId')
+  const agentId = c.req.query('agentId')
   const cronId = c.req.query('cronId')
   const search = c.req.query('search')?.trim() || undefined
   const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 20), 1), 100)
   const offset = Math.max(Number(c.req.query('offset') ?? 0), 0)
 
-  const { tasks: allTasks, total } = await listTasksPaginated({ status, kinId, cronId, search, limit, offset })
+  const { tasks: allTasks, total } = await listTasksPaginated({ status, agentId, cronId, search, limit, offset })
 
-  // Fetch kin info (name + avatar + thinking config) for display
-  const kinIds = [...new Set(allTasks.flatMap((t) => [t.parentKinId, t.sourceKinId].filter((id): id is string => id != null)))]
-  const kinMap = new Map<string, { name: string; avatarUrl: string | null; model: string; thinkingConfig: string | null }>()
+  // Fetch agent info (name + avatar + thinking config) for display
+  const agentIds = [...new Set(allTasks.flatMap((t) => [t.parentAgentId, t.sourceAgentId].filter((id): id is string => id != null)))]
+  const agentMap = new Map<string, { name: string; avatarUrl: string | null; model: string; thinkingConfig: string | null }>()
 
-  for (const id of kinIds) {
-    const kin = await db.select({ id: kins.id, name: kins.name, avatarPath: kins.avatarPath, model: kins.model, thinkingConfig: kins.thinkingConfig }).from(kins).where(eq(kins.id, id)).get()
-    if (kin) {
-      const ext = kin.avatarPath?.split('.').pop() ?? 'png'
-      kinMap.set(kin.id, {
-        name: kin.name,
-        avatarUrl: kin.avatarPath ? `/api/uploads/kins/${kin.id}/avatar.${ext}` : null,
-        model: kin.model,
-        thinkingConfig: kin.thinkingConfig,
+  for (const id of agentIds) {
+    const agent = await db.select({ id: agents.id, name: agents.name, avatarPath: agents.avatarPath, model: agents.model, thinkingConfig: agents.thinkingConfig }).from(agents).where(eq(agents.id, id)).get()
+    if (agent) {
+      const ext = agent.avatarPath?.split('.').pop() ?? 'png'
+      agentMap.set(agent.id, {
+        name: agent.name,
+        avatarUrl: agent.avatarPath ? `/api/uploads/agents/${agent.id}/avatar.${ext}` : null,
+        model: agent.model,
+        thinkingConfig: agent.thinkingConfig,
       })
     }
   }
@@ -49,21 +49,21 @@ taskRoutes.get('/', async (c) => {
 
   return c.json({
     tasks: allTasks.map((t) => {
-      const parentKin = kinMap.get(t.parentKinId)
-      const sourceKin = t.sourceKinId ? kinMap.get(t.sourceKinId) : null
-      // Mirror the runtime cascade in tasks.ts: task.thinkingConfig ?? parentKin.thinkingConfig
+      const parentAgent = agentMap.get(t.parentAgentId)
+      const sourceAgent = t.sourceAgentId ? agentMap.get(t.sourceAgentId) : null
+      // Mirror the runtime cascade in tasks.ts: task.thinkingConfig ?? parentAgent.thinkingConfig
       // → resolveThinkingConfig() applies the default (medium) when neither is set.
-      const effectiveThinking = resolveThinkingConfig(t.thinkingConfig ?? parentKin?.thinkingConfig ?? null)
-      const effectiveModel = t.model ?? parentKin?.model ?? null
+      const effectiveThinking = resolveThinkingConfig(t.thinkingConfig ?? parentAgent?.thinkingConfig ?? null)
+      const effectiveModel = t.model ?? parentAgent?.model ?? null
       const providerType = effectiveModel ? guessProviderType(effectiveModel) : null
       return {
         id: t.id,
-        parentKinId: t.parentKinId,
-        parentKinName: parentKin?.name ?? 'Unknown',
-        parentKinAvatarUrl: parentKin?.avatarUrl ?? null,
-        sourceKinId: t.sourceKinId,
-        sourceKinName: sourceKin?.name ?? null,
-        sourceKinAvatarUrl: sourceKin?.avatarUrl ?? null,
+        parentAgentId: t.parentAgentId,
+        parentAgentName: parentAgent?.name ?? 'Unknown',
+        parentAgentAvatarUrl: parentAgent?.avatarUrl ?? null,
+        sourceAgentId: t.sourceAgentId,
+        sourceAgentName: sourceAgent?.name ?? null,
+        sourceAgentAvatarUrl: sourceAgent?.avatarUrl ?? null,
         title: t.title,
         description: t.description,
         status: t.status,
@@ -103,14 +103,14 @@ taskRoutes.get('/:id', async (c) => {
   const taskMessages = await db
     .select()
     .from(messages)
-    .where(and(eq(messages.kinId, task.parentKinId), eq(messages.taskId, taskId)))
+    .where(and(eq(messages.agentId, task.parentAgentId), eq(messages.taskId, taskId)))
     .orderBy(asc(messages.createdAt))
     .all()
 
-  // Resolve effective model + thinking config (fall back to parent Kin, mirroring tasks.ts runtime cascade)
-  const parentKin = await db.select({ model: kins.model, thinkingConfig: kins.thinkingConfig }).from(kins).where(eq(kins.id, task.parentKinId)).get()
-  const effectiveModel = task.model ?? parentKin?.model ?? null
-  const effectiveThinking = resolveThinkingConfig(task.thinkingConfig ?? parentKin?.thinkingConfig ?? null)
+  // Resolve effective model + thinking config (fall back to parent Agent, mirroring tasks.ts runtime cascade)
+  const parentAgent = await db.select({ model: agents.model, thinkingConfig: agents.thinkingConfig }).from(agents).where(eq(agents.id, task.parentAgentId)).get()
+  const effectiveModel = task.model ?? parentAgent?.model ?? null
+  const effectiveThinking = resolveThinkingConfig(task.thinkingConfig ?? parentAgent?.thinkingConfig ?? null)
 
   // Fetch learnings saved during this task run (if cron task)
   const learningsSaved = task.cronId
@@ -134,7 +134,7 @@ taskRoutes.get('/:id', async (c) => {
   const providerType = effectiveModel ? guessProviderType(effectiveModel) : null
 
   // Parent ticket info — surfaced so the task panel can show the ticket ref
-  // (e.g. kinbot#42) and let the user jump back to the ticket. Null for tasks
+  // (e.g. hivekeep#42) and let the user jump back to the ticket. Null for tasks
   // not bound to a ticket (spawn_self, cron, channel-origin, etc.).
   let ticketInfo: { id: string; number: number | null; projectSlug: string | null } | null = null
   if (task.ticketId) {
@@ -152,7 +152,7 @@ taskRoutes.get('/:id', async (c) => {
   return c.json({
     task: {
       id: task.id,
-      parentKinId: task.parentKinId,
+      parentAgentId: task.parentAgentId,
       title: task.title,
       description: task.description,
       status: task.status,
@@ -250,7 +250,7 @@ taskRoutes.post('/:id/cancel', async (c) => {
     return c.json({ error: { code: 'NOT_FOUND', message: 'Task not found' } }, 404)
   }
 
-  const success = await cancelTask(taskId, task.parentKinId)
+  const success = await cancelTask(taskId, task.parentAgentId)
   if (!success) {
     return c.json(
       { error: { code: 'TASK_NOT_CANCELLABLE', message: 'Task is already finished' } },
@@ -258,7 +258,7 @@ taskRoutes.post('/:id/cancel', async (c) => {
     )
   }
 
-  log.info({ taskId, parentKinId: task.parentKinId }, 'Task cancelled')
+  log.info({ taskId, parentAgentId: task.parentAgentId }, 'Task cancelled')
   return c.json({ success: true })
 })
 
