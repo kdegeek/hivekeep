@@ -1145,17 +1145,19 @@ export const projects = sqliteTable('projects', {
    *  override is provided. Falls back to the parent Agent's own model. */
   model: text('model'),
   providerId: text('provider_id'),
-  /** Optional default scout model for sub-Agent tasks spawned on tickets of
-   *  this project. One step in resolveScoutModel()'s chain (between the
-   *  per-Agent scout model and the global default). Coupled with
-   *  `scoutProviderId`. Null falls through to the global default → Agent main
+  /** Optional default scout model for work in a project context (ticket tasks
+   *  + active-project sessions). One step in resolveScoutModel()'s chain,
+   *  BETWEEN the per-call override and the per-Agent scout (project beats
+   *  Agent, like the main-task model chain). Coupled with `scoutProviderId`.
+   *  Null falls through to the Agent scout → global default → Agent main
    *  model. */
   scoutModel: text('scout_model'),
   scoutProviderId: text('scout_provider_id'),
   /** Optional default thinking/reasoning config for sub-Agent tasks spawned on
-   *  tickets of this project. JSON: AgentThinkingConfig. Same freeze-at-spawn
-   *  pattern as `model`: copied into `tasks.thinking_config` if no explicit
-   *  task override is given. Falls back to the parent Agent's own config. */
+   *  tickets of this project (and for scouts dispatched in a project context).
+   *  JSON: AgentThinkingConfig. Same freeze-at-spawn pattern as `model`:
+   *  copied into `tasks.thinking_config` if no explicit task override is
+   *  given. Falls back to the parent Agent's own config. */
   thinkingConfig: text('thinking_config'),
   /** Optional default toolbox selection for sub-Agent tasks spawned on tickets
    *  of this project. JSON: string[] of toolbox ids. Frozen into

@@ -7,10 +7,15 @@
  * The model is resolved through a fallback chain, most-specific first:
  *
  *   1. per-spawn override   (explicit { modelId, providerId } passed at call)
- *   2. Agent scout            (agents.scout_model / agents.scout_provider_id)
- *   3. project scout        (projects.scout_model / projects.scout_provider_id)
+ *   2. project scout        (projects.scout_model / projects.scout_provider_id)
+ *   3. Agent scout          (agents.scout_model / agents.scout_provider_id)
  *   4. global scout default (app_settings default_scout_model / _provider_id)
  *   5. Agent's own main model (agents.model / agents.provider_id) — the safety net
+ *
+ * Project beats Agent (founder decision, 2026-06-12): a project-level default
+ * homogenizes every Agent working on that project, exactly like the main-task
+ * chain in createTask (params > project > agent). Only the per-call override
+ * outranks it.
  *
  * A scout/main model pair is "set" only when its model is a non-empty string.
  * The providerId is allowed to be null at every tier (null = auto-resolve, the
@@ -85,11 +90,7 @@ export async function resolveScoutModel(
     .get()
   if (!agent) throw new Error(`resolveScoutModel: agent not found: ${agentId}`)
 
-  // 2. Agent-level scout model.
-  const fromAgent = asTier(agent.scoutModel, agent.scoutProviderId)
-  if (fromAgent) return fromAgent
-
-  // 3. Project-level scout model.
+  // 2. Project-level scout model (beats the Agent's own scout setting).
   if (projectId) {
     const project = db
       .select({ scoutModel: projects.scoutModel, scoutProviderId: projects.scoutProviderId })
@@ -99,6 +100,10 @@ export async function resolveScoutModel(
     const fromProject = asTier(project?.scoutModel, project?.scoutProviderId)
     if (fromProject) return fromProject
   }
+
+  // 3. Agent-level scout model.
+  const fromAgent = asTier(agent.scoutModel, agent.scoutProviderId)
+  if (fromAgent) return fromAgent
 
   // 4. Global scout default (k/v app setting).
   const [globalModel, globalProviderId] = await Promise.all([

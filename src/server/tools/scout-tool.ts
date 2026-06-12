@@ -2,11 +2,13 @@ import { tool } from '@/server/tools/tool-helper'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { db } from '@/server/db/index'
-import { tickets, agents } from '@/server/db/schema'
+import { tickets, agents, projects } from '@/server/db/schema'
 import { spawnTask, suspendTaskForChild } from '@/server/services/tasks'
 import { resolveScoutModel } from '@/server/llm/core/resolve-scout'
 import { createLogger } from '@/server/logger'
 import type { ToolRegistration } from '@/server/tools/types'
+import type { AgentThinkingConfig, AgentThinkingEffort } from '@/shared/types'
+import { THINKING_EFFORTS } from '@/shared/constants'
 
 const log = createLogger('tools:scout')
 
@@ -16,7 +18,7 @@ const log = createLogger('tools:scout')
  * burning Opus steps on it.
  *
  * Behaviour: spawn an `await` sub-task on the resolved scout model
- * (resolveScoutModel: per-spawn override → Agent scout → project scout → global
+ * (resolveScoutModel: per-spawn override → project scout → Agent scout → global
  * scout default → the Agent's own model) with the read-only 'scout' built-in
  * toolbox (grep / read_file / list_directory / web_search / browse_url /
  * extract_links — NO writes, NO scout/spawn tools, so a scout is always a
@@ -74,8 +76,12 @@ export const scoutTool: ToolRegistration = {
           .string()
           .optional()
           .describe('Provider slug or UUID for the overridden scout model. Required whenever `model` is set.'),
+        thinking_effort: z
+          .enum(['off', ...THINKING_EFFORTS] as [string, ...string[]])
+          .optional()
+          .describe('Reasoning effort for this scout only. "off" disables thinking. Omit to inherit the project default, then the calling Agent\'s config. Scouts are meant to be fast and cheap — prefer low efforts.'),
       }),
-      execute: async ({ task_description, title, hints, model, provider_id }) => {
+      execute: async ({ task_description, title, hints, model, provider_id, thinking_effort }) => {
         if (model && !provider_id) {
           return {
             error:
@@ -116,6 +122,28 @@ export const scoutTool: ToolRegistration = {
           projectId,
           override: model ? { modelId: model, providerId: provider_id ?? null } : null,
         })
+
+        // Reasoning for the scout — same priority principle as the model:
+        // per-call override → project default → (at execution) the calling
+        // Agent's own thinking config. Frozen on the task row when a tier hits;
+        // left null otherwise so the execution-time Agent fallback applies.
+        let thinkingConfig: AgentThinkingConfig | undefined
+        if (thinking_effort === 'off') {
+          thinkingConfig = { enabled: false }
+        } else if (thinking_effort) {
+          thinkingConfig = { enabled: true, effort: thinking_effort as AgentThinkingEffort }
+        } else if (projectId) {
+          const projectRow = db
+            .select({ thinkingConfig: projects.thinkingConfig })
+            .from(projects)
+            .where(eq(projects.id, projectId))
+            .get()
+          if (projectRow?.thinkingConfig) {
+            try {
+              thinkingConfig = JSON.parse(projectRow.thinkingConfig) as AgentThinkingConfig
+            } catch { /* malformed project config — fall back to the Agent's */ }
+          }
+        }
 
         // Resolve the read-only 'scout' built-in toolbox. It excludes
         // scout/spawn_self/spawn_agent, so a scout sub-task is always a LEAF.
@@ -161,6 +189,7 @@ export const scoutTool: ToolRegistration = {
             model: scout.modelId,
             providerId: scout.providerId ?? undefined,
             toolboxIds: [scoutBox.id],
+            thinkingConfig,
             channelOriginId: ctx.channelOriginId,
             parentTaskId: ctx.taskId ?? undefined,
             depth: ctx.taskDepth ? ctx.taskDepth + 1 : undefined,

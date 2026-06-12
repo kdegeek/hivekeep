@@ -30,10 +30,15 @@ The `scout` tool is included in the built-in `code`, `research`, and `ops` toolb
 The scout model is resolved through a fallback chain, most specific first. The first tier that has a non-empty model wins:
 
 1. **Per-call override**: an explicit `model` (plus its `provider_id`) passed to the `scout` tool for that call only.
-2. **Agent scout**: the Agent's own `scoutModel` / `scoutProviderId`.
-3. **Project scout**: when the scout runs in a project context, the project's `scoutModel` / `scoutProviderId`.
+2. **Project scout**: when the scout runs in a project context (a ticket task, or the Agent's active project), the project's `scoutModel` / `scoutProviderId`.
+3. **Agent scout**: the Agent's own `scoutModel` / `scoutProviderId`.
 4. **Global scout default**: the platform-wide default (`default_scout_model` / `default_scout_provider_id`).
 5. **The Agent's own main model**: the safety net.
+
+The project beats the Agent on purpose: a project-level default homogenizes
+every Agent working on that project, exactly like the main-task chain
+(explicit override → project default → Agent). Only the per-call override
+outranks a project default.
 
 Because the chain ends at the Agent's own model, scout is **purely additive**: on an install with no scout configuration at all, every scout simply runs on the calling Agent's main model. Nothing breaks; you just do not get the cost savings until you point scout at a cheaper model.
 
@@ -46,8 +51,8 @@ When you override the scout model on a single `scout` call, you must pass `provi
 Scout is configured through the UI, at three levels matching the resolution chain. (There is no environment variable for the scout default; it is stored as a platform setting.)
 
 - **Global default**: in **Settings → Models & services**, set the **Default Scout Model**. A small, fast model is ideal here. When unset, scouts fall back to the calling Agent's own model.
-- **Per Agent**: in an Agent's settings, set its **Scout model**. Leave it on inherit to fall back to the project scout default, then the global default, then the Agent's own model.
-- **Per project**: in a project's settings, set its **Default scout model** to override the global default for tasks on that project's tickets.
+- **Per Agent**: in an Agent's settings, set its **Scout model**. A project scout default (when the work runs in a project context) takes precedence over it; leave it on inherit to fall back to the global default, then the Agent's own model.
+- **Per project**: in a project's settings, set its **Default scout model**. It takes precedence over each Agent's scout setting and the global default for work in that project.
 
 These can also be set programmatically. The global default is one of the model-bearing services handled by the `set_default_model` tool, alongside `llm`, `embedding`, `image`, `compacting`, and `extraction`:
 
@@ -56,6 +61,20 @@ set_default_model(service: "scout", model: "claude-haiku-4-6", provider_id: "ant
 ```
 
 [Queenie](/docs/features/queenie/) can do this for you in conversation, and `get_default_models` reports the current scout default along with the rest.
+
+## Reasoning effort for scouts
+
+The scout's reasoning follows the same priority principle as its model:
+
+1. **Per-call override**: the `scout` tool accepts a `thinking_effort` argument
+   (`off`, `minimal` … `max`) for that call only.
+2. **Project default**: the project's default reasoning config, when the scout
+   runs in a project context.
+3. **The calling Agent's own thinking config**: the fallback at execution time.
+
+Scouts are meant to be fast and cheap; prefer low efforts (or `off`) when
+overriding. As everywhere else, the requested effort is clamped at run time to
+what the scout model actually supports.
 
 ## When to use scout
 
