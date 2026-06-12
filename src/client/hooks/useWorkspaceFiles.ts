@@ -3,6 +3,41 @@ import { api, getErrorMessage } from '@/client/lib/api'
 import { useSSEResync } from '@/client/hooks/useSSE'
 import type { WorkspaceEntry } from '@/shared/types'
 
+/** Parent dir of a workspace-relative path ('' = root). */
+export const parentDirOf = (path: string) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '')
+
+/**
+ * App-level clipboard for workspace entries (files.md § 4.3) — survives
+ * workspace switches so cross-workspace copy/paste works. Never touches the
+ * OS clipboard (a server file cannot live there).
+ */
+export interface WorkspaceClipboard {
+  agentId: string
+  path: string
+  isDirectory: boolean
+  op: 'copy' | 'cut'
+}
+let clipboardValue: WorkspaceClipboard | null = null
+const clipboardListeners = new Set<() => void>()
+export function setWorkspaceClipboard(value: WorkspaceClipboard | null) {
+  clipboardValue = value
+  for (const listener of clipboardListeners) listener()
+}
+export function getWorkspaceClipboard() {
+  return clipboardValue
+}
+export function useWorkspaceClipboard(): WorkspaceClipboard | null {
+  const [value, setValue] = useState(clipboardValue)
+  useEffect(() => {
+    const listener = () => setValue(clipboardValue)
+    clipboardListeners.add(listener)
+    return () => {
+      clipboardListeners.delete(listener)
+    }
+  }, [])
+  return value
+}
+
 /** Loading state of one lazily-fetched directory of the workspace tree. */
 export interface WorkspaceDirState {
   entries: WorkspaceEntry[] | null
@@ -107,5 +142,92 @@ export function useWorkspaceFiles(agentId: string | null) {
   refreshRef.current = refresh
   useSSEResync(() => refreshRef.current())
 
-  return { dirs, expanded, loadDir, toggleDir, expandTo, refresh, setDirs }
+  // ── Mutations (files.md § 4/6.5/6.6) — each reloads the affected dirs ──────
+
+  const base = useCallback(
+    () => `/agents/${encodeURIComponent(agentId ?? '')}/workspace`,
+    [agentId],
+  )
+
+  const createFile = useCallback(
+    async (dirPath: string, name: string): Promise<string> => {
+      const path = dirPath ? `${dirPath}/${name}` : name
+      await api.put(`${base()}/file`, { path, content: '', createOnly: true })
+      await loadDir(dirPath)
+      return path
+    },
+    [base, loadDir],
+  )
+
+  const createDir = useCallback(
+    async (dirPath: string, name: string): Promise<string> => {
+      const path = dirPath ? `${dirPath}/${name}` : name
+      await api.post(`${base()}/mkdir`, { path })
+      await loadDir(dirPath)
+      return path
+    },
+    [base, loadDir],
+  )
+
+  const movePath = useCallback(
+    async (from: string, to: string, fromAgentId?: string): Promise<string> => {
+      const result = await api.post<{ from: string; to: string }>(`${base()}/move`, { from, to, fromAgentId })
+      await loadDir(parentDirOf(to))
+      if (!fromAgentId || fromAgentId === agentId) await loadDir(parentDirOf(from))
+      return result.to
+    },
+    [base, loadDir, agentId],
+  )
+
+  const copyPath = useCallback(
+    async (from: string, to: string, fromAgentId?: string): Promise<string> => {
+      const result = await api.post<{ from: string; to: string }>(`${base()}/copy`, { from, to, fromAgentId })
+      await loadDir(parentDirOf(result.to))
+      return result.to
+    },
+    [base, loadDir],
+  )
+
+  const removePath = useCallback(
+    async (path: string): Promise<void> => {
+      await api.delete(`${base()}/file?path=${encodeURIComponent(path)}`)
+      await loadDir(parentDirOf(path))
+    },
+    [base, loadDir],
+  )
+
+  const uploadFiles = useCallback(
+    async (dirPath: string, files: File[]): Promise<{ files: Array<{ path: string }>; errors: Array<{ name: string; code: string }> }> => {
+      // Raw fetch: the shared api helper JSON-encodes bodies (multipart needs
+      // the browser-set boundary header) — same pattern as useFileUpload.
+      const formData = new FormData()
+      formData.append('path', dirPath)
+      for (const file of files) formData.append('file', file)
+      const res = await fetch(`/api${base()}/upload`, { method: 'POST', credentials: 'include', body: formData })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
+        throw new Error(data?.error?.message ?? 'Upload failed')
+      }
+      const result = (await res.json()) as { files: Array<{ path: string }>; errors: Array<{ name: string; code: string }> }
+      await loadDir(dirPath)
+      return result
+    },
+    [base, loadDir],
+  )
+
+  return {
+    dirs,
+    expanded,
+    loadDir,
+    toggleDir,
+    expandTo,
+    refresh,
+    setDirs,
+    createFile,
+    createDir,
+    movePath,
+    copyPath,
+    removePath,
+    uploadFiles,
+  }
 }

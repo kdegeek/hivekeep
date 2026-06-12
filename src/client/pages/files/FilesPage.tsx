@@ -3,24 +3,40 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Folder, FolderTree, RefreshCw, Loader2, FilePlus2 } from 'lucide-react'
+import { toastError } from '@/client/lib/api'
 import { PageHeader } from '@/client/components/layout/PageHeader'
 import { EmptyState } from '@/client/components/common/EmptyState'
 import { AgentSelector } from '@/client/components/common/AgentSelector'
 import { UnsavedChangesDialog } from '@/client/components/common/UnsavedChangesDialog'
 import { Button } from '@/client/components/ui/button'
 import { Sheet, SheetContent, SheetTitle } from '@/client/components/ui/sheet'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/client/components/ui/alert-dialog'
 import { useAgentList } from '@/client/hooks/useAgentList'
-import { useWorkspaceFiles } from '@/client/hooks/useWorkspaceFiles'
+import {
+  useWorkspaceFiles,
+  parentDirOf,
+  setWorkspaceClipboard,
+  getWorkspaceClipboard,
+} from '@/client/hooks/useWorkspaceFiles'
 import { useWorkspaceTabs } from '@/client/hooks/useWorkspaceTabs'
-import { WorkspaceTree } from '@/client/components/files/WorkspaceTree'
-import { WorkspaceEditor } from '@/client/components/files/WorkspaceEditor'
+import { WorkspaceTree, type WorkspaceTreeActions } from '@/client/components/files/WorkspaceTree'
+import { WorkspaceEditor, workspaceRawUrl } from '@/client/components/files/WorkspaceEditor'
 import { FileTabs } from '@/client/components/files/FileTabs'
 import type { WorkspaceEntry } from '@/shared/types'
 
 const LAST_AGENT_KEY = 'files.lastAgentId'
 
 /**
- * Files section (files.md § 3): VSCode-like browser/editor over agent
+ * Files section (files.md § 3-4): VSCode-like browser/editor over agent
  * workspaces. Deep-linkable as /files/:agentId?path=relative/path.
  */
 export function FilesPage() {
@@ -44,28 +60,26 @@ export function FilesPage() {
     if (activeAgentId) localStorage.setItem(LAST_AGENT_KEY, activeAgentId)
   }, [activeAgentId])
 
-  const { dirs, expanded, loadDir, toggleDir, expandTo, refresh } = useWorkspaceFiles(activeAgentId)
+  const workspace = useWorkspaceFiles(activeAgentId)
   const tabsApi = useWorkspaceTabs(activeAgentId)
 
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [treeSheetOpen, setTreeSheetOpen] = useState(false)
   const [closingTab, setClosingTab] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<WorkspaceEntry | null>(null)
 
   const openPath = useCallback(
     (path: string) => {
       setSelectedPath(path)
-      expandTo(path)
+      workspace.expandTo(path)
       tabsApi.openTab(path)
     },
-    [expandTo, tabsApi],
+    [workspace, tabsApi],
   )
 
   // Deep link: open ?path= once the agent list resolved the workspace.
   useEffect(() => {
     if (!activeAgentId || !requestedPath) return
-    // A directory deep-link just expands the tree; a file opens a tab. We
-    // can't know which without asking — openTab handles the 404/dir cases by
-    // surfacing state; the cheap probe here is the ls of its parent.
     openPath(requestedPath)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAgentId, requestedPath])
@@ -80,6 +94,117 @@ export function FilesPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabsApi.states[requestedPath ?? '']?.deletedOnDisk])
+
+  /** Close (or retarget after rename) the tabs touched by a tree mutation. */
+  const closeTabsUnder = useCallback(
+    (path: string, isDir: boolean) => {
+      for (const tab of tabsApi.tabs) {
+        if (tab === path || (isDir && tab.startsWith(path + '/'))) tabsApi.forceCloseTab(tab)
+      }
+    },
+    [tabsApi],
+  )
+
+  const treeActions: WorkspaceTreeActions = {
+    createFile: async (dirPath, name) => {
+      try {
+        const path = await workspace.createFile(dirPath, name)
+        openPath(path)
+      } catch (err) {
+        toastError(err)
+      }
+    },
+    createDir: async (dirPath, name) => {
+      try {
+        await workspace.createDir(dirPath, name)
+      } catch (err) {
+        toastError(err)
+      }
+    },
+    rename: async (entry, newName) => {
+      const parent = parentDirOf(entry.path)
+      const to = parent ? `${parent}/${newName}` : newName
+      try {
+        const finalPath = await workspace.movePath(entry.path, to)
+        const wasOpen = tabsApi.tabs.includes(entry.path)
+        closeTabsUnder(entry.path, entry.type === 'dir')
+        if (wasOpen && entry.type === 'file') tabsApi.openTab(finalPath)
+        if (selectedPath === entry.path) setSelectedPath(finalPath)
+      } catch (err) {
+        toastError(err)
+      }
+    },
+    moveInto: async (entry, destDir) => {
+      const to = destDir ? `${destDir}/${entry.name}` : entry.name
+      try {
+        const finalPath = await workspace.movePath(entry.path, to)
+        const wasOpen = tabsApi.tabs.includes(entry.path)
+        closeTabsUnder(entry.path, entry.type === 'dir')
+        if (wasOpen && entry.type === 'file') tabsApi.openTab(finalPath)
+      } catch (err) {
+        toastError(err)
+      }
+    },
+    requestDelete: (entry) => setDeleteTarget(entry),
+    download: (entry) => {
+      if (!activeAgentId) return
+      const anchor = document.createElement('a')
+      anchor.href = workspaceRawUrl(activeAgentId, entry.path)
+      anchor.download = entry.name
+      anchor.click()
+    },
+    copyRelativePath: (entry) => {
+      void navigator.clipboard.writeText(entry.path)
+      toast.success(t('files.tree.pathCopied'))
+    },
+    clipboardSet: (entry, op) => {
+      if (!activeAgentId) return
+      setWorkspaceClipboard({ agentId: activeAgentId, path: entry.path, isDirectory: entry.type === 'dir', op })
+    },
+    clipboardPaste: async (destDir) => {
+      const clip = getWorkspaceClipboard()
+      if (!clip || !activeAgentId) return
+      const name = clip.path.split('/').pop() ?? clip.path
+      const to = destDir ? `${destDir}/${name}` : name
+      const fromAgentId = clip.agentId !== activeAgentId ? clip.agentId : undefined
+      try {
+        if (clip.op === 'copy') {
+          await workspace.copyPath(clip.path, to, fromAgentId)
+        } else {
+          await workspace.movePath(clip.path, to, fromAgentId)
+          setWorkspaceClipboard(null)
+        }
+      } catch (err) {
+        toastError(err)
+      }
+    },
+    uploadTo: async (dirPath, files) => {
+      try {
+        const result = await workspace.uploadFiles(dirPath, files)
+        if (result.errors.length > 0) {
+          toast.error(t('files.tree.uploadErrors', { count: result.errors.length, name: result.errors[0]!.name }))
+        } else {
+          toast.success(t('files.tree.uploaded', { count: result.files.length }))
+        }
+        workspace.expandTo(`${dirPath}/x`)
+      } catch (err) {
+        toastError(err)
+      }
+    },
+  }
+
+  const confirmDelete = async () => {
+    const entry = deleteTarget
+    setDeleteTarget(null)
+    if (!entry) return
+    try {
+      await workspace.removePath(entry.path)
+      closeTabsUnder(entry.path, entry.type === 'dir')
+      if (selectedPath === entry.path) setSelectedPath(null)
+    } catch (err) {
+      toastError(err)
+    }
+  }
 
   const handleSelectFile = (entry: WorkspaceEntry) => {
     setTreeSheetOpen(false)
@@ -96,7 +221,7 @@ export function FilesPage() {
     }
   }
 
-  const rootState = dirs['']
+  const rootState = workspace.dirs['']
   const workspaceIsEmpty = rootState?.entries != null && rootState.entries.length === 0
 
   const treePanel = (
@@ -109,20 +234,19 @@ export function FilesPage() {
           placeholder={t('files.selectWorkspace')}
         />
       </div>
-      {workspaceIsEmpty ? (
-        <div className="flex flex-1 items-start justify-center p-4">
-          <EmptyState icon={Folder} title={t('files.empty.title')} description={t('files.empty.description')} compact />
-        </div>
-      ) : (
-        <WorkspaceTree
-          dirs={dirs}
-          expanded={expanded}
-          selectedPath={selectedPath}
-          onToggleDir={toggleDir}
-          onSelectFile={handleSelectFile}
-          onSelectDir={(entry) => setSelectedPath(entry.path)}
-          onRetryDir={(path) => void loadDir(path)}
-        />
+      <WorkspaceTree
+        dirs={workspace.dirs}
+        expanded={workspace.expanded}
+        selectedPath={selectedPath}
+        onToggleDir={workspace.toggleDir}
+        onSelectFile={handleSelectFile}
+        onSelectDir={(entry) => setSelectedPath(entry.path)}
+        onRetryDir={(path) => void workspace.loadDir(path)}
+        onRefresh={workspace.refresh}
+        actions={treeActions}
+      />
+      {workspaceIsEmpty && (
+        <div className="px-4 pb-4 text-center text-xs text-muted-foreground">{t('files.empty.description')}</div>
       )}
     </div>
   )
@@ -147,7 +271,7 @@ export function FilesPage() {
           </Button>
         }
         actions={
-          <Button variant="ghost" size="icon-sm" onClick={refresh} aria-label={t('files.refresh')} title={t('files.refresh')}>
+          <Button variant="ghost" size="icon-sm" onClick={workspace.refresh} aria-label={t('files.refresh')} title={t('files.refresh')}>
             <RefreshCw className="size-4" />
           </Button>
         }
@@ -214,6 +338,25 @@ export function FilesPage() {
         }}
         onCancel={() => setClosingTab(null)}
       />
+
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('files.tree.deleteConfirm.title', { name: deleteTarget?.name ?? '' })}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.type === 'dir'
+                ? t('files.tree.deleteConfirm.folderDescription')
+                : t('files.tree.deleteConfirm.fileDescription')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => void confirmDelete()}>
+              {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -3585,7 +3585,27 @@
     },
     "tree": {
       "loadError": "Failed to load — tap to retry",
-      "emptyFolder": "empty"
+      "emptyFolder": "empty",
+      "title": "Files",
+      "newFile": "New file",
+      "newFolder": "New folder",
+      "upload": "Upload files",
+      "uploadHere": "Upload here",
+      "rename": "Rename",
+      "copy": "Copy",
+      "cut": "Cut",
+      "paste": "Paste",
+      "share": "Share…",
+      "insertInChat": "Insert in chat",
+      "copyPath": "Copy relative path",
+      "pathCopied": "Path copied to clipboard",
+      "uploaded": "{{count}} file(s) uploaded",
+      "uploadErrors": "{{count}} file(s) rejected (e.g. {{name}})",
+      "deleteConfirm": {
+        "title": "Delete “{{name}}”?",
+        "fileDescription": "This file will be permanently deleted from the workspace.",
+        "folderDescription": "This folder and everything inside it will be permanently deleted."
+      }
     },
     "editor": {
       "download": "Download",
