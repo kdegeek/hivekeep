@@ -48,6 +48,9 @@ export const createMiniAppTool: ToolRegistration = {
         'Create a new mini web app displayed in the Hivekeep sidebar. ' +
         'Call get_mini_app_docs first for full SDK reference. ' +
         'Use get_mini_app_templates to start from a template. ' +
+        'Apps can have a _server.js backend; with "background": true in app.json it runs as a live ' +
+        'service (boot-loaded, onStart/onStop, local cron jobs via ctx.schedule, platform notifications ' +
+        'via ctx.notify, and permission-gated access to vault secrets / LLM / you via app.json "permissions"). ' +
         'Bare ES imports (react, @hivekeep/react, …) resolve ONLY via an app.json import map, ' +
         'never via inline HTML tags — pass `dependencies` (shorthand import map) or a `files` ' +
         'map that includes app.json so the app works in a single call. If you provide HTML with ' +
