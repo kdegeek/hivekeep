@@ -2424,7 +2424,9 @@
       "mcp-pending-approval": "MCP wartet auf Freigabe",
       "agent-error": "Agent-Fehler",
       "agent-alert": "Agent-Hinweis",
-      "mention": "Erwähnung"
+      "mention": "Erwähnung",
+      "miniapp-notify": "Mini-App-Benachrichtigung",
+      "email-pending-send-approval": "E-Mail wartet auf Freigabe"
     },
     "descriptions": {
       "prompt-pending": "Ein Agent wartet auf deine Antwort, um fortzufahren",
@@ -2433,7 +2435,9 @@
       "mcp-pending-approval": "Ein von einem Agenten hinzugefügter MCP-Server braucht deine Freigabe",
       "agent-error": "Ein Agent ist auf einen Fehler gestoßen, der untersucht werden sollte",
       "agent-alert": "Ein Agent hat dir eine Benachrichtigung gesendet",
-      "mention": "Jemand hat dich in einer Unterhaltung erwähnt"
+      "mention": "Jemand hat dich in einer Unterhaltung erwähnt",
+      "miniapp-notify": "Eine Mini-App hat eine Benachrichtigung aus ihrem Hintergrunddienst gesendet",
+      "email-pending-send-approval": "Ein Agent möchte eine E-Mail senden, die deine Freigabe benötigt"
     }
   },
   "modelPicker": {
@@ -2794,7 +2798,8 @@
       "get_project_knowledge": "Projektwissen abrufen",
       "update_project_knowledge": "Projektwissen aktualisieren",
       "delete_project_knowledge": "Projektwissen löschen",
-      "pin_project_knowledge": "Projektwissen anpinnen"
+      "pin_project_knowledge": "Projektwissen anpinnen",
+      "get_mini_app_backend_status": "Mini-App-Backend-Status"
     },
     "renderers": {
       "rawJson": "Roh-JSON",
@@ -3165,6 +3170,11 @@
       "selectPlaceholder": "Agent auswählen",
       "reassign": "Neu zuweisen",
       "reassigned": "Betreuer auf {{agent}} gesetzt"
+    },
+    "permissions": {
+      "title": "Vom Backend angeforderte Berechtigungen",
+      "approve": "Genehmigen",
+      "granted": "Berechtigungen erteilt"
     }
   },
   "accessibility": {
@@ -3699,5 +3709,13 @@
       "noResults": "Keine passende Datei",
       "open": "Schnell öffnen (Ctrl+P)"
     }
+  },
+  "updateOverlay": {
+    "title": "Hivekeep wird aktualisiert",
+    "successTitle": "Aktualisierung abgeschlossen",
+    "toVersion": "Aktualisierung auf {{version}}"
+  },
+  "topbar": {
+    "updateAvailable": "Aktualisierung"
   }
 }

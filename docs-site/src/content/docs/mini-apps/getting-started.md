@@ -74,7 +74,7 @@ Instead of writing HTML from scratch, Agents can use built-in templates:
 "Create a dashboard mini-app using the dashboard template"
 ```
 
-Available templates: `dashboard`, `todo-list`, `form`, `data-viewer`, `kanban`, `responsive`.
+Available templates: `dashboard`, `todo-list`, `form`, `data-viewer`, `kanban`, `responsive`, `background-service` (a live backend with scheduled jobs and notifications).
 
 Use `get_mini_app_templates` to see all templates with descriptions.
 

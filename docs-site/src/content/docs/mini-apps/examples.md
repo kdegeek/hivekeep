@@ -290,12 +290,47 @@ createRoot(document.getElementById("root")).render(<App />);
 </script>
 ```
 
+## Background Service
+
+A mini-app that keeps working with no UI open: `app.json` declares `"background": true`, the backend polls on a schedule and notifies the user. See [Backend](/docs/mini-apps/backend/) for the full runtime reference, or scaffold it with the `background-service` template.
+
+```javascript
+// _server.js
+export async function onStart(ctx) {
+  ctx.schedule("poll", "*/30 * * * *", async () => {
+    const res = await ctx.fetch("https://api.example.com/status");
+    const status = await res.json();
+    const previous = await ctx.storage.get("status");
+    await ctx.storage.set("status", status);
+    ctx.events.emit("status", status);                  // live update for open UIs
+    if (previous && status.state !== previous.state) {
+      await ctx.notify("Status changed", status.state); // platform notification
+    }
+  });
+}
+
+export function onClientEvent(ctx, event, data, meta) {
+  if (event === "refresh-now") return { ok: true };     // UI → backend channel
+}
+
+export default function (ctx) {
+  const app = new ctx.Hono();
+  app.get("/status", async (c) => c.json(await ctx.storage.get("status")));
+  return app;
+}
+```
+
+```json
+// app.json
+{ "background": true }
+```
+
 ## Templates
 
 Hivekeep includes built-in templates for common patterns. Ask an Agent:
 
 > "Create a mini-app using the kanban template"
 
-Available templates: `dashboard`, `todo-list`, `form`, `data-viewer`, `kanban`, `responsive`.
+Available templates: `dashboard`, `todo-list`, `form`, `data-viewer`, `kanban`, `responsive`, `background-service`.
 
 Use `get_mini_app_templates` to see all templates with descriptions and full source code.

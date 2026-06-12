@@ -2424,7 +2424,9 @@
       "mcp-pending-approval": "MCP 待批准",
       "agent-error": "智能体错误",
       "agent-alert": "智能体提醒",
-      "mention": "提及"
+      "mention": "提及",
+      "miniapp-notify": "迷你应用通知",
+      "email-pending-send-approval": "邮件待审批"
     },
     "descriptions": {
       "prompt-pending": "有智能体正在等待你的回复才能继续",
@@ -2433,7 +2435,9 @@
       "mcp-pending-approval": "智能体添加的 MCP 服务器需要你的批准",
       "agent-error": "有智能体遇到了可能需要排查的错误",
       "agent-alert": "有智能体给你发送了通知",
-      "mention": "有人在对话中提到了你"
+      "mention": "有人在对话中提到了你",
+      "miniapp-notify": "一个迷你应用从其后台服务发送了通知",
+      "email-pending-send-approval": "智能体想要发送一封需要你审批的邮件"
     }
   },
   "modelPicker": {
@@ -2794,7 +2798,8 @@
       "get_project_knowledge": "获取项目知识",
       "update_project_knowledge": "更新项目知识",
       "delete_project_knowledge": "删除项目知识",
-      "pin_project_knowledge": "置顶项目知识"
+      "pin_project_knowledge": "置顶项目知识",
+      "get_mini_app_backend_status": "迷你应用后端状态"
     },
     "renderers": {
       "rawJson": "原始 JSON",
@@ -3165,6 +3170,11 @@
       "selectPlaceholder": "选择智能体",
       "reassign": "重新指派",
       "reassigned": "维护者已设为 {{agent}}"
+    },
+    "permissions": {
+      "title": "后端请求的权限",
+      "approve": "批准",
+      "granted": "权限已授予"
     }
   },
   "accessibility": {
@@ -3699,5 +3709,13 @@
       "noResults": "没有匹配的文件",
       "open": "快速打开（Ctrl+P）"
     }
+  },
+  "updateOverlay": {
+    "title": "正在更新 Hivekeep",
+    "successTitle": "更新完成",
+    "toVersion": "正在更新到 {{version}}"
+  },
+  "topbar": {
+    "updateAvailable": "更新"
   }
 }

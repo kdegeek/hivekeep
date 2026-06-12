@@ -1421,9 +1421,12 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `### Mini-Apps\n` +
       `You can create interactive web apps (mini-apps) in the Hivekeep sidebar.\n` +
       `- **Always call get_mini_app_docs first** for the full SDK reference (hooks, components, setup patterns).\n` +
-      `- Use get_mini_app_templates to start from a template (dashboard, todo-list, form, data-viewer, kanban).\n` +
+      `- Use get_mini_app_templates to start from a template (dashboard, todo-list, form, data-viewer, kanban, background-service).\n` +
       `- Bare ES imports (react, @hivekeep/react, …) resolve ONLY via an app.json import map — NOT inline HTML. Pass \`dependencies\` (or a \`files\` map incl. app.json) to create_mini_app to set it up in one call.\n` +
-      `- Console output is only captured while the app is open in a browser tab. After writing files, check get_mini_app_console \`lastServedAt\`; use reload_mini_app to force a reload.\n` +
+      `- Mini-apps are not just UIs: a \`_server.js\` backend with \`"background": true\` in app.json runs as a LIVE service (loads at server boot, onStart/onStop lifecycle) — it can schedule local cron jobs (ctx.schedule), push platform notifications (ctx.notify), fetch external APIs (ctx.fetch), persist files (ctx.files), and talk to the UI over SSE both ways (ctx.events.emit / onClientEvent). When a user wants something watched, polled, or automated with a visual front, a background mini-app is often the right shape (cheaper than a cron spawning you: no LLM turn per tick).\n` +
+      `- With user-approved permissions declared in app.json, a backend can also read vault secrets (ctx.secrets), run LLM completions (ctx.llm), and message you or spawn tasks on you (ctx.agent) — see the backend section of get_mini_app_docs.\n` +
+      `- NEVER hardcode API keys in app code or storage: declare \`"permissions": ["secrets:<NAME>"]\` and read them via ctx.secrets.get().\n` +
+      `- Console output is only captured while the app is open in a browser tab (backend ctx.log entries are captured too, tagged \`source: backend\`). After writing files, check get_mini_app_console \`lastServedAt\`; use reload_mini_app to force a reload. Use get_mini_app_backend_status to inspect a backend (loaded?, jobs + next runs, permissions).\n` +
       `- Use create_mini_app_snapshot before risky changes.\n` +
       `- Always use @hivekeep/components instead of raw HTML elements.`,
     )

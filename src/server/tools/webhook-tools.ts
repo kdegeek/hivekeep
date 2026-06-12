@@ -93,7 +93,9 @@ export const updateWebhookTool: ToolRegistration = {
         webhook_id: z.string(),
         name: z.string().optional(),
         description: z.string().optional(),
+        // Accept both snake_case (canonical) and camelCase (LLM-friendly alias)
         is_active: z.boolean().optional(),
+        isActive: z.boolean().optional(),
         filter_mode: z.enum(['simple', 'advanced']).nullable().optional()
           .describe('Filter mode: "simple" for field+allowlist, "advanced" for regex, null to disable filtering.'),
         filter_field: z.string().nullable().optional()
@@ -104,14 +106,38 @@ export const updateWebhookTool: ToolRegistration = {
           .describe('Regex pattern to test against raw payload body (advanced mode).'),
         dispatch_mode: z.enum(['conversation', 'task']).optional()
           .describe('"conversation" = payload injected as message. "task" = payload spawns a sub-task.'),
+        dispatchMode: z.enum(['conversation', 'task']).optional()
+          .describe('Alias for dispatch_mode.'),
         task_title_template: z.string().nullable().optional()
           .describe('Template for task title (task mode). Use {{field.path}} placeholders.'),
+        taskTitleTemplate: z.string().nullable().optional()
+          .describe('Alias for task_title_template.'),
         task_prompt_template: z.string().nullable().optional()
           .describe('Template for task description/prompt (task mode). Use {{field.path}} and {{__payload__}}.'),
+        taskPromptTemplate: z.string().nullable().optional()
+          .describe('Alias for task_prompt_template.'),
         max_concurrent_tasks: z.number().int().min(0).optional()
           .describe('Max concurrent webhook-spawned tasks (task mode). 0 = unlimited.'),
+        maxConcurrentTasks: z.number().int().min(0).optional()
+          .describe('Alias for max_concurrent_tasks.'),
       }),
-      execute: async ({ webhook_id, name, description, is_active, filter_mode, filter_field, filter_allowed_values, filter_expression, dispatch_mode, task_title_template, task_prompt_template, max_concurrent_tasks }) => {
+      execute: async (args) => {
+        const {
+          webhook_id,
+          name,
+          description,
+          filter_mode,
+          filter_field,
+          filter_allowed_values,
+          filter_expression,
+        } = args
+        // Resolve snake_case and camelCase aliases for dispatch-related fields
+        const is_active = args.is_active ?? args.isActive
+        const dispatch_mode = args.dispatch_mode ?? args.dispatchMode
+        const task_title_template = args.task_title_template ?? args.taskTitleTemplate
+        const task_prompt_template = args.task_prompt_template ?? args.taskPromptTemplate
+        const max_concurrent_tasks = args.max_concurrent_tasks ?? args.maxConcurrentTasks
+
         // Verify ownership
         const existing = await getWebhook(webhook_id)
         if (!existing || existing.agentId !== ctx.agentId) {

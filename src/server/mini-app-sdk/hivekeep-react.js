@@ -930,7 +930,7 @@ export function useAsync(asyncFn) {
  *
  * @param {string} [eventName] - Specific event name to listen for (omit to receive all events)
  * @param {Function} [callback] - Callback for each event. If omitted, events accumulate in `messages`.
- * @returns {{ messages: Array, connected: boolean, clear: () => void }}
+ * @returns {{ messages: Array, connected: boolean, clear: () => void, send: (event: string, data?: any) => Promise<{handled: boolean, result: any}> }}
  *
  * @example
  *   // Listen for specific events
@@ -983,7 +983,10 @@ export function useEventStream(eventName, callback) {
 
   const clear = useCallback(() => setMessages([]), [])
 
-  return { messages, connected, clear }
+  // Upstream channel: send an event to the backend's onClientEvent export
+  const send = useCallback((name, data) => window.Hivekeep.events.send(name, data), [])
+
+  return { messages, connected, clear, send }
 }
 
 // ─── useInfiniteScroll ──────────────────────────────────────────────────────

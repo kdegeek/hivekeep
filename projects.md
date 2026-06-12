@@ -2,7 +2,7 @@
 
 Système de gestion de projets avec tickets organisés en kanban. Permet à n'importe quel Agent de la plateforme de travailler sur n'importe quel projet, en lui injectant le contexte du projet actif dans son prompt et en lui exposant des outils CRUD dédiés.
 
-> Ce document décrit la feature complète : modèle de données, outils Agent, API REST, prompt, navigation. Voir `idea.md` pour le contexte global de Hivekeep et `schema.md` pour les conventions générales de schéma.
+> Ce document décrit la feature complète : modèle de données, outils Agent, API REST, prompt, navigation. Voir `CLAUDE.md` pour le contexte global de Hivekeep et `schema.md` pour les conventions générales de schéma.
 
 ---
 
@@ -50,7 +50,7 @@ Entité projet indépendante.
 **Index** :
 - `idx_projects_created` sur `created_at` (pour le tri dans la sidebar)
 
-> Pas de FK `user_id` / `owner_agent_id`. Les projets sont partagés entre tous les utilisateurs, conformément au principe Hivekeep (idea.md §11 — « Les Agents sont partagés entre tous les utilisateurs »). Même règle pour les projets.
+> Pas de FK `user_id` / `owner_agent_id`. Les projets sont partagés entre tous les utilisateurs, conformément au principe Hivekeep (« les Agents sont partagés entre tous les utilisateurs »). Même règle pour les projets.
 
 #### `project_tags`
 
@@ -239,7 +239,7 @@ Bien que le projet actif soit injecté dans le prompt, **aucun outil n'utilise `
 
 ### Pourquoi `await` obligatoire ?
 
-Le mode `async` (fire-and-forget) dépose le résultat de la task dans l'historique sans déclencher de turn LLM sur le parent (cf. `idea.md` § 7). Combiné avec le principe "le Agent gère manuellement le statut du ticket", ça donnerait : tu spawn une task async, elle finit, personne ne met à jour le ticket → état figé.
+Le mode `async` (fire-and-forget) dépose le résultat de la task dans l'historique sans déclencher de turn LLM sur le parent. Combiné avec le principe "le Agent gère manuellement le statut du ticket", ça donnerait : tu spawn une task async, elle finit, personne ne met à jour le ticket → état figé.
 
 Donc règle : tasks liées à un ticket = toujours `await`. Le service valide explicitement : si une autre source (futur webhook, futur cron) tente de spawner une task avec `ticket_id !== null` et `mode = 'async'`, refus avec code d'erreur `TICKET_TASK_REQUIRES_AWAIT`.
 

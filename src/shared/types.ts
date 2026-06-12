@@ -22,8 +22,9 @@ export type NotificationType =
   | 'agent:error'
   | 'agent:alert'
   | 'mention'
+  | 'miniapp:notify'
 
-export type NotificationRelatedType = 'prompt' | 'channel' | 'cron' | 'mcp' | 'email' | 'agent' | 'message'
+export type NotificationRelatedType = 'prompt' | 'channel' | 'cron' | 'mcp' | 'email' | 'agent' | 'message' | 'miniapp'
 
 /** An email send queued for human approval (account in send_mode='approval'). */
 export interface PendingEmailSend {

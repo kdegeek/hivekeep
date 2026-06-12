@@ -2424,7 +2424,9 @@
       "mcp-pending-approval": "MCP en attente",
       "agent-error": "Erreur Agent",
       "agent-alert": "Alerte Agent",
-      "mention": "Mention"
+      "mention": "Mention",
+      "miniapp-notify": "Notification de Mini-App",
+      "email-pending-send-approval": "E-mail en attente d'approbation"
     },
     "descriptions": {
       "prompt-pending": "Un Agent attend votre réponse pour continuer",
@@ -2433,7 +2435,9 @@
       "mcp-pending-approval": "Un serveur MCP ajouté par un Agent nécessite votre approbation",
       "agent-error": "Un Agent a rencontré une erreur qui peut nécessiter investigation",
       "agent-alert": "Un Agent vous a envoyé une notification",
-      "mention": "Quelqu'un vous a mentionné dans une conversation"
+      "mention": "Quelqu'un vous a mentionné dans une conversation",
+      "miniapp-notify": "Une Mini-App a envoyé une notification depuis son service en arrière-plan",
+      "email-pending-send-approval": "Un Agent souhaite envoyer un e-mail qui nécessite votre approbation"
     }
   },
   "modelPicker": {
@@ -2794,7 +2798,8 @@
       "get_project_knowledge": "Lire une connaissance projet",
       "update_project_knowledge": "Modifier une connaissance projet",
       "delete_project_knowledge": "Supprimer une connaissance projet",
-      "pin_project_knowledge": "Épingler une connaissance projet"
+      "pin_project_knowledge": "Épingler une connaissance projet",
+      "get_mini_app_backend_status": "Statut du backend de Mini-App"
     },
     "renderers": {
       "rawJson": "JSON brut",
@@ -3165,6 +3170,11 @@
       "selectPlaceholder": "Choisir un Agent",
       "reassign": "Réassigner",
       "reassigned": "Maintainer défini sur {{agent}}"
+    },
+    "permissions": {
+      "title": "Permissions demandées par le backend",
+      "approve": "Approuver",
+      "granted": "Permissions accordées"
     }
   },
   "accessibility": {
@@ -3699,5 +3709,13 @@
       "noResults": "Aucun fichier trouvé",
       "open": "Ouverture rapide (Ctrl+P)"
     }
+  },
+  "updateOverlay": {
+    "title": "Mise à jour de Hivekeep",
+    "successTitle": "Mise à jour terminée",
+    "toVersion": "Mise à jour vers {{version}}"
+  },
+  "topbar": {
+    "updateAvailable": "Mise à jour"
   }
 }

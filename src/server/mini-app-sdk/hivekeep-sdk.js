@@ -45,6 +45,7 @@
  *   Hivekeep.on('locale-changed', cb) — listen for language changes (cb receives {locale})
  *   Hivekeep.events — real-time event stream from backend (_server.js)
  *     .subscribe(callback) — receive all events from ctx.events.emit() in the backend
+ *     .send(event, data)   — send an event to the backend's onClientEvent() export
  *     .on(eventName, callback) — listen for a specific event name
  *     .close() — disconnect the event stream
  *     .connected — whether the SSE connection is active
@@ -736,6 +737,28 @@
       }
     },
 
+    /**
+     * Send an event to the backend's onClientEvent(ctx, event, data, meta) export.
+     * The socket-style upstream channel: the backend can react and answer via
+     * its return value, or push to everyone with ctx.events.emit().
+     * @param {string} eventName
+     * @param {any} [data]
+     * @returns {Promise<{handled: boolean, result: any}>}
+     */
+    send: function (eventName, data) {
+      if (!_appMeta || !_appMeta.id) return Promise.reject(new Error('App not ready — call Hivekeep.ready() first'))
+      return fetch('/api/mini-apps/' + _appMeta.id + '/client-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: eventName, data: data }),
+      }).then(function (r) {
+        return r.json().then(function (d) {
+          if (!r.ok) throw new Error((d.error && d.error.message) || 'events.send failed: ' + r.status)
+          return d
+        })
+      })
+    },
+
     /** Disconnect the event stream */
     close: function () {
       if (_eventSource) {
@@ -1198,6 +1221,6 @@
     conversation: conversation,
     share: share,
     download: download,
-    version: '1.16.0',
+    version: '1.17.0',
   }
 })()

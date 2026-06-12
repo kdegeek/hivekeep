@@ -239,7 +239,7 @@ The **authoritative native-tool inventory is `src/server/tools/register.ts`**. D
 | `agent-management` | create/update/delete/get Agents + toolbox management (`list_tools`, `list/create/update/delete_toolbox`) |
 | `webhooks` | webhook CRUD |
 | `channels` | external messaging (`list_channels`, `send_channel_message`, `send_to_contact`, `attach_file`, `transfer_channel`, channel CRUD/activate, `list_endpoints`, …) |
-| `mini-apps` | the full mini-app builder (files, storage, snapshots/rollback, docs/templates/gallery, console/reload, icon generation, maintainer) |
+| `mini-apps` | the full mini-app builder (files, storage, snapshots/rollback, docs/templates/gallery, console/reload, backend status, icon generation, maintainer) — backends can run as background services (lifecycle hooks, local crons, notifications, permission-gated secrets/LLM/Agent access) |
 | `filesystem` | `read_file`, `write_file`, `edit_file`, `multi_edit`, `list_directory`, `grep` |
 | `database` | `execute_sql` (opt-in, God-tier) |
 | `users` | `list_users`, `get_user`, `create_invitation` |

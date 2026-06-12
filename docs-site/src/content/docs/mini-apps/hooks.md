@@ -110,7 +110,8 @@ Subscribe to SSE events from the backend.
 
 ```jsx
 // Accumulate messages:
-const { messages, connected, clear } = useEventStream("update");
+const { messages, connected, clear, send } = useEventStream("update");
+// send("eventName", data) reaches the backend's onClientEvent export
 
 // Or use a callback (no accumulation):
 useEventStream("update", (data) => {

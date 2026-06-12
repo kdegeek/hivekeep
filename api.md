@@ -934,7 +934,7 @@ Approuve un cron créé par un Agent (qui nécessite validation).
 
 ## Custom Tools & Tool Domains
 
-Outils custom **globaux** (scripts authored via l'UI ou les Agents) et domaines dynamiques. Voir `idea.md` / `schema.md`.
+Outils custom **globaux** (scripts authored via l'UI ou les Agents) et domaines dynamiques. Voir `schema.md`.
 
 ### `GET /api/tools/catalog`
 Catalogue agnostique de tous les outils grantables (native / plugin / mcp / custom). Les entrées custom sont globales (`custom_<slug>`, `domain` = leur `domain_slug`, `enabled`).
@@ -1767,6 +1767,59 @@ Upgrade WebSocket (cookie de session Better Auth requis, mêmes gardes que `/sta
 | `exit` | `{ "type": "exit" }` | Le shell s'est terminé (exit, kill ou TTL) ; la session n'existe plus |
 | `error` | `{ "type": "error", "code": "TERMINAL_MAX_SESSIONS" }` | Création refusée (cap `HIVEKEEP_TERMINAL_MAX_SESSIONS` atteint), le serveur ferme ensuite le socket |
 
+## Mini-Apps (backend runtime)
+
+> Le CRUD complet des mini-apps (fichiers, storage, snapshots, console, icônes) est documenté côté `docs-site/` (section Mini-Apps). Cette section couvre les contrats du **runtime backend** (`_server.js`).
+
+### `ALL /api/mini-apps/:id/api/*`
+
+Proxy vers les routes Hono du `_server.js` de l'app (chargé paresseusement, ou au boot si `app.json` déclare `"background": true`). `404 NO_BACKEND` si l'app n'a pas de backend, `404 NO_HTTP_ROUTES` si le module n'exporte que des hooks de cycle de vie.
+
+### `GET /api/mini-apps/:id/events`
+
+Flux SSE **par app** (distinct du SSE global) : événements émis par `ctx.events.emit()` côté backend. Chaque abonné est taggé avec le user de session, ce qui permet l'émission ciblée `ctx.events.emit(event, data, { userId })`.
+
+```
+event: connected   data: { appId }
+event: app-event   data: { event: string, data: unknown, timestamp: number }
+: ping             (keep-alive toutes les 30s)
+```
+
+### `POST /api/mini-apps/:id/client-event`
+
+Canal montant UI → backend (`Hivekeep.events.send()`). Délivré à l'export `onClientEvent(ctx, event, data, meta)` du `_server.js` (`meta = { userId, userName }`, exécution bornée à 10s).
+
+```typescript
+// Requête
+{ event: string, data?: unknown }
+
+// Réponse 200
+{ handled: boolean, result: unknown | null }   // handled=false si pas d'export onClientEvent
+
+// Erreurs : 404 NOT_FOUND / NO_BACKEND, 400 INVALID_BODY, 500 CLIENT_EVENT_ERROR
+```
+
+### `GET /api/mini-apps/:id/permissions`
+
+État des permissions de capacités : demandées dans `app.json` (`"permissions": ["llm", "agent:inform", "agent:task", "secrets:<NAME>"]`) vs accordées par l'utilisateur.
+
+```typescript
+// Réponse 200
+{ requested: string[], granted: string[], missing: string[] }
+```
+
+### `POST /api/mini-apps/:id/permissions`
+
+Accorde des permissions (additif — jamais de révocation implicite). Seules des permissions présentes dans le manifest peuvent être accordées. Redémarre le backend et émet `miniapp:updated`.
+
+```typescript
+// Requête
+{ grant: string[] }
+
+// Réponse 200
+{ requested: string[], granted: string[], invalid: string[] }
+```
+
 ## SSE
 
 ### `GET /api/sse`
@@ -1859,6 +1912,15 @@ Connexion SSE **globale** (une seule par client). Le serveur multiplex les évé
 // mort) — scope user (sendToUser) : seul le propriétaire reçoit. Le payload porte
 // la liste fraîche complète (la sidebar remplace, pas de merge nécessaire).
 { event: 'terminal:sessions-changed', data: { sessions: TerminalSessionDTO[] } }
+
+// Mini-apps : cycle de vie (CRUD + fichiers). `miniapp:notify` n'existe pas ici —
+// les notifications d'apps passent par le canal notification:new standard
+// (type 'miniapp:notify', relatedType 'miniapp', relatedId = appId).
+{ event: 'miniapp:created', data: { app: MiniAppSummary } }
+{ event: 'miniapp:updated', data: { app: MiniAppSummary } }       // inclut reassignation mainteneur + grant de permissions
+{ event: 'miniapp:deleted', data: { appId: string } }
+{ event: 'miniapp:file-updated', data: { appId: string, path: string, version: number } }
+{ event: 'miniapp:reload', data: { appId: string } }              // demande de reload de l'iframe (tool reload_mini_app)
 
 // Mises à jour de la plateforme
 // Nouvelle version détectée par le cron de check (émis une seule fois par version)

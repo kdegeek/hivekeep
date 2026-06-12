@@ -220,6 +220,7 @@ Subscribe to real-time events from the backend (`_server.js` using `ctx.events.e
 ```javascript
 Hivekeep.events.on("eventName", (data) => { ... })
 Hivekeep.events.subscribe((event) => { ... })  // all events — { event, data }
+Hivekeep.events.send("eventName", data)        // → backend onClientEvent(); resolves { handled, result }
 Hivekeep.events.close()
 Hivekeep.events.connected  // boolean
 ```

@@ -151,6 +151,11 @@ initCronScheduler()
 log.info('Recovering pending wake-ups...')
 recoverPendingWakeups().catch((err) => log.error({ err }, 'Failed to recover pending wake-ups'))
 
+// Start mini-app backends that declare "background": true in app.json
+log.info('Starting background mini-app backends...')
+import { initMiniAppBackends, stopAllBackends } from '@/server/services/mini-app-backend'
+initMiniAppBackends().catch((err) => log.error({ err }, 'Failed to init mini-app backends'))
+
 // Start the email account trigger poller (condition-matched email → Agent)
 log.info('Starting email trigger poller...')
 startEmailTriggerPoller()
@@ -252,10 +257,10 @@ Bun.serve({
   maxRequestBodySize: config.maxRequestBodyBytes,
 })
 
-// Graceful shutdown — cleanup browser pool
+// Graceful shutdown — cleanup browser pool + mini-app backends
 const shutdown = async () => {
   log.info('Shutting down...')
-  await playwrightManager.shutdown()
+  await Promise.allSettled([playwrightManager.shutdown(), stopAllBackends()])
   process.exit(0)
 }
 process.on('SIGTERM', shutdown)

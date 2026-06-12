@@ -64,6 +64,11 @@ export function NotificationBell({ onOpenSettings }: NotificationBellProps) {
       case 'email:pending-send-approval':
         onOpenSettings?.('emailAccounts')
         break
+      // Mini-app notifications land on the Mini-Apps page (the app that sent
+      // it is identified by relatedId).
+      case 'miniapp:notify':
+        navigate('/mini-apps')
+        break
       default: {
         // Exhaustiveness guard: adding a NotificationType without a target here
         // is a compile error, so a new notification can never silently dead-end.

@@ -9,6 +9,8 @@ export interface ConsoleEntry {
   args: string[]
   stack: string | null
   timestamp: number
+  /** Where the entry came from: the iframe UI (default) or the _server.js backend */
+  source?: 'frontend' | 'backend'
 }
 
 const BUFFER_MAX = 50

@@ -838,6 +838,62 @@ Table de liaison N-N tickets ↔ project_tags.
 
 ---
 
+### `mini_apps`
+
+Mini-applications web (UI iframe + backend `_server.js` optionnel) construites par les Agents. Les fichiers vivent sur disque dans `{MINI_APPS_DIR}/<agent_id>/<app_id>/` ; cette table porte les métadonnées. Le manifest `app.json` (sur disque, pas en DB) déclare les dépendances (import map), `background: true` (backend chargé au boot, redémarré à chaque édition) et `permissions` (capacités demandées).
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | text PK | UUID | |
+| `agent_id` | text | FK → agents.id, ON DELETE CASCADE, NOT NULL | Agent **mainteneur** (réassignable — n'importe quel Agent peut éditer n'importe quelle app) |
+| `name` | text | NOT NULL | Nom affiché |
+| `slug` | text | NOT NULL | Identifiant kebab-case, unique par Agent |
+| `description` | text | | |
+| `icon` | text | | Emoji ou nom d'icône Lucide |
+| `icon_url` | text | | Chemin du logo généré (image) |
+| `entry_file` | text | NOT NULL, DEFAULT 'index.html' | Fichier d'entrée servi dans l'iframe |
+| `has_backend` | integer (bool) | NOT NULL, DEFAULT 0 | Vrai si `_server.js`/`_server.ts` existe |
+| `is_active` | integer (bool) | NOT NULL, DEFAULT 1 | |
+| `version` | integer | NOT NULL, DEFAULT 1 | Incrémenté à chaque écriture de fichier (cache-busting + invalidation du backend) |
+| `granted_permissions` | text | | JSON `string[]` des permissions de capacités approuvées par l'utilisateur (sous-ensemble des `permissions` du manifest, ex. `"llm"`, `"secrets:<NAME>"`, `"agent:inform"`, `"agent:task"`). Additif uniquement. |
+| `created_at` | integer | NOT NULL | |
+| `updated_at` | integer | NOT NULL | |
+
+**Index** :
+- `idx_mini_apps_agent_slug` UNIQUE sur (`agent_id`, `slug`)
+- `idx_mini_apps_agent_id` sur (`agent_id`)
+
+---
+
+### `mini_app_storage`
+
+Stockage clé-valeur par app, partagé entre le frontend (SDK `Hivekeep.storage`) et le backend (`ctx.storage`). Limites : 500 clés/app, 64 KB/valeur, clés ≤ 256 caractères.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | integer PK | AUTOINCREMENT | |
+| `app_id` | text | FK → mini_apps.id, ON DELETE CASCADE, NOT NULL | |
+| `key` | text | NOT NULL | |
+| `value` | text | NOT NULL | JSON sérialisé |
+| `updated_at` | integer | NOT NULL | |
+
+---
+
+### `mini_app_snapshots`
+
+Snapshots de version des fichiers d'une app (max 20, auto-élagués). Les fichiers snapshotés vivent dans `.snapshots/<version>/` du répertoire de l'app ; le répertoire runtime `_data/` (ctx.files) est exclu des snapshots et des rollbacks.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | integer PK | AUTOINCREMENT | |
+| `app_id` | text | FK → mini_apps.id, ON DELETE CASCADE, NOT NULL | |
+| `version` | integer | NOT NULL | Version de l'app au moment du snapshot |
+| `label` | text | | Libellé optionnel (ex. auto-backup avant rollback) |
+| `file_manifest` | text | NOT NULL | JSON `[{path, size}]` |
+| `created_at` | integer | NOT NULL | |
+
+---
+
 ## Tables virtuelles (FTS5 + sqlite-vec)
 
 ### `memories_fts` (FTS5)

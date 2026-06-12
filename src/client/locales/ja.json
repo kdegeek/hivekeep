@@ -2424,7 +2424,9 @@
       "mcp-pending-approval": "MCP承認待ち",
       "agent-error": "エージェントエラー",
       "agent-alert": "エージェントアラート",
-      "mention": "メンション"
+      "mention": "メンション",
+      "miniapp-notify": "ミニアプリ通知",
+      "email-pending-send-approval": "メール送信の承認待ち"
     },
     "descriptions": {
       "prompt-pending": "エージェントが続行のためにあなたの応答を待っています",
@@ -2433,7 +2435,9 @@
       "mcp-pending-approval": "エージェントが追加したMCPサーバーが承認を必要としています",
       "agent-error": "エージェントで調査が必要な可能性のあるエラーが発生しました",
       "agent-alert": "エージェントから通知が届きました",
-      "mention": "誰かが会話であなたをメンションしました"
+      "mention": "誰かが会話であなたをメンションしました",
+      "miniapp-notify": "ミニアプリがバックグラウンドサービスから通知を送信しました",
+      "email-pending-send-approval": "エージェントが承認が必要なメールを送信しようとしています"
     }
   },
   "modelPicker": {
@@ -2794,7 +2798,8 @@
       "get_project_knowledge": "プロジェクトナレッジを取得",
       "update_project_knowledge": "プロジェクトナレッジを更新",
       "delete_project_knowledge": "プロジェクトナレッジを削除",
-      "pin_project_knowledge": "プロジェクトナレッジをピン留め"
+      "pin_project_knowledge": "プロジェクトナレッジをピン留め",
+      "get_mini_app_backend_status": "ミニアプリバックエンドの状態"
     },
     "renderers": {
       "rawJson": "生のJSON",
@@ -3165,6 +3170,11 @@
       "selectPlaceholder": "エージェントを選択",
       "reassign": "再割り当て",
       "reassigned": "メンテナーを{{agent}}に設定しました"
+    },
+    "permissions": {
+      "title": "バックエンドが要求した権限",
+      "approve": "承認",
+      "granted": "権限が付与されました"
     }
   },
   "accessibility": {
@@ -3699,5 +3709,13 @@
       "noResults": "一致するファイルがありません",
       "open": "クイックオープン(Ctrl+P)"
     }
+  },
+  "updateOverlay": {
+    "title": "Hivekeep を更新中",
+    "successTitle": "更新が完了しました",
+    "toVersion": "{{version}} に更新中"
+  },
+  "topbar": {
+    "updateAvailable": "更新"
   }
 }

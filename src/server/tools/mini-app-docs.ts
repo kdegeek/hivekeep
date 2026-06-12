@@ -132,7 +132,7 @@ Use \`get_mini_app_templates\` to see built-in templates (dashboard, todo-list, 
 - \`useSharedData(onData?)\` → \`{ data, clear }\` — receive shared data from other apps
 
 ## Events
-- \`useEventStream(eventName?, callback?)\` → \`{ messages, connected, clear }\` — SSE from backend`,
+- \`useEventStream(eventName?, callback?)\` → \`{ messages, connected, clear, send }\` — SSE from backend; \`send(event, data)\` reaches the backend's onClientEvent`,
   },
 
   components: {
@@ -191,6 +191,7 @@ Direct SDK exports from @hivekeep/react (use hooks when possible):
 
 ## Events
 - \`events.on(event, cb)\`, \`events.subscribe(cb)\`, \`events.close()\` — SSE from backend
+- \`events.send(event, data?)\` → Promise<{handled, result}> — send to backend onClientEvent()
 
 ## Other
 - \`clipboard.write(text)\`, \`clipboard.read()\`
@@ -210,31 +211,78 @@ Direct SDK exports from @hivekeep/react (use hooks when possible):
     url: `${DOCS_BASE_URL}/mini-apps/backend/`,
     content: `# Mini-App Backend
 
-Create \`_server.js\` via \`write_mini_app_file\`. Must export a default function that receives ctx and returns a Hono app.
+Create \`_server.js\` via \`write_mini_app_file\`. Recognized exports (all optional, at least one required):
 
 \`\`\`js
-export default function(ctx) {
+export default function(ctx) {            // HTTP routes at /api/mini-apps/<appId>/api/*
   const app = new ctx.Hono();
   app.get("/hello", (c) => c.json({ message: "Hello!" }));
   return app;
 }
+export async function onStart(ctx) {}     // runs when the backend loads
+export async function onStop(ctx) {}      // cleanup before unload/reload (5s budget)
+export function onClientEvent(ctx, event, data, meta) {  // receives Hivekeep.events.send() from the UI
+  // meta = { userId, userName }; the return value is sent back to the caller
+}
 \`\`\`
 
-## Context Object
-- \`ctx.Hono\` — Hono constructor
-- \`ctx.storage\` — KV storage (.get/.set/.delete/.list/.clear)
-- \`ctx.events\` — SSE (.emit(event, data))
-- \`ctx.appId\`, \`ctx.agentId\`, \`ctx.appName\`, \`ctx.log\`
+## Background mode (live backend)
+Set \`"background": true\` in \`app.json\` → the backend loads at server boot and is restarted
+automatically after every edit. Use \`onStart\` to launch live work (jobs, watchers).
 
-## Routes
-Served at \`/api/mini-apps/<appId>/api/*\`
+## Context Object
+- \`ctx.Hono\`, \`ctx.appId\`, \`ctx.agentId\`, \`ctx.appName\`, \`ctx.version\`, \`ctx.background\`
+- \`ctx.storage\` — KV storage (.get/.set/.delete/.list/.clear), shared with the frontend
+- \`ctx.events.emit(event, data, {userId}?)\` — SSE push to the app UI (optionally a single user)
+- \`ctx.schedule(name, cronPattern, handler)\` — local cron job (croner pattern, max 10/app, runs spaced >= 15s, auto-stopped on reload). Returns \`{stop()}\`
+- \`ctx.timers.setTimeout/setInterval/clearTimeout/clearInterval\` — managed timers, auto-cleared when the instance stops (interval min 1s). NEVER use global setInterval — it would leak across reloads
+- \`ctx.signal\` — AbortSignal aborted when the instance stops (pass it to fetch/loops)
+- \`ctx.notify(title, body?)\` — platform notification (notification center + user's external channels), max 10/hour
+- \`ctx.fetch(url, options?)\` — SSRF-guarded fetch (http/https, public hosts only, 30s timeout)
+- \`ctx.files\` — file storage under the app's \`_data/\` dir (.read/.write/.delete/.list/.exists), excluded from snapshots
+- \`ctx.log.info/warn/error\` — also lands in the app console (readable via get_mini_app_console)
+
+## Gated capabilities (need user-approved permissions)
+Declare what you need in \`app.json\`: \`"permissions": ["llm", "agent:inform", "agent:task", "secrets:MY_KEY"]\`.
+The user approves from the banner in the app panel. Until granted, these throw:
+- \`ctx.secrets.get(name)\` — vault secret (needs \`secrets:<NAME>\`) — NEVER store API keys in code or storage
+- \`ctx.llm.complete(prompt, {model?, maxTokens?})\` — one-shot LLM completion (needs \`llm\`, 30/hour)
+- \`ctx.agent.inform(text)\` — drop a message into the maintainer Agent's queue (needs \`agent:inform\`, 10/hour)
+- \`ctx.agent.task(description, {title?})\` — spawn an async sub-task on the maintainer Agent (needs \`agent:task\`, 5/hour)
+- \`ctx.permissions.has("llm")\` / \`.requested\` / \`.granted\` — introspection
+
+## Example: background watcher
+\`\`\`js
+export async function onStart(ctx) {
+  ctx.schedule("poll-feed", "*/15 * * * *", async () => {
+    const res = await ctx.fetch("https://api.example.com/feed");
+    const items = await res.json();
+    const lastSeen = (await ctx.storage.get("lastSeen")) ?? 0;
+    const fresh = items.filter((i) => i.ts > lastSeen);
+    if (fresh.length > 0) {
+      await ctx.storage.set("lastSeen", fresh[0].ts);
+      ctx.events.emit("feed:updated", fresh);
+      await ctx.notify(\`\${fresh.length} new items\`);
+    }
+  });
+}
+export default function(ctx) {
+  const app = new ctx.Hono();
+  app.get("/items", async (c) => c.json((await ctx.storage.get("items")) ?? []));
+  return app;
+}
+\`\`\`
 
 ## Frontend Access
 \`const { api } = useHivekeep()\` then \`api.get("/path")\`, \`api.post("/path", data)\`
 
-## Real-time Events (SSE)
-Backend: \`ctx.events.emit("update", {count: 42})\`
-Frontend: \`events.on("update", (data) => ...)\` or \`useEventStream("update", cb)\``,
+## Real-time Events
+Backend → UI: \`ctx.events.emit("update", {count: 42})\` → \`events.on("update", cb)\` / \`useEventStream("update", cb)\`
+UI → backend: \`Hivekeep.events.send("refresh", data)\` (or \`useEventStream().send\`) → \`onClientEvent\`
+
+## Debugging
+Use \`get_mini_app_backend_status\` (loaded?, background?, jobs + next runs, timers, SSE subscribers)
+and \`get_mini_app_console\` (frontend + backend log entries).`,
   },
 
   guidelines: {

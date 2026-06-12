@@ -274,6 +274,51 @@ describe('webhook-tools', () => {
       })
     })
 
+    it('accepts snake_case task_prompt_template and persists as taskPromptTemplate', async () => {
+      await execute(updateWebhookTool, {
+        webhook_id: 'wh-1',
+        task_prompt_template: 'New prompt content',
+      })
+
+      expect(mockUpdateWebhook).toHaveBeenCalledWith('wh-1', {
+        taskPromptTemplate: 'New prompt content',
+      })
+    })
+
+    it('accepts camelCase taskPromptTemplate alias and persists correctly (regression #67)', async () => {
+      // This was the bug: LLMs often generate camelCase matching the tool output field names
+      // but the Zod schema used snake_case — the field was silently dropped.
+      await execute(updateWebhookTool, {
+        webhook_id: 'wh-1',
+        taskPromptTemplate: 'New prompt via camelCase alias',
+      })
+
+      expect(mockUpdateWebhook).toHaveBeenCalledWith('wh-1', {
+        taskPromptTemplate: 'New prompt via camelCase alias',
+      })
+    })
+
+    it('snake_case task_prompt_template takes precedence over camelCase alias', async () => {
+      await execute(updateWebhookTool, {
+        webhook_id: 'wh-1',
+        task_prompt_template: 'snake wins',
+        taskPromptTemplate: 'camel loses',
+      })
+
+      expect(mockUpdateWebhook).toHaveBeenCalledWith('wh-1', {
+        taskPromptTemplate: 'snake wins',
+      })
+    })
+
+    it('accepts camelCase isActive alias', async () => {
+      await execute(updateWebhookTool, {
+        webhook_id: 'wh-1',
+        isActive: false,
+      })
+
+      expect(mockUpdateWebhook).toHaveBeenCalledWith('wh-1', { isActive: false })
+    })
+
     it('returns error when update returns null', async () => {
       mockUpdateWebhook.mockImplementationOnce(() => Promise.resolve(null))
 

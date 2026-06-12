@@ -47,6 +47,22 @@ function guessMimeType(filename: string): string {
   return map[ext] ?? 'application/octet-stream'
 }
 
+/**
+ * Notify the backend runtime that app files changed, without a static import
+ * (mini-app-backend.ts imports this module — a static import would be a cycle).
+ */
+function notifyBackendFilesChanged(appId: string, relativePath: string): void {
+  void import('@/server/services/mini-app-backend')
+    .then((m) => m.handleAppFilesChanged(appId, relativePath))
+    .catch(() => {})
+}
+
+function notifyBackendRestart(appId: string): void {
+  void import('@/server/services/mini-app-backend')
+    .then((m) => m.restartBackend(appId))
+    .catch(() => {})
+}
+
 function serializeApp(row: MiniAppRow, agentName: string, agentAvatarUrl: string | null): MiniAppSummary {
   return {
     id: row.id,
@@ -191,6 +207,11 @@ export async function updateMiniApp(id: string, params: UpdateMiniAppParams): Pr
 
   await db.update(miniApps).set(updates).where(eq(miniApps.id, id))
   log.info({ appId: id }, 'Mini-app updated')
+
+  // Activation changes affect the running backend: stop when deactivated,
+  // (re)start background apps when reactivated.
+  if (params.isActive !== undefined) notifyBackendRestart(id)
+
   return getMiniApp(id)
 }
 
@@ -223,6 +244,10 @@ export async function setMiniAppMaintainer(appId: string, newMaintainerAgentId: 
 
   await db.update(miniApps).set({ agentId: newMaintainerAgentId, updatedAt: new Date() }).where(eq(miniApps.id, appId))
   log.info({ appId, fromAgentId: app.agentId, toAgentId: newMaintainerAgentId }, 'Mini-app maintainer reassigned')
+
+  // The on-disk dir moved: the cached backend module points at the old path.
+  notifyBackendRestart(appId)
+
   return getMiniApp(appId)
 }
 
@@ -243,6 +268,12 @@ export async function deleteMiniApp(id: string): Promise<boolean> {
   }
 
   await db.delete(miniApps).where(eq(miniApps.id, id))
+
+  // Stop any running backend instance and drop the SSE emitter.
+  void import('@/server/services/mini-app-backend')
+    .then((m) => m.removeBackend(id))
+    .catch(() => {})
+
   log.info({ appId: id, name: app.name }, 'Mini-app deleted')
   return true
 }
@@ -278,6 +309,8 @@ export async function writeAppFile(
     updates.hasBackend = true
   }
   await db.update(miniApps).set(updates).where(eq(miniApps.id, appId))
+
+  notifyBackendFilesChanged(appId, relativePath)
 
   log.debug({ appId, path: relativePath, size: buffer.length }, 'App file written')
   return { path: relativePath, size: buffer.length }
@@ -317,6 +350,8 @@ export async function deleteAppFile(appId: string, relativePath: string): Promis
     updates.hasBackend = false
   }
   await db.update(miniApps).set(updates).where(eq(miniApps.id, appId))
+
+  notifyBackendFilesChanged(appId, relativePath)
 
   log.debug({ appId, path: relativePath }, 'App file deleted')
   return true
@@ -367,6 +402,95 @@ export function getAppDir(agentId: string, appId: string): string {
 /** Get the raw DB row (for routes that need agentId) */
 export async function getMiniAppRow(id: string): Promise<MiniAppRow | null> {
   return db.select().from(miniApps).where(eq(miniApps.id, id)).get() ?? null
+}
+
+// ─── Manifest (app.json) ─────────────────────────────────────────────────────
+
+/** Parsed `app.json` manifest fields the host cares about. */
+export interface MiniAppManifest {
+  dependencies?: Record<string, string>
+  importmap?: { imports?: Record<string, string> }
+  /** When true, the backend is loaded at server boot and restarted on edits. */
+  background?: boolean
+  /** Capabilities the backend requests (granted by the user, see mini-app permissions). */
+  permissions?: string[]
+  [key: string]: unknown
+}
+
+/** Read and parse the app's `app.json`. Returns {} when absent or malformed. */
+export async function readAppManifest(appId: string): Promise<MiniAppManifest> {
+  const app = await db.select().from(miniApps).where(eq(miniApps.id, appId)).get()
+  if (!app) return {}
+  const manifestPath = join(appDir(app.agentId, appId), 'app.json')
+  if (!existsSync(manifestPath)) return {}
+  try {
+    const parsed = JSON.parse(await Bun.file(manifestPath).text())
+    return parsed && typeof parsed === 'object' ? (parsed as MiniAppManifest) : {}
+  } catch {
+    return {}
+  }
+}
+
+// ─── Capability permissions ──────────────────────────────────────────────────
+
+/**
+ * Grant capability permissions to a mini-app (additive — grants are never
+ * silently revoked here). Only permissions actually requested in app.json can
+ * be granted. The backend is restarted so the new grants take effect.
+ */
+export async function grantMiniAppPermissions(
+  appId: string,
+  grant: string[],
+): Promise<{ requested: string[]; granted: string[]; invalid: string[] } | null> {
+  const { parseRequestedPermissions, parseGrantedPermissions, isKnownPermission } = await import('@/server/services/mini-app-capabilities')
+
+  const app = await db.select().from(miniApps).where(eq(miniApps.id, appId)).get()
+  if (!app) return null
+
+  const manifest = await readAppManifest(appId)
+  const requested = parseRequestedPermissions(manifest)
+  const current = parseGrantedPermissions(app.grantedPermissions)
+
+  const invalid: string[] = []
+  const accepted: string[] = []
+  for (const p of grant) {
+    if (typeof p !== 'string' || !isKnownPermission(p) || !requested.includes(p)) invalid.push(String(p))
+    else accepted.push(p)
+  }
+
+  const granted = [...new Set([...current, ...accepted])]
+  await db.update(miniApps)
+    .set({ grantedPermissions: JSON.stringify(granted), updatedAt: new Date() })
+    .where(eq(miniApps.id, appId))
+
+  if (accepted.length > 0) notifyBackendRestart(appId)
+
+  log.info({ appId, accepted, invalid }, 'Mini-app permissions granted')
+  return { requested, granted, invalid }
+}
+
+/** Current permission state of an app: requested (manifest) vs granted (DB). */
+export async function getMiniAppPermissions(
+  appId: string,
+): Promise<{ requested: string[]; granted: string[]; missing: string[] } | null> {
+  const { parseRequestedPermissions, parseGrantedPermissions } = await import('@/server/services/mini-app-capabilities')
+
+  const app = await db.select().from(miniApps).where(eq(miniApps.id, appId)).get()
+  if (!app) return null
+
+  const manifest = await readAppManifest(appId)
+  const requested = parseRequestedPermissions(manifest)
+  const granted = parseGrantedPermissions(app.grantedPermissions).filter((p) => requested.includes(p))
+  return { requested, granted, missing: requested.filter((p) => !granted.includes(p)) }
+}
+
+/** Ids of all active apps that have a backend (for boot-time background loading). */
+export async function listBackendAppIds(): Promise<string[]> {
+  const rows = await db.select({ id: miniApps.id })
+    .from(miniApps)
+    .where(and(eq(miniApps.hasBackend, true), eq(miniApps.isActive, true)))
+    .all()
+  return rows.map((r) => r.id)
 }
 
 export { guessMimeType }
@@ -628,6 +752,9 @@ export async function rollbackToSnapshot(appId: string, targetVersion: number): 
     updatedAt: new Date(),
   }).where(eq(miniApps.id, appId))
 
+  // The restored file set may carry a different _server.js / app.json.
+  notifyBackendRestart(appId)
+
   log.info({ appId, fromVersion: app.version, toVersion: targetVersion, newVersion }, 'App rolled back')
 
   return {
@@ -636,12 +763,14 @@ export async function rollbackToSnapshot(appId: string, targetVersion: number): 
   }
 }
 
-/** Walk directory excluding .snapshots */
+/** Walk directory excluding .snapshots and the runtime data dir (_data) */
 async function walkDirForSnapshot(base: string, current: string, results: { path: string; size: number }[]): Promise<void> {
   if (!existsSync(current)) return
   const entries = await readdir(current, { withFileTypes: true })
   for (const entry of entries) {
     if (entry.name === '.snapshots') continue
+    // ctx.files runtime data is not source code: never snapshotted/rolled back
+    if (current === base && entry.name === '_data') continue
     const fullPath = join(current, entry.name)
     if (entry.isDirectory()) {
       await walkDirForSnapshot(base, fullPath, results)

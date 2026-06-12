@@ -2442,7 +2442,9 @@
       "mcp-pending-approval": "MCP czeka na zatwierdzenie",
       "agent-error": "Błąd Agenta",
       "agent-alert": "Alert Agenta",
-      "mention": "Wzmianka"
+      "mention": "Wzmianka",
+      "miniapp-notify": "Powiadomienie mini-aplikacji",
+      "email-pending-send-approval": "E-mail oczekuje na zatwierdzenie"
     },
     "descriptions": {
       "prompt-pending": "Agent czeka na twoją odpowiedź, aby kontynuować",
@@ -2451,7 +2453,9 @@
       "mcp-pending-approval": "Serwer MCP dodany przez Agenta wymaga twojego zatwierdzenia",
       "agent-error": "Agent napotkał błąd, który może wymagać sprawdzenia",
       "agent-alert": "Agent wysłał ci powiadomienie",
-      "mention": "Ktoś wspomniał o tobie w rozmowie"
+      "mention": "Ktoś wspomniał o tobie w rozmowie",
+      "miniapp-notify": "Mini-aplikacja wysłała powiadomienie ze swojej usługi w tle",
+      "email-pending-send-approval": "Agent chce wysłać e-mail, który wymaga Twojego zatwierdzenia"
     }
   },
   "modelPicker": {
@@ -2812,7 +2816,8 @@
       "get_project_knowledge": "Pobierz wiedzę projektu",
       "update_project_knowledge": "Aktualizuj wiedzę projektu",
       "delete_project_knowledge": "Usuń wiedzę projektu",
-      "pin_project_knowledge": "Przypnij wiedzę projektu"
+      "pin_project_knowledge": "Przypnij wiedzę projektu",
+      "get_mini_app_backend_status": "Status backendu mini-aplikacji"
     },
     "renderers": {
       "rawJson": "Surowy JSON",
@@ -3183,6 +3188,11 @@
       "selectPlaceholder": "Wybierz Agenta",
       "reassign": "Przypisz ponownie",
       "reassigned": "Opiekunem został {{agent}}"
+    },
+    "permissions": {
+      "title": "Uprawnienia żądane przez backend",
+      "approve": "Zatwierdź",
+      "granted": "Uprawnienia przyznane"
     }
   },
   "accessibility": {
@@ -3737,5 +3747,13 @@
       "noResults": "Brak pasujących plików",
       "open": "Szybkie otwieranie (Ctrl+P)"
     }
+  },
+  "updateOverlay": {
+    "title": "Aktualizowanie Hivekeep",
+    "successTitle": "Aktualizacja zakonczona",
+    "toVersion": "Aktualizacja do {{version}}"
+  },
+  "topbar": {
+    "updateAvailable": "Aktualizuj"
   }
 }

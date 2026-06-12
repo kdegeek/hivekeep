@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f7fd289f-8847-4161-bdc3-3f233ff61392",
-  "prevId": "7c768bed-3f10-4e33-b4b1-d5a91cabe204",
+  "id": "856a8379-9ad5-4c37-a30c-d4c2454a1a0f",
+  "prevId": "f7fd289f-8847-4161-bdc3-3f233ff61392",
   "tables": {
     "account": {
       "name": "account",
@@ -7383,6 +7383,27 @@
         },
         "created_by_agent_id": {
           "name": "created_by_agent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_used_at": {
+          "name": "last_used_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "allowed_tools": {
+          "name": "allowed_tools",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "allowed_hosts": {
+          "name": "allowed_hosts",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

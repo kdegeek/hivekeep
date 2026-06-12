@@ -2828,6 +2828,147 @@ export default {
 </html>`,
     },
   },
+  {
+    id: 'background-service',
+    name: 'Background Service',
+    description: 'A live background app: "background": true in app.json, onStart/onStop lifecycle, a ctx.schedule cron job polling an external API via ctx.fetch, ctx.notify platform notifications, SSE push to the UI, and an onClientEvent upstream channel. The reference starting point for apps that keep working while nobody has them open.',
+    icon: '📡',
+    tags: ['background', 'cron', 'schedule', 'notifications', 'sse', 'lifecycle', 'backend'],
+    suggestedSlug: 'watcher',
+    files: {
+      'app.json': JSON.stringify({
+        background: true,
+        dependencies: {
+          'react': 'https://esm.sh/react@19',
+          'react-dom/client': 'https://esm.sh/react-dom@19/client',
+          '@hivekeep/react': '/api/mini-apps/sdk/hivekeep-react.js',
+          '@hivekeep/components': '/api/mini-apps/sdk/hivekeep-components.js',
+        },
+      }, null, 2),
+      '_server.js': `// Background service: polls a public API on a schedule, stores results,
+// pushes live updates over SSE and notifies the user on changes.
+// Loaded at server boot because app.json declares "background": true.
+
+async function poll(ctx) {
+  try {
+    // ctx.fetch is SSRF-guarded (public hosts only) and times out after 30s
+    const res = await ctx.fetch('https://api.github.com/repos/oven-sh/bun')
+    const repo = await res.json()
+    const previous = (await ctx.storage.get('stars')) ?? null
+    const stars = repo.stargazers_count
+
+    await ctx.storage.set('stars', stars)
+    await ctx.storage.set('lastCheckedAt', Date.now())
+
+    // Push to every open UI (use { userId } as 3rd arg to target one user)
+    ctx.events.emit('stats', { stars, lastCheckedAt: Date.now() })
+
+    if (previous !== null && stars !== previous) {
+      // Platform notification: notification center + the user's external channels
+      await ctx.notify('Star count changed', previous + ' → ' + stars)
+    }
+    ctx.log.info('Polled: ' + stars + ' stars')
+  } catch (err) {
+    ctx.log.error('Poll failed: ' + err.message)
+  }
+}
+
+export async function onStart(ctx) {
+  // Cron job: every 30 minutes (croner syntax, max 10 jobs, runs >= 15s apart).
+  // Jobs and ctx.timers are cleaned up automatically when the app reloads.
+  ctx.schedule('poll', '*/30 * * * *', () => poll(ctx))
+  // Prime the data right away
+  await poll(ctx)
+}
+
+export async function onStop(ctx) {
+  ctx.log.info('Service stopping')
+}
+
+// UI → backend channel (Hivekeep.events.send). Return value goes back to the caller.
+export function onClientEvent(ctx, event, data, meta) {
+  if (event === 'refresh-now') {
+    poll(ctx)
+    return { ok: true }
+  }
+}
+
+export default function (ctx) {
+  const app = new ctx.Hono()
+  app.get('/stats', async (c) => c.json({
+    stars: (await ctx.storage.get('stars')) ?? null,
+    lastCheckedAt: (await ctx.storage.get('lastCheckedAt')) ?? null,
+  }))
+  return app
+}
+`,
+      'index.html': `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Watcher</title>
+  <style>body { padding: 1.5rem; }</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/jsx">
+    import { useState, useEffect } from 'react'
+    import { createRoot } from 'react-dom/client'
+    import { useHivekeep, useApi, useEventStream } from '@hivekeep/react'
+    import { Card, Stack, Heading, Text, Stat, Button, Badge, Spinner } from '@hivekeep/components'
+
+    function App() {
+      const { ready } = useHivekeep()
+      if (!ready) return <Spinner />
+      return <Watcher />
+    }
+
+    function Watcher() {
+      const { data, loading, refetch } = useApi('/stats')
+      const [live, setLive] = useState(null)
+      const { send, connected } = useEventStream('stats', (s) => setLive(s))
+
+      const stars = live?.stars ?? data?.stars
+      const checkedAt = live?.lastCheckedAt ?? data?.lastCheckedAt
+
+      const refreshNow = async () => {
+        await send('refresh-now')   // → backend onClientEvent
+      }
+
+      return (
+        <Stack gap={4}>
+          <Stack direction="row" align="center" justify="space-between">
+            <Heading as="h2">Repo Watcher</Heading>
+            <Badge variant={connected ? 'success' : 'outline'}>{connected ? 'live' : 'offline'}</Badge>
+          </Stack>
+          <Card>
+            <Card.Content>
+              {loading && stars == null ? <Spinner /> : (
+                <Stack gap={2}>
+                  <Stat label="GitHub stars (oven-sh/bun)" value={stars ?? '—'} />
+                  <Text muted size="sm">
+                    Last checked: {checkedAt ? new Date(checkedAt).toLocaleTimeString() : 'never'}
+                    {' '}(auto-polls every 30 min, even with this panel closed)
+                  </Text>
+                </Stack>
+              )}
+            </Card.Content>
+          </Card>
+          <Stack direction="row" gap={2}>
+            <Button onClick={refreshNow}>Refresh now</Button>
+            <Button variant="secondary" onClick={refetch}>Reload stats</Button>
+          </Stack>
+        </Stack>
+      )
+    }
+
+    createRoot(document.getElementById('root')).render(<App />)
+  </script>
+</body>
+</html>`,
+    },
+  },
 ]
 
 export function getTemplateById(id: string): MiniAppTemplate | undefined {

@@ -2424,7 +2424,9 @@
       "mcp-pending-approval": "MCP aguardando aprovação",
       "agent-error": "Erro de Agente",
       "agent-alert": "Alerta de Agente",
-      "mention": "Menção"
+      "mention": "Menção",
+      "miniapp-notify": "Notificação de Mini-App",
+      "email-pending-send-approval": "E-mail aguardando aprovação"
     },
     "descriptions": {
       "prompt-pending": "Um Agente está aguardando sua resposta para continuar",
@@ -2433,7 +2435,9 @@
       "mcp-pending-approval": "Um servidor MCP adicionado por um Agente precisa da sua aprovação",
       "agent-error": "Um Agente encontrou um erro que pode precisar de investigação",
       "agent-alert": "Um Agente enviou uma notificação para você",
-      "mention": "Alguém mencionou você em uma conversa"
+      "mention": "Alguém mencionou você em uma conversa",
+      "miniapp-notify": "Um Mini-App enviou uma notificação do seu serviço em segundo plano",
+      "email-pending-send-approval": "Um Agente quer enviar um e-mail que precisa da sua aprovação"
     }
   },
   "modelPicker": {
@@ -2794,7 +2798,8 @@
       "get_project_knowledge": "Obter Conhecimento do Projeto",
       "update_project_knowledge": "Atualizar Conhecimento do Projeto",
       "delete_project_knowledge": "Excluir Conhecimento do Projeto",
-      "pin_project_knowledge": "Fixar Conhecimento do Projeto"
+      "pin_project_knowledge": "Fixar Conhecimento do Projeto",
+      "get_mini_app_backend_status": "Status do backend do Mini-App"
     },
     "renderers": {
       "rawJson": "JSON bruto",
@@ -3165,6 +3170,11 @@
       "selectPlaceholder": "Selecione um Agente",
       "reassign": "Reatribuir",
       "reassigned": "Mantenedor definido como {{agent}}"
+    },
+    "permissions": {
+      "title": "Permissões solicitadas pelo backend",
+      "approve": "Aprovar",
+      "granted": "Permissões concedidas"
     }
   },
   "accessibility": {
@@ -3699,5 +3709,13 @@
       "noResults": "Nenhum arquivo correspondente",
       "open": "Abertura rápida (Ctrl+P)"
     }
+  },
+  "updateOverlay": {
+    "title": "Atualizando o Hivekeep",
+    "successTitle": "Atualizacao concluida",
+    "toVersion": "Atualizando para {{version}}"
+  },
+  "topbar": {
+    "updateAvailable": "Atualizar"
   }
 }

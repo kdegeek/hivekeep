@@ -14,7 +14,7 @@ hivekeep/
 ├── tsconfig.json
 ├── drizzle.config.ts
 ├── CLAUDE.md                          # Instructions agent + conventions
-├── idea.md / api.md / schema.md / …   # Specs (voir CLAUDE.md > Documentation map)
+├── api.md / schema.md / sse.md / …    # Specs (voir CLAUDE.md > Documentation map)
 ├── docker/
 │   ├── Dockerfile
 │   └── docker-compose.yml

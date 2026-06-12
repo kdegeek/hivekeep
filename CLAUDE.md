@@ -8,7 +8,6 @@ Read these files **before starting any phase**. They are the source of truth.
 
 | File | Content |
 |---|---|
-| `idea.md` | Full functional specification (features, UX, architecture) toujours inclure dans le contexte pour etre aligné |
 | `schema.md` | Complete SQLite database schema (all tables, indexes, virtual tables) |
 | `api.md` | REST API contracts (request/response for every route) + SSE events |
 | `sse.md` | **Real-time/SSE cheat sheet** — emit↔handle rules, the 8 recurring sync-bug traps, optimistic reconciliation, review checklist. Read before touching SSE or shared state. |

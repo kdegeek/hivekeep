@@ -943,6 +943,9 @@ export const miniApps = sqliteTable('mini_apps', {
   hasBackend: integer('has_backend', { mode: 'boolean' }).notNull().default(false),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
   version: integer('version').notNull().default(1),     // incremented on each file write (cache busting)
+  /** JSON string[] of user-approved capability permissions (subset of the
+   *  `permissions` requested in app.json — e.g. "llm", "secrets:MY_KEY"). */
+  grantedPermissions: text('granted_permissions'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 }, (table) => [
@@ -1137,7 +1140,7 @@ export const projects = sqliteTable('projects', {
   title: text('title').notNull(),
   description: text('description').notNull().default(''),
   githubUrl: text('github_url'),
-  // GitHub integration for sub-task worktree isolation. See idea.md.
+  // GitHub integration for sub-task worktree isolation.
   // `githubRepo` is the authoritative "owner/name" used by the clone +
   // worktree pipeline; `githubUrl` (above) stays a free-form display link.
   githubPatVaultKey: text('github_pat_vault_key'),

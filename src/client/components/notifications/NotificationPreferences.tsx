@@ -5,7 +5,7 @@ import { Switch } from '@/client/components/ui/switch'
 import { Label } from '@/client/components/ui/label'
 import { Button } from '@/client/components/ui/button'
 import { Separator } from '@/client/components/ui/separator'
-import { AlertTriangle, Bell, Clock, MessageCircle, Plus, Radio, ShieldAlert, UserCheck, Volume2 } from 'lucide-react'
+import { AlertTriangle, Bell, Blocks, Clock, MessageCircle, Plus, Radio, ShieldAlert, UserCheck, Volume2 } from 'lucide-react'
 import { EmptyState } from '@/client/components/common/EmptyState'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
 import {
@@ -25,6 +25,7 @@ const NOTIFICATION_TYPE_ICONS: Record<string, React.ElementType> = {
   'cron:pending-approval': Clock,
   'mcp:pending-approval': ShieldAlert,
   'channel:user-pending': UserCheck,
+  'miniapp:notify': Blocks,
 }
 
 export function NotificationPreferences() {

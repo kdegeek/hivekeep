@@ -229,6 +229,7 @@ export const NOTIFICATION_TYPES = [
   'agent:error',
   'agent:alert',
   'mention',
+  'miniapp:notify',
 ] as const
 
 /** Regex to detect @mentions in message content. Shared between client (rendering) and server (parsing). */

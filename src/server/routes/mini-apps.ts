@@ -26,9 +26,12 @@ import {
   listSnapshots,
   rollbackToSnapshot,
   generateMiniAppIcon,
+  getMiniAppPermissions,
+  grantMiniAppPermissions,
 } from '@/server/services/mini-apps'
 import { ImageGenerationError } from '@/server/services/image-generation'
-import { handleBackendRequest, invalidateBackend, getAppEmitter } from '@/server/services/mini-app-backend'
+import { handleBackendRequest, handleClientEvent, getAppEmitter } from '@/server/services/mini-app-backend'
+import { isBlockedHost } from '@/server/services/mini-app-capabilities'
 import { pushConsoleEntry, getConsoleEntries, clearConsoleEntries, markServed } from '@/server/services/mini-app-console'
 import {
   buildDefaultManifest,
@@ -209,7 +212,6 @@ miniAppRoutes.delete('/:id', async (c) => {
     return c.json({ error: { code: 'NOT_FOUND', message: 'App not found' } }, 404)
   }
 
-  invalidateBackend(c.req.param('id'))
   await deleteMiniApp(c.req.param('id'))
   sseManager.broadcast({ type: 'miniapp:deleted', agentId: existing.maintainerAgentId, data: { appId: existing.id } })
   return c.body(null, 204)
@@ -302,11 +304,6 @@ miniAppRoutes.put('/:id/files/*', async (c) => {
 
     const result = await writeAppFile(c.req.param('id'), filePath, content)
 
-    // Invalidate backend cache if _server.js was updated
-    if (filePath === '_server.js' || filePath === '_server.ts') {
-      invalidateBackend(c.req.param('id'))
-    }
-
     // Get updated app for version
     const app = await getMiniAppRow(c.req.param('id'))
     if (app) {
@@ -335,11 +332,6 @@ miniAppRoutes.delete('/:id/files/*', async (c) => {
     const deleted = await deleteAppFile(c.req.param('id'), filePath)
     if (!deleted) {
       return c.json({ error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
-    }
-
-    // Invalidate backend cache if _server.js was deleted
-    if (filePath === '_server.js' || filePath === '_server.ts') {
-      invalidateBackend(c.req.param('id'))
     }
 
     const app = await getMiniAppRow(c.req.param('id'))
@@ -494,34 +486,6 @@ const httpProxyLimits = new Map<string, { count: number; resetAt: number }>()
 const HTTP_PROXY_MAX_PER_MINUTE = 60
 const HTTP_PROXY_MAX_RESPONSE_BYTES = 5 * 1024 * 1024 // 5 MB
 const HTTP_PROXY_TIMEOUT_MS = 15_000
-
-/** Check if a hostname resolves to a private/internal IP */
-function isBlockedHost(hostname: string): boolean {
-  // Block obvious private/internal hostnames
-  if (
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname === '::1' ||
-    hostname === '0.0.0.0' ||
-    hostname.endsWith('.local') ||
-    hostname.endsWith('.internal')
-  ) return true
-
-  // Block private IP ranges
-  const parts = hostname.split('.')
-  if (parts.length === 4 && parts.every((p) => /^\d+$/.test(p))) {
-    const a = parseInt(parts[0]!, 10)
-    const b = parseInt(parts[1]!, 10)
-    if (a === 10) return true                          // 10.0.0.0/8
-    if (a === 172 && b >= 16 && b <= 31) return true   // 172.16.0.0/12
-    if (a === 192 && b === 168) return true            // 192.168.0.0/16
-    if (a === 127) return true                         // 127.0.0.0/8
-    if (a === 169 && b === 254) return true            // link-local
-    if (a === 0) return true                           // 0.0.0.0/8
-  }
-
-  return false
-}
 
 /**
  * HTTP proxy for mini-apps — lets them fetch external APIs without CORS issues.
@@ -726,6 +690,7 @@ miniAppRoutes.get('/:id/events', async (c) => {
     return c.json({ error: { code: 'NOT_FOUND', message: 'App not found' } }, 404)
   }
 
+  const user = c.get('user') as { id: string } | undefined
   const emitter = getAppEmitter(appId)
 
   // Create a readable stream that pushes SSE events
@@ -745,7 +710,8 @@ miniAppRoutes.get('/:id/events', async (c) => {
         }
       }, 30_000)
 
-      // Subscribe to app events
+      // Subscribe to app events, tagged with the session user so the backend
+      // can target a single user via ctx.events.emit(event, data, { userId })
       const unsubscribe = emitter._subscribe((event: string, data: unknown) => {
         try {
           const payload = JSON.stringify({ event, data, timestamp: Date.now() })
@@ -755,7 +721,7 @@ miniAppRoutes.get('/:id/events', async (c) => {
           clearInterval(pingInterval)
           unsubscribe()
         }
-      })
+      }, user?.id)
 
       // Clean up when the client disconnects
       c.req.raw.signal.addEventListener('abort', () => {
@@ -774,6 +740,61 @@ miniAppRoutes.get('/:id/events', async (c) => {
       'X-Accel-Buffering': 'no',
     },
   })
+})
+
+// ─── Capability permissions ──────────────────────────────────────────────────
+
+// Permission state: requested in app.json vs granted by the user
+miniAppRoutes.get('/:id/permissions', async (c) => {
+  const state = await getMiniAppPermissions(c.req.param('id'))
+  if (!state) return c.json({ error: { code: 'NOT_FOUND', message: 'App not found' } }, 404)
+  return c.json(state)
+})
+
+// Grant requested permissions (additive). Body: { grant: string[] }
+miniAppRoutes.post('/:id/permissions', async (c) => {
+  const body = await c.req.json<{ grant?: string[] }>().catch(() => null)
+  if (!body || !Array.isArray(body.grant) || body.grant.length === 0) {
+    return c.json({ error: { code: 'INVALID_BODY', message: 'grant (non-empty string[]) is required' } }, 400)
+  }
+
+  const result = await grantMiniAppPermissions(c.req.param('id'), body.grant)
+  if (!result) return c.json({ error: { code: 'NOT_FOUND', message: 'App not found' } }, 404)
+
+  const app = await getMiniApp(c.req.param('id'))
+  if (app) {
+    sseManager.broadcast({ type: 'miniapp:updated', agentId: app.maintainerAgentId, data: { app } })
+  }
+
+  return c.json(result)
+})
+
+// Upstream client events: frontend Hivekeep.events.send() → backend onClientEvent()
+miniAppRoutes.post('/:id/client-event', async (c) => {
+  const appId = c.req.param('id')
+  const app = await getMiniAppRow(appId)
+  if (!app) {
+    return c.json({ error: { code: 'NOT_FOUND', message: 'App not found' } }, 404)
+  }
+  if (!app.hasBackend) {
+    return c.json({ error: { code: 'NO_BACKEND', message: 'This app has no backend. Write a _server.js file to add one.' } }, 404)
+  }
+
+  const body = await c.req.json<{ event?: string; data?: unknown }>().catch(() => null)
+  if (!body || typeof body.event !== 'string' || !body.event.trim()) {
+    return c.json({ error: { code: 'INVALID_BODY', message: 'event (string) is required' } }, 400)
+  }
+
+  const user = c.get('user') as { id: string; name?: string }
+  const result = await handleClientEvent(appId, body.event, body.data, {
+    userId: user.id,
+    userName: user.name ?? null,
+  })
+
+  if (result.error) {
+    return c.json({ error: { code: 'CLIENT_EVENT_ERROR', message: result.error } }, 500)
+  }
+  return c.json({ handled: result.handled, result: result.result ?? null })
 })
 
 // ─── Backend API proxy ──────────────────────────────────────────────────────

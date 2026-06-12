@@ -1,6 +1,6 @@
 /**
  * Hivekeep Mini-App SDK — TypeScript Definitions
- * @version 1.16.0
+ * @version 1.17.0
  *
  * These types describe the global `Hivekeep` object auto-injected into mini-app iframes.
  * Import type reference: `/// <reference path="hivekeep-sdk.d.ts" />`
@@ -151,6 +151,12 @@ export interface HivekeepEvents {
   subscribe(callback: (event: { event: string; data: unknown }) => void): void;
   /** Listen for a specific event name from backend. */
   on(eventName: string, callback: (data: unknown) => void): void;
+  /**
+   * Send an event to the backend's onClientEvent(ctx, event, data, meta) export.
+   * Resolves with the handler's return value (handled=false when the backend
+   * does not export onClientEvent).
+   */
+  send(eventName: string, data?: unknown): Promise<{ handled: boolean; result: unknown }>;
   /** Disconnect the SSE stream. */
   close(): void;
   /** Whether the SSE connection is active. */
