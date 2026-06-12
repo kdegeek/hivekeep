@@ -18,6 +18,7 @@ import { basename, dirname, extname } from 'node:path'
 import { tool } from '@/server/tools/tool-helper'
 import { resolveEmailProvider, listEmailAccounts } from '@/server/services/email-accounts'
 import { resolveToolWorkspace } from '@/server/tools/workspace'
+import { emitWorkspaceChangedForTool } from '@/server/services/workspace-files'
 import { resolveAndValidate } from '@/server/tools/filesystem-tools'
 import type { EmailAddress, EmailSearchQuery, OutgoingAttachment } from '@/server/email/types'
 import type { ToolExecutionContext } from '@/server/tools/types'
@@ -344,6 +345,7 @@ export const downloadEmailAttachmentTool: ToolRegistration = {
           const abs = resolveAndValidate(rel, workspace)
           await mkdir(dirname(abs), { recursive: true })
           await writeFile(abs, bytes)
+          emitWorkspaceChangedForTool(ctx, abs, 'created')
           log.info(
             { agentId: ctx.agentId, account: account.slug, path: rel, bytes: bytes.length },
             'download_email_attachment',

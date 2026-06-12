@@ -7,6 +7,7 @@ import { createLogger } from '@/server/logger'
 import { noteReadFile, formatReadRange, recordReadPath, hasReadPath, recordGuardFire } from '@/server/services/tool-call-tracker'
 import type { ToolRegistration } from '@/server/tools/types'
 import { resolveToolWorkspace } from '@/server/tools/workspace'
+import { emitWorkspaceChangedForTool } from '@/server/services/workspace-files'
 
 const log = createLogger('filesystem-tools')
 
@@ -245,6 +246,7 @@ export const writeFileTool: ToolRegistration = {
           }
 
           await writeFile(absPath, content, 'utf-8')
+          emitWorkspaceChangedForTool(ctx, absPath, created ? 'created' : 'modified')
           const lines = content.split('\n').length
           const bytes = Buffer.byteLength(content, 'utf-8')
           const language = detectLanguage(absPath)
@@ -330,6 +332,7 @@ export const editFileTool: ToolRegistration = {
             ? content.split(oldText).join(newText)
             : content.replace(oldText, newText)
           await writeFile(absPath, newContent, 'utf-8')
+          emitWorkspaceChangedForTool(ctx, absPath, 'modified')
 
           const language = detectLanguage(absPath)
 

@@ -12,8 +12,10 @@ import {
   lstatSync,
   existsSync,
 } from 'node:fs'
+import { resolve } from 'node:path'
 import { config } from '@/server/config'
 import { createLogger } from '@/server/logger'
+import { sseManager } from '@/server/sse/index'
 import { isPathBlocked } from '@/server/tools/filesystem-tools'
 import { guessMimeType, isBinary } from '@/server/services/file-kind'
 import type { WorkspaceEntry, WorkspaceFileInfo, WorkspaceFileKind } from '@/shared/types'
@@ -308,6 +310,7 @@ export async function writeWorkspaceFile(
     throw new WorkspaceFilesError('FILE_TOO_LARGE', `Content exceeds ${config.workspaceFiles.maxEditableSizeMb} MB`)
   }
 
+  const existedBefore = resolved.exists
   if (resolved.exists) {
     const current = await lstat(resolved.abs)
     if (current.isDirectory()) throw new WorkspaceFilesError('IS_DIRECTORY', `Path is a directory: ${resolved.rel}`)
@@ -347,7 +350,79 @@ export async function writeWorkspaceFile(
 
   const written = await stat(resolved.abs)
   log.info({ agentId, path: resolved.rel, size: written.size }, 'Workspace file written via Files API')
+  emitWorkspaceChanged(agentId, [
+    { path: resolved.rel, type: existedBefore ? 'modified' : 'created', isDirectory: false, modifiedAt: written.mtimeMs },
+  ])
   return { path: resolved.rel, size: written.size, modifiedAt: written.mtimeMs }
+}
+
+// ─── workspace:changed SSE (files.md § 8) ────────────────────────────────────
+
+export interface WorkspaceChange {
+  path: string
+  type: 'created' | 'modified' | 'deleted' | 'renamed'
+  isDirectory: boolean
+  newPath?: string
+  /** Resulting mtime — the emitting device uses it to ignore its own echo. */
+  modifiedAt?: number
+}
+
+/** Recursive ops emit ONE coarse change on the folder; `changes` stays small. */
+const MAX_CHANGES_PER_EVENT = 20
+
+/**
+ * Single emission point for every workspace mutation (REST routes AND the
+ * native tools that write into the static workspace). Scope: sendToAgent —
+ * event tied to an Agent, the client filters by agentId (sse.md).
+ */
+export function emitWorkspaceChanged(agentId: string, changes: WorkspaceChange[]): void {
+  if (changes.length === 0) return
+  const bounded =
+    changes.length > MAX_CHANGES_PER_EVENT
+      ? [{ path: commonParentOf(changes.map((c) => c.path)), type: 'modified' as const, isDirectory: true }]
+      : changes
+  try {
+    sseManager.sendToAgent(agentId, {
+      type: 'workspace:changed',
+      agentId,
+      data: { agentId, changes: bounded },
+    })
+  } catch (err) {
+    // Real-time sync is best-effort — emission must never break the mutation
+    // that triggered it (tool writes catch errors and would report failure).
+    log.warn({ agentId, err: (err as Error).message }, 'workspace:changed emission failed')
+  }
+}
+
+function commonParentOf(paths: string[]): string {
+  if (paths.length === 0) return ''
+  let prefix = paths[0]!.split('/').slice(0, -1)
+  for (const p of paths.slice(1)) {
+    const parts = p.split('/').slice(0, -1)
+    let i = 0
+    while (i < prefix.length && i < parts.length && prefix[i] === parts[i]) i++
+    prefix = prefix.slice(0, i)
+  }
+  return prefix.join('/')
+}
+
+/**
+ * Tool-side emission: native tools pass their execution context + the absolute
+ * path they wrote. Skipped for per-task worktrees (workspaceOverride) and for
+ * writes outside the static workspace (agents are allowed to write elsewhere).
+ */
+export function emitWorkspaceChangedForTool(
+  ctx: { agentId: string; workspaceOverride?: { path: string } },
+  absPath: string,
+  type: WorkspaceChange['type'],
+  opts: { isDirectory?: boolean } = {},
+): void {
+  if (ctx.workspaceOverride) return
+  const root = resolve(workspaceRootFor(ctx.agentId))
+  const abs = resolve(absPath)
+  if (abs !== root && !abs.startsWith(root + sep)) return
+  const rel = abs === root ? '' : abs.slice(root.length + 1)
+  emitWorkspaceChanged(ctx.agentId, [{ path: rel, type, isDirectory: opts.isDirectory ?? false }])
 }
 
 // ─── mutations: mkdir / move / copy / delete / upload ────────────────────────
@@ -359,6 +434,7 @@ export async function mkdirWorkspace(agentId: string, relPath: string): Promise<
   validateEntryName(basename(resolved.abs))
   mkdirSync(resolved.abs, { recursive: true })
   log.info({ agentId, path: resolved.rel }, 'Workspace folder created via Files API')
+  emitWorkspaceChanged(agentId, [{ path: resolved.rel, type: 'created', isDirectory: true }])
   return { path: resolved.rel }
 }
 
@@ -383,8 +459,16 @@ export async function moveWorkspaceEntry(params: {
   validateEntryName(basename(dest.abs))
 
   mkdirSync(dirname(dest.abs), { recursive: true })
+  const isDirectory = lstatSync(source.abs).isDirectory()
   renameSync(source.abs, dest.abs)
   log.info({ agentId: params.agentId, fromAgentId: sourceAgent, from: source.rel, to: dest.rel }, 'Workspace entry moved via Files API')
+  if (sourceAgent !== params.agentId) {
+    // Cross-workspace cut/paste: one event per touched agent.
+    emitWorkspaceChanged(sourceAgent, [{ path: source.rel, type: 'deleted', isDirectory }])
+    emitWorkspaceChanged(params.agentId, [{ path: dest.rel, type: 'created', isDirectory }])
+  } else {
+    emitWorkspaceChanged(params.agentId, [{ path: source.rel, type: 'renamed', isDirectory, newPath: dest.rel }])
+  }
   return { from: source.rel, to: dest.rel }
 }
 
@@ -458,6 +542,7 @@ export async function copyWorkspaceEntry(params: {
     ? basename(finalAbs)
     : `${dirname(dest.rel)}/${basename(finalAbs)}`
   log.info({ agentId: params.agentId, fromAgentId: sourceAgent, from: source.rel, to: finalRel }, 'Workspace entry copied via Files API')
+  emitWorkspaceChanged(params.agentId, [{ path: finalRel, type: 'created', isDirectory: lstatSync(finalAbs).isDirectory() }])
   return { from: source.rel, to: finalRel }
 }
 
@@ -465,8 +550,10 @@ export async function deleteWorkspaceEntry(agentId: string, relPath: string): Pr
   const resolved = await resolveWorkspacePath(agentId, relPath, { unlink: true })
   if (!resolved.exists) throw new WorkspaceFilesError('FILE_NOT_FOUND', `No such file: ${resolved.rel}`)
   if (resolved.rel === '') throw forbidden('cannot delete the workspace root')
+  const isDirectory = lstatSync(resolved.abs).isDirectory()
   rmSync(resolved.abs, { recursive: true, force: false })
   log.info({ agentId, path: resolved.rel }, 'Workspace entry deleted via Files API')
+  emitWorkspaceChanged(agentId, [{ path: resolved.rel, type: 'deleted', isDirectory }])
   return { path: resolved.rel }
 }
 
@@ -526,6 +613,10 @@ export async function uploadWorkspaceFiles(
     }
   }
   log.info({ agentId, dir: dir.rel, count: uploaded.length, failed: errors.length }, 'Workspace upload via Files API')
+  emitWorkspaceChanged(
+    agentId,
+    uploaded.map((f) => ({ path: f.path, type: 'created' as const, isDirectory: false, modifiedAt: f.modifiedAt })),
+  )
   return { files: uploaded, errors }
 }
 

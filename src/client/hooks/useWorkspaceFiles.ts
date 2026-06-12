@@ -1,7 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { api, getErrorMessage } from '@/client/lib/api'
-import { useSSEResync } from '@/client/hooks/useSSE'
+import { useSSE, useSSEResync } from '@/client/hooks/useSSE'
 import type { WorkspaceEntry } from '@/shared/types'
+
+/** Payload of the workspace:changed SSE event (files.md § 8.1). */
+export interface WorkspaceChange {
+  path: string
+  type: 'created' | 'modified' | 'deleted' | 'renamed'
+  isDirectory: boolean
+  newPath?: string
+  modifiedAt?: number
+}
 
 /** Parent dir of a workspace-relative path ('' = root). */
 export const parentDirOf = (path: string) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '')
@@ -141,6 +150,121 @@ export function useWorkspaceFiles(agentId: string | null) {
   const refreshRef = useRef(refresh)
   refreshRef.current = refresh
   useSSEResync(() => refreshRef.current())
+
+  // ── Live tree patching from workspace:changed (files.md § 8.2) ─────────────
+  // Idempotent by path (insert-if-absent / remove-if-present / tolerant rename)
+  // so the emitter's own optimistic update double-applies harmlessly.
+
+  const sortEntries = (entries: WorkspaceEntry[]) =>
+    [...entries].sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'dir' ? -1 : 1
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    })
+
+  const applyChange = useCallback(
+    (change: WorkspaceChange) => {
+      const parent = parentDirOf(change.path)
+      const name = change.path.split('/').pop() ?? change.path
+      if (change.type === 'created' || (change.type === 'modified' && !change.isDirectory)) {
+        setDirs((prev) => {
+          const state = prev[parent]
+          if (!state?.entries) return prev // parent not loaded: it'll fetch on expand
+          const existing = state.entries.find((e) => e.path === change.path)
+          const entry: WorkspaceEntry = existing
+            ? { ...existing, modifiedAt: change.modifiedAt ?? existing.modifiedAt }
+            : {
+                name,
+                path: change.path,
+                type: change.isDirectory ? 'dir' : 'file',
+                size: 0,
+                modifiedAt: change.modifiedAt ?? 0,
+                isSymlink: false,
+              }
+          const entries = sortEntries([...state.entries.filter((e) => e.path !== change.path), entry])
+          return { ...prev, [parent]: { ...state, entries } }
+        })
+      } else if (change.type === 'modified' && change.isDirectory) {
+        // Coarse event (recursive op): refetch the folder if we have it loaded.
+        setDirs((prev) => {
+          if (prev[change.path]?.entries) void loadDir(change.path)
+          else if (prev[parent]?.entries) void loadDir(parent)
+          return prev
+        })
+      } else if (change.type === 'deleted') {
+        setDirs((prev) => {
+          const next = { ...prev }
+          const state = next[parent]
+          if (state?.entries) {
+            next[parent] = { ...state, entries: state.entries.filter((e) => e.path !== change.path) }
+          }
+          if (change.isDirectory) {
+            for (const key of Object.keys(next)) {
+              if (key === change.path || key.startsWith(change.path + '/')) delete next[key]
+            }
+          }
+          return next
+        })
+        setExpanded((prev) => {
+          if (!change.isDirectory) return prev
+          const next = new Set([...prev].filter((p) => p !== change.path && !p.startsWith(change.path + '/')))
+          return next.size === prev.size ? prev : next
+        })
+      } else if (change.type === 'renamed' && change.newPath) {
+        const newPath = change.newPath
+        const newParent = parentDirOf(newPath)
+        const newName = newPath.split('/').pop() ?? newPath
+        setDirs((prev) => {
+          const next = { ...prev }
+          const oldState = next[parent]
+          if (oldState?.entries) {
+            next[parent] = { ...oldState, entries: oldState.entries.filter((e) => e.path !== change.path) }
+          }
+          if (change.isDirectory) {
+            // Re-key the loaded subtree (and fix child entry paths lazily via refetch).
+            for (const key of Object.keys(next)) {
+              if (key === change.path || key.startsWith(change.path + '/')) {
+                delete next[key]
+              }
+            }
+          }
+          const destState = next[newParent]
+          if (destState?.entries) {
+            const entry: WorkspaceEntry = {
+              name: newName,
+              path: newPath,
+              type: change.isDirectory ? 'dir' : 'file',
+              size: 0,
+              modifiedAt: change.modifiedAt ?? 0,
+              isSymlink: false,
+            }
+            next[newParent] = {
+              ...destState,
+              entries: sortEntries([...destState.entries.filter((e) => e.path !== newPath), entry]),
+            }
+          }
+          return next
+        })
+        setExpanded((prev) => {
+          if (!change.isDirectory) return prev
+          const next = new Set<string>()
+          for (const p of prev) {
+            if (p === change.path) next.add(newPath)
+            else if (p.startsWith(change.path + '/')) next.add(newPath + p.slice(change.path.length))
+            else next.add(p)
+          }
+          return next
+        })
+      }
+    },
+    [loadDir],
+  )
+
+  useSSE({
+    'workspace:changed': (data) => {
+      if ((data.agentId as string) !== agentId) return
+      for (const change of (data.changes as WorkspaceChange[]) ?? []) applyChange(change)
+    },
+  })
 
   // ── Mutations (files.md § 4/6.5/6.6) — each reloads the affected dirs ──────
 

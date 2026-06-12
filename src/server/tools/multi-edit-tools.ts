@@ -8,6 +8,7 @@ import { resolveAndValidate } from '@/server/tools/filesystem-tools'
 import { hasReadPath, recordGuardFire } from '@/server/services/tool-call-tracker'
 import type { ToolRegistration } from '@/server/tools/types'
 import { resolveToolWorkspace } from '@/server/tools/workspace'
+import { emitWorkspaceChangedForTool } from '@/server/services/workspace-files'
 
 const log = createLogger('multi-edit-tools')
 
@@ -103,6 +104,7 @@ export const multiEditTool: ToolRegistration = {
 
           // All edits succeeded — write once
           await writeFile(absPath, content, 'utf-8')
+          emitWorkspaceChangedForTool(ctx, absPath, 'modified')
 
           const language = detectLanguage(absPath)
 
