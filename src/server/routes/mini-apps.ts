@@ -28,7 +28,7 @@ import {
   generateMiniAppIcon,
 } from '@/server/services/mini-apps'
 import { ImageGenerationError } from '@/server/services/image-generation'
-import { handleBackendRequest, invalidateBackend, getAppEmitter } from '@/server/services/mini-app-backend'
+import { handleBackendRequest, getAppEmitter } from '@/server/services/mini-app-backend'
 import { pushConsoleEntry, getConsoleEntries, clearConsoleEntries, markServed } from '@/server/services/mini-app-console'
 import {
   buildDefaultManifest,
@@ -209,7 +209,6 @@ miniAppRoutes.delete('/:id', async (c) => {
     return c.json({ error: { code: 'NOT_FOUND', message: 'App not found' } }, 404)
   }
 
-  invalidateBackend(c.req.param('id'))
   await deleteMiniApp(c.req.param('id'))
   sseManager.broadcast({ type: 'miniapp:deleted', agentId: existing.maintainerAgentId, data: { appId: existing.id } })
   return c.body(null, 204)
@@ -302,11 +301,6 @@ miniAppRoutes.put('/:id/files/*', async (c) => {
 
     const result = await writeAppFile(c.req.param('id'), filePath, content)
 
-    // Invalidate backend cache if _server.js was updated
-    if (filePath === '_server.js' || filePath === '_server.ts') {
-      invalidateBackend(c.req.param('id'))
-    }
-
     // Get updated app for version
     const app = await getMiniAppRow(c.req.param('id'))
     if (app) {
@@ -335,11 +329,6 @@ miniAppRoutes.delete('/:id/files/*', async (c) => {
     const deleted = await deleteAppFile(c.req.param('id'), filePath)
     if (!deleted) {
       return c.json({ error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
-    }
-
-    // Invalidate backend cache if _server.js was deleted
-    if (filePath === '_server.js' || filePath === '_server.ts') {
-      invalidateBackend(c.req.param('id'))
     }
 
     const app = await getMiniAppRow(c.req.param('id'))

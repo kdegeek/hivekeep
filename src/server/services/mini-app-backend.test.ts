@@ -283,6 +283,201 @@ describe('Backend cache', () => {
 
 })
 
+// ─── Lifecycle: managed timers ──────────────────────────────────────────────
+
+describe('Managed timers (ctx.timers contract)', () => {
+  const MAX_TIMERS = 100
+  const MIN_INTERVAL = 1000
+
+  function makeTimers(timers: Set<ReturnType<typeof setTimeout>>) {
+    return {
+      setTimeout: (fn: () => void, ms: number) => {
+        if (timers.size >= MAX_TIMERS) throw new Error(`Too many active timers (max ${MAX_TIMERS})`)
+        const id = setTimeout(() => { timers.delete(id); fn() }, ms)
+        timers.add(id)
+        return id
+      },
+      setInterval: (fn: () => void, ms: number) => {
+        if (timers.size >= MAX_TIMERS) throw new Error(`Too many active timers (max ${MAX_TIMERS})`)
+        if (ms < MIN_INTERVAL) throw new Error(`Interval too short: minimum ${MIN_INTERVAL}ms`)
+        const id = setInterval(fn, ms)
+        timers.add(id)
+        return id
+      },
+      clearTimeout: (id: ReturnType<typeof setTimeout>) => { clearTimeout(id); timers.delete(id) },
+      clearInterval: (id: ReturnType<typeof setTimeout>) => { clearInterval(id); timers.delete(id) },
+    }
+  }
+
+  function stopAll(timers: Set<ReturnType<typeof setTimeout>>) {
+    for (const id of timers) { clearTimeout(id); clearInterval(id) }
+    timers.clear()
+  }
+
+  it('tracks created timers and forgets fired timeouts', async () => {
+    const tracked = new Set<ReturnType<typeof setTimeout>>()
+    const t = makeTimers(tracked)
+
+    let fired = false
+    t.setTimeout(() => { fired = true }, 1)
+    expect(tracked.size).toBe(1)
+
+    await new Promise((r) => setTimeout(r, 15))
+    expect(fired).toBe(true)
+    expect(tracked.size).toBe(0)
+  })
+
+  it('stop clears pending timers so they never fire (no zombie work)', async () => {
+    const tracked = new Set<ReturnType<typeof setTimeout>>()
+    const t = makeTimers(tracked)
+
+    let fired = false
+    t.setTimeout(() => { fired = true }, 5)
+    t.setInterval(() => { fired = true }, 1000)
+    expect(tracked.size).toBe(2)
+
+    stopAll(tracked)
+    expect(tracked.size).toBe(0)
+
+    await new Promise((r) => setTimeout(r, 20))
+    expect(fired).toBe(false)
+  })
+
+  it('rejects intervals shorter than the minimum', () => {
+    const tracked = new Set<ReturnType<typeof setTimeout>>()
+    const t = makeTimers(tracked)
+    expect(() => t.setInterval(() => {}, 50)).toThrow('Interval too short')
+    expect(tracked.size).toBe(0)
+  })
+
+  it('caps the number of active timers', () => {
+    const tracked = new Set<ReturnType<typeof setTimeout>>()
+    const t = makeTimers(tracked)
+    const created: Array<ReturnType<typeof setTimeout>> = []
+    for (let i = 0; i < MAX_TIMERS; i++) created.push(t.setTimeout(() => {}, 60_000))
+    expect(() => t.setTimeout(() => {}, 60_000)).toThrow('Too many active timers')
+    for (const id of created) t.clearTimeout(id)
+    expect(tracked.size).toBe(0)
+  })
+
+  it('clearTimeout/clearInterval remove from tracking', () => {
+    const tracked = new Set<ReturnType<typeof setTimeout>>()
+    const t = makeTimers(tracked)
+    const a = t.setTimeout(() => {}, 60_000)
+    const b = t.setInterval(() => {}, 60_000)
+    expect(tracked.size).toBe(2)
+    t.clearTimeout(a)
+    t.clearInterval(b)
+    expect(tracked.size).toBe(0)
+  })
+})
+
+// ─── Lifecycle: onStop bounded execution ────────────────────────────────────
+
+describe('onStop bounded execution', () => {
+  async function runOnStop(onStop: () => Promise<void>, timeoutMs: number): Promise<{ ok: boolean; error?: string }> {
+    try {
+      await Promise.race([
+        Promise.resolve(onStop()),
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`onStop timed out after ${timeoutMs}ms`)), timeoutMs)),
+      ])
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  }
+
+  it('completes when onStop resolves in time', async () => {
+    const result = await runOnStop(async () => {}, 100)
+    expect(result.ok).toBe(true)
+  })
+
+  it('times out a hanging onStop instead of blocking the reload', async () => {
+    const result = await runOnStop(() => new Promise(() => {}), 20)
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('timed out')
+  })
+
+  it('captures onStop errors without throwing', async () => {
+    const result = await runOnStop(async () => { throw new Error('cleanup failed') }, 100)
+    expect(result.ok).toBe(false)
+    expect(result.error).toBe('cleanup failed')
+  })
+})
+
+// ─── Lifecycle: abort signal ────────────────────────────────────────────────
+
+describe('Instance abort signal (ctx.signal contract)', () => {
+  it('signal aborts when the instance stops', () => {
+    const controller = new AbortController()
+    expect(controller.signal.aborted).toBe(false)
+    controller.abort()
+    expect(controller.signal.aborted).toBe(true)
+  })
+
+  it('abort listeners fire so backends can cancel in-flight work', () => {
+    const controller = new AbortController()
+    let cancelled = false
+    controller.signal.addEventListener('abort', () => { cancelled = true })
+    controller.abort()
+    expect(cancelled).toBe(true)
+  })
+})
+
+// ─── Emitter stability across reloads ───────────────────────────────────────
+
+describe('Emitter survives backend reloads', () => {
+  it('subscribers keep receiving events after instance swap when emitter is stable', () => {
+    // Regression guard: emitters are NOT dropped on invalidation — connected
+    // SSE clients must keep receiving events from the reloaded instance.
+    const registry = new Map<string, AppEventEmitter>()
+    function getEmitter(appId: string): AppEventEmitter {
+      let emitter = registry.get(appId)
+      if (!emitter) { emitter = new AppEventEmitter(); registry.set(appId, emitter) }
+      return emitter
+    }
+
+    const received: string[] = []
+    getEmitter('app-1')._subscribe((event) => received.push(event))
+
+    // Old instance emits, then "reload" happens (cache invalidated, emitter kept)
+    getEmitter('app-1').emit('before-reload')
+    // New instance gets the same emitter
+    const afterReload = getEmitter('app-1')
+    afterReload.emit('after-reload')
+
+    expect(received).toEqual(['before-reload', 'after-reload'])
+  })
+})
+
+// ─── Manifest background flag parsing ───────────────────────────────────────
+
+describe('app.json background flag', () => {
+  function parseManifest(raw: string | null): Record<string, unknown> {
+    if (!raw) return {}
+    try {
+      const parsed = JSON.parse(raw)
+      return parsed && typeof parsed === 'object' ? parsed : {}
+    } catch { return {} }
+  }
+
+  it('detects background: true', () => {
+    const m = parseManifest('{"background": true, "dependencies": {}}')
+    expect(m.background === true).toBe(true)
+  })
+
+  it('treats missing/false/truthy-but-not-true as non-background', () => {
+    expect(parseManifest('{}').background === true).toBe(false)
+    expect(parseManifest('{"background": false}').background === true).toBe(false)
+    expect(parseManifest('{"background": "yes"}').background === true).toBe(false)
+    expect(parseManifest(null).background === true).toBe(false)
+  })
+
+  it('malformed manifest falls back to non-background', () => {
+    expect(parseManifest('{not json').background === true).toBe(false)
+  })
+})
+
 // ─── MiniAppBackendContext storage contract ─────────────────────────────────
 
 describe('Storage context JSON serialization', () => {

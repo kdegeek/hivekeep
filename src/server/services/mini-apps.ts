@@ -47,6 +47,22 @@ function guessMimeType(filename: string): string {
   return map[ext] ?? 'application/octet-stream'
 }
 
+/**
+ * Notify the backend runtime that app files changed, without a static import
+ * (mini-app-backend.ts imports this module — a static import would be a cycle).
+ */
+function notifyBackendFilesChanged(appId: string, relativePath: string): void {
+  void import('@/server/services/mini-app-backend')
+    .then((m) => m.handleAppFilesChanged(appId, relativePath))
+    .catch(() => {})
+}
+
+function notifyBackendRestart(appId: string): void {
+  void import('@/server/services/mini-app-backend')
+    .then((m) => m.restartBackend(appId))
+    .catch(() => {})
+}
+
 function serializeApp(row: MiniAppRow, agentName: string, agentAvatarUrl: string | null): MiniAppSummary {
   return {
     id: row.id,
@@ -191,6 +207,11 @@ export async function updateMiniApp(id: string, params: UpdateMiniAppParams): Pr
 
   await db.update(miniApps).set(updates).where(eq(miniApps.id, id))
   log.info({ appId: id }, 'Mini-app updated')
+
+  // Activation changes affect the running backend: stop when deactivated,
+  // (re)start background apps when reactivated.
+  if (params.isActive !== undefined) notifyBackendRestart(id)
+
   return getMiniApp(id)
 }
 
@@ -223,6 +244,10 @@ export async function setMiniAppMaintainer(appId: string, newMaintainerAgentId: 
 
   await db.update(miniApps).set({ agentId: newMaintainerAgentId, updatedAt: new Date() }).where(eq(miniApps.id, appId))
   log.info({ appId, fromAgentId: app.agentId, toAgentId: newMaintainerAgentId }, 'Mini-app maintainer reassigned')
+
+  // The on-disk dir moved: the cached backend module points at the old path.
+  notifyBackendRestart(appId)
+
   return getMiniApp(appId)
 }
 
@@ -243,6 +268,12 @@ export async function deleteMiniApp(id: string): Promise<boolean> {
   }
 
   await db.delete(miniApps).where(eq(miniApps.id, id))
+
+  // Stop any running backend instance and drop the SSE emitter.
+  void import('@/server/services/mini-app-backend')
+    .then((m) => m.removeBackend(id))
+    .catch(() => {})
+
   log.info({ appId: id, name: app.name }, 'Mini-app deleted')
   return true
 }
@@ -278,6 +309,8 @@ export async function writeAppFile(
     updates.hasBackend = true
   }
   await db.update(miniApps).set(updates).where(eq(miniApps.id, appId))
+
+  notifyBackendFilesChanged(appId, relativePath)
 
   log.debug({ appId, path: relativePath, size: buffer.length }, 'App file written')
   return { path: relativePath, size: buffer.length }
@@ -317,6 +350,8 @@ export async function deleteAppFile(appId: string, relativePath: string): Promis
     updates.hasBackend = false
   }
   await db.update(miniApps).set(updates).where(eq(miniApps.id, appId))
+
+  notifyBackendFilesChanged(appId, relativePath)
 
   log.debug({ appId, path: relativePath }, 'App file deleted')
   return true
@@ -367,6 +402,42 @@ export function getAppDir(agentId: string, appId: string): string {
 /** Get the raw DB row (for routes that need agentId) */
 export async function getMiniAppRow(id: string): Promise<MiniAppRow | null> {
   return db.select().from(miniApps).where(eq(miniApps.id, id)).get() ?? null
+}
+
+// ─── Manifest (app.json) ─────────────────────────────────────────────────────
+
+/** Parsed `app.json` manifest fields the host cares about. */
+export interface MiniAppManifest {
+  dependencies?: Record<string, string>
+  importmap?: { imports?: Record<string, string> }
+  /** When true, the backend is loaded at server boot and restarted on edits. */
+  background?: boolean
+  /** Capabilities the backend requests (granted by the user, see mini-app permissions). */
+  permissions?: string[]
+  [key: string]: unknown
+}
+
+/** Read and parse the app's `app.json`. Returns {} when absent or malformed. */
+export async function readAppManifest(appId: string): Promise<MiniAppManifest> {
+  const app = await db.select().from(miniApps).where(eq(miniApps.id, appId)).get()
+  if (!app) return {}
+  const manifestPath = join(appDir(app.agentId, appId), 'app.json')
+  if (!existsSync(manifestPath)) return {}
+  try {
+    const parsed = JSON.parse(await Bun.file(manifestPath).text())
+    return parsed && typeof parsed === 'object' ? (parsed as MiniAppManifest) : {}
+  } catch {
+    return {}
+  }
+}
+
+/** Ids of all active apps that have a backend (for boot-time background loading). */
+export async function listBackendAppIds(): Promise<string[]> {
+  const rows = await db.select({ id: miniApps.id })
+    .from(miniApps)
+    .where(and(eq(miniApps.hasBackend, true), eq(miniApps.isActive, true)))
+    .all()
+  return rows.map((r) => r.id)
 }
 
 export { guessMimeType }
@@ -627,6 +698,9 @@ export async function rollbackToSnapshot(appId: string, targetVersion: number): 
     hasBackend,
     updatedAt: new Date(),
   }).where(eq(miniApps.id, appId))
+
+  // The restored file set may carry a different _server.js / app.json.
+  notifyBackendRestart(appId)
 
   log.info({ appId, fromVersion: app.version, toVersion: targetVersion, newVersion }, 'App rolled back')
 
