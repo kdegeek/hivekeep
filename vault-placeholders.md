@@ -299,7 +299,7 @@ Effet de bord : mise à jour de `last_used_at`. v1 s'arrête là (event + colonn
 | **P4** ✅ | Audit : event bus `vault:secret-used` (+ `violation: unknown-key` sur fail-closed), colonne `last_used_at` stampée à chaque expansion (+ migration 0102 incluant `allowed_tools`/`allowed_hosts` pour P7), « Last used » sur la carte vault (10 locales). `vault:secret-revealed` arrive avec P5 | **SHIPPED** |
 | **P5** | `reveal_secret` : purpose `'reveal'`, carte d'approbation in-chat, auto-redact fin de tour, i18n (10 locales) + ligne `reveal_secret` ajoutée au bloc prompt (§ 8.1) | Oui |
 | **P6** ✅ | Transforms `\|base64` / `\|urlencode` (substitution ET variante env `HIVEKEEP_SECRET_KEY_BASE64`/`_URLENC` ; les valeurs transformées entrent au hot cache sous leur placeholder exact, donc la redaction de sortie rattrape aussi un base64 fuité) | **SHIPPED** |
-| **P7** | Enforcement scoping `allowedTools`/`allowedHosts` + UI d'édition (tags) + erreurs explicites | Oui |
+| **P7** ✅ | Enforcement scoping `allowedTools`/`allowedHosts` dans l'executor (fail-closed avant exécution, events `violation: tool-scope/host-scope`, wildcard `*.domaine`, restrictions visibles dans le retour de `get_secret`) + champs d'édition UI (inputs virgule, 10 locales) + routes | **SHIPPED** |
 | **P8** | Docs : docs-site (page vault réécrite), `api.md` (purpose `reveal`, SSE `chat:messages-redacted`, events bus), `sse.md` (nouvel event), `schema.md` (colonnes), `prompt-system.md` (bloc Secrets), mise à jour de cette spec → SHIPPED | Avec chaque phase (règle n°12) — P8 = passe finale de cohérence |
 
 Chaque phase : `bun run typecheck` + `bun run test` + tests unitaires dédiés (substituteur, redacteur, env-rewrite, fail-closed).

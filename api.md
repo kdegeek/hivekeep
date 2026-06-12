@@ -970,9 +970,11 @@ Exécute l'outil avec des args de test (`{ args }`) → `{ success, output, erro
 
 ## Vault
 
+Les agents n'accèdent aux secrets que par **placeholder** `{{secret:KEY}}` (substitué à l'exécution des tools — voir `vault-placeholders.md`). Les routes ci-dessous servent l'UI d'administration.
+
 ### `GET /api/vault`
 
-Liste les secrets (clés uniquement, jamais les valeurs).
+Liste les secrets (clés uniquement, jamais les valeurs). `lastUsedAt` est stampé à chaque expansion de placeholder.
 
 ```typescript
 // Response 200
@@ -980,11 +982,25 @@ Liste les secrets (clés uniquement, jamais les valeurs).
   secrets: Array<{
     id: string
     key: string
+    lastUsedAt: number | null
     createdAt: number
     updatedAt: number
   }>
 }
 ```
+
+### Scoping par secret (entries)
+
+`POST /api/vault/entries` et `PATCH /api/vault/entries/:id` acceptent deux champs optionnels, retournés par `GET /api/vault/entries` :
+
+```typescript
+{
+  allowedTools?: string[] | null  // tools autorisés à expandre ce secret (null = tous)
+  allowedHosts?: string[] | null  // hôtes autorisés pour les tools porteurs d'URL, wildcard *.domaine supporté (null = tous)
+}
+```
+
+Une expansion hors périmètre est refusée avant exécution (fail-closed) et émet `vault:secret-used` avec `violation: { type: 'tool-scope' | 'host-scope' }` sur le bus d'événements.
 
 ### `POST /api/vault`
 

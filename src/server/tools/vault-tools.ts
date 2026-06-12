@@ -56,6 +56,8 @@ export const getSecretTool: ToolRegistration = {
           placeholder: placeholderFor(key),
           key,
           ...(secret.description ? { description: secret.description } : {}),
+          ...(secret.allowedTools ? { restricted_to_tools: secret.allowedTools } : {}),
+          ...(secret.allowedHosts ? { restricted_to_hosts: secret.allowedHosts } : {}),
           usage: placeholderUsage(key),
         }
       },

@@ -1,15 +1,16 @@
 import type { Tool, JSONValue } from '@/server/tools/tool-helper'
 import { toolRegistry } from '@/server/tools/index'
 import { getCustomTool } from '@/server/services/custom-tools'
-import { getSecretValue, markSecretUsed } from '@/server/services/vault'
+import { getSecretForUse, markSecretUsed } from '@/server/services/vault'
 import { eventBus } from '@/server/services/events'
 import {
   extractPlaceholderKeys,
-  resolvePlaceholderSecrets,
   substitutePlaceholders,
   rewritePlaceholdersToEnvRefs,
   buildSecretEnv,
   redactSecretsInResult,
+  noteHotSecret,
+  hostMatchesAllowlist,
 } from '@/server/services/secret-substitution'
 import { sseManager } from '@/server/sse/index'
 import { config } from '@/server/config'
@@ -229,6 +230,16 @@ function toolExpandsSecrets(name: string): boolean {
   return toolRegistry.expandsSecrets(name) || name.startsWith('custom_') || name.startsWith('mcp_')
 }
 
+/** Native tools whose args carry a single identifiable target URL — the
+ *  surface where per-secret `allowedHosts` scoping is enforceable. Tools
+ *  outside this map are not host-constrained (documented limitation:
+ *  `allowedTools` is the lever to keep a secret away from run_shell). */
+const URL_BEARING_TOOLS: Record<string, (args: unknown) => string | undefined> = {
+  http_request: (a) => (a as { url?: string } | null)?.url,
+  browse_url: (a) => (a as { url?: string } | null)?.url,
+  screenshot_url: (a) => (a as { url?: string } | null)?.url,
+}
+
 export async function executeSingleTool(
   tc: ToolCall,
   tools: Record<string, Tool<any, any>>,
@@ -255,16 +266,70 @@ export async function executeSingleTool(
   if (toolExpandsSecrets(tc.name)) {
     const keys = extractPlaceholderKeys(tc.args)
     if (keys.length > 0) {
-      const { resolved, missing } = await resolvePlaceholderSecrets(keys, getSecretValue)
-      if (missing.length > 0) {
+      const resolved = new Map<string, string>()
+      const missing: string[] = []
+      const violations: Array<{ key: string; type: 'tool-scope' | 'host-scope'; message: string }> = []
+
+      for (const key of keys) {
+        const record = await getSecretForUse(key)
+        if (record === null) {
+          missing.push(key)
+          continue
+        }
+        // Per-secret scoping (vault-placeholders.md § 9) — checked BEFORE the
+        // value can reach any argument. This is the actual anti-exfiltration
+        // defense: a prompt-injected placeholder is useless outside the
+        // secret's legitimate destination.
+        if (record.allowedTools && !record.allowedTools.includes(tc.name)) {
+          violations.push({
+            key,
+            type: 'tool-scope',
+            message: `secret "${key}" is restricted to: ${record.allowedTools.join(', ')} (this tool is "${tc.name}")`,
+          })
+          continue
+        }
+        if (record.allowedHosts) {
+          const getUrl = URL_BEARING_TOOLS[tc.name]
+          if (getUrl) {
+            const url = getUrl(tc.args)
+            if (!url || !hostMatchesAllowlist(url, record.allowedHosts)) {
+              violations.push({
+                key,
+                type: 'host-scope',
+                message: `secret "${key}" is restricted to host${record.allowedHosts.length > 1 ? 's' : ''}: ${record.allowedHosts.join(', ')} (target was ${url ?? 'unparseable'})`,
+              })
+              continue
+            }
+          }
+        }
+        resolved.set(key, record.value)
+        noteHotSecret(key, record.value)
+      }
+
+      if (missing.length > 0 || violations.length > 0) {
         // Fail closed: never execute with a literal placeholder (a request
-        // carrying a fake token would still hit the network).
+        // carrying a fake token would still hit the network), and never
+        // execute a call that violates a secret's scoping policy.
         for (const key of missing) {
           eventBus.emit({
             type: 'vault:secret-used',
             data: { agentId, toolName: tc.name, secretKey: key, violation: { type: 'unknown-key' } },
             timestamp: Date.now(),
           })
+        }
+        for (const v of violations) {
+          eventBus.emit({
+            type: 'vault:secret-used',
+            data: { agentId, toolName: tc.name, secretKey: v.key, violation: { type: v.type } },
+            timestamp: Date.now(),
+          })
+        }
+        if (violations.length > 0) {
+          return {
+            error:
+              `Secret scope violation — the tool was NOT executed: ${violations.map((v) => v.message).join('; ')}. ` +
+              `These restrictions are set by the user in the Vault and cannot be bypassed; use the secret with its allowed tools/hosts, or ask the user to adjust the restriction.`,
+          }
         }
         const list = missing.map((k) => `"${k}"`).join(', ')
         return {
@@ -273,6 +338,7 @@ export async function executeSingleTool(
             `Use search_secrets to find the right key, or prompt_secret to ask the user for it.`,
         }
       }
+
       // Audit trail — fire-and-forget: usage tracking must never delay or
       // fail the tool call itself.
       for (const key of keys) {

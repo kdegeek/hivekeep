@@ -41,6 +41,8 @@ export function VaultEntryFormDialog({
   const [key, setKey] = useState('')
   const [entryType, setEntryType] = useState('text')
   const [description, setDescription] = useState('')
+  const [allowedTools, setAllowedTools] = useState('')
+  const [allowedHosts, setAllowedHosts] = useState('')
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
 
   // Build type options
@@ -72,6 +74,8 @@ export function VaultEntryFormDialog({
       setKey(entry.key)
       setEntryType(entry.entryType ?? 'text')
       setDescription(entry.description ?? '')
+      setAllowedTools((entry.allowedTools ?? []).join(', '))
+      setAllowedHosts((entry.allowedHosts ?? []).join(', '))
       setFieldValues({})
       setError('')
 
@@ -93,6 +97,8 @@ export function VaultEntryFormDialog({
       setKey('')
       setEntryType('text')
       setDescription('')
+      setAllowedTools('')
+      setAllowedHosts('')
       setFieldValues({})
       setError('')
     }
@@ -124,10 +130,17 @@ export function VaultEntryFormDialog({
         value = obj
       }
 
+      const parseList = (raw: string): string[] | null => {
+        const list = raw.split(',').map((v) => v.trim()).filter(Boolean)
+        return list.length > 0 ? list : null
+      }
+      const scopes = { allowedTools: parseList(allowedTools), allowedHosts: parseList(allowedHosts) }
+
       if (isEditing) {
         await api.patch(`/vault/entries/${entry.id}`, {
           value,
           ...(description !== (entry.description ?? '') ? { description } : {}),
+          ...scopes,
         })
       } else {
         await api.post('/vault/entries', {
@@ -135,6 +148,7 @@ export function VaultEntryFormDialog({
           entryType,
           value,
           ...(description ? { description } : {}),
+          ...scopes,
         })
       }
       onSaved()
@@ -267,6 +281,38 @@ export function VaultEntryFormDialog({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder={t('settings.vault.descriptionPlaceholder')}
+        />
+      </FormField>
+
+      {/* Agent usage restrictions (placeholder scoping) */}
+      <FormField
+        label={t('settings.vault.allowedTools')}
+        htmlFor="vault-allowed-tools"
+        tip={t('settings.vault.allowedToolsTip')}
+        hint={`(${t('common.optional')})`}
+      >
+        <Input
+          id="vault-allowed-tools"
+          value={allowedTools}
+          onChange={(e) => setAllowedTools(e.target.value)}
+          placeholder="http_request, run_shell"
+          className="font-mono"
+          autoComplete="off"
+        />
+      </FormField>
+      <FormField
+        label={t('settings.vault.allowedHosts')}
+        htmlFor="vault-allowed-hosts"
+        tip={t('settings.vault.allowedHostsTip')}
+        hint={`(${t('common.optional')})`}
+      >
+        <Input
+          id="vault-allowed-hosts"
+          value={allowedHosts}
+          onChange={(e) => setAllowedHosts(e.target.value)}
+          placeholder="api.github.com, *.example.com"
+          className="font-mono"
+          autoComplete="off"
         />
       </FormField>
 

@@ -16,6 +16,7 @@ import {
   invalidateHotSecrets,
   noteHotSecret,
   mapJsonStrings,
+  hostMatchesAllowlist,
   placeholderFor,
   hotSecretCount,
   MIN_REDACTABLE_SECRET_LENGTH,
@@ -160,6 +161,25 @@ describe('output redaction', () => {
     expect(redactKnownSecrets('value-aaaaaa value-bbbbbb')).toBe(`value-aaaaaa ${placeholderFor('B')}`)
     invalidateHotSecrets()
     expect(hotSecretCount()).toBe(0)
+  })
+})
+
+describe('hostMatchesAllowlist', () => {
+  it('matches exact hostnames case-insensitively, ignoring port and path', () => {
+    expect(hostMatchesAllowlist('https://API.GitHub.com:8443/repos?x=1', ['api.github.com'])).toBe(true)
+    expect(hostMatchesAllowlist('https://github.com', ['api.github.com'])).toBe(false)
+  })
+
+  it('matches *.wildcards on subdomains only, never the apex', () => {
+    expect(hostMatchesAllowlist('https://api.github.com', ['*.github.com'])).toBe(true)
+    expect(hostMatchesAllowlist('https://a.b.github.com', ['*.github.com'])).toBe(true)
+    expect(hostMatchesAllowlist('https://github.com', ['*.github.com'])).toBe(false)
+    expect(hostMatchesAllowlist('https://evilgithub.com', ['*.github.com'])).toBe(false)
+  })
+
+  it('fails closed on unparseable URLs and empty entries', () => {
+    expect(hostMatchesAllowlist('not a url', ['api.github.com'])).toBe(false)
+    expect(hostMatchesAllowlist('https://x.com', ['', '  '])).toBe(false)
   })
 })
 

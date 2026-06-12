@@ -26,6 +26,8 @@ export interface VaultSecretData {
   attachmentCount?: number
   createdByAgentId: string | null
   lastUsedAt?: number | null
+  allowedTools?: string[] | null
+  allowedHosts?: string[] | null
   createdAt: number
   updatedAt: number
 }

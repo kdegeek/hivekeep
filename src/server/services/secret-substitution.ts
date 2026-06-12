@@ -201,6 +201,34 @@ export function hotSecretCount(): number {
   return hotSecrets.size
 }
 
+// ─── Host allowlist matching (per-secret scoping, P7) ───────────────────────
+
+/**
+ * Does the target URL's hostname match the secret's host allowlist?
+ * Entries are either an exact hostname (`api.github.com`) or a wildcard
+ * subdomain pattern (`*.github.com` — subdomains only, not the apex).
+ * Comparison is case-insensitive on hostname only (ports/paths ignored).
+ * Unparseable URLs never match (fail closed).
+ */
+export function hostMatchesAllowlist(url: string, allowlist: string[]): boolean {
+  let hostname: string
+  try {
+    hostname = new URL(url).hostname.toLowerCase()
+  } catch {
+    return false
+  }
+  for (const entry of allowlist) {
+    const e = entry.trim().toLowerCase()
+    if (!e) continue
+    if (e.startsWith('*.')) {
+      if (hostname.endsWith(e.slice(1)) && hostname.length > e.length - 1) return true
+    } else if (hostname === e) {
+      return true
+    }
+  }
+  return false
+}
+
 // ─── Retroactive leak scrubbing (engine) ─────────────────────────────────────
 //
 // The storage-agnostic core of `redact_secret_leak`. Lives here with injected

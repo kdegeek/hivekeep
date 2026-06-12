@@ -116,6 +116,8 @@ vaultRoutes.post('/entries', async (c) => {
     value: string | Record<string, unknown>
     description?: string
     isFavorite?: boolean
+    allowedTools?: string[] | null
+    allowedHosts?: string[] | null
   }
 
   if (!body.key || !body.entryType || body.value === undefined) {
@@ -145,6 +147,8 @@ vaultRoutes.post('/entries', async (c) => {
     value: body.value,
     description: body.description,
     isFavorite: body.isFavorite,
+    allowedTools: body.allowedTools,
+    allowedHosts: body.allowedHosts,
   })
 
   return c.json({ entry }, 201)
@@ -171,6 +175,8 @@ vaultRoutes.patch('/entries/:id', async (c) => {
     description?: string
     entryType?: string
     isFavorite?: boolean
+    allowedTools?: string[] | null
+    allowedHosts?: string[] | null
   }
 
   const updated = await updateEntry(id, body)

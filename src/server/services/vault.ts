@@ -89,18 +89,22 @@ export async function deleteSecret(secretId: string) {
 // ─── Key-based operations (for tools) ────────────────────────────────────────
 
 export async function getSecretByKey(key: string) {
-  return db
+  const row = await db
     .select({
       id: vaultSecrets.id,
       key: vaultSecrets.key,
       description: vaultSecrets.description,
       createdByAgentId: vaultSecrets.createdByAgentId,
+      allowedTools: vaultSecrets.allowedTools,
+      allowedHosts: vaultSecrets.allowedHosts,
       createdAt: vaultSecrets.createdAt,
       updatedAt: vaultSecrets.updatedAt,
     })
     .from(vaultSecrets)
     .where(eq(vaultSecrets.key, key))
     .get()
+  if (!row) return row
+  return { ...row, allowedTools: parseScopeList(row.allowedTools), allowedHosts: parseScopeList(row.allowedHosts) }
 }
 
 export async function updateSecretValueByKey(key: string, newValue: string) {
@@ -164,6 +168,42 @@ export async function getSecretValue(key: string): Promise<string | null> {
   if (!secret) return null
   log.debug({ key }, 'Vault secret accessed')
   return decrypt(secret.encryptedValue)
+}
+
+/** Parse a JSON string[] column; null/invalid degrades to null (= unrestricted). */
+function parseScopeList(raw: string | null): string[] | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      const list = parsed.filter((v): v is string => typeof v === 'string' && v.trim() !== '')
+      return list.length > 0 ? list : null
+    }
+  } catch { /* treated as unrestricted; the column is admin-written JSON */ }
+  return null
+}
+
+export interface SecretForUse {
+  value: string
+  allowedTools: string[] | null
+  allowedHosts: string[] | null
+}
+
+/** Decrypted value + scoping policy, for placeholder expansion. The executor
+ *  enforces the scopes BEFORE the value is allowed into any tool call. */
+export async function getSecretForUse(key: string): Promise<SecretForUse | null> {
+  const secret = await db
+    .select()
+    .from(vaultSecrets)
+    .where(eq(vaultSecrets.key, key))
+    .get()
+
+  if (!secret) return null
+  return {
+    value: await decrypt(secret.encryptedValue),
+    allowedTools: parseScopeList(secret.allowedTools),
+    allowedHosts: parseScopeList(secret.allowedHosts),
+  }
 }
 
 /** Audit trail: stamp the secret as used now (placeholder expansion). Callers
@@ -245,6 +285,8 @@ export async function listEntries(filter?: ListEntriesFilter) {
       isFavorite: vaultSecrets.isFavorite,
       createdByAgentId: vaultSecrets.createdByAgentId,
       lastUsedAt: vaultSecrets.lastUsedAt,
+      allowedTools: vaultSecrets.allowedTools,
+      allowedHosts: vaultSecrets.allowedHosts,
       createdAt: vaultSecrets.createdAt,
       updatedAt: vaultSecrets.updatedAt,
     })
@@ -271,6 +313,8 @@ export async function listEntries(filter?: ListEntriesFilter) {
 
   return entries.map((e) => ({
     ...e,
+    allowedTools: parseScopeList(e.allowedTools),
+    allowedHosts: parseScopeList(e.allowedHosts),
     attachmentCount: attachmentCounts.get(e.id) ?? 0,
   }))
 }
@@ -282,6 +326,10 @@ export interface CreateEntryData {
   description?: string
   isFavorite?: boolean
   createdByAgentId?: string
+  /** Scoping (P7): tools allowed to expand this secret; null = all. */
+  allowedTools?: string[] | null
+  /** Scoping (P7): hosts the secret may be sent to (URL-bearing tools); null = all. */
+  allowedHosts?: string[] | null
 }
 
 export async function createEntry(data: CreateEntryData) {
@@ -300,6 +348,8 @@ export async function createEntry(data: CreateEntryData) {
     entryType: data.entryType,
     isFavorite: data.isFavorite ?? false,
     createdByAgentId: data.createdByAgentId ?? null,
+    allowedTools: data.allowedTools?.length ? JSON.stringify(data.allowedTools) : null,
+    allowedHosts: data.allowedHosts?.length ? JSON.stringify(data.allowedHosts) : null,
     createdAt: now,
     updatedAt: now,
   })
@@ -338,6 +388,8 @@ export interface UpdateEntryData {
   description?: string
   entryType?: VaultEntryType
   isFavorite?: boolean
+  allowedTools?: string[] | null
+  allowedHosts?: string[] | null
 }
 
 export async function updateEntry(id: string, updates: UpdateEntryData) {
@@ -349,6 +401,8 @@ export async function updateEntry(id: string, updates: UpdateEntryData) {
   if (updates.description !== undefined) setValues.description = updates.description
   if (updates.entryType !== undefined) setValues.entryType = updates.entryType
   if (updates.isFavorite !== undefined) setValues.isFavorite = updates.isFavorite
+  if (updates.allowedTools !== undefined) setValues.allowedTools = updates.allowedTools?.length ? JSON.stringify(updates.allowedTools) : null
+  if (updates.allowedHosts !== undefined) setValues.allowedHosts = updates.allowedHosts?.length ? JSON.stringify(updates.allowedHosts) : null
   if (updates.value !== undefined) {
     const plaintext = typeof updates.value === 'string' ? updates.value : JSON.stringify(updates.value)
     setValues.encryptedValue = await encrypt(plaintext)
