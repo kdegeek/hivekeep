@@ -21,6 +21,7 @@ import {
   AlertDialogTitle,
 } from '@/client/components/ui/alert-dialog'
 import { useAgentList } from '@/client/hooks/useAgentList'
+import { appendToDraft } from '@/client/hooks/useDraftMessage'
 import {
   useWorkspaceFiles,
   parentDirOf,
@@ -181,6 +182,14 @@ export function FilesPage() {
       }
     },
     share: (entry) => setShareTarget(entry),
+    insertInChat: (entry) => {
+      if (!activeAgentId) return
+      // Write the draft BEFORE navigating (no composer mount race) — the path
+      // goes in backticks, same convention as the @ palette (files.md § 5.3).
+      appendToDraft(activeAgentId, `\`${entry.path}\``)
+      const agent = agents.find((a) => a.id === activeAgentId)
+      navigate(`/agent/${agent?.slug ?? activeAgentId}`)
+    },
     uploadTo: async (dirPath, files) => {
       try {
         const result = await workspace.uploadFiles(dirPath, files)

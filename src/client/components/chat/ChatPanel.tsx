@@ -36,6 +36,7 @@ import { useQuickSession } from '@/client/hooks/useQuickSession'
 import { useAuth } from '@/client/hooks/useAuth'
 import { useReactions } from '@/client/hooks/useReactions'
 import { useDraftMessage } from '@/client/hooks/useDraftMessage'
+import { WorkspacePathProvider } from '@/client/contexts/WorkspacePathContext'
 import { useQueueItems } from '@/client/hooks/useQueueItems'
 import { useFileUpload } from '@/client/hooks/useFileUpload'
 import { useExportConversation } from '@/client/hooks/useExportConversation'
@@ -813,6 +814,7 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
   }, [displayMessages, isLoading])
 
   return (
+    <WorkspacePathProvider agentId={agent.id}>
     <div
       className="relative flex min-h-0 min-w-0 flex-1 flex-col"
       onDragEnter={handlePanelDragEnter}
@@ -1356,5 +1358,6 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </WorkspacePathProvider>
   )
 }

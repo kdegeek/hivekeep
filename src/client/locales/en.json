@@ -917,7 +917,8 @@
     "mention": {
       "users": "User",
       "agents": "Agent",
-      "noResults": "No results"
+      "noResults": "No results",
+      "files": "Files"
     },
     "ticketMention": {
       "loading": "Searching tickets...",

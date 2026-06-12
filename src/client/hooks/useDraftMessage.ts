@@ -59,6 +59,18 @@ function cleanupOldDrafts() {
 cleanupOldDrafts()
 
 /**
+ * Append text to an agent's persisted draft from OUTSIDE the composer (e.g.
+ * the Files tree "Insert in chat" action, files.md § 5.3). Writing the draft
+ * BEFORE navigating avoids any mount race: MessageInput picks it up naturally
+ * when the conversation opens.
+ */
+export function appendToDraft(agentId: string, text: string) {
+  const current = loadDraft(agentId)
+  const glue = current && !current.endsWith(' ') ? ' ' : ''
+  saveDraft(agentId, `${current}${glue}${text} `)
+}
+
+/**
  * Persists draft message content per Agent across component unmounts
  * and page reloads via localStorage.
  */

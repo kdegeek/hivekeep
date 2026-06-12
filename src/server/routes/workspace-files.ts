@@ -12,6 +12,8 @@ import {
   copyWorkspaceEntry,
   deleteWorkspaceEntry,
   uploadWorkspaceFiles,
+  searchWorkspaceFiles,
+  resolveWorkspacePaths,
 } from '@/server/services/workspace-files'
 import { resolveAgentId } from '@/server/services/agent-resolver'
 import { isInlineSafeMime } from '@/server/services/file-kind'
@@ -175,6 +177,35 @@ workspaceFilesRoutes.post('/upload', async (c) => {
   } catch (err) {
     return handleError(c, err)
   }
+})
+
+// GET /api/agents/:agentId/workspace/search?q=…&limit=20 — filename search
+workspaceFilesRoutes.get('/search', async (c) => {
+  const agent = requireAgent(c)
+  if (!agent) return agentNotFound(c)
+  const q = c.req.query('q') ?? ''
+  const limit = Number(c.req.query('limit') ?? 20)
+  try {
+    const hits = await searchWorkspaceFiles(agent.id, q, Number.isFinite(limit) ? limit : 20)
+    return c.json({ hits })
+  } catch (err) {
+    return handleError(c, err)
+  }
+})
+
+// POST /api/agents/:agentId/workspace/resolve-paths — batched existence check (chat chips)
+workspaceFilesRoutes.post('/resolve-paths', async (c) => {
+  const agent = requireAgent(c)
+  if (!agent) return agentNotFound(c)
+  const body = await c.req.json<{ paths?: string[] }>()
+  if (!Array.isArray(body.paths)) {
+    return c.json({ error: { code: 'VALIDATION_ERROR', message: 'paths must be an array' } }, 400)
+  }
+  const existing = await resolveWorkspacePaths(
+    agent.id,
+    body.paths.filter((p): p is string => typeof p === 'string'),
+  )
+  return c.json({ existing })
 })
 
 // GET /api/agents/:agentId/workspace/raw?path=…&inline=1 — stream raw bytes

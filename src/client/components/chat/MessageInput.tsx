@@ -11,6 +11,7 @@ import { MAX_MESSAGE_LENGTH } from '@/shared/constants'
 import { MentionPopover, getMentionItemCount, getMentionItemAt, type MentionItem } from '@/client/components/chat/MentionPopover'
 import { CommandPopover, getFilteredCommands, SLASH_COMMANDS, type SlashCommand } from '@/client/components/chat/CommandPopover'
 import { TicketMentionPopover, TICKET_MENTION_MAX_VISIBLE } from '@/client/components/chat/TicketMentionPopover'
+import { useWorkspaceFileSearch } from '@/client/hooks/useWorkspaceFileSearch'
 import { useTicketSearch, type TicketSearchHit } from '@/client/hooks/useTicketSearch'
 import { getCaretCoordinates } from '@/client/lib/getCaretCoordinates'
 import { PROJECT_SLUG_REGEX } from '@/shared/constants'
@@ -123,7 +124,17 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
   const [mentionStartIndex, setMentionStartIndex] = useState(0)
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0)
   const [mentionPosition, setMentionPosition] = useState<{ top: number; left: number }>({ top: 8, left: 0 })
-  const isMentionOpen = mentionQuery !== null && (mentionableUsers?.length || mentionableAgents?.length)
+
+  // Workspace files group of the @ palette (files.md § 5.1) — scoped to the
+  // conversation agent, server-side search-as-you-type.
+  const { hits: mentionFileHits } = useWorkspaceFileSearch({
+    query: mentionQuery ?? '',
+    agentId: agentId ?? null,
+    enabled: mentionQuery !== null && !!agentId,
+  })
+  const isMentionOpen =
+    mentionQuery !== null &&
+    ((mentionableUsers?.length ?? 0) > 0 || (mentionableAgents?.length ?? 0) > 0 || mentionFileHits.length > 0)
 
   // Slash command autocomplete state
   const [commandQuery, setCommandQuery] = useState<string | null>(null)
@@ -168,9 +179,11 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
 
   /** Detect @mention trigger from the current cursor position */
   const detectMention = useCallback((text: string, cursorPos: number) => {
-    // Walk backwards from cursor to find @ that starts this mention
+    // Walk backwards from cursor to find @ that starts this mention.
+    // `.` and `/` are allowed inside the query so file paths (`@docs/report.md`)
+    // keep the palette open — user/agent handles never contain them anyway.
     let i = cursorPos - 1
-    while (i >= 0 && /[a-zA-Z0-9_-]/.test(text[i]!)) i--
+    while (i >= 0 && /[a-zA-Z0-9_./-]/.test(text[i]!)) i--
 
     if (i >= 0 && text[i] === '@') {
       // Check that @ is at start of text or preceded by whitespace
@@ -287,12 +300,16 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
   const handleMentionSelect = useCallback((item: MentionItem) => {
     const before = value.slice(0, mentionStartIndex)
     const after = value.slice(mentionStartIndex + 1 + (mentionQuery?.length ?? 0)) // +1 for the @
-    const newValue = `${before}@${item.handle} ${after}`
+    // Files drop the @ and insert the relative path in backticks: agents read
+    // the path with their filesystem tools and the renderer turns it into a
+    // clickable chip; backticks delimit spaces/accents (files.md § 5.1).
+    const insertion = item.type === 'file' ? `\`${item.handle}\`` : `@${item.handle}`
+    const newValue = `${before}${insertion} ${after}`
     onChange(newValue)
     setMentionQuery(null)
 
     // Place cursor right after the inserted mention
-    const cursorPos = mentionStartIndex + 1 + item.handle.length + 1
+    const cursorPos = before.length + insertion.length + 1
     requestAnimationFrame(() => {
       textareaRef.current?.setSelectionRange(cursorPos, cursorPos)
       textareaRef.current?.focus()
@@ -442,8 +459,8 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
     }
 
     // Mention popover keyboard navigation
-    if (isMentionOpen && mentionableUsers && mentionableAgents) {
-      const count = getMentionItemCount(mentionQuery!, mentionableUsers, mentionableAgents)
+    if (isMentionOpen) {
+      const count = getMentionItemCount(mentionQuery!, mentionableUsers ?? [], mentionableAgents ?? [], mentionFileHits)
       if (count > 0) {
         if (e.key === 'ArrowDown') {
           e.preventDefault()
@@ -457,7 +474,7 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
         }
         if (e.key === 'Enter' || e.key === 'Tab') {
           e.preventDefault()
-          const item = getMentionItemAt(mentionSelectedIndex, mentionQuery!, mentionableUsers, mentionableAgents)
+          const item = getMentionItemAt(mentionSelectedIndex, mentionQuery!, mentionableUsers ?? [], mentionableAgents ?? [], mentionFileHits)
           if (item) handleMentionSelect(item)
           return
         }
@@ -732,11 +749,12 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
           />
 
           {/* @mention autocomplete popover */}
-          {isMentionOpen && mentionableUsers && mentionableAgents && (
+          {isMentionOpen && (
             <MentionPopover
               query={mentionQuery!}
-              users={mentionableUsers}
-              agents={mentionableAgents}
+              users={mentionableUsers ?? []}
+              agents={mentionableAgents ?? []}
+              files={mentionFileHits}
               selectedIndex={mentionSelectedIndex}
               position={mentionPosition}
               onSelect={handleMentionSelect}

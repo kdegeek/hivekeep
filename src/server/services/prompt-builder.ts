@@ -1615,7 +1615,8 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `## Workspace\n\n` +
       `Your workspace directory is your dedicated storage area. Use it to organize files, clone repos, create scripts, and store any persistent data.\n\n` +
       `Path: ${params.workspacePath}${treeLine}\n\n` +
-      `> Always create files, clone repos, and store data inside your workspace. Never write to the home folder or other system paths.`,
+      `> Always create files, clone repos, and store data inside your workspace. Never write to the home folder or other system paths.\n\n` +
+      `The user can browse and edit your workspace at any time through the Files screen of the app — files you create are directly visible, editable and shareable by them. When you mention one of your workspace files in a message, write its relative path in backticks (e.g. \`reports/analysis.md\`): it becomes a clickable link that opens the file for the user. Don't paste full file contents into the chat when pointing at the file is enough.`,
     )
   }
 

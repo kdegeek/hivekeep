@@ -4,7 +4,7 @@ import { join, basename } from 'path'
 /**
  * Directories to skip when generating the workspace tree.
  */
-const IGNORED_DIRS = new Set([
+export const IGNORED_DIRS = new Set([
   'node_modules',
   '.git',
   'dist',

@@ -620,6 +620,80 @@ export async function uploadWorkspaceFiles(
   return { files: uploaded, errors }
 }
 
+// ─── search & resolve-paths (chat integrations, files.md § 6.7/6.8) ──────────
+
+export interface WorkspaceSearchHit {
+  path: string
+  name: string
+  size: number
+  modifiedAt: number
+}
+
+/**
+ * Filename/path substring search. lstat-based walk that NEVER descends into
+ * symlinked directories (escape + cycles), skips the heavy dirs the prompt
+ * tree skips (IGNORED_DIRS), and stops at the entry budget.
+ */
+export async function searchWorkspaceFiles(agentId: string, query: string, limit: number): Promise<WorkspaceSearchHit[]> {
+  const { IGNORED_DIRS } = await import('@/server/services/workspace-tree')
+  const resolved = await resolveWorkspacePath(agentId, '')
+  if (!resolved.exists) return []
+  const cap = Math.min(Math.max(1, limit), config.workspaceFiles.searchMaxResults)
+  const needle = query.toLowerCase()
+  const hits: WorkspaceSearchHit[] = []
+  let budget = config.workspaceFiles.searchMaxEntries
+
+  const walk = (dirAbs: string, dirRel: string): boolean => {
+    let dirents
+    try {
+      dirents = readdirSync(dirAbs, { withFileTypes: true })
+    } catch {
+      return true
+    }
+    for (const dirent of dirents) {
+      if (--budget < 0) return false
+      const rel = dirRel ? `${dirRel}/${dirent.name}` : dirent.name
+      const abs = join(dirAbs, dirent.name)
+      if (dirent.isSymbolicLink()) continue
+      if (dirent.isDirectory()) {
+        if (IGNORED_DIRS.has(dirent.name)) continue
+        if (!walk(abs, rel)) return false
+        continue
+      }
+      if (!dirent.isFile()) continue
+      if (needle && !rel.toLowerCase().includes(needle)) continue
+      let entryStat
+      try {
+        entryStat = lstatSync(abs)
+      } catch {
+        continue
+      }
+      hits.push({ path: rel, name: dirent.name, size: entryStat.size, modifiedAt: entryStat.mtimeMs })
+      if (hits.length >= cap) return false
+    }
+    return true
+  }
+
+  walk(resolved.abs, '')
+  return hits
+}
+
+/** Existence check for candidate paths from chat messages — files only,
+ *  invalid/escaping candidates silently dropped (they're regex output). */
+export async function resolveWorkspacePaths(agentId: string, paths: string[]): Promise<string[]> {
+  const existing: string[] = []
+  for (const path of paths.slice(0, 50)) {
+    try {
+      const resolved = await resolveWorkspacePath(agentId, path)
+      if (!resolved.exists) continue
+      if ((await lstat(resolved.abs)).isFile()) existing.push(resolved.rel)
+    } catch {
+      // candidates come from a regex — not an error
+    }
+  }
+  return existing
+}
+
 // ─── raw (download / inline view) ────────────────────────────────────────────
 
 export async function statWorkspaceFileForRaw(

@@ -18,6 +18,7 @@ import { MessageBubble } from '@/client/components/chat/MessageBubble'
 import { MessageInput } from '@/client/components/chat/MessageInput'
 import { TypingIndicator } from '@/client/components/chat/TypingIndicator'
 import { useQuickChat } from '@/client/hooks/useQuickChat'
+import { WorkspacePathProvider } from '@/client/contexts/WorkspacePathContext'
 import { useToolCalls } from '@/client/hooks/useToolCalls'
 import { useDraftMessage } from '@/client/hooks/useDraftMessage'
 import { useFileUpload } from '@/client/hooks/useFileUpload'
@@ -156,6 +157,7 @@ export function QuickChatPanel({ agentId, agentName, agentAvatarUrl, agentModel,
   }, [onEnd, saveAsMemory, memorySummary])
 
   return (
+    <WorkspacePathProvider agentId={agentId}>
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -366,5 +368,6 @@ export function QuickChatPanel({ agentId, agentName, agentAvatarUrl, agentModel,
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </WorkspacePathProvider>
   )
 }

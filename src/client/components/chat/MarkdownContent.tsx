@@ -8,7 +8,9 @@ import { cn } from '@/client/lib/utils'
 import { HighlightText } from '@/client/components/chat/HighlightText'
 import { ImageLightbox } from '@/client/components/chat/ImageLightbox'
 import { TicketMention } from '@/client/components/chat/TicketMention'
+import { WorkspacePathMention } from '@/client/components/chat/WorkspacePathMention'
 import { remarkTicketMentions } from '@/client/lib/remark-ticket-mentions'
+import { remarkWorkspacePaths, WORKSPACE_PATH_TEXT_REGEX } from '@/client/lib/remark-workspace-paths'
 
 interface MarkdownContentProps {
   content: string
@@ -20,7 +22,7 @@ interface MarkdownContentProps {
   className?: string
 }
 
-const defaultRemarkPlugins = [remarkGfm, remarkTicketMentions]
+const defaultRemarkPlugins = [remarkGfm, remarkTicketMentions, remarkWorkspacePaths]
 
 // ─── Lazy-loaded plugins ──────────────────────────────────────────────────────
 // rehype-highlight (~170 KB), remark-math + rehype-katex (~260 KB) are loaded
@@ -473,6 +475,12 @@ function MarkdownTable({ children, ...props }: HTMLAttributes<HTMLTableElement> 
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: registering a custom tag name in the components map
+function WorkspacePathElement(props: HTMLAttributes<HTMLElement> & { 'data-path'?: string; 'data-was-code'?: string }) {
+  const path = props['data-path']
+  if (!path) return <>{props.children}</>
+  return <WorkspacePathMention path={path} wasCode={props['data-was-code'] !== undefined} />
+}
+
 const markdownComponents: any = {
   pre: PreBlock,
   table: MarkdownTable,
@@ -493,6 +501,7 @@ const markdownComponents: any = {
   h6: withHighlight('h6'),
   blockquote: withHighlight('blockquote'),
   'ticket-mention': MentionElement,
+  'workspace-path': WorkspacePathElement,
 }
 
 // ─── Inner markdown renderer (uses hooks for lazy rehype plugins) ─────────────
@@ -541,7 +550,11 @@ export const MarkdownContent = memo(function MarkdownContent({
   // potential ticket mention (`#42` or `slug#42`) already takes the markdown
   // path and runs through remarkTicketMentions — no extra branch needed here.
   const isPlainText = useMemo(() => {
-    return !/[*_`#\[!\-|>~$\\]/.test(trimmed) && !/^\d+\.\s/m.test(trimmed)
+    if (/[*_`#\[!\-|>~$\\]/.test(trimmed) || /^\d+\.\s/m.test(trimmed)) return false
+    // Workspace path candidates (e.g. "voilà rapports/analyse.md") need the
+    // remark pipeline even when no markdown marker is present (files.md § 5.2).
+    const pathProbe = new RegExp(WORKSPACE_PATH_TEXT_REGEX.source)
+    return !pathProbe.test(trimmed)
   }, [trimmed])
 
   if (isPlainText) {
