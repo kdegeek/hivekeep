@@ -14,12 +14,13 @@
  * Emits `chat:messages-redacted` per affected agent so connected clients
  * refetch instead of keeping the secret on screen.
  */
-import { eq, or, sql } from 'drizzle-orm'
+import { and, eq, or, sql } from 'drizzle-orm'
 import { db } from '@/server/db/index'
 import { messages, compactingSummaries } from '@/server/db/schema'
 import { getSecretValue } from '@/server/services/vault'
 import {
   scrubLeakedValue,
+  sweepRevealedCarriers,
   MIN_REDACTABLE_SECRET_LENGTH,
   type LeakScrubStore,
 } from '@/server/services/secret-substitution'
@@ -87,4 +88,49 @@ export async function redactSecretLeak(key: string): Promise<RedactLeakResult> {
   const { messagesCleaned, summariesCleaned } = await scrubLeakedValue(key, value, drizzleStore)
   log.info({ secretKey: key, messagesCleaned, summariesCleaned }, 'Secret leak scrubbed from history')
   return { ok: true, messagesCleaned, summariesCleaned }
+}
+
+/**
+ * End-of-turn / boot sweep for reveal_secret carrier messages — see
+ * `sweepRevealedCarriers` (secret-substitution.ts) for the engine. Called
+ * (awaited) at the end of every main-conversation turn BEFORE the compacting
+ * trigger, and once at boot (crash recovery: a turn that died mid-flight
+ * must not leave the raw value in the history).
+ */
+export async function sweepRevealedSecrets(agentId?: string): Promise<number> {
+  const count = await sweepRevealedCarriers(
+    {
+      async findPendingCarriers(aid) {
+        return db
+          .select({ id: messages.id, agentId: messages.agentId, metadata: messages.metadata })
+          .from(messages)
+          .where(
+            aid
+              ? and(eq(messages.redactPending, true), eq(messages.agentId, aid))
+              : eq(messages.redactPending, true),
+          )
+          .all()
+      },
+      async redactCarrier(id, content) {
+        await db
+          .update(messages)
+          .set({ content, isRedacted: true, redactPending: false })
+          .where(eq(messages.id, id))
+      },
+      async scrubKey(key) {
+        const res = await redactSecretLeak(key)
+        if (!res.ok) log.warn({ key, error: res.error }, 'Post-reveal scrub skipped')
+      },
+      emitRedacted(aid, messageIds) {
+        sseManager.sendToAgent(aid, {
+          type: 'chat:messages-redacted',
+          agentId: aid,
+          data: { agentId: aid, messageIds },
+        })
+      },
+    },
+    agentId,
+  )
+  if (count > 0) log.info({ count }, 'Revealed-secret carriers redacted')
+  return count
 }

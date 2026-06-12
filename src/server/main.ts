@@ -134,6 +134,13 @@ pluginManager.startWatching()
 
 // Start the queue worker
 log.info('Starting queue worker...')
+// Crash recovery: a reveal_secret turn that died mid-flight must not leave
+// the raw value in the history — sweep BEFORE the queue worker starts.
+import('@/server/services/secret-redaction')
+  .then(({ sweepRevealedSecrets }) => sweepRevealedSecrets())
+  .then((n) => { if (n > 0) log.warn({ count: n }, 'Boot sweep: redacted stale revealed-secret carriers') })
+  .catch((err) => log.error({ err }, 'Boot sweep of revealed secrets failed'))
+
 startQueueWorker()
 
 // Initialize cron scheduler (restore active crons from DB)

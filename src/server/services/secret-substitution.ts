@@ -315,3 +315,56 @@ export async function scrubLeakedValue(
   const messagesCleaned = [...cleanedByAgent.values()].reduce((n, ids) => n + ids.length, 0)
   return { messagesCleaned, summariesCleaned: summaryRows.length }
 }
+
+// ─── Reveal-carrier sweep (engine) ───────────────────────────────────────────
+//
+// End-of-turn / boot cleanup for reveal_secret carrier messages. Storage ops
+// are injected for the same reason as scrubLeakedValue — secret-redaction.ts
+// binds them to drizzle + sseManager.
+
+export interface RevealSweepStore {
+  /** Messages flagged redactPending (optionally for one agent). */
+  findPendingCarriers(agentId?: string): Promise<Array<{ id: string; agentId: string; metadata: string | null }>>
+  /** Full-redact the carrier: set content, isRedacted=true, redactPending=false. */
+  redactCarrier(id: string, content: string): Promise<void>
+  /** Retroactively scrub this key's value from the whole history. */
+  scrubKey(key: string): Promise<void>
+  emitRedacted(agentId: string, messageIds: string[]): void
+}
+
+/**
+ * Redact every reveal carrier: the message holding a raw revealed value is
+ * replaced with a neutral note (re-teaching the placeholder), and the value
+ * is scrubbed from anything it touched during the turn — the agent may have
+ * pasted it into tool arguments, persisted in tool_calls.
+ */
+export async function sweepRevealedCarriers(store: RevealSweepStore, agentId?: string): Promise<number> {
+  const pending = await store.findPendingCarriers(agentId)
+  if (pending.length === 0) return 0
+
+  const carriersByAgent = new Map<string, string[]>()
+  for (const msg of pending) {
+    let revealKey: string | null = null
+    try {
+      revealKey = (JSON.parse(msg.metadata ?? '{}') as { reveal?: { key?: string } }).reveal?.key ?? null
+    } catch { /* metadata unreadable — still redact the carrier below */ }
+
+    await store.redactCarrier(
+      msg.id,
+      revealKey
+        ? `[Secret "${revealKey}" was revealed here with user approval — value redacted. Use the placeholder {{secret:${revealKey}}} from now on.]`
+        : '[A revealed secret was redacted.]',
+    )
+
+    const list = carriersByAgent.get(msg.agentId) ?? []
+    list.push(msg.id)
+    carriersByAgent.set(msg.agentId, list)
+
+    if (revealKey) await store.scrubKey(revealKey)
+  }
+
+  for (const [aid, messageIds] of carriersByAgent) {
+    store.emitRedacted(aid, messageIds)
+  }
+  return pending.length
+}

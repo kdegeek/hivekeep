@@ -2,6 +2,9 @@
   "secretPrompt": {
     "getKey": "Hol dir hier deinen Schlüssel",
     "privacyNote": "Das landet direkt in deinem verschlüsselten Vault. Die KI sieht es nie.",
+    "revealWarning": "Der Agent möchte den Klartext dieses Secrets SEHEN. Wenn du zustimmst, wird der Wert für einen Zug an das KI-Modell gesendet und danach automatisch aus dem Verlauf entfernt. Stimme nur zu, wenn der Grund nachvollziehbar ist.",
+    "approve": "Wert offenlegen",
+    "deny": "Ablehnen",
     "saving": "Wird gespeichert…",
     "submit": "Sicher speichern"
   },
@@ -2668,6 +2671,7 @@
       "delete_secret": "Secret löschen",
       "search_secrets": "Secrets durchsuchen",
       "redact_secret_leak": "Geleaktes Secret bereinigen",
+      "reveal_secret": "Secret offenlegen (mit Freigabe)",
       "spawn_self": "Unteraufgabe starten",
       "spawn_agent": "Agenten-Aufgabe starten",
       "scout": "Scout",

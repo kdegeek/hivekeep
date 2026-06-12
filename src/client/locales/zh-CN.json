@@ -2,6 +2,9 @@
   "secretPrompt": {
     "getKey": "在这里获取你的密钥",
     "privacyNote": "它会直接进入你的加密保险库，AI 永远不会看到它。",
+    "revealWarning": "智能体请求查看此密钥的明文。如果批准，该值将发送给 AI 模型一个回合，随后自动从历史记录中移除。仅在理由合理时批准。",
+    "approve": "显示明文",
+    "deny": "拒绝",
     "saving": "保存中…",
     "submit": "安全保存"
   },
@@ -2668,6 +2671,7 @@
       "delete_secret": "删除机密",
       "search_secrets": "搜索机密",
       "redact_secret_leak": "清除泄露的密钥",
+      "reveal_secret": "显示密钥（需批准）",
       "spawn_self": "派生子任务",
       "spawn_agent": "派生智能体任务",
       "scout": "侦察",

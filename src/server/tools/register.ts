@@ -89,6 +89,7 @@ import { searchHistoryTool, browseHistoryTool, readMessageTool, listSummariesToo
 import {
   getSecretTool,
   redactSecretLeakTool,
+  revealSecretTool,
   createSecretTool,
   updateSecretTool,
   deleteSecretTool,
@@ -425,6 +426,7 @@ export function registerAllTools(): void {
   // Phase 14: Vault tools
   toolRegistry.register('get_secret', getSecretTool, 'vault')
   toolRegistry.register('redact_secret_leak', redactSecretLeakTool, 'vault')
+  toolRegistry.register('reveal_secret', revealSecretTool, 'vault')
   toolRegistry.register('create_secret', createSecretTool, 'vault')
   toolRegistry.register('update_secret', updateSecretTool, 'vault')
   toolRegistry.register('delete_secret', deleteSecretTool, 'vault')

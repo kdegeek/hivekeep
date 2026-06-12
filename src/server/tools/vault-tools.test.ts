@@ -5,6 +5,14 @@ import type { ToolExecutionContext } from '@/server/tools/types'
 
 const mockRedaction = {
   redactSecretLeak: mock(() => Promise.resolve({ ok: false, error: 'x', messagesCleaned: 0, summariesCleaned: 0 } as any)),
+  sweepRevealedSecrets: mock(() => Promise.resolve(0)),
+}
+
+const mockSecretPrompts = {
+  createSecretPrompt: mock(() => Promise.resolve({ promptId: 'prompt-1' })),
+  respondToSecretPrompt: mock(() => Promise.resolve({ success: true, summary: '' } as any)),
+  cancelSecretPrompt: mock(() => Promise.resolve({ success: true } as any)),
+  getPendingSecretPrompts: mock(() => Promise.resolve([] as any[])),
 }
 
 const mockVault = {
@@ -32,6 +40,7 @@ const mockVaultTypes = {
 
 mock.module('@/server/services/vault', () => mockVault)
 mock.module('@/server/services/secret-redaction', () => mockRedaction)
+mock.module('@/server/services/secret-prompts', () => mockSecretPrompts)
 mock.module('@/server/services/vault-types', () => mockVaultTypes)
 mock.module('@/server/logger', () => ({
   createLogger: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }),
@@ -41,6 +50,7 @@ mock.module('@/server/logger', () => ({
 const {
   getSecretTool,
   redactSecretLeakTool,
+  revealSecretTool,
   createSecretTool,
   updateSecretTool,
   deleteSecretTool,
@@ -63,6 +73,7 @@ function execute(registration: any, args: any) {
 function resetMocks() {
   Object.values(mockVault).forEach((m) => m.mockReset())
   Object.values(mockRedaction).forEach((m) => m.mockReset())
+  Object.values(mockSecretPrompts).forEach((m) => m.mockReset())
   Object.values(mockVaultTypes).forEach((m) => m.mockReset())
 }
 
@@ -76,7 +87,7 @@ describe('vault-tools', () => {
   describe('availability', () => {
     it('all vault tools are main-only', () => {
       const tools = [
-        getSecretTool, redactSecretLeakTool, createSecretTool, updateSecretTool,
+        getSecretTool, redactSecretLeakTool, revealSecretTool, createSecretTool, updateSecretTool,
         deleteSecretTool, searchSecretsTool, getVaultEntryTool, createVaultEntryTool,
         createVaultTypeTool, getVaultAttachmentTool,
       ]
@@ -126,6 +137,33 @@ describe('vault-tools', () => {
       mockRedaction.redactSecretLeak.mockResolvedValueOnce({ ok: false, error: 'Secret with key "NOPE" not found', messagesCleaned: 0, summariesCleaned: 0 })
       const result = await execute(redactSecretLeakTool, { key: 'NOPE' })
       expect(result).toEqual({ error: 'Secret with key "NOPE" not found' })
+    })
+  })
+
+  // ── reveal_secret ─────────────────────────────────────────────────────────
+
+  describe('reveal_secret', () => {
+    it('creates a reveal prompt (approval card) and suspends the turn', async () => {
+      mockVault.getSecretByKey.mockResolvedValueOnce({ id: 'sec-1', key: 'GH_TOKEN' })
+      mockSecretPrompts.createSecretPrompt.mockResolvedValueOnce({ promptId: 'prompt-42' })
+      const result = await execute(revealSecretTool, { key: 'GH_TOKEN', reason: 'debug the API signature' })
+      expect(result.promptId).toBe('prompt-42')
+      expect(result.status).toBe('awaiting_user_approval')
+      expect(mockSecretPrompts.createSecretPrompt).toHaveBeenCalledWith({
+        agentId: 'agent-abc',
+        purpose: 'reveal',
+        title: 'Reveal secret "GH_TOKEN" to the model?',
+        description: 'debug the API signature',
+        fields: [],
+        spec: { key: 'GH_TOKEN', reason: 'debug the API signature' },
+      })
+    })
+
+    it('errors without creating a prompt when the key does not exist', async () => {
+      mockVault.getSecretByKey.mockResolvedValueOnce(null)
+      const result = await execute(revealSecretTool, { key: 'NOPE', reason: 'x' })
+      expect(result.error).toContain('"NOPE" not found')
+      expect(mockSecretPrompts.createSecretPrompt).not.toHaveBeenCalled()
     })
   })
 

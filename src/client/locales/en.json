@@ -2,6 +2,9 @@
   "secretPrompt": {
     "getKey": "Get your key here",
     "privacyNote": "This goes straight to your encrypted vault. The AI never sees it.",
+    "revealWarning": "The agent asks to SEE this secret’s raw value. If you approve, the value is sent to the AI model for one turn, then automatically removed from the conversation history. Approve only if you understand why it needs it.",
+    "approve": "Reveal the value",
+    "deny": "Deny",
     "saving": "Saving…",
     "submit": "Save securely"
   },
@@ -2668,6 +2671,7 @@
       "delete_secret": "Delete Secret",
       "search_secrets": "Search Secrets",
       "redact_secret_leak": "Scrub Leaked Secret",
+      "reveal_secret": "Reveal Secret (with approval)",
       "spawn_self": "Spawn Sub-Task",
       "spawn_agent": "Spawn Agent Task",
       "scout": "Scout",

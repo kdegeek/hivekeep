@@ -12,6 +12,7 @@ import {
 } from '@/server/services/vault'
 import { placeholderFor } from '@/server/services/secret-substitution'
 import { redactSecretLeak } from '@/server/services/secret-redaction'
+import { createSecretPrompt } from '@/server/services/secret-prompts'
 import { createType } from '@/server/services/vault-types'
 import { createLogger } from '@/server/logger'
 import type { ToolRegistration } from '@/server/tools/types'
@@ -92,6 +93,45 @@ export const redactSecretLeakTool: ToolRegistration = {
           messages_cleaned: result.messagesCleaned,
           summaries_cleaned: result.summariesCleaned,
           note: 'Already-sent context for the current turn may still contain the value; from the next turn on, the history only carries the placeholder.',
+        }
+      },
+    }),
+}
+
+/**
+ * reveal_secret — ask the USER for permission to see a secret's raw value.
+ * The approval card is mandatory and can never be bypassed: on approval the
+ * value is injected for ONE turn and auto-redacted when the turn ends.
+ * Available to main agents only.
+ */
+export const revealSecretTool: ToolRegistration = {
+  availability: ['main'],
+  create: (ctx) =>
+    tool({
+      description:
+        'Ask the user for permission to see a secret\'s RAW value. Use only when the placeholder genuinely cannot work (rare — placeholders cover tool args, shell env, file contents, and base64/urlencode transforms). The user sees your reason and approves or denies; your turn ends and resumes with their decision. If approved, the value is visible for that turn ONLY and is automatically redacted from the history afterwards. If denied, do not ask again — work with the placeholder.',
+      inputSchema: z.object({
+        key: z.string().describe('Vault key of the secret'),
+        reason: z.string().describe('Shown verbatim to the user: why the raw value is needed'),
+      }),
+      execute: async ({ key, reason }) => {
+        log.info({ key, agentId: ctx.agentId }, 'reveal_secret invoked')
+        const secret = await getSecretByKey(key)
+        if (!secret) {
+          return { error: `Secret "${key}" not found. Use search_secrets to find the right key.` }
+        }
+        const { promptId } = await createSecretPrompt({
+          agentId: ctx.agentId,
+          purpose: 'reveal',
+          title: `Reveal secret "${key}" to the model?`,
+          description: reason,
+          fields: [],
+          spec: { key, reason },
+        })
+        return {
+          promptId,
+          status: 'awaiting_user_approval',
+          note: 'The user has been asked. Your turn ends here and resumes with their decision.',
         }
       },
     }),

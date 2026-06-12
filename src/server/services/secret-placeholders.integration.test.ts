@@ -19,6 +19,7 @@ import { describe, it, expect, mock, beforeEach } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import {
   scrubLeakedValue,
+  sweepRevealedCarriers,
   invalidateHotSecrets,
   placeholderFor,
   type LeakScrubStore,
@@ -70,7 +71,10 @@ sqlite.run(`CREATE TABLE messages (
   id text PRIMARY KEY NOT NULL,
   agent_id text NOT NULL,
   content text,
-  tool_calls text
+  tool_calls text,
+  metadata text,
+  is_redacted integer NOT NULL DEFAULT 0,
+  redact_pending integer NOT NULL DEFAULT 0
 )`)
 sqlite.run(`CREATE TABLE compacting_summaries (
   id text PRIMARY KEY NOT NULL,
@@ -168,6 +172,86 @@ describe('scrubLeakedValue (redact_secret_leak engine)', () => {
     expect(res.messagesCleaned).toBe(1)
     expect(getMessage(decoy).content).toBe('ghp_Sup3rSecretXYvalue plus du texte')
     expect(getMessage(real).content).toBe(`x ${placeholderFor('GH_TOKEN')} y`)
+  })
+})
+
+describe('sweepRevealedCarriers (reveal_secret end-of-turn / boot sweep)', () => {
+  const VALUE = 'revealed-raw-value-9f8e7d'
+
+  function makeStore() {
+    const scrubbed: string[] = []
+    const sweepStore = {
+      async findPendingCarriers(agentId?: string) {
+        return sqlite
+          .query(`SELECT id, agent_id as agentId, metadata FROM messages WHERE redact_pending = 1${agentId ? ' AND agent_id = ?' : ''}`)
+          .all(...(agentId ? [agentId] : [])) as never as Array<{ id: string; agentId: string; metadata: string | null }>
+      },
+      async redactCarrier(id: string, content: string) {
+        sqlite.run('UPDATE messages SET content = ?, is_redacted = 1, redact_pending = 0 WHERE id = ?', [content, id])
+      },
+      async scrubKey(key: string) {
+        scrubbed.push(key)
+        // mirror production: full retroactive scrub through the shared engine
+        const value = testSecrets.get(key)
+        if (value !== undefined) await scrubLeakedValue(key, value, store)
+      },
+      emitRedacted(agentId: string, messageIds: string[]) {
+        emitted.push({ agentId, messageIds })
+      },
+    }
+    return { sweepStore, scrubbed }
+  }
+
+  it('redacts the carrier and scrubs the value from tool_calls of the turn', async () => {
+    testSecrets.set('REV_KEY', VALUE)
+    const carrierId = insertMessage({ content: `[approved — raw value: ${VALUE}]` })
+    sqlite.run('UPDATE messages SET redact_pending = 1, metadata = ? WHERE id = ?', [JSON.stringify({ reveal: { key: 'REV_KEY' } }), carrierId])
+    // The agent used the raw value in a tool call during the turn — it landed
+    // verbatim in the persisted tool_calls.
+    const usedId = insertMessage({
+      content: 'signed the request',
+      toolCalls: JSON.stringify([{ id: 'tc1', name: 'custom_sign', args: { token: VALUE }, result: { ok: true } }]),
+    })
+
+    const { sweepStore, scrubbed } = makeStore()
+    const count = await sweepRevealedCarriers(sweepStore, 'agent-1')
+    expect(count).toBe(1)
+    expect(scrubbed).toEqual(['REV_KEY'])
+
+    const carrier = sqlite.query('SELECT content, is_redacted, redact_pending FROM messages WHERE id = ?').get(carrierId) as { content: string; is_redacted: number; redact_pending: number }
+    expect(carrier.is_redacted).toBe(1)
+    expect(carrier.redact_pending).toBe(0)
+    expect(carrier.content).not.toContain(VALUE)
+    expect(carrier.content).toContain('{{secret:REV_KEY}}') // re-teaches the placeholder
+
+    const used = getMessage(usedId)
+    expect(used.tool_calls).not.toContain(VALUE)
+    expect(JSON.parse(used.tool_calls!)[0].args.token).toBe('{{secret:REV_KEY}}')
+
+    expect(emitted.some((e) => e.messageIds.includes(carrierId))).toBe(true)
+  })
+
+  it('boot sweep (no agentId) recovers carriers across agents, even with broken metadata', async () => {
+    testSecrets.set('REV_KEY', VALUE)
+    const a = insertMessage({ agentId: 'agent-1', content: `v=${VALUE}` })
+    sqlite.run('UPDATE messages SET redact_pending = 1, metadata = ? WHERE id = ?', [JSON.stringify({ reveal: { key: 'REV_KEY' } }), a])
+    const b = insertMessage({ agentId: 'agent-2', content: 'orphan' })
+    sqlite.run(`UPDATE messages SET redact_pending = 1, metadata = '{not json' WHERE id = ?`, [b])
+
+    const { sweepStore } = makeStore()
+    expect(await sweepRevealedCarriers(sweepStore)).toBe(2)
+    const orphan = sqlite.query('SELECT content, is_redacted, redact_pending FROM messages WHERE id = ?').get(b) as { content: string; is_redacted: number; redact_pending: number }
+    expect(orphan.is_redacted).toBe(1)
+    expect(orphan.redact_pending).toBe(0)
+    const cleaned = sqlite.query('SELECT content FROM messages WHERE id = ?').get(a) as { content: string }
+    expect(cleaned.content).not.toContain(VALUE)
+  })
+
+  it('is a cheap no-op when nothing is pending', async () => {
+    insertMessage({ content: 'normal message' })
+    const { sweepStore } = makeStore()
+    expect(await sweepRevealedCarriers(sweepStore, 'agent-1')).toBe(0)
+    expect(emitted.length).toBe(0)
   })
 })
 

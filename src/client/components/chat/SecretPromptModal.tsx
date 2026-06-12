@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ShieldCheck, ExternalLink, Lock } from 'lucide-react'
+import { ShieldCheck, ExternalLink, Lock, Eye, TriangleAlert } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,8 @@ export function SecretPromptModal({ agentId }: { agentId: string | null }) {
 
   if (!prompt) return null
 
+  // reveal: no inputs — an approval card (the agent asks to SEE a raw value).
+  const isReveal = prompt.purpose === 'reveal'
   const canSubmit = prompt.fields.every((f) => !f.secret || (values[f.key]?.trim().length ?? 0) > 0)
 
   const handleSubmit = async () => {
@@ -65,7 +67,7 @@ export function SecretPromptModal({ agentId }: { agentId: string | null }) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <ShieldCheck className="size-5 text-primary" />
+            {isReveal ? <Eye className="size-5 text-warning" /> : <ShieldCheck className="size-5 text-primary" />}
             {prompt.title}
           </DialogTitle>
           {prompt.description && <DialogDescription>{prompt.description}</DialogDescription>}
@@ -102,18 +104,27 @@ export function SecretPromptModal({ agentId }: { agentId: string | null }) {
             </div>
           ))}
 
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Lock className="size-3 shrink-0" />
-            {t('secretPrompt.privacyNote')}
-          </p>
+          {isReveal ? (
+            <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-foreground">
+              <TriangleAlert className="size-4 shrink-0 text-warning" />
+              <p>{t('secretPrompt.revealWarning')}</p>
+            </div>
+          ) : (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Lock className="size-3 shrink-0" />
+              {t('secretPrompt.privacyNote')}
+            </p>
+          )}
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="ghost" onClick={handleCancel} disabled={isResponding}>
-            {t('common.cancel')}
+            {isReveal ? t('secretPrompt.deny') : t('common.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={!canSubmit || isResponding}>
-            {isResponding ? t('secretPrompt.saving') : t('secretPrompt.submit')}
+            {isReveal
+              ? (isResponding ? t('secretPrompt.saving') : t('secretPrompt.approve'))
+              : (isResponding ? t('secretPrompt.saving') : t('secretPrompt.submit'))}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -543,7 +543,7 @@ export interface HumanPromptSummary {
 
 // ─── Secret prompts (secure input) ───────────────────────────────────────────
 
-export type SecretPromptPurpose = 'provider' | 'channel' | 'vault'
+export type SecretPromptPurpose = 'provider' | 'channel' | 'vault' | 'reveal'
 
 /** One field the user must fill in the secure-input popup. `secret: true`
  *  fields render as masked password inputs and go straight to the vault. */

@@ -6,7 +6,7 @@
 >
 > Cette spec a été vérifiée contre le codebase : chaque symbole/fichier cité existe sauf mention « nouveau ».
 >
-> **Statut : P1+P2 IMPLÉMENTÉS** (substitution d'entrée, redaction de sortie, `redact_secret_leak`, bloc prompt, hot cache — voir § 13). P3-P7 à venir. Décisions fondateur actées le 2026-06-12.
+> **Statut : P1-P7 IMPLÉMENTÉS** (voir § 13 — toutes les phases SHIPPED le 2026-06-12). Décisions fondateur actées le 2026-06-12.
 
 ---
 
@@ -297,7 +297,7 @@ Effet de bord : mise à jour de `last_used_at`. v1 s'arrête là (event + colonn
 | **P2** ✅ | Redaction de sortie (hot cache + `redactSecretsInResult` + invalidation update/delete) + `redactKnownSecrets` appliqué au log DEBUG d'`http_request` + **`redact_secret_leak`** (moteur `scrubLeakedValue` à store injecté dans `secret-substitution.ts`, binder drizzle dans `secret-redaction.ts`, scan rétroactif content/tool_calls/résumés, SSE `chat:messages-redacted`, retrait de `redact_message`, i18n 10 locales) | **SHIPPED** |
 | **P3** ✅ | `run_shell` via env : flag `secretsViaEnv` (SDK), réécriture `${HIVEKEEP_SECRET_*}` + `options.secretEnv`, merge dans l'env du subprocess, description du tool mise à jour | **SHIPPED** |
 | **P4** ✅ | Audit : event bus `vault:secret-used` (+ `violation: unknown-key` sur fail-closed), colonne `last_used_at` stampée à chaque expansion (+ migration 0102 incluant `allowed_tools`/`allowed_hosts` pour P7), « Last used » sur la carte vault (10 locales). `vault:secret-revealed` arrive avec P5 | **SHIPPED** |
-| **P5** | `reveal_secret` : purpose `'reveal'`, carte d'approbation in-chat, auto-redact fin de tour, i18n (10 locales) + ligne `reveal_secret` ajoutée au bloc prompt (§ 8.1) | Oui |
+| **P5** ✅ | `reveal_secret` : purpose `'reveal'` (la valeur brute ne voyage QUE dans le message de reprise, jamais dans le summary SSE/HTTP), carte d'approbation (variante du SecretPromptModal, warning + Approve/Deny), carrier `redact_pending` + metadata `{reveal:{key}}`, **sweep fin de tour** (avant compacting, scrub tool_calls inclus) + **sweep au boot** (crash recovery), events `vault:secret-revealed`, premier vrai writer de `redactPending`, ligne ajoutée au bloc prompt, i18n 10 locales | **SHIPPED** |
 | **P6** ✅ | Transforms `\|base64` / `\|urlencode` (substitution ET variante env `HIVEKEEP_SECRET_KEY_BASE64`/`_URLENC` ; les valeurs transformées entrent au hot cache sous leur placeholder exact, donc la redaction de sortie rattrape aussi un base64 fuité) | **SHIPPED** |
 | **P7** ✅ | Enforcement scoping `allowedTools`/`allowedHosts` dans l'executor (fail-closed avant exécution, events `violation: tool-scope/host-scope`, wildcard `*.domaine`, restrictions visibles dans le retour de `get_secret`) + champs d'édition UI (inputs virgule, 10 locales) + routes | **SHIPPED** |
 | **P8** | Docs : docs-site (page vault réécrite), `api.md` (purpose `reveal`, SSE `chat:messages-redacted`, events bus), `sse.md` (nouvel event), `schema.md` (colonnes), `prompt-system.md` (bloc Secrets), mise à jour de cette spec → SHIPPED | Avec chaque phase (règle n°12) — P8 = passe finale de cohérence |

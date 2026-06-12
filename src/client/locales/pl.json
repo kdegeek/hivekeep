@@ -2,6 +2,9 @@
   "secretPrompt": {
     "getKey": "Uzyskaj swój klucz tutaj",
     "privacyNote": "Trafia prosto do twojego zaszyfrowanego sejfu. AI nigdy go nie widzi.",
+    "revealWarning": "Agent prosi o WGLĄD w jawną wartość tego sekretu. Jeśli zatwierdzisz, wartość zostanie wysłana do modelu AI na jedną turę, a następnie automatycznie usunięta z historii. Zatwierdź tylko, jeśli powód jest uzasadniony.",
+    "approve": "Ujawnij wartość",
+    "deny": "Odmów",
     "saving": "Zapisywanie…",
     "submit": "Zapisz bezpiecznie"
   },
@@ -2686,6 +2689,7 @@
       "delete_secret": "Usuń sekret",
       "search_secrets": "Szukaj sekretów",
       "redact_secret_leak": "Wyczyść ujawniony sekret",
+      "reveal_secret": "Ujawnij sekret (za zgodą)",
       "spawn_self": "Uruchom podzadanie",
       "spawn_agent": "Uruchom zadanie Agenta",
       "scout": "Zwiadowca",

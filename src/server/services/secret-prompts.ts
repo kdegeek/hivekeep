@@ -23,7 +23,8 @@ import { secretPrompts, providers, tasks, messages } from '@/server/db/schema'
 import { sseManager } from '@/server/sse/index'
 import { enqueueMessage } from '@/server/services/queue'
 import { encrypt } from '@/server/services/encryption'
-import { createSecret, getSecretByKey, updateSecret } from '@/server/services/vault'
+import { createSecret, getSecretByKey, updateSecret, getSecretValue } from '@/server/services/vault'
+import { eventBus } from '@/server/services/events'
 import { vaultifyProviderConfig } from '@/server/services/provider-config'
 import { testProviderConnection, getCapabilitiesForType } from '@/server/providers/index'
 import { generateProviderSlug } from '@/server/services/provider-slug'
@@ -45,6 +46,10 @@ export interface ProviderSecretSpec {
 }
 export interface VaultSecretSpec {
   key: string
+}
+export interface RevealSecretSpec {
+  key: string
+  reason: string
 }
 export interface ChannelSecretSpec {
   platform: string
@@ -144,6 +149,8 @@ export async function respondToSecretPrompt(
 
   let resultRef: Record<string, unknown> = {}
   let summary = ''
+  let confirmationOverride: string | undefined
+  let messageMetadata: Record<string, unknown> | undefined
 
   try {
     if (prompt.purpose === 'provider') {
@@ -213,6 +220,28 @@ export async function respondToSecretPrompt(
         `Secret${storedKeys.length > 1 ? 's' : ''} stored in the vault: ${storedKeys.join(', ')}. ` +
         `Use the placeholder${storedKeys.length > 1 ? 's' : ''} ${placeholders} verbatim in tool arguments — the real value is substituted at execution time and is never shown to you.`
       log.info({ promptId, keys: storedKeys }, 'Secret(s) stored from secure input')
+    } else if (prompt.purpose === 'reveal') {
+      const rs = spec as unknown as RevealSecretSpec
+      const value = await getSecretValue(rs.key)
+      if (value === null) {
+        throw new Error(`Secret "${rs.key}" no longer exists in the vault.`)
+      }
+      resultRef = { revealedKey: rs.key }
+      // The raw value travels ONLY in the resume message (confirmationOverride):
+      // `summary` is broadcast over SSE and returned to the HTTP caller, so it
+      // must stay non-sensitive. The carrier message is flagged for end-of-turn
+      // redaction via the `reveal` metadata (redactPending is set at insert).
+      summary = `the user approved revealing secret "${rs.key}" to the model for this turn.`
+      confirmationOverride =
+        `[Secure input received — the user APPROVED revealing secret "${rs.key}". ` +
+        `Raw value (visible for THIS turn only; it will be redacted from the history when the turn ends): ${value}]`
+      messageMetadata = { reveal: { key: rs.key } }
+      eventBus.emit({
+        type: 'vault:secret-revealed',
+        data: { agentId: prompt.agentId, secretKey: rs.key, approved: true },
+        timestamp: Date.now(),
+      })
+      log.info({ promptId, key: rs.key }, 'Secret revealed to the model with user approval')
     } else if (prompt.purpose === 'channel') {
       const cs = spec as unknown as ChannelSecretSpec
       const { createChannel, activateChannel } = await import('@/server/services/channels')
@@ -258,6 +287,8 @@ export async function respondToSecretPrompt(
     confirmationPrefix: 'Secure input received',
     resultRef,
     userId,
+    confirmationOverride,
+    messageMetadata,
   })
 
   return { success: true, summary }
@@ -277,11 +308,25 @@ export async function cancelSecretPrompt(
   if (!prompt) return { success: false, error: 'Prompt not found' }
   if (prompt.status !== 'pending') return { success: true } // already resolved — idempotent
 
+  const isReveal = prompt.purpose === 'reveal'
+  let cancelSummary = 'the user dismissed the secure-input request and did not provide the value.'
+  if (isReveal) {
+    cancelSummary = 'the user DENIED revealing the secret. Do not ask again unless they change their mind — work with the placeholder instead.'
+    try {
+      const spec = JSON.parse(prompt.spec) as { key?: string }
+      eventBus.emit({
+        type: 'vault:secret-revealed',
+        data: { agentId: prompt.agentId, secretKey: spec.key ?? null, approved: false },
+        timestamp: Date.now(),
+      })
+    } catch { /* spec unreadable — event skipped */ }
+  }
+
   await finalizeSecretPrompt(prompt, {
     ok: false,
     status: 'cancelled',
-    summary: 'the user dismissed the secure-input request and did not provide the value.',
-    confirmationPrefix: 'Secure input dismissed',
+    summary: cancelSummary,
+    confirmationPrefix: isReveal ? 'Reveal denied' : 'Secure input dismissed',
     resultRef: { cancelled: true },
     userId,
   })
@@ -304,6 +349,12 @@ async function finalizeSecretPrompt(
     confirmationPrefix: string
     resultRef: Record<string, unknown>
     userId?: string
+    /** Full resume-message content when it must differ from the SSE-safe
+     *  summary (reveal: the raw value rides ONLY here). */
+    confirmationOverride?: string
+    /** Sideband metadata for the resume message (e.g. { reveal: { key } } —
+     *  flags the carrier for end-of-turn redaction). */
+    messageMetadata?: Record<string, unknown>
   },
 ): Promise<void> {
   await db
@@ -311,7 +362,7 @@ async function finalizeSecretPrompt(
     .set({ status: opts.status, resultRef: JSON.stringify(opts.resultRef), respondedAt: new Date() })
     .where(eq(secretPrompts.id, prompt.id))
 
-  const confirmation = `[${opts.confirmationPrefix} — ${opts.summary}]`
+  const confirmation = opts.confirmationOverride ?? `[${opts.confirmationPrefix} — ${opts.summary}]`
 
   if (prompt.taskId) {
     const claim = sqlite.run(
@@ -327,6 +378,8 @@ async function finalizeSecretPrompt(
         content: confirmation,
         sourceType: 'user',
         sourceId: opts.userId ?? null,
+        metadata: opts.messageMetadata ? JSON.stringify(opts.messageMetadata) : null,
+        redactPending: !!(opts.messageMetadata as { reveal?: unknown } | undefined)?.reveal,
         createdAt: new Date(),
       })
       const { runOrQueueResumedTask } = await import('@/server/services/tasks')
@@ -342,6 +395,7 @@ async function finalizeSecretPrompt(
       sourceType: 'user',
       sourceId: opts.userId,
       priority: config.queue.userPriority,
+      messageMetadata: opts.messageMetadata,
     })
   }
 

@@ -2,6 +2,9 @@
   "secretPrompt": {
     "getKey": "Générer ta clé ici",
     "privacyNote": "Ça va directement dans ton coffre chiffré. L'IA ne le voit jamais.",
+    "revealWarning": "L’agent demande à VOIR la valeur brute de ce secret. Si vous approuvez, la valeur est envoyée au modèle IA pour un tour, puis retirée automatiquement de l’historique. N’approuvez que si la raison vous semble légitime.",
+    "approve": "Révéler la valeur",
+    "deny": "Refuser",
     "saving": "Enregistrement…",
     "submit": "Enregistrer en sécurité"
   },
@@ -2668,6 +2671,7 @@
       "delete_secret": "Supprimer un secret",
       "search_secrets": "Rechercher des secrets",
       "redact_secret_leak": "Purger un secret divulgué",
+      "reveal_secret": "Révéler un secret (avec approbation)",
       "spawn_self": "Lancer une sous-tâche",
       "spawn_agent": "Lancer une tâche Agent",
       "scout": "Éclaireur",

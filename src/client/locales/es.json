@@ -2,6 +2,9 @@
   "secretPrompt": {
     "getKey": "Consigue tu clave aquí",
     "privacyNote": "Va directo a tu vault cifrado. La IA nunca lo ve.",
+    "revealWarning": "El agente pide VER el valor en claro de este secreto. Si apruebas, el valor se envía al modelo de IA durante un turno y luego se elimina automáticamente del historial. Aprueba solo si la razón te parece legítima.",
+    "approve": "Revelar el valor",
+    "deny": "Denegar",
     "saving": "Guardando…",
     "submit": "Guardar de forma segura"
   },
@@ -2668,6 +2671,7 @@
       "delete_secret": "Eliminar secreto",
       "search_secrets": "Buscar secretos",
       "redact_secret_leak": "Purgar secreto filtrado",
+      "reveal_secret": "Revelar secreto (con aprobación)",
       "spawn_self": "Lanzar subtarea",
       "spawn_agent": "Lanzar tarea de Agente",
       "scout": "Scout",

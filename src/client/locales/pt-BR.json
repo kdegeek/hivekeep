@@ -2,6 +2,9 @@
   "secretPrompt": {
     "getKey": "Obtenha sua chave aqui",
     "privacyNote": "Isso vai direto para o seu cofre criptografado. A IA nunca tem acesso.",
+    "revealWarning": "O agente pede para VER o valor bruto deste segredo. Se você aprovar, o valor é enviado ao modelo de IA por um turno e depois removido automaticamente do histórico. Aprove apenas se o motivo fizer sentido.",
+    "approve": "Revelar o valor",
+    "deny": "Negar",
     "saving": "Salvando…",
     "submit": "Salvar com segurança"
   },
@@ -2668,6 +2671,7 @@
       "delete_secret": "Excluir Segredo",
       "search_secrets": "Buscar Segredos",
       "redact_secret_leak": "Limpar segredo vazado",
+      "reveal_secret": "Revelar segredo (com aprovação)",
       "spawn_self": "Criar Subtarefa",
       "spawn_agent": "Criar Tarefa de Agente",
       "scout": "Batedor",

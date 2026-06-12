@@ -1015,6 +1015,10 @@ export async function processNextMessage(agentId: string): Promise<boolean> {
         inReplyTo: queueItem.inReplyTo,
         channelOriginId: queueItem.channelOriginId ?? null,
         metadata: messageMetadata,
+        // reveal_secret carrier: the raw value is in `content` for THIS turn
+        // only — flagged so compacting skips it and the end-of-turn sweep
+        // (sweepRevealedSecrets) redacts it.
+        redactPending: !!(metaBag as { reveal?: unknown }).reveal,
         createdAt: new Date(),
       })
       // Record the created message ID on the queue item for crash recovery
@@ -1966,6 +1970,18 @@ export async function processNextMessage(agentId: string): Promise<boolean> {
     }
 
     await markQueueItemDone(queueItem.id)
+
+    // End-of-turn reveal cleanup: any redactPending carrier message (the raw
+    // value injected by an approved reveal_secret) is redacted NOW, before
+    // compacting can run, and the value is scrubbed from anything it touched
+    // this turn (tool args/results persisted in tool_calls). Awaited so the
+    // compacting trigger below never sees the raw value.
+    try {
+      const { sweepRevealedSecrets } = await import('@/server/services/secret-redaction')
+      await sweepRevealedSecrets(agentId)
+    } catch (err) {
+      log.error({ agentId, err }, 'Revealed-secret sweep failed')
+    }
 
     if (!wasAborted) {
       // Trigger compacting if thresholds are exceeded (non-blocking, with lock)

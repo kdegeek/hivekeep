@@ -84,6 +84,10 @@ This is the real defense against prompt injection: even if a malicious page conv
 
 Two derivation transforms are available where APIs need them: `{{secret:KEY|base64}}` (for example HTTP Basic auth) and `{{secret:KEY|urlencode}}` (query strings). Anything fancier belongs in a script that reads the secret from an environment variable.
 
+### Revealing a value, with your approval
+
+In the rare case where the placeholder genuinely cannot work, an Agent can call `reveal_secret(key, reason)`. You see an approval card with the Agent's reason; nothing happens until you decide. If you approve, the raw value is given to the model for **that turn only**, then automatically redacted from the history (including anything the value touched in tool calls during the turn; a crashed turn is cleaned up at the next boot). If you deny, the Agent is told not to ask again. This approval can never be bypassed or automated — a prompt-injected Agent cannot exfiltrate a value by politely asking for it.
+
 For shell commands and scripts, the recommended pattern is environment variables, and Agents are taught it: write the script to read `process.env.GITHUB_TOKEN`, then run it with `GITHUB_TOKEN={{secret:GITHUB_TOKEN}} bun run script.ts`. The secret never appears in the script file or in the command the model wrote.
 
 The full tool set available to a main Agent:

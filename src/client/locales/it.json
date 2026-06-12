@@ -2,6 +2,9 @@
   "secretPrompt": {
     "getKey": "Ottieni la tua chiave qui",
     "privacyNote": "Va direttamente nel tuo vault cifrato. L'IA non la vede mai.",
+    "revealWarning": "L’agente chiede di VEDERE il valore in chiaro di questo segreto. Se approvi, il valore viene inviato al modello IA per un turno e poi rimosso automaticamente dalla cronologia. Approva solo se il motivo è legittimo.",
+    "approve": "Rivela il valore",
+    "deny": "Nega",
     "saving": "Salvataggio…",
     "submit": "Salva in modo sicuro"
   },
@@ -2668,6 +2671,7 @@
       "delete_secret": "Elimina segreto",
       "search_secrets": "Cerca segreti",
       "redact_secret_leak": "Ripulisci segreto trapelato",
+      "reveal_secret": "Rivela segreto (con approvazione)",
       "spawn_self": "Avvia sotto-attività",
       "spawn_agent": "Avvia attività di un Agente",
       "scout": "Scout",

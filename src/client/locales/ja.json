@@ -2,6 +2,9 @@
   "secretPrompt": {
     "getKey": "キーはこちらで取得",
     "privacyNote": "暗号化されたVaultに直接保存されます。AIがこの値を見ることはありません。",
+    "revealWarning": "エージェントがこのシークレットの生の値の表示を求めています。承認すると、値は1ターンの間AIモデルに送られ、その後履歴から自動的に削除されます。理由が妥当な場合のみ承認してください。",
+    "approve": "値を表示",
+    "deny": "拒否",
     "saving": "保存中…",
     "submit": "安全に保存"
   },
@@ -2668,6 +2671,7 @@
       "delete_secret": "シークレットを削除",
       "search_secrets": "シークレットを検索",
       "redact_secret_leak": "漏えいシークレットを除去",
+      "reveal_secret": "シークレットを表示（要承認）",
       "spawn_self": "サブタスクを起動",
       "spawn_agent": "エージェントタスクを起動",
       "scout": "スカウト",

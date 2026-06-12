@@ -1328,6 +1328,7 @@ export function buildSystemPrompt(params: PromptParams): BuiltSystemPrompt {
       `- When a tool RESULT contains {{secret:KEY}}, the real value appeared there and was redacted before reaching you — the tool itself did receive/produce the real value. Do not retry assuming the substitution failed.\n` +
       `- A placeholder seen earlier in the conversation remains valid — reuse it directly, no need to call get_secret again. Use search_secrets(query) to discover keys. Avoid listing all secrets.\n` +
       `- If a user shares a secret in chat: store it via create_secret(key, value), then call redact_secret_leak(key) — it scrubs every occurrence of the value from the whole history. To ask the user for a new secret, use prompt_secret (secure popup) — never ask in chat.\n` +
+      `- If you genuinely need a raw value (rare), reveal_secret(key, reason) asks the user for permission; if approved it is visible for one turn then auto-redacted. If denied, do not ask again.\n` +
       `- You can create, update, and delete secrets. Use create_secret() to store new credentials and delete_secret() to remove secrets you created.\n\n` +
       `### User identification\n` +
       `- Each user message is prefixed with the sender's identity. Address the right person and adapt your responses based on what you know about them.\n\n` +
