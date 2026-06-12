@@ -949,8 +949,15 @@ resolve_channel() {
 }
 
 # Newest non-prerelease vX.Y.Z tag. Prefers the local repo (after a fetch);
-# falls back to the remote so it also works before cloning.
+# falls back to the remote so it also works before cloning. Memoized: a single
+# update flow resolves the tag several times (check, install, build) and each
+# remote resolution is a network round-trip.
+_LATEST_STABLE_TAG_CACHE=""
 get_latest_stable_tag() {
+  if [ -n "$_LATEST_STABLE_TAG_CACHE" ]; then
+    echo "$_LATEST_STABLE_TAG_CACHE"
+    return
+  fi
   local tags=""
   if [ -d "${HIVEKEEP_DIR:-/nonexistent}/.git" ]; then
     tags="$(git -C "$HIVEKEEP_DIR" tag -l 'v*' 2>/dev/null)"
@@ -958,7 +965,8 @@ get_latest_stable_tag() {
   if [ -z "$tags" ]; then
     tags="$(git ls-remote --tags --refs "https://github.com/$HIVEKEEP_REPO.git" 'v*' 2>/dev/null | awk -F/ '{print $NF}')"
   fi
-  echo "$tags" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1
+  _LATEST_STABLE_TAG_CACHE="$(echo "$tags" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+  echo "$_LATEST_STABLE_TAG_CACHE"
 }
 
 # Download the prebuilt client assets attached to a release by CI

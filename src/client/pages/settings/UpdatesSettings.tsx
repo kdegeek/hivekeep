@@ -16,6 +16,10 @@ import { HelpPanel } from '@/client/components/common/HelpPanel'
 import { InfoTip } from '@/client/components/common/InfoTip'
 import { UpdateChangelog } from '@/client/components/common/UpdateChangelog'
 import { UpdateProgressView } from '@/client/components/common/UpdateProgressView'
+import {
+  DOCKER_UPDATE_COMMAND,
+  UpdateResultBanner,
+} from '@/client/components/common/UpdateResultBanner'
 import { api, getErrorMessage } from '@/client/lib/api'
 import { useAuth } from '@/client/hooks/useAuth'
 import { useVersionCheck } from '@/client/hooks/useVersionCheck'
@@ -27,13 +31,9 @@ import {
   FlaskConical,
   Loader2,
   RefreshCw,
-  ShieldAlert,
-  Undo2,
 } from 'lucide-react'
 import { useCopyToClipboard } from '@/client/hooks/useCopyToClipboard'
 import type { UpdateChannel, UpdateRunInfo, VersionInfo } from '@/shared/types'
-
-const DOCKER_UPDATE_COMMAND = 'docker compose pull && docker compose up -d'
 
 const INSTALLATION_TYPE_LABELS: Record<VersionInfo['installationType'], string> = {
   docker: 'Docker',
@@ -271,38 +271,7 @@ export function UpdatesSettings() {
       )}
 
       {/* Last run result */}
-      {result && result.status !== 'success' && (
-        <div
-          className={
-            result.status === 'rolled-back'
-              ? 'flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3'
-              : 'flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3'
-          }
-        >
-          {result.status === 'rolled-back' ? (
-            <Undo2 className="size-4 shrink-0 text-amber-500 mt-0.5" />
-          ) : (
-            <ShieldAlert className="size-4 shrink-0 text-destructive mt-0.5" />
-          )}
-          <div className="min-w-0 text-xs">
-            <p className="font-medium">
-              {result.status === 'rolled-back'
-                ? t('updateProgress.rolledBackTitle')
-                : t('updateProgress.failedTitle')}
-            </p>
-            <p className="mt-1 text-muted-foreground">
-              {result.status === 'rolled-back'
-                ? t('updateProgress.rolledBackDescription')
-                : t('updateProgress.failedSafe')}
-            </p>
-            {result.error && (
-              <p className="mt-1 break-words font-mono text-[11px] text-muted-foreground">
-                {result.error}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+      {result && result.status !== 'success' && <UpdateResultBanner result={result} />}
     </div>
   )
 }

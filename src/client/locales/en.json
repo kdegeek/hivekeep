@@ -3066,7 +3066,6 @@
     "manualInstallNote": "This install is not managed by Hivekeep — update it the same way it was installed.",
     "viewOnGitHub": "View on GitHub",
     "updateButton": "Update now",
-    "updating": "Updating...",
     "updateSuccess": "Updated to {{version}}!",
     "updateFailed": "Update failed"
   },

@@ -3066,7 +3066,6 @@
     "manualInstallNote": "Cette installation n'est pas gérée par Hivekeep — mettez-la à jour comme elle a été installée.",
     "viewOnGitHub": "Voir sur GitHub",
     "updateButton": "Mettre à jour",
-    "updating": "Mise à jour...",
     "updateSuccess": "Mis à jour vers {{version}} !",
     "updateFailed": "Échec de la mise à jour"
   },

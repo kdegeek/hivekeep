@@ -11,21 +11,17 @@ import {
 } from '@/client/components/ui/dialog'
 import { Button } from '@/client/components/ui/button'
 import { Badge } from '@/client/components/ui/badge'
-import {
-  ArrowUpCircle,
-  CheckCircle2,
-  Copy,
-  Download,
-  ExternalLink,
-  ShieldAlert,
-  Undo2,
-} from 'lucide-react'
+import { ArrowUpCircle, Copy, Download, ExternalLink } from 'lucide-react'
 import { useCopyToClipboard } from '@/client/hooks/useCopyToClipboard'
 import { useAuth } from '@/client/hooks/useAuth'
 import { api, getErrorMessage } from '@/client/lib/api'
 import { toast } from 'sonner'
 import { UpdateChangelog } from '@/client/components/common/UpdateChangelog'
 import { UpdateProgressView } from '@/client/components/common/UpdateProgressView'
+import {
+  DOCKER_UPDATE_COMMAND,
+  UpdateResultBanner,
+} from '@/client/components/common/UpdateResultBanner'
 import type { UpdateRunInfo, VersionInfo } from '@/shared/types'
 
 interface UpdateAvailableDialogProps {
@@ -33,8 +29,6 @@ interface UpdateAvailableDialogProps {
   onOpenChange: (open: boolean) => void
   versionInfo: VersionInfo
 }
-
-const DOCKER_UPDATE_COMMAND = 'docker compose pull && docker compose up -d'
 
 type DialogMode = 'info' | 'updating' | 'result'
 
@@ -148,51 +142,7 @@ export function UpdateAvailableDialog({
             </div>
           )}
 
-          {mode === 'result' && result && (
-            <div className="flex flex-col gap-2">
-              {result.status === 'success' && (
-                <div className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3">
-                  <CheckCircle2 className="size-4 shrink-0 text-emerald-500 mt-0.5" />
-                  <div className="text-xs">
-                    <p className="font-medium">
-                      {t('updateAvailable.updateSuccess', { version: result.toVersion })}
-                    </p>
-                    <p className="mt-1 text-muted-foreground">{t('updateProgress.reloading')}</p>
-                  </div>
-                </div>
-              )}
-              {result.status === 'failed' && (
-                <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3">
-                  <ShieldAlert className="size-4 shrink-0 text-destructive mt-0.5" />
-                  <div className="min-w-0 text-xs">
-                    <p className="font-medium">{t('updateProgress.failedTitle')}</p>
-                    <p className="mt-1 text-muted-foreground">{t('updateProgress.failedSafe')}</p>
-                    {result.error && (
-                      <p className="mt-1 break-words font-mono text-[11px] text-muted-foreground">
-                        {result.error}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-              {result.status === 'rolled-back' && (
-                <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
-                  <Undo2 className="size-4 shrink-0 text-amber-500 mt-0.5" />
-                  <div className="min-w-0 text-xs">
-                    <p className="font-medium">{t('updateProgress.rolledBackTitle')}</p>
-                    <p className="mt-1 text-muted-foreground">
-                      {t('updateProgress.rolledBackDescription')}
-                    </p>
-                    {result.error && (
-                      <p className="mt-1 break-words font-mono text-[11px] text-muted-foreground">
-                        {result.error}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          {mode === 'result' && result && <UpdateResultBanner result={result} />}
         </DialogBody>
 
         {mode === 'info' && (

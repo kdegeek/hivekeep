@@ -20,7 +20,7 @@
  *    service manager restart us (Restart=always / KeepAlive).
  *  - manual / script installs: respawn ourselves detached, then exit.
  */
-import { spawn, spawnSync } from 'child_process'
+import { spawnSync } from 'child_process'
 import { Database } from 'bun:sqlite'
 import {
   cpSync,
@@ -43,6 +43,7 @@ import {
   type UpdateJournal,
 } from '@/server/update/journal'
 import { performRollback } from '@/server/update/rollback'
+import { isManagedInstall, respawnDetached } from '@/server/update/respawn'
 import {
   getCachedVersionInfo,
   getCurrentSha,
@@ -79,7 +80,10 @@ function runGit(args: string[], opts: { timeoutMs?: number } = {}): string {
     timeout: opts.timeoutMs ?? 5 * 60 * 1000,
   })
   if (proc.status !== 0) {
-    throw new UpdateError(`git ${args[0]} failed: ${(proc.stderr || proc.stdout || '').trim()}`)
+    // status === null means the process was killed (timeout) — say so instead
+    // of surfacing an empty stderr.
+    const detail = (proc.stderr || proc.stdout || '').trim() || (proc.status === null ? 'timed out' : 'unknown error')
+    throw new UpdateError(`git ${args[0]} failed: ${detail}`)
   }
   return (proc.stdout ?? '').trim()
 }
@@ -92,7 +96,7 @@ function runBun(args: string[], opts: { timeoutMs?: number } = {}): void {
     env: { ...process.env, HUSKY: '0' },
   })
   if (proc.status !== 0) {
-    const output = `${proc.stdout ?? ''}\n${proc.stderr ?? ''}`.trim().slice(-2000)
+    const output = `${proc.stdout ?? ''}\n${proc.stderr ?? ''}`.trim().slice(-2000) || (proc.status === null ? 'timed out' : 'unknown error')
     throw new UpdateError(`${args.join(' ')} failed: ${output}`)
   }
 }
@@ -262,21 +266,9 @@ function extractClientAssets(tarPath: string): void {
 }
 
 function restartServer(journal: UpdateJournal): void {
-  const managed = ['systemd-system', 'systemd-user', 'launchd'].includes(journal.installationType)
-
-  if (!managed) {
+  if (!isManagedInstall(journal.installationType)) {
     // No service manager will bring us back: respawn ourselves detached.
-    // The short sleep lets the old process release the port first.
-    const cmd = journal.restartCmd
-    const shellCmd = `sleep 2; exec ${cmd.map((c) => `'${c.replace(/'/g, "'\\''")}'`).join(' ')}`
-    const child = spawn('bash', ['-c', shellCmd], {
-      cwd: journal.repoDir,
-      detached: true,
-      stdio: 'ignore',
-      env: process.env,
-    })
-    child.unref()
-    appendUpdateLog(`[${journal.id}] Respawned detached server process (pid ${child.pid})`)
+    respawnDetached(journal, `[${journal.id}] Respawned detached server process`)
   }
 
   appendUpdateLog(`[${journal.id}] Exiting for restart into ${journal.toVersion}`)
@@ -387,10 +379,16 @@ async function runUpdate(journal: UpdateJournal): Promise<void> {
         runGit(['fetch', 'origin', config.versionCheck.branch])
         const local = runGit(['rev-parse', 'HEAD'])
         const isAncestor = spawnSync('git', ['merge-base', '--is-ancestor', local, `origin/${config.versionCheck.branch}`], { cwd: process.cwd() })
-        if (isAncestor.status !== 0) {
+        // exit 1 = genuinely not an ancestor; anything else (null = timeout,
+        // 128 = git error) is a different failure and must not be reported as
+        // local divergence.
+        if (isAncestor.status === 1) {
           throw new UpdateError(
             'Local HEAD has commits that are not on origin/main — refusing to overwrite them. Update manually.',
           )
+        }
+        if (isAncestor.status !== 0) {
+          throw new UpdateError(`git merge-base failed: ${(isAncestor.stderr ?? '').toString().trim() || 'unknown error'}`)
         }
         runGit(['checkout', '--force', '-B', config.versionCheck.branch, `origin/${config.versionCheck.branch}`])
       }

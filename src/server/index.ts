@@ -14,7 +14,6 @@
  *    must still run.
  *  - Keep it tiny. Every line here runs on every boot of every install.
  */
-import { spawn } from 'child_process'
 import {
   appendUpdateLog,
   readJournal,
@@ -22,22 +21,13 @@ import {
   type UpdateJournal,
 } from '@/server/update/journal'
 import { performRollback } from '@/server/update/rollback'
+import { isManagedInstall, respawnDetached } from '@/server/update/respawn'
 
 function restartAfterRollback(journal: UpdateJournal): void {
-  const managed = ['systemd-system', 'systemd-user', 'launchd'].includes(journal.installationType)
-  if (!managed) {
+  if (!isManagedInstall(journal.installationType)) {
     // No service manager to bring us back — respawn the (now restored) old
     // version detached before exiting.
-    const cmd = journal.restartCmd
-    const shellCmd = `sleep 2; exec ${cmd.map((c) => `'${c.replace(/'/g, "'\\''")}'`).join(' ')}`
-    const child = spawn('bash', ['-c', shellCmd], {
-      cwd: journal.repoDir,
-      detached: true,
-      stdio: 'ignore',
-      env: process.env,
-    })
-    child.unref()
-    appendUpdateLog(`Respawned restored server detached (pid ${child.pid})`)
+    respawnDetached(journal, 'Respawned restored server detached')
   }
   process.exit(1)
 }

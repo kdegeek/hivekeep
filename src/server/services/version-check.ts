@@ -222,7 +222,9 @@ async function checkEdge(currentSha: string | null): Promise<CheckCache | null> 
   )
   if (!compare) return null
 
-  if (compare.ahead_by === 0) {
+  // Guard on the commits list, not just ahead_by — a truncated/malformed
+  // compare response must not crash the check.
+  if (compare.ahead_by === 0 || compare.commits.length === 0) {
     return {
       channel: 'edge',
       latestVersion: currentSha,
