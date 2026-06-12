@@ -6,6 +6,8 @@ import {
   extractPlaceholderKeys,
   resolvePlaceholderSecrets,
   substitutePlaceholders,
+  rewritePlaceholdersToEnvRefs,
+  buildSecretEnv,
   redactSecretsInResult,
 } from '@/server/services/secret-substitution'
 import { sseManager } from '@/server/sse/index'
@@ -247,6 +249,7 @@ export async function executeSingleTool(
   // (messages.tool_calls), broadcast over SSE, and replayed to the LLM, and
   // all of those must only ever carry the placeholder.
   let execArgs = tc.args
+  let secretEnv: Record<string, string> | undefined
   if (toolExpandsSecrets(tc.name)) {
     const keys = extractPlaceholderKeys(tc.args)
     if (keys.length > 0) {
@@ -261,14 +264,24 @@ export async function executeSingleTool(
             `Use search_secrets to find the right key, or prompt_secret to ask the user for it.`,
         }
       }
-      execArgs = substitutePlaceholders(tc.args, resolved)
-      log.debug({ toolName: tc.name, secretKeys: keys }, 'Expanded secret placeholders in tool args')
+      if (toolRegistry.secretsViaEnv(tc.name)) {
+        // Shell-like tools: the value rides the subprocess env, never the
+        // command string (ps, history, bash error messages).
+        execArgs = rewritePlaceholdersToEnvRefs(tc.args)
+        secretEnv = buildSecretEnv(resolved)
+      } else {
+        execArgs = substitutePlaceholders(tc.args, resolved)
+      }
+      log.debug({ toolName: tc.name, secretKeys: keys, viaEnv: secretEnv !== undefined }, 'Expanded secret placeholders in tool args')
     }
   }
 
   const execPromise = (async () => {
     try {
-      return await (toolDef.execute as Function)(execArgs, { abortSignal: abortController.signal })
+      return await (toolDef.execute as Function)(execArgs, {
+        abortSignal: abortController.signal,
+        ...(secretEnv ? { secretEnv } : {}),
+      })
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) }
     }

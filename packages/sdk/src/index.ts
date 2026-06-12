@@ -216,6 +216,16 @@ export interface ToolRegistration {
    * always expand regardless of this flag.
    */
   expandsSecrets?: boolean
+  /**
+   * Refines `expandsSecrets` for shell-like tools: instead of splicing the
+   * raw value into the argument string, each `{{secret:KEY}}` is rewritten
+   * to `${HIVEKEEP_SECRET_KEY}` and the real value is delivered through the
+   * execution options as `secretEnv` — the tool must merge it into the env
+   * of any subprocess it spawns. Keeps the value out of the command line
+   * (ps, shell history, bash error messages). Only meaningful when
+   * `expandsSecrets` is also true.
+   */
+  secretsViaEnv?: boolean
   /** Optional gating predicate evaluated at resolve time. Return false to omit
    *  the tool from the resolved toolset for a particular context. */
   condition?: (ctx: ToolExecutionContext) => boolean

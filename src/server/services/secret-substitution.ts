@@ -89,6 +89,29 @@ export function substitutePlaceholders(args: unknown, resolved: Map<string, stri
   )
 }
 
+/** Env variable name carrying an expanded secret for `secretsViaEnv` tools.
+ *  Vault keys are SCREAMING_SNAKE_CASE so the mapping is direct. The prefix
+ *  is reserved — documented in the run_shell tool description. */
+export function toEnvName(key: string): string {
+  return `HIVEKEEP_SECRET_${key}`
+}
+
+/** For `secretsViaEnv` tools (run_shell): rewrite each `{{secret:KEY}}` to
+ *  `${HIVEKEEP_SECRET_KEY}` so bash expands it from the env at run time —
+ *  the value never appears in the command string (ps, history, bash error
+ *  messages). Works in double-quoted and bare contexts; single quotes block
+ *  expansion by design (taught in the tool description). */
+export function rewritePlaceholdersToEnvRefs(args: unknown): unknown {
+  return mapJsonStrings(args, (s) =>
+    s.replace(SECRET_PLACEHOLDER_PATTERN, (_whole, key: string) => `\${${toEnvName(key)}}`),
+  )
+}
+
+/** Build the env map delivered via `options.secretEnv`. */
+export function buildSecretEnv(resolved: Map<string, string>): Record<string, string> {
+  return Object.fromEntries([...resolved].map(([key, value]) => [toEnvName(key), value]))
+}
+
 // ─── Hot cache & output redaction ────────────────────────────────────────────
 
 /** Decrypted values of secrets expanded at least once since boot, keyed by

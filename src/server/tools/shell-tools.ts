@@ -229,10 +229,11 @@ export const _SHELL_INTERNALS_FOR_TEST = { truncateOutput, MAX_OUTPUT_LENGTH }
 export const runShellTool: ToolRegistration = {
   availability: ['main', 'sub-agent'],
   expandsSecrets: true,
+  secretsViaEnv: true,
   create: (ctx) =>
     tool({
       description:
-        'Run a shell command (bash -c). Returns stdout, stderr, exit code. Use for: git, builds, tests, package managers, language tooling. **Never use for: cat, head, tail, sed, awk, grep, find, ls, wc, echo** — those have dedicated tools (`read_file` with offset/limit, `grep`, `list_directory`, `edit_file`, `multi_edit`). **Never use for: curl, wget, httpie, lynx, w3m, browsers, nc, telnet** — use `http_request` / `browse_url` / `screenshot_url` instead. The runner refuses standalone wrappers around those binaries and asks you to retry with the dedicated tool. Pass `cwd` as a parameter instead of `cd ... &&` prefixes. Output is capped at 30 KB — re-run with narrower options if you need more. Never use `--no-verify`, `git push --force`, or `git reset --hard` without explicit authorization.',
+        'Run a shell command (bash -c). Returns stdout, stderr, exit code. Vault secrets: write `{{secret:KEY}}` in the command (e.g. `GITHUB_TOKEN={{secret:GITHUB_TOKEN}} bun run script.ts`) — it is delivered to the subprocess as an environment variable, never spliced into the command line; use double quotes around it, never single quotes (they block expansion); the `HIVEKEEP_SECRET_*` env prefix is reserved for this mechanism. Use for: git, builds, tests, package managers, language tooling. **Never use for: cat, head, tail, sed, awk, grep, find, ls, wc, echo** — those have dedicated tools (`read_file` with offset/limit, `grep`, `list_directory`, `edit_file`, `multi_edit`). **Never use for: curl, wget, httpie, lynx, w3m, browsers, nc, telnet** — use `http_request` / `browse_url` / `screenshot_url` instead. The runner refuses standalone wrappers around those binaries and asks you to retry with the dedicated tool. Pass `cwd` as a parameter instead of `cd ... &&` prefixes. Output is capped at 30 KB — re-run with narrower options if you need more. Never use `--no-verify`, `git push --force`, or `git reset --hard` without explicit authorization.',
       inputSchema: z.object({
         command: z.string(),
         cwd: z
@@ -249,6 +250,10 @@ export const runShellTool: ToolRegistration = {
       }),
       execute: async ({ command, cwd, timeout }, options) => {
         const abortSignal = (options as { abortSignal?: AbortSignal } | undefined)?.abortSignal
+        // Expanded vault secrets delivered by the tool-executor (secretsViaEnv):
+        // merged into the subprocess env below — the command string only ever
+        // carries `${HIVEKEEP_SECRET_*}` references.
+        const secretEnv = (options as { secretEnv?: Record<string, string> } | undefined)?.secretEnv
         const workspace = resolveToolWorkspace(ctx)
         const effectiveCwd = cwd ?? workspace
         const effectiveTimeout = timeout ?? DEFAULT_TIMEOUT
@@ -317,6 +322,7 @@ export const runShellTool: ToolRegistration = {
             // never appears as a literal here.
             env: resolveToolEnv(ctx, {
               ...process.env,
+              ...secretEnv,
               HIVEKEEP_KIN_ID: ctx.agentId,
               HIVEKEEP_WORKSPACE: workspace,
             }),

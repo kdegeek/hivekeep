@@ -120,6 +120,13 @@ class ToolRegistry {
     return this.tools.get(name)?.registration.expandsSecrets === true
   }
 
+  /** Check if this tool receives expanded secrets through `options.secretEnv`
+   *  (placeholders rewritten to `${HIVEKEEP_SECRET_KEY}` env references)
+   *  instead of literal substitution into its args. */
+  secretsViaEnv(name: string): boolean {
+    return this.tools.get(name)?.registration.secretsViaEnv === true
+  }
+
   /**
    * Best-effort extraction of a tool's LLM-facing description.
    *

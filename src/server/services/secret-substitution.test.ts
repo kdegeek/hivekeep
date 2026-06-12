@@ -8,6 +8,9 @@ import {
   extractPlaceholderKeys,
   substitutePlaceholders,
   resolvePlaceholderSecrets,
+  rewritePlaceholdersToEnvRefs,
+  buildSecretEnv,
+  toEnvName,
   redactKnownSecrets,
   redactSecretsInResult,
   invalidateHotSecrets,
@@ -66,6 +69,22 @@ describe('substitutePlaceholders', () => {
       new Map([['EVIL', 'prefix {{secret:GITHUB_TOKEN}} suffix'], ['GITHUB_TOKEN', 'real']]),
     )
     expect(out).toBe('v=prefix {{secret:GITHUB_TOKEN}} suffix')
+  })
+})
+
+describe('env-ref rewrite (secretsViaEnv tools)', () => {
+  it('rewrites placeholders to ${HIVEKEEP_SECRET_*} references, never the value', () => {
+    const out = rewritePlaceholdersToEnvRefs({
+      command: 'GITHUB_TOKEN={{secret:GITHUB_TOKEN}} bun run x.ts && echo "{{secret:OTHER}}"',
+    }) as { command: string }
+    expect(out.command).toBe(
+      'GITHUB_TOKEN=${HIVEKEEP_SECRET_GITHUB_TOKEN} bun run x.ts && echo "${HIVEKEEP_SECRET_OTHER}"',
+    )
+  })
+
+  it('builds the secretEnv map with prefixed names', () => {
+    expect(buildSecretEnv(new Map([['GH', 'value-123456']]))).toEqual({ HIVEKEEP_SECRET_GH: 'value-123456' })
+    expect(toEnvName('A_B')).toBe('HIVEKEEP_SECRET_A_B')
   })
 })
 

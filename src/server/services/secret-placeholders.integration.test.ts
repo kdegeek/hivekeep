@@ -212,6 +212,59 @@ describe('executeSingleTool placeholder wiring', () => {
     expect((result as { error: string }).error).toContain('NOT executed')
   })
 
+  it('delivers secrets via env (rewritten refs + options.secretEnv) for secretsViaEnv tools', async () => {
+    const { toolRegistry } = await import('@/server/tools/index')
+    testSecrets.set('ENV_KEY', 'env-delivered-value-123')
+    const captured: Array<{ args: unknown; options: unknown }> = []
+    toolRegistry.register(
+      'test_env_tool',
+      {
+        availability: ['main'],
+        expandsSecrets: true,
+        secretsViaEnv: true,
+        create: () => ({ execute: async () => ({}) }) as never,
+      },
+      'shell',
+    )
+    try {
+      const envTools = {
+        test_env_tool: {
+          execute: async (args: unknown, options: unknown) => {
+            captured.push({ args, options })
+            return { ok: true }
+          },
+        },
+      } as never
+      await executeSingleTool(
+        { id: 't4', name: 'test_env_tool', args: { command: 'TOKEN={{secret:ENV_KEY}} run "{{secret:ENV_KEY}}"' }, offset: 0 },
+        envTools,
+        abort(),
+      )
+      const { args, options } = captured[0]!
+      // The command carries env REFERENCES, never the value…
+      expect((args as { command: string }).command).toBe('TOKEN=${HIVEKEEP_SECRET_ENV_KEY} run "${HIVEKEEP_SECRET_ENV_KEY}"')
+      // …and the value rides the options bag for the tool to merge into its subprocess env.
+      expect((options as { secretEnv: Record<string, string> }).secretEnv).toEqual({
+        HIVEKEEP_SECRET_ENV_KEY: 'env-delivered-value-123',
+      })
+    } finally {
+      toolRegistry.unregister('test_env_tool')
+    }
+  })
+
+  it('run_shell merges options.secretEnv into the spawned process env', async () => {
+    const { runShellTool } = await import('@/server/tools/shell-tools')
+    const t = runShellTool.create({ agentId: 'agent-1', isSubAgent: false } as never) as {
+      execute: (args: unknown, options: unknown) => Promise<{ success: boolean; output: string }>
+    }
+    const result = await t.execute(
+      { command: 'printf "%s" "got:${HIVEKEEP_SECRET_SPAWN_KEY}"', cwd: '/tmp' },
+      { secretEnv: { HIVEKEEP_SECRET_SPAWN_KEY: 'spawned-value-42' } },
+    )
+    expect(result.success).toBe(true)
+    expect(result.output).toBe('got:spawned-value-42')
+  })
+
   it('passes placeholders through as inert text for non-expanding tools', async () => {
     testSecrets.set('SAFE_KEY', 'value-never-expanded-here')
     const result = await executeSingleTool(
