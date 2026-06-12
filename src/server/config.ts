@@ -526,6 +526,22 @@ export const config = {
     cleanupIntervalMin: Number(process.env.FILE_STORAGE_CLEANUP_INTERVAL ?? 60),
   },
 
+  /** Files section — user-facing workspace browser/editor (see files.md). */
+  workspaceFiles: {
+    /** Above this size a text file is served as `too-large` (download only). */
+    maxEditableSizeMb: Number(process.env.WORKSPACE_FILES_MAX_EDITABLE_SIZE ?? 5),
+    /** Max size of a file uploaded to a workspace. 0 = unlimited (still capped by MAX_REQUEST_BODY_MB). */
+    maxUploadSizeMb: Number(process.env.WORKSPACE_FILES_MAX_UPLOAD_SIZE ?? 100),
+    /** Byte budget of a recursive folder copy (aborts mid-copy when exceeded). */
+    maxCopySizeMb: Number(process.env.WORKSPACE_FILES_MAX_COPY_SIZE ?? 500),
+    /** Entry-count budget of a recursive folder copy. */
+    maxCopyEntries: Number(process.env.WORKSPACE_FILES_COPY_MAX_ENTRIES ?? 5000),
+    /** Hard cap of the `limit` param of /workspace/search. */
+    searchMaxResults: Number(process.env.WORKSPACE_FILES_SEARCH_MAX_RESULTS ?? 50),
+    /** Budget of files walked per search request (giant workspaces). */
+    searchMaxEntries: Number(process.env.WORKSPACE_FILES_SEARCH_MAX_ENTRIES ?? 20000),
+  },
+
   webhooks: {
     maxPerAgent: Number(process.env.WEBHOOKS_MAX_PER_KIN ?? 20),
     maxPayloadBytes: Number(process.env.WEBHOOKS_MAX_PAYLOAD_BYTES ?? 1_048_576), // 1MB

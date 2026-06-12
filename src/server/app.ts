@@ -54,6 +54,7 @@ import { miniAppRoutes, miniAppSdkRoutes } from '@/server/routes/mini-apps'
 import { pluginRoutes } from '@/server/routes/plugins'
 import { pluginCardRoutes } from '@/server/routes/plugin-cards'
 import { knowledgeRoutes } from '@/server/routes/knowledge'
+import { workspaceFilesRoutes } from '@/server/routes/workspace-files'
 import { logRoutes } from '@/server/routes/logs'
 import { usageRoutes } from '@/server/routes/usage'
 import { versionCheckRoutes } from '@/server/routes/version-check'
@@ -209,6 +210,7 @@ app.route('/api/channels/whatsapp/webhook', channelWhatsAppRoutes)
 app.route('/api/channels/signal/webhook', channelSignalRoutes)
 app.route('/api/channels', channelRoutes)
 app.route('/api/agents/:agentId/knowledge', knowledgeRoutes)
+app.route('/api/agents/:agentId/workspace', workspaceFilesRoutes)
 app.route('/api/agents/:agentId/quick-sessions', quickSessionAgentRoutes)
 app.route('/api/quick-sessions', quickSessionDetailRoutes)
 app.route('/api/mini-apps/sdk', miniAppSdkRoutes)

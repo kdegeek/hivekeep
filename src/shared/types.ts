@@ -1218,3 +1218,34 @@ export interface TicketAttachment {
   createdAt: number
   updatedAt: number
 }
+
+// ─── Workspace files (Files section, see files.md) ──────────────────────────
+
+/** How the server decided a workspace file should be presented. */
+export type WorkspaceFileKind = 'text' | 'image' | 'pdf' | 'binary' | 'too-large'
+
+/** One row of a workspace directory listing (GET /workspace/ls). */
+export interface WorkspaceEntry {
+  name: string
+  /** Path relative to the workspace root. */
+  path: string
+  type: 'file' | 'dir'
+  /** 0 for directories. */
+  size: number
+  /** Unix ms mtime. */
+  modifiedAt: number
+  isSymlink: boolean
+}
+
+/** Full read of a workspace file (GET /workspace/file). */
+export interface WorkspaceFileInfo {
+  path: string
+  name: string
+  size: number
+  /** Unix ms mtime — echo back as `baseModifiedAt` on PUT (optimistic concurrency). */
+  modifiedAt: number
+  mimeType: string
+  kind: WorkspaceFileKind
+  /** Only set when kind === 'text'. */
+  content: string | null
+}
