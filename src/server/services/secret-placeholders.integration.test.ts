@@ -34,6 +34,7 @@ mock.module('@/server/logger', () => ({
 const testSecrets = new Map<string, string>()
 mock.module('@/server/services/vault', () => ({
   getSecretValue: async (key: string) => testSecrets.get(key) ?? null,
+  markSecretUsed: async () => {},
   getSecretByKey: async (key: string) => (testSecrets.has(key) ? { id: `id-${key}`, key } : null),
   createSecret: async () => ({ id: 'x', key: 'X' }),
   updateSecret: async () => null,

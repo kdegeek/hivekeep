@@ -1584,6 +1584,7 @@
       "entryType": "条目类型",
       "delete": "删除条目",
       "deleteConfirm": "这将永久移除此条目及其附件。使用它的智能体将无法再访问。",
+      "lastUsed": "上次使用",
       "added": "条目已添加",
       "saved": "条目已更新",
       "deleted": "条目已删除",

@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { timeAgo } from '@/client/lib/time'
 import { Button } from '@/client/components/ui/button'
 import { Card, CardContent } from '@/client/components/ui/card'
 import { AgentBadge } from '@/client/components/common/AgentBadge'
@@ -24,6 +25,7 @@ export interface VaultSecretData {
   isFavorite?: boolean
   attachmentCount?: number
   createdByAgentId: string | null
+  lastUsedAt?: number | null
   createdAt: number
   updatedAt: number
 }
@@ -82,6 +84,11 @@ export function VaultSecretCard({ secret, agentName, agentAvatarUrl, onEdit, onD
                 </span>
               )}
             </div>
+            {secret.lastUsedAt ? (
+              <p className="text-[11px] text-muted-foreground/70 truncate mt-0.5">
+                {t('settings.vault.lastUsed')} {timeAgo(secret.lastUsedAt)}
+              </p>
+            ) : null}
             {secret.description && (
               <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{secret.description}</p>
             )}

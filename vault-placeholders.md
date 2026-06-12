@@ -295,8 +295,8 @@ Effet de bord : mise à jour de `last_used_at`. v1 s'arrête là (event + colonn
 |---|---|---|
 | **P1** ✅ | Module `secret-substitution.ts` (grammaire, extract, substitute, fail-closed) + branchement `executeSingleTool` + flag `expandsSecrets` (SDK 0.12 + registry + 7 tools natifs) + nouveau retour `get_secret`/`create_secret`/`update_secret` + descriptions réécrites + **réécriture du bloc `### Secrets` du system prompt** (§ 8.1) + confirmation `prompt_secret` avec placeholder | **SHIPPED** avec P2 |
 | **P2** ✅ | Redaction de sortie (hot cache + `redactSecretsInResult` + invalidation update/delete) + `redactKnownSecrets` appliqué au log DEBUG d'`http_request` + **`redact_secret_leak`** (moteur `scrubLeakedValue` à store injecté dans `secret-substitution.ts`, binder drizzle dans `secret-redaction.ts`, scan rétroactif content/tool_calls/résumés, SSE `chat:messages-redacted`, retrait de `redact_message`, i18n 10 locales) | **SHIPPED** |
-| **P3** | `run_shell` via env : flag `secretsViaEnv`, `options.secretEnv`, merge dans `resolveToolEnv`, doc du pattern script | Oui |
-| **P4** | Audit : events `vault:secret-used`/`vault:secret-revealed`, colonne `last_used_at` (+ migration unique P4/P7 : `allowed_tools`, `allowed_hosts`), affichage UI vault | Oui |
+| **P3** ✅ | `run_shell` via env : flag `secretsViaEnv` (SDK), réécriture `${HIVEKEEP_SECRET_*}` + `options.secretEnv`, merge dans l'env du subprocess, description du tool mise à jour | **SHIPPED** |
+| **P4** ✅ | Audit : event bus `vault:secret-used` (+ `violation: unknown-key` sur fail-closed), colonne `last_used_at` stampée à chaque expansion (+ migration 0102 incluant `allowed_tools`/`allowed_hosts` pour P7), « Last used » sur la carte vault (10 locales). `vault:secret-revealed` arrive avec P5 | **SHIPPED** |
 | **P5** | `reveal_secret` : purpose `'reveal'`, carte d'approbation in-chat, auto-redact fin de tour, i18n (10 locales) + ligne `reveal_secret` ajoutée au bloc prompt (§ 8.1) | Oui |
 | **P6** | Transforms `\|base64` / `\|urlencode` | Oui |
 | **P7** | Enforcement scoping `allowedTools`/`allowedHosts` + UI d'édition (tags) + erreurs explicites | Oui |

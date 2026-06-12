@@ -23,6 +23,7 @@ export async function listSecrets() {
       entryType: vaultSecrets.entryType,
       isFavorite: vaultSecrets.isFavorite,
       createdByAgentId: vaultSecrets.createdByAgentId,
+      lastUsedAt: vaultSecrets.lastUsedAt,
       createdAt: vaultSecrets.createdAt,
       updatedAt: vaultSecrets.updatedAt,
     })
@@ -165,6 +166,15 @@ export async function getSecretValue(key: string): Promise<string | null> {
   return decrypt(secret.encryptedValue)
 }
 
+/** Audit trail: stamp the secret as used now (placeholder expansion). Callers
+ *  fire-and-forget — usage tracking must never delay or fail a tool call. */
+export async function markSecretUsed(key: string): Promise<void> {
+  await db
+    .update(vaultSecrets)
+    .set({ lastUsedAt: new Date() })
+    .where(eq(vaultSecrets.key, key))
+}
+
 export async function redactMessage(
   messageId: string,
   agentId: string,
@@ -234,6 +244,7 @@ export async function listEntries(filter?: ListEntriesFilter) {
       entryType: vaultSecrets.entryType,
       isFavorite: vaultSecrets.isFavorite,
       createdByAgentId: vaultSecrets.createdByAgentId,
+      lastUsedAt: vaultSecrets.lastUsedAt,
       createdAt: vaultSecrets.createdAt,
       updatedAt: vaultSecrets.updatedAt,
     })

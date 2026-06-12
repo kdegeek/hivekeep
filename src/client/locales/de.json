@@ -1584,6 +1584,7 @@
       "entryType": "Eintragstyp",
       "delete": "Eintrag löschen",
       "deleteConfirm": "Das entfernt diesen Eintrag und seine Anhänge dauerhaft. Agenten, die ihn nutzen, haben keinen Zugriff mehr.",
+      "lastUsed": "Zuletzt verwendet:",
       "added": "Eintrag hinzugefügt",
       "saved": "Eintrag aktualisiert",
       "deleted": "Eintrag gelöscht",

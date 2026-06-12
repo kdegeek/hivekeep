@@ -1584,6 +1584,7 @@
       "entryType": "Tipo de entrada",
       "delete": "Excluir entrada",
       "deleteConfirm": "Isso removerá permanentemente esta entrada e seus anexos. Os Agentes que a usam perderão o acesso.",
+      "lastUsed": "Último uso:",
       "added": "Entrada adicionada",
       "saved": "Entrada atualizada",
       "deleted": "Entrada excluída",

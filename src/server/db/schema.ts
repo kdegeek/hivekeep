@@ -624,6 +624,9 @@ export const vaultSecrets = sqliteTable('vault_secrets', {
   vaultTypeId: text('vault_type_id').references(() => vaultTypes.id, { onDelete: 'set null' }),
   isFavorite: integer('is_favorite', { mode: 'boolean' }).notNull().default(false),
   createdByAgentId: text('created_by_agent_id').references(() => agents.id),
+  lastUsedAt: integer('last_used_at', { mode: 'timestamp_ms' }), // updated on each placeholder expansion (audit)
+  allowedTools: text('allowed_tools'), // JSON string[] | null = usable by any tool (scoping, enforced P7)
+  allowedHosts: text('allowed_hosts'), // JSON string[] | null = usable toward any host (scoping, enforced P7)
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 }, (table) => [

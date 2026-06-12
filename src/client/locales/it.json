@@ -1584,6 +1584,7 @@
       "entryType": "Tipo di voce",
       "delete": "Elimina voce",
       "deleteConfirm": "Questo rimuoverà definitivamente questa voce e i suoi allegati. Gli Agenti che la usano non vi avranno più accesso.",
+      "lastUsed": "Ultimo utilizzo:",
       "added": "Voce aggiunta",
       "saved": "Voce aggiornata",
       "deleted": "Voce eliminata",

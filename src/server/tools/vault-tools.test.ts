@@ -9,6 +9,7 @@ const mockRedaction = {
 
 const mockVault = {
   getSecretValue: mock(() => Promise.resolve(null as string | null)),
+  markSecretUsed: mock(() => Promise.resolve()),
   redactMessage: mock(() => Promise.resolve(false)),
   createSecret: mock(() => Promise.resolve({ id: 'sec-1', key: 'TEST_KEY' })),
   getSecretByKey: mock(() => Promise.resolve(null as any)),

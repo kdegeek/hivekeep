@@ -1584,6 +1584,7 @@
       "entryType": "Entry type",
       "delete": "Delete entry",
       "deleteConfirm": "This will permanently remove this entry and its attachments. Agents using it will no longer have access.",
+      "lastUsed": "Last used",
       "added": "Entry added",
       "saved": "Entry updated",
       "deleted": "Entry deleted",

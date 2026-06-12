@@ -1,7 +1,8 @@
 import type { Tool, JSONValue } from '@/server/tools/tool-helper'
 import { toolRegistry } from '@/server/tools/index'
 import { getCustomTool } from '@/server/services/custom-tools'
-import { getSecretValue } from '@/server/services/vault'
+import { getSecretValue, markSecretUsed } from '@/server/services/vault'
+import { eventBus } from '@/server/services/events'
 import {
   extractPlaceholderKeys,
   resolvePlaceholderSecrets,
@@ -125,7 +126,7 @@ export async function executeToolBatch(opts: ExecuteToolBatchOptions): Promise<E
       await boundedAll(
         batch.calls.map(tc => async () => {
           if (abortController.signal.aborted) return
-          const result = await executeSingleTool(tc, tools, abortController)
+          const result = await executeSingleTool(tc, tools, abortController, agentId)
           resultMap.set(tc.id, result)
 
           sseManager.sendToAgent(agentId, {
@@ -140,7 +141,7 @@ export async function executeToolBatch(opts: ExecuteToolBatchOptions): Promise<E
       for (const tc of batch.calls) {
         if (abortController.signal.aborted) break
 
-        const result = await executeSingleTool(tc, tools, abortController)
+        const result = await executeSingleTool(tc, tools, abortController, agentId)
         resultMap.set(tc.id, result)
 
         sseManager.sendToAgent(agentId, {
@@ -232,6 +233,7 @@ export async function executeSingleTool(
   tc: ToolCall,
   tools: Record<string, Tool<any, any>>,
   abortController: AbortController,
+  agentId?: string,
 ): Promise<unknown> {
   const toolDef = tools[tc.name]
   if (!toolDef) {
@@ -257,12 +259,29 @@ export async function executeSingleTool(
       if (missing.length > 0) {
         // Fail closed: never execute with a literal placeholder (a request
         // carrying a fake token would still hit the network).
+        for (const key of missing) {
+          eventBus.emit({
+            type: 'vault:secret-used',
+            data: { agentId, toolName: tc.name, secretKey: key, violation: { type: 'unknown-key' } },
+            timestamp: Date.now(),
+          })
+        }
         const list = missing.map((k) => `"${k}"`).join(', ')
         return {
           error:
             `Unknown secret${missing.length > 1 ? 's' : ''} ${list} — the tool was NOT executed. ` +
             `Use search_secrets to find the right key, or prompt_secret to ask the user for it.`,
         }
+      }
+      // Audit trail — fire-and-forget: usage tracking must never delay or
+      // fail the tool call itself.
+      for (const key of keys) {
+        eventBus.emit({
+          type: 'vault:secret-used',
+          data: { agentId, toolName: tc.name, secretKey: key },
+          timestamp: Date.now(),
+        })
+        markSecretUsed(key).catch((err) => log.warn({ key, err }, 'Failed to stamp secret last_used_at'))
       }
       if (toolRegistry.secretsViaEnv(tc.name)) {
         // Shell-like tools: the value rides the subprocess env, never the

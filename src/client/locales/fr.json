@@ -1584,6 +1584,7 @@
       "entryType": "Type d'entrée",
       "delete": "Supprimer l'entrée",
       "deleteConfirm": "Cette entrée et ses pièces jointes seront supprimées définitivement. Les Agents qui l'utilisent n'y auront plus accès.",
+      "lastUsed": "Dernière utilisation :",
       "added": "Entrée ajoutée",
       "saved": "Entrée mise à jour",
       "deleted": "Entrée supprimée",

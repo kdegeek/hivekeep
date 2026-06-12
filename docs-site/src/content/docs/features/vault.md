@@ -57,6 +57,7 @@ As an admin you manage Vault entries from **Settings, Vault**. You can:
 - Create, edit, and delete entries.
 - Choose an entry type. Built-in types are `text`, `credential`, `card`, `note`, and `identity`; you can also define custom types with their own field schema.
 - Mark entries as favorites and search by key or description.
+- See when each secret was last used by an Agent (stamped on every placeholder expansion).
 - Attach files to an entry (encrypted at rest, with per-entry size and count limits, see [Configuration](/docs/getting-started/configuration/)).
 
 A plain secret (the `text` type) is just a key and an encrypted value. Typed entries store a small JSON object of fields (encrypted as one blob) so a login can carry a username, URL, and password together.

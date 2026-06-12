@@ -1600,6 +1600,7 @@
       "entryType": "Typ wpisu",
       "delete": "Usuń wpis",
       "deleteConfirm": "Spowoduje to trwałe usunięcie tego wpisu i jego załączników. Agenci, którzy go używają, stracą do niego dostęp.",
+      "lastUsed": "Ostatnio użyto:",
       "added": "Wpis dodany",
       "saved": "Wpis zaktualizowany",
       "deleted": "Wpis usunięty",
