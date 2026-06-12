@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { api, getErrorMessage, ApiRequestError } from '@/client/lib/api'
+import { useSSE } from '@/client/hooks/useSSE'
+import type { WorkspaceChange } from '@/client/hooks/useWorkspaceFiles'
 import type { WorkspaceFileInfo } from '@/shared/types'
 
 /** Per-open-file state (files.md § 3.4/3.5). */
@@ -195,6 +197,54 @@ export function useWorkspaceTabs(agentId: string | null) {
     },
     [agentId, states, patchState],
   )
+
+  /** Rename `from` → `to` across tabs/states/active, draft preserved. */
+  const retargetTabs = useCallback((from: string, to: string, isDirectory: boolean) => {
+    const map = (p: string) =>
+      p === from ? to : isDirectory && p.startsWith(from + '/') ? to + p.slice(from.length) : p
+    setTabs((prev) => prev.map(map))
+    setActive((cur) => (cur ? map(cur) : cur))
+    setStates((prev) => {
+      const next: Record<string, TabFileState> = {}
+      for (const [path, state] of Object.entries(prev)) {
+        const newPath = map(path)
+        next[newPath] =
+          newPath === path || !state.info ? state : { ...state, info: { ...state.info, path: newPath } }
+      }
+      return next
+    })
+  }, [])
+
+  // Live reconciliation with agent writes (files.md § 8.2). The (path,
+  // modifiedAt) pair memorized at save time identifies our own echo.
+  const statesRef = useRef(states)
+  statesRef.current = states
+  useSSE({
+    'workspace:changed': (data) => {
+      if ((data.agentId as string) !== agentId) return
+      for (const change of (data.changes as WorkspaceChange[]) ?? []) {
+        const affected = (path: string) =>
+          path === change.path || (change.isDirectory && path.startsWith(change.path + '/'))
+        if (change.type === 'renamed' && change.newPath) {
+          retargetTabs(change.path, change.newPath, change.isDirectory)
+          continue
+        }
+        for (const path of Object.keys(statesRef.current)) {
+          if (!affected(path)) continue
+          const state = statesRef.current[path]!
+          if (change.type === 'deleted') {
+            if (state.dirty) patchState(path, { deletedOnDisk: true })
+            else forceCloseTab(path)
+          } else if (change.type === 'modified' || change.type === 'created') {
+            // Own echo: the PUT response already updated this tab.
+            if (change.modifiedAt !== undefined && lastSavedRef.current.get(path) === change.modifiedAt) continue
+            if (state.dirty) patchState(path, { conflict: true })
+            else if (state.info || state.deletedOnDisk) void loadFile(path)
+          }
+        }
+      }
+    },
+  })
 
   const anyDirty = Object.values(states).some((s) => s.dirty)
 

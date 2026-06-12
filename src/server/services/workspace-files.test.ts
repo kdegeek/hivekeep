@@ -3,7 +3,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 // process-globally (mkdir becomes a no-op) and Bun cannot un-mock it — the
 // sync 'node:fs' surface is not covered by that mock. See the custom-tools
 // mock.module gotcha.
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, rmSync, realpathSync, utimesSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, rmSync, realpathSync, utimesSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mock } from 'bun:test'
@@ -18,6 +18,11 @@ mock.module('@/server/config', () => ({ config: testConfig }))
 import {
   resolveInRoot,
   writeWorkspaceFile,
+  mkdirWorkspace,
+  moveWorkspaceEntry,
+  copyWorkspaceEntry,
+  deleteWorkspaceEntry,
+  uploadWorkspaceFiles,
   normalizeRelPath,
   validateEntryName,
   WorkspaceFilesError,
@@ -193,6 +198,103 @@ describe('writeWorkspaceFile', () => {
     } catch (err) {
       expect((err as WorkspaceFilesError).code).toBe('INVALID_NAME')
     }
+  })
+})
+
+describe('mutations (mkdir / move / copy / delete / upload)', () => {
+  beforeEach(() => {
+    ;(testConfig.workspace as { baseDir: string }).baseDir = join(root, '..')
+  })
+  const AGENT = 'workspace'
+
+  test('mkdir creates, DEST_EXISTS on retry', async () => {
+    await mkdirWorkspace(AGENT, 'reports/2026')
+    expect(existsSync(join(root, 'reports/2026'))).toBe(true)
+    try {
+      await mkdirWorkspace(AGENT, 'reports/2026')
+      expect.unreachable()
+    } catch (err) {
+      expect((err as WorkspaceFilesError).code).toBe('DEST_EXISTS')
+    }
+  })
+
+  test('move renames within the workspace and refuses collisions', async () => {
+    await moveWorkspaceEntry({ agentId: AGENT, from: 'hello.txt', to: 'docs/hi.txt' })
+    expect(readFileSync(join(root, 'docs/hi.txt'), 'utf8')).toBe('hello')
+    writeFileSync(join(root, 'other.txt'), 'x')
+    try {
+      await moveWorkspaceEntry({ agentId: AGENT, from: 'other.txt', to: 'docs/hi.txt' })
+      expect.unreachable()
+    } catch (err) {
+      expect((err as WorkspaceFilesError).code).toBe('DEST_EXISTS')
+    }
+  })
+
+  test('move across workspaces validates each side against its own root', async () => {
+    const otherRoot = join(root, '..', 'agent-b')
+    mkdirSync(otherRoot, { recursive: true })
+    writeFileSync(join(otherRoot, 'from-b.txt'), 'b content')
+    const result = await moveWorkspaceEntry({ agentId: AGENT, fromAgentId: 'agent-b', from: 'from-b.txt', to: 'imported.txt' })
+    expect(result.to).toBe('imported.txt')
+    expect(readFileSync(join(root, 'imported.txt'), 'utf8')).toBe('b content')
+    expect(existsSync(join(otherRoot, 'from-b.txt'))).toBe(false)
+  })
+
+  test('copy suffixes on collision: name (copy).ext', async () => {
+    const first = await copyWorkspaceEntry({ agentId: AGENT, from: 'hello.txt', to: 'hello.txt' })
+    expect(first.to).toBe('hello (copy).txt')
+    const second = await copyWorkspaceEntry({ agentId: AGENT, from: 'hello.txt', to: 'hello.txt' })
+    expect(second.to).toBe('hello (copy 2).txt')
+  })
+
+  test('recursive copy aborts over the entry budget and cleans up', async () => {
+    mkdirSync(join(root, 'big'))
+    for (let i = 0; i < 20; i++) writeFileSync(join(root, 'big', `f${i}.txt`), 'x')
+    ;(testConfig.workspaceFiles as { maxCopyEntries: number }).maxCopyEntries = 5
+    try {
+      await copyWorkspaceEntry({ agentId: AGENT, from: 'big', to: 'big-copy' })
+      expect.unreachable()
+    } catch (err) {
+      expect((err as WorkspaceFilesError).code).toBe('COPY_TOO_LARGE')
+    } finally {
+      ;(testConfig.workspaceFiles as { maxCopyEntries: number }).maxCopyEntries = 5000
+    }
+    expect(existsSync(join(root, 'big-copy'))).toBe(false)
+  })
+
+  test('copy never follows symlinks (escape + cycles)', async () => {
+    mkdirSync(join(root, 'src-dir'))
+    writeFileSync(join(root, 'src-dir', 'ok.txt'), 'ok')
+    symlinkSync(outside, join(root, 'src-dir', 'evil'))
+    const result = await copyWorkspaceEntry({ agentId: AGENT, from: 'src-dir', to: 'dst-dir' })
+    expect(readFileSync(join(root, 'dst-dir', 'ok.txt'), 'utf8')).toBe('ok')
+    expect(existsSync(join(root, result.to, 'evil'))).toBe(false)
+  })
+
+  test('delete removes folders recursively, and symlinks WITHOUT following', async () => {
+    await deleteWorkspaceEntry(AGENT, 'docs')
+    expect(existsSync(join(root, 'docs'))).toBe(false)
+    symlinkSync(join(outside, 'secret.txt'), join(root, 'link-out'))
+    await deleteWorkspaceEntry(AGENT, 'link-out')
+    expect(existsSync(join(root, 'link-out'))).toBe(false)
+    expect(readFileSync(join(outside, 'secret.txt'), 'utf8')).toBe('top secret') // target untouched
+  })
+
+  test('upload sanitizes smuggled paths, suffixes collisions, reports per-file errors', async () => {
+    const result = await uploadWorkspaceFiles(AGENT, 'incoming', [
+      { name: '../../etc/evil.txt', buffer: Buffer.from('payload') },
+      { name: 'hello.txt', buffer: Buffer.from('A') },
+      { name: 'hello.txt', buffer: Buffer.from('B') },
+      { name: 'x'.repeat(300), buffer: Buffer.from('too long') },
+    ])
+    // "../../etc/evil.txt" → basename "evil.txt" lands INSIDE incoming/
+    expect(result.files.map((f) => f.path)).toEqual([
+      'incoming/evil.txt',
+      'incoming/hello.txt',
+      'incoming/hello (copy).txt',
+    ])
+    expect(existsSync(join(root, '..', 'etc'))).toBe(false)
+    expect(result.errors).toEqual([{ name: 'x'.repeat(300), code: 'INVALID_NAME' }])
   })
 })
 

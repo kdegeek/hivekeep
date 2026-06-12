@@ -7,7 +7,13 @@ import {
   readWorkspaceFile,
   statWorkspaceFileForRaw,
   writeWorkspaceFile,
+  mkdirWorkspace,
+  moveWorkspaceEntry,
+  copyWorkspaceEntry,
+  deleteWorkspaceEntry,
+  uploadWorkspaceFiles,
 } from '@/server/services/workspace-files'
+import { resolveAgentId } from '@/server/services/agent-resolver'
 import { isInlineSafeMime } from '@/server/services/file-kind'
 import type { AppVariables } from '@/server/app'
 
@@ -84,6 +90,88 @@ workspaceFilesRoutes.put('/file', async (c) => {
       createOnly: body.createOnly === true,
     })
     return c.json(result)
+  } catch (err) {
+    return handleError(c, err)
+  }
+})
+
+// POST /api/agents/:agentId/workspace/mkdir — create a folder
+workspaceFilesRoutes.post('/mkdir', async (c) => {
+  const agent = requireAgent(c)
+  if (!agent) return agentNotFound(c)
+  const body = await c.req.json<{ path?: string }>()
+  if (typeof body.path !== 'string') {
+    return c.json({ error: { code: 'VALIDATION_ERROR', message: 'path is required' } }, 400)
+  }
+  try {
+    return c.json(await mkdirWorkspace(agent.id, body.path))
+  } catch (err) {
+    return handleError(c, err)
+  }
+})
+
+// POST /api/agents/:agentId/workspace/move — rename / move (cross-workspace via fromAgentId)
+workspaceFilesRoutes.post('/move', async (c) => {
+  const agent = requireAgent(c)
+  if (!agent) return agentNotFound(c)
+  const body = await c.req.json<{ from?: string; to?: string; fromAgentId?: string }>()
+  if (typeof body.from !== 'string' || typeof body.to !== 'string') {
+    return c.json({ error: { code: 'VALIDATION_ERROR', message: 'from and to are required' } }, 400)
+  }
+  const fromAgentId = body.fromAgentId ? resolveAgentId(body.fromAgentId) : undefined
+  if (body.fromAgentId && !fromAgentId) return agentNotFound(c)
+  try {
+    return c.json(await moveWorkspaceEntry({ agentId: agent.id, from: body.from, to: body.to, fromAgentId: fromAgentId ?? undefined }))
+  } catch (err) {
+    return handleError(c, err)
+  }
+})
+
+// POST /api/agents/:agentId/workspace/copy — copy (collision → " (copy N)" suffix)
+workspaceFilesRoutes.post('/copy', async (c) => {
+  const agent = requireAgent(c)
+  if (!agent) return agentNotFound(c)
+  const body = await c.req.json<{ from?: string; to?: string; fromAgentId?: string }>()
+  if (typeof body.from !== 'string' || typeof body.to !== 'string') {
+    return c.json({ error: { code: 'VALIDATION_ERROR', message: 'from and to are required' } }, 400)
+  }
+  const fromAgentId = body.fromAgentId ? resolveAgentId(body.fromAgentId) : undefined
+  if (body.fromAgentId && !fromAgentId) return agentNotFound(c)
+  try {
+    return c.json(await copyWorkspaceEntry({ agentId: agent.id, from: body.from, to: body.to, fromAgentId: fromAgentId ?? undefined }))
+  } catch (err) {
+    return handleError(c, err)
+  }
+})
+
+// DELETE /api/agents/:agentId/workspace/file?path=… — delete file or folder (recursive)
+workspaceFilesRoutes.delete('/file', async (c) => {
+  const agent = requireAgent(c)
+  if (!agent) return agentNotFound(c)
+  try {
+    const result = await deleteWorkspaceEntry(agent.id, c.req.query('path') ?? '')
+    return c.json({ deleted: true, path: result.path })
+  } catch (err) {
+    return handleError(c, err)
+  }
+})
+
+// POST /api/agents/:agentId/workspace/upload — multipart upload into a folder
+workspaceFilesRoutes.post('/upload', async (c) => {
+  const agent = requireAgent(c)
+  if (!agent) return agentNotFound(c)
+  const formData = await c.req.formData()
+  const dirPath = (formData.get('path') as string | null) ?? ''
+  const entries = formData.getAll('file').filter((f): f is File => f instanceof File)
+  if (entries.length === 0) {
+    return c.json({ error: { code: 'VALIDATION_ERROR', message: 'At least one file is required' } }, 400)
+  }
+  try {
+    const files = await Promise.all(
+      entries.map(async (f) => ({ name: f.name, buffer: Buffer.from(await f.arrayBuffer()) })),
+    )
+    const result = await uploadWorkspaceFiles(agent.id, dirPath, files)
+    return c.json(result, 201)
   } catch (err) {
     return handleError(c, err)
   }

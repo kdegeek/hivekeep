@@ -40,6 +40,7 @@ export type SSEEventType =
   | 'trigger:fired'
   | 'compacting:start'
   | 'compacting:done'
+  | 'workspace:changed'
   | 'compacting:error'
   | 'avatar-bulk:progress'
   | 'avatar-bulk:done'

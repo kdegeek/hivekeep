@@ -3584,7 +3584,27 @@
     },
     "tree": {
       "loadError": "Échec du chargement — réessayer",
-      "emptyFolder": "vide"
+      "emptyFolder": "vide",
+      "title": "Fichiers",
+      "newFile": "Nouveau fichier",
+      "newFolder": "Nouveau dossier",
+      "upload": "Uploader des fichiers",
+      "uploadHere": "Uploader ici",
+      "rename": "Renommer",
+      "copy": "Copier",
+      "cut": "Couper",
+      "paste": "Coller",
+      "share": "Partager…",
+      "insertInChat": "Insérer dans le chat",
+      "copyPath": "Copier le chemin relatif",
+      "pathCopied": "Chemin copié dans le presse-papier",
+      "uploaded": "{{count}} fichier(s) uploadé(s)",
+      "uploadErrors": "{{count}} fichier(s) refusé(s) (ex. {{name}})",
+      "deleteConfirm": {
+        "title": "Supprimer « {{name}} » ?",
+        "fileDescription": "Ce fichier sera définitivement supprimé du workspace.",
+        "folderDescription": "Ce dossier et tout son contenu seront définitivement supprimés."
+      }
     },
     "editor": {
       "download": "Télécharger",

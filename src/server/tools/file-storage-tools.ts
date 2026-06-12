@@ -16,6 +16,7 @@ import {
   readStoredFile,
 } from '@/server/services/file-storage'
 import { resolveToolWorkspace } from '@/server/tools/workspace'
+import { emitWorkspaceChangedForTool } from '@/server/services/workspace-files'
 import { resolveAndValidate } from '@/server/tools/filesystem-tools'
 import type { ToolRegistration } from '@/server/tools/types'
 
@@ -159,6 +160,7 @@ export const downloadStoredFileTool: ToolRegistration = {
         const abs = resolveAndValidate(rel, workspace)
         await mkdir(dirname(abs), { recursive: true })
         await writeFile(abs, file.buffer)
+        emitWorkspaceChangedForTool(ctx, abs, 'created')
         log.debug({ agentId: ctx.agentId, name: file.name, path: rel, bytes: file.buffer.length }, 'download_stored_file')
         return { savedPath: rel, bytes: file.buffer.length, mimeType: file.mimeType }
       },
