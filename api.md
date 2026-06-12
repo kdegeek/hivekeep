@@ -934,7 +934,7 @@ Approuve un cron créé par un Agent (qui nécessite validation).
 
 ## Custom Tools & Tool Domains
 
-Outils custom **globaux** (scripts authored via l'UI ou les Agents) et domaines dynamiques. Voir `idea.md` / `schema.md`.
+Outils custom **globaux** (scripts authored via l'UI ou les Agents) et domaines dynamiques. Voir `schema.md`.
 
 ### `GET /api/tools/catalog`
 Catalogue agnostique de tous les outils grantables (native / plugin / mcp / custom). Les entrées custom sont globales (`custom_<slug>`, `domain` = leur `domain_slug`, `enabled`).

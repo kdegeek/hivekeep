@@ -1,6 +1,6 @@
 # Queenie — Onboarding conversationnel & Agent configurateur
 
-> **Statut** : spécification (non implémentée). Source de vérité pour la feature. Voir aussi `idea.md` (onboarding actuel), `prompt-system.md` (blocs du prompt), `api.md` / `sse.md` (contrats), `schema.md` (DB).
+> **Statut** : spécification (non implémentée). Source de vérité pour la feature. Voir aussi `prompt-system.md` (blocs du prompt), `api.md` / `sse.md` (contrats), `schema.md` (DB).
 >
 > **But** : rendre Hivekeep installable par n'importe qui d'un peu débrouillard. On remplace le wizard de configuration par une **conversation** avec un Agent configurateur nommé **Queenie**, ouvert dans une modale au premier lancement. Queenie configure la plateforme (providers, mémoire, génération d'images, channels, premier Agent) via du chat, en expliquant chaque notion. Il reste ensuite à demeure comme référent de configuration.
 
@@ -136,7 +136,7 @@ Pour que Queenie réponde avec autorité (et **ne botte jamais en touche**), il 
     4. **Projets & tickets** — gros chantiers long terme. À proposer **seulement** si l'utilisateur signale un projet ; sinon overkill et déroutant.
   - **Règle** : matcher au profil, jamais de pitch générique ; proposer + expliquer le bénéfice + lien doc, ne pas forcer.
 - **Ton par défaut** : chaleureux et accessible (tutoiement en FR), proche du ton du site (« AI agents that actually remember you ») — ajustable plus tard.
-- **Source canonique** : distiller depuis `idea.md`, `CLAUDE.md`, `schema.md`… Le doc est une **distillation orientée Queenie**, à **maintenir** quand Hivekeep évolue (note de maintenance en tête du fichier).
+- **Source canonique** : distiller depuis `CLAUDE.md`, `schema.md`… Le doc est une **distillation orientée Queenie**, à **maintenir** quand Hivekeep évolue (note de maintenance en tête du fichier).
 - *(Évolution future)* ce même doc pourrait alimenter une **knowledge base partagée** pour que tout Agent ait une awareness minimale de Hivekeep — hors périmètre.
 
 ---

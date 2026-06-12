@@ -1137,7 +1137,7 @@ export const projects = sqliteTable('projects', {
   title: text('title').notNull(),
   description: text('description').notNull().default(''),
   githubUrl: text('github_url'),
-  // GitHub integration for sub-task worktree isolation. See idea.md.
+  // GitHub integration for sub-task worktree isolation.
   // `githubRepo` is the authoritative "owner/name" used by the clone +
   // worktree pipeline; `githubUrl` (above) stays a free-form display link.
   githubPatVaultKey: text('github_pat_vault_key'),

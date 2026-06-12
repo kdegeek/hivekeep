@@ -1,6 +1,6 @@
 <!--
   Queenie's knowledge base. Injected verbatim into the configurator Agent's system
-  prompt (stable, cached). MAINTENANCE: keep this in sync with idea.md / CLAUDE.md
+  prompt (stable, cached). MAINTENANCE: keep this in sync with CLAUDE.md
   and the actual code when Hivekeep's features change. Written for the AI to read —
   concise, factual, no marketing fluff. Project-meta facts must stay accurate.
 
