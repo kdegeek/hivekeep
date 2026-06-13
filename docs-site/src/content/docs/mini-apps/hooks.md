@@ -178,13 +178,15 @@ await send("Remind me about this task");
 
 ### useLocalStorage(key, defaultValue)
 
-Browser-side localStorage (not synced via Hivekeep). Good for UI preferences.
+Transient, **in-session** state. Mini-apps run in a sandboxed opaque-origin iframe where the browser's `localStorage` is unavailable, so the value lives only in memory for the current session and does **not** survive a reload.
 
 ```jsx
 const [sortOrder, setSortOrder, remove] = useLocalStorage("sortOrder", "asc");
 ```
 
-Keys are auto-prefixed with `kb:`. Syncs across tabs.
+:::caution
+For anything that must persist across reloads, use [`useStorage`](#usestoragekey-defaultvalue) (server-backed) instead. `useLocalStorage` is only suitable for throwaway UI state within a single session.
+:::
 
 ### useForm(initialValues, validate?)
 

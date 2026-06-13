@@ -96,8 +96,8 @@ Use \`get_mini_app_templates\` to see built-in templates (dashboard, todo-list, 
 - \`useUser()\` → \`{ user, loading }\` — current user info
 
 ## Data & Storage
-- \`useStorage(key, defaultValue)\` → \`[value, setValue, loading]\` — persistent KV storage (like useState but persisted)
-- \`useLocalStorage(key, defaultValue)\` → \`[value, setValue, remove]\` — browser localStorage (UI prefs)
+- \`useStorage(key, defaultValue)\` → \`[value, setValue, loading]\` — **persistent** KV storage (server-backed, survives reloads). USE THIS for anything that must persist.
+- \`useLocalStorage(key, defaultValue)\` → \`[value, setValue, remove]\` — **in-session only** (the app runs in a sandboxed opaque-origin iframe where browser localStorage is unavailable, so values do NOT survive a reload). Fine for transient UI state in one session; for real persistence use useStorage / Hivekeep.storage.
 - \`useApi(path, options?)\` → \`{ data, loading, error, refetch }\` — fetch from _server.js backend
 - \`useFetch(url, options?)\` → \`{ data, loading, error, refetch, status }\` — fetch external data via proxy
 - \`useAsync(asyncFn)\` → \`{ run, data, loading, error, reset }\` — wrap any async function
