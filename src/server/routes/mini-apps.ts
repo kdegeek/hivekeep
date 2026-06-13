@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { config } from '@/server/config'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import type { AppVariables } from '@/server/app'
@@ -926,7 +927,13 @@ function baseTag(appId: string): string {
 // the app host (loading the SDK + static assets, fetching its own /api namespace)
 // gets the concrete origin instead. Allows inline scripts/styles (SDK injection
 // + app code), the app origin, popular CDNs, and data:/blob:.
-function buildMiniAppCsp(origin: string): string {
+function buildMiniAppCsp(origins: string[]): string {
+  // `origin` here is a space-separated list of the app host origin(s). The iframe
+  // is an opaque document, so `'self'` no longer designates the host — directives
+  // that must reach it carry the explicit origin(s). We include both the
+  // request-derived origin AND config.publicUrl so a reverse proxy that doesn't
+  // set x-forwarded-proto (wrong scheme) can't break SDK/module loading.
+  const origin = [...new Set(origins.filter(Boolean))].join(' ')
   return [
     `default-src 'self' ${origin}`,
     `script-src 'self' ${origin} 'unsafe-inline' 'unsafe-eval' https://esm.sh https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com`,
@@ -1079,7 +1086,7 @@ miniAppRoutes.get('/:id/serve', async (c) => {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-store',
-      'Content-Security-Policy': buildMiniAppCsp(selfOrigin),
+      'Content-Security-Policy': buildMiniAppCsp([selfOrigin, config.publicUrl]),
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
       'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=(), payment=(), clipboard-read=(self), clipboard-write=(self), autoplay=(self)',
@@ -1147,6 +1154,13 @@ miniAppRoutes.get('/:id/static/*', async (c) => {
 // ─── SDK CSS endpoint (no auth needed — only CSS tokens) ────────────────────
 
 export const miniAppSdkRoutes = new Hono()
+
+// CORS for the SDK assets. The hardened iframe runs at an opaque origin, and the
+// app imports @hivekeep/react / @hivekeep/components as ES MODULES — module
+// imports are CORS-governed (unlike a classic <script src>), so without this the
+// opaque-origin iframe can't load the SDK and every app that uses the React layer
+// breaks. Public static files, no credentials → permissive origin is safe.
+miniAppSdkRoutes.use('*', cors({ origin: '*', allowMethods: ['GET', 'OPTIONS'], maxAge: 86400 }))
 
 // SDK assets, each served under its canonical `hivekeep-*` name AND a legacy
 // `kinbot-*` alias. Mini-apps authored before the Hivekeep rebrand carry an
