@@ -541,6 +541,8 @@
       "cropConfirm": "切り抜いて使用"
     },
     "wizard": {
+      "genModelLabel": "生成モデル",
+      "genModelPlaceholder": "モデルを選択",
       "title": "エージェントを説明してください",
       "subtitle": "必要なアシスタントを説明していただければ、こちらで設定します。",
       "placeholder": "例:契約書の作成支援とコンプライアンス助言ができる会社法の専門家...",

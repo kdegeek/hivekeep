@@ -541,6 +541,8 @@
       "cropConfirm": "裁剪并使用"
     },
     "wizard": {
+      "genModelLabel": "生成模型",
+      "genModelPlaceholder": "选择模型",
       "title": "描述你的智能体",
       "subtitle": "描述你需要的助手，我们会为你完成配置。",
       "placeholder": "例如：一位精通公司法的专家，能协助起草合同并提供合规建议...",

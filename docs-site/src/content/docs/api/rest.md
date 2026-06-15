@@ -44,7 +44,7 @@ The HTTP status reflects the error class (`400` validation, `401` unauthenticate
 | `POST` | `/api/agents/:id/avatar` | Upload avatar (multipart) |
 | `POST` | `/api/agents/:id/avatar/generate` | Generate avatar with AI |
 | `POST` | `/api/agents/avatar/preview` | Preview generated avatar |
-| `POST` | `/api/agents/generate-config` | AI-generate Agent config from description |
+| `POST` | `/api/agents/generate-config` | AI-generate Agent config from description (optional `model` + `providerId` pick the generation model; defaults to the platform default LLM) |
 | `GET` | `/api/agents/:id/export` | Export Agent as archive |
 | `POST` | `/api/agents/import` | Import Agent from archive |
 

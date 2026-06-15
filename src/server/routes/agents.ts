@@ -128,11 +128,15 @@ agentRoutes.get('/', async (c) => {
 // POST /api/agents/generate-config — generate Agent configuration from natural language
 agentRoutes.post('/generate-config', async (c) => {
   const body = await c.req.json()
-  const { description, refinement, currentConfig, language } = body as {
+  const { description, refinement, currentConfig, language, model, providerId } = body as {
     description?: string
     refinement?: string
     currentConfig?: Record<string, unknown>
     language?: string
+    /** Model used to GENERATE the config (chosen in the wizard). Distinct from
+     *  the model the generated Agent will run on. Omitted → platform default. */
+    model?: string
+    providerId?: string | null
   }
 
   if (!description && !refinement) {
@@ -151,10 +155,22 @@ agentRoutes.post('/generate-config', async (c) => {
     )
   }
 
-  const { pickAnyLLMModel } = await import('@/server/llm/core/resolve')
+  const { pickAnyLLMModel, resolveLLM } = await import('@/server/llm/core/resolve')
   const { runOneShot } = await import('@/server/llm/core/run-oneshot')
 
-  const resolved = await pickAnyLLMModel()
+  // Honour the model explicitly picked in the wizard; otherwise fall back to
+  // the platform default (pickAnyLLMModel prefers the configured default LLM).
+  let resolved
+  try {
+    resolved = model
+      ? await resolveLLM({ modelId: model, providerId: providerId ?? null })
+      : await pickAnyLLMModel()
+  } catch (err) {
+    return c.json(
+      { error: { code: 'NO_LLM_MODEL', message: err instanceof Error ? err.message : 'Requested model is not available' } },
+      422,
+    )
+  }
   if (!resolved) {
     return c.json(
       { error: { code: 'NO_LLM_MODEL', message: 'No LLM model available for the configured provider' } },

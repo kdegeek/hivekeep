@@ -543,6 +543,8 @@
       "cropConfirm": "Przytnij i użyj"
     },
     "wizard": {
+      "genModelLabel": "Model generowania",
+      "genModelPlaceholder": "Wybierz model",
       "title": "Opisz swojego Agenta",
       "subtitle": "Opisz asystenta, jakiego potrzebujesz, a my skonfigurujemy go za ciebie.",
       "placeholder": "np. Ekspert prawa korporacyjnego, który pomoże przygotowywać umowy i doradzać w kwestiach zgodności...",

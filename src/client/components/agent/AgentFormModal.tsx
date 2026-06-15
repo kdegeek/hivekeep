@@ -111,6 +111,8 @@ interface AgentFormModalProps {
     refinement?: string
     currentConfig?: Record<string, unknown>
     language?: string
+    model?: string
+    providerId?: string | null
   }) => Promise<GeneratedAgentConfig>
   onGenerateAvatarPreviewFromConfig?: (data: {
     name: string
@@ -254,6 +256,11 @@ export function AgentFormModal({
   const [isGenerating, setIsGenerating] = useState(false)
   const [wasAiGenerated, setWasAiGenerated] = useState(false)
   const [isAvatarGenerating, setIsAvatarGenerating] = useState(false)
+  // Model used to GENERATE the config (separate from the Agent's runtime model
+  // chosen in the General tab). Defaults to the platform default LLM model;
+  // shown in the wizard so the user can see and change it before generating.
+  const [genModel, setGenModel] = useState('')
+  const [genProviderId, setGenProviderId] = useState<string | null>(null)
 
   // Refine state
   const [refineText, setRefineText] = useState('')
@@ -441,12 +448,15 @@ export function AgentFormModal({
       setInitialCompacting('')
       setInitialThinking('')
 
-      // Pre-populate with default LLM model
+      // Pre-populate with default LLM model — both the Agent's runtime model
+      // and the wizard's generation model.
       api.get<{ defaultLlmModel: string | null; defaultLlmProviderId: string | null }>('/settings/default-models')
         .then((data) => {
           if (data.defaultLlmModel) {
             setModel(data.defaultLlmModel)
             setProviderId(data.defaultLlmProviderId ?? null)
+            setGenModel(data.defaultLlmModel)
+            setGenProviderId(data.defaultLlmProviderId ?? null)
           }
         })
         .catch(() => {})
@@ -462,6 +472,17 @@ export function AgentFormModal({
     setIsAvatarGenerating(false)
     resetDirty()
   }, [agent, defaultCharacter, defaultExpertise, resetDirty, initialTab])
+
+  // No default LLM model configured: fall back to the first available model so
+  // the wizard always shows a concrete, account-valid generation model (never
+  // a blind newest-first pick that might 404).
+  useEffect(() => {
+    if (genModel || llmModels.length === 0) return
+    const first = llmModels[0]
+    if (!first) return
+    setGenModel(first.id)
+    setGenProviderId(first.providerId)
+  }, [genModel, llmModels])
 
   // In edit mode the close-guard is driven by the combined per-tab dirtiness
   // (derived from snapshots), so a per-tab save clears it for that tab without
@@ -547,6 +568,7 @@ export function AgentFormModal({
       const config = await onGenerateAgentConfig({
         description: wizardDescription.trim(),
         language: user?.agentLanguage ?? i18n.language,
+        ...(genModel ? { model: genModel, providerId: genProviderId } : {}),
       })
 
       applyGeneratedConfig(config)
@@ -578,6 +600,7 @@ export function AgentFormModal({
         refinement: refineText.trim(),
         currentConfig: { name, role, character, expertise, model },
         language: user?.agentLanguage ?? i18n.language,
+        ...(genModel ? { model: genModel, providerId: genProviderId } : {}),
       })
 
       applyGeneratedConfig(config)
@@ -781,6 +804,22 @@ export function AgentFormModal({
                       }
                     }}
                   />
+
+                  {hasLlm && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        {t('agent.wizard.genModelLabel')}
+                      </label>
+                      <ModelPicker
+                        models={llmModels}
+                        value={modelPickerValue(genModel, genProviderId ?? '')}
+                        onValueChange={(modelId, pid) => { setGenModel(modelId); setGenProviderId(pid || null) }}
+                        placeholder={t('agent.wizard.genModelPlaceholder')}
+                        disabled={isGenerating}
+                        isLoading={llmModels.length === 0}
+                      />
+                    </div>
+                  )}
 
                   <FormErrorAlert error={error} animate />
 

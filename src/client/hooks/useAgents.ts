@@ -408,6 +408,9 @@ export function useAgents() {
     refinement?: string
     currentConfig?: Record<string, unknown>
     language?: string
+    /** Model used to generate the config (distinct from the Agent's own model). */
+    model?: string
+    providerId?: string | null
   }): Promise<GeneratedAgentConfig> => {
     const result = await api.post<{ config: GeneratedAgentConfig }>('/agents/generate-config', data)
     return result.config

@@ -541,6 +541,8 @@
       "cropConfirm": "Zuschneiden & verwenden"
     },
     "wizard": {
+      "genModelLabel": "Generierungsmodell",
+      "genModelPlaceholder": "Modell auswählen",
       "title": "Beschreibe deinen Agenten",
       "subtitle": "Beschreibe den Assistenten, den du brauchst, und wir konfigurieren ihn für dich.",
       "placeholder": "z. B. Ein Experte für Gesellschaftsrecht, der beim Aufsetzen von Verträgen hilft und zu Compliance berät...",

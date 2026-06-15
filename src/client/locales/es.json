@@ -541,6 +541,8 @@
       "cropConfirm": "Recortar y usar"
     },
     "wizard": {
+      "genModelLabel": "Modelo de generación",
+      "genModelPlaceholder": "Seleccionar un modelo",
       "title": "Describe tu Agente",
       "subtitle": "Describe el asistente que necesitas y lo configuramos por ti.",
       "placeholder": "p. ej. Un experto en derecho mercantil que ayude a redactar contratos y asesore sobre cumplimiento normativo...",

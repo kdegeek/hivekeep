@@ -115,11 +115,31 @@ export async function resolveLLM(opts: ResolveOptions): Promise<ResolvedLLM> {
 
 
 /**
- * Pick the first usable LLM model across all configured providers. Used by
- * one-shot helpers (avatar prompt, icon prompt) that don't care which model
- * is used and just want "something that works".
+ * Pick a usable LLM model for one-shot helpers (avatar/icon prompts, wizard
+ * config generation, mini-app capabilities) that just want "something that
+ * works".
+ *
+ * Prefers the platform's configured default LLM (chat) model — the model the
+ * operator actually picked and has access to. Only when no default is set (or
+ * it no longer resolves) does it fall back to scanning providers and taking
+ * the first model each one lists. That blind scan is dangerous on its own:
+ * provider APIs list newest-first (Anthropic's `models.list` puts the latest
+ * release at the top), so `list[0]` can be a brand-new model the account isn't
+ * entitled to yet — which only surfaces as a 404 at call time, not in the list.
  */
 export async function pickAnyLLMModel(): Promise<ResolvedLLM | null> {
+  const { getDefaultLlmModel, getDefaultLlmProviderId } = await import('@/server/services/app-settings')
+  const defaultModel = await getDefaultLlmModel()
+  if (defaultModel) {
+    try {
+      const defaultProviderId = await getDefaultLlmProviderId()
+      return await resolveLLM({ modelId: defaultModel, providerId: defaultProviderId })
+    } catch {
+      // The configured default points at a model/provider that's gone or
+      // invalid — fall through to the first-available scan below.
+    }
+  }
+
   const allRows = db.select().from(providers).all()
   for (const row of allRows) {
     if (!row.isValid) continue

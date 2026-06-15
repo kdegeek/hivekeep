@@ -541,6 +541,8 @@
       "cropConfirm": "Ritaglia e usa"
     },
     "wizard": {
+      "genModelLabel": "Modello di generazione",
+      "genModelPlaceholder": "Seleziona un modello",
       "title": "Descrivi il tuo Agente",
       "subtitle": "Descrivi l'assistente di cui hai bisogno e lo configureremo per te.",
       "placeholder": "es. Un esperto di diritto societario che possa aiutare a redigere contratti e consigliare sulla conformità...",
