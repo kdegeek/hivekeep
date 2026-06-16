@@ -152,6 +152,14 @@ export function CodeEditor({
     onChange(val)
   }, [onChange])
 
+  // When asked to fill its container (height="100%"), CodeMirror's own root
+  // div (inserted between our wrapper and `.cm-editor`) stays `height: auto`,
+  // so the `.cm-editor { height: 100% }` set by the `height` prop resolves
+  // against an auto-height parent and grows with the content instead of
+  // capping — which kills scrolling. Force that root div to fill the wrapper
+  // so the height chain stays definite all the way down to `.cm-scroller`.
+  const fillHeight = height === '100%'
+
   return (
     <div className={cn(
       'min-w-0 max-w-full overflow-hidden rounded-md border border-input transition-[color,box-shadow]',
@@ -162,6 +170,7 @@ export function CodeEditor({
         value={value}
         onChange={handleChange}
         height={height}
+        className={cn(fillHeight && 'h-full [&_.cm-editor]:h-full')}
         theme={theme}
         extensions={extensions}
         readOnly={readOnly}
