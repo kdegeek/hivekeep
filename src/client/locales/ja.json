@@ -3213,7 +3213,8 @@
     "apps": "ミニアプリ",
     "models": "モデル",
     "files": "ファイル",
-    "terminal": "ターミナル"
+    "terminal": "ターミナル",
+    "feedback": "フィードバック"
   },
   "terminal": {
     "title": "ターミナル",
@@ -3729,6 +3730,36 @@
       "pseudonymTooShort": "ニックネームは2文字以上にしてください",
       "pseudonymTooLong": "ニックネームは{{max}}文字未満にしてください",
       "pseudonymInvalidChars": "ニックネームには英数字、アンダースコア、ハイフンのみ使用できます"
+    }
+  },
+  "feedback": {
+    "banner": {
+      "message": "Hivekeep はいかがですか？スターや一言の感想がとても助かります。",
+      "star": "スター",
+      "give": "フィードバック",
+      "later": "後で",
+      "dontAskAgain": "今後表示しない"
+    },
+    "dialog": {
+      "title": "フィードバックを送る",
+      "description": "不具合、アイデア、感想など何でも Hivekeep の改善に役立ちます。",
+      "typeLabel": "内容の種類",
+      "messageLabel": "メッセージ",
+      "messagePlaceholder": {
+        "bug": "何が起きたか、再現手順を教えてください...",
+        "suggestion": "アイデアや改善案を教えてください...",
+        "experience": "使い心地を教えてください..."
+      },
+      "emailLabel": "メール（任意）",
+      "emailHint": "返信が必要な場合はご記入ください。",
+      "emailPlaceholder": "you@example.com",
+      "submit": "送信",
+      "success": "フィードバックありがとうございます！"
+    },
+    "type": {
+      "bug": "不具合",
+      "suggestion": "提案",
+      "experience": "感想"
     }
   }
 }

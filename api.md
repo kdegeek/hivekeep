@@ -1838,6 +1838,57 @@ Grants permissions (additive: never an implicit revocation). Only permissions pr
 { requested: string[], granted: string[], invalid: string[] }
 ```
 
+## Feedback
+
+In-app feedback. The browser never calls the external collector directly: the server enriches each submission with the instance version + an anonymous per-install id, then relays it. No new SSE events.
+
+### `GET /api/feedback/state`
+
+Returns the proactive-banner eligibility for the current user.
+
+```json
+{
+  "enabled": true,
+  "shouldPrompt": false,
+  "starred": false,
+  "githubUrl": "https://github.com/MarlBurroW/hivekeep"
+}
+```
+
+- `enabled` — feature configured on this instance (`HIVEKEEP_FEEDBACK_ENDPOINT` set).
+- `shouldPrompt` — true when the discreet chat banner should be shown now (usage threshold reached, not dismissed, not snoozed).
+- `starred` — the user already clicked the GitHub star CTA.
+
+### `PATCH /api/feedback/state`
+
+Record a banner action. Returns the updated state (same shape as `GET /state`).
+
+```json
+{ "action": "snooze" }
+```
+
+`action` is one of `snooze` (hide for `HIVEKEEP_FEEDBACK_SNOOZE_DAYS`), `dismiss` (hide permanently), `starred` (record star click), `shown` (mark the banner as displayed). Invalid action → `400 INVALID_ACTION`.
+
+### `POST /api/feedback`
+
+Submit written feedback. Relayed to the central collector.
+
+```json
+{
+  "type": "bug",
+  "message": "Steps to reproduce...",
+  "email": "you@example.com",
+  "locale": "fr"
+}
+```
+
+- `type` — `bug` | `suggestion` | `experience` (required; otherwise `400 INVALID_TYPE`).
+- `message` — required, trimmed, max `HIVEKEEP_FEEDBACK_MAX_LENGTH` chars (`400 EMPTY_MESSAGE` / `400 MESSAGE_TOO_LONG`).
+- `email` — optional, max 200 chars.
+- `locale` — optional UI locale, attached for triage.
+
+Returns `201 { "ok": true }`. Errors: `503 FEEDBACK_DISABLED` (feature off), `502 FEEDBACK_RELAY_FAILED` (collector unreachable).
+
 ## SSE
 
 ### `GET /api/sse`

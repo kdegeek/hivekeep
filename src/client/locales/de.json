@@ -3213,7 +3213,8 @@
     "apps": "Mini-Apps",
     "models": "Modelle",
     "files": "Dateien",
-    "terminal": "Terminal"
+    "terminal": "Terminal",
+    "feedback": "Feedback"
   },
   "terminal": {
     "title": "Terminal",
@@ -3729,6 +3730,36 @@
       "pseudonymTooShort": "Pseudonym muss mindestens 2 Zeichen haben",
       "pseudonymTooLong": "Pseudonym muss weniger als {{max}} Zeichen haben",
       "pseudonymInvalidChars": "Pseudonym darf nur Buchstaben, Zahlen, Unterstriche und Bindestriche enthalten"
+    }
+  },
+  "feedback": {
+    "banner": {
+      "message": "Gefällt dir Hivekeep? Ein Stern oder kurzes Feedback hilft sehr.",
+      "star": "Stern",
+      "give": "Feedback geben",
+      "later": "Später",
+      "dontAskAgain": "Nicht mehr fragen"
+    },
+    "dialog": {
+      "title": "Teile dein Feedback",
+      "description": "Fehler, Idee oder einfach deine Erfahrung: alles hilft, Hivekeep zu verbessern.",
+      "typeLabel": "Worum geht es?",
+      "messageLabel": "Deine Nachricht",
+      "messagePlaceholder": {
+        "bug": "Beschreibe, was schiefging und wie man es reproduziert...",
+        "suggestion": "Beschreibe deine Idee oder Verbesserung...",
+        "experience": "Erzähl uns, wie es läuft..."
+      },
+      "emailLabel": "E-Mail (optional)",
+      "emailHint": "Lass sie da, wenn du eine Antwort möchtest.",
+      "emailPlaceholder": "du@beispiel.com",
+      "submit": "Senden",
+      "success": "Danke für dein Feedback!"
+    },
+    "type": {
+      "bug": "Fehler",
+      "suggestion": "Vorschlag",
+      "experience": "Erfahrung"
     }
   }
 }

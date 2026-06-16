@@ -3231,7 +3231,8 @@
     "apps": "Mini-aplikacje",
     "models": "Modele",
     "files": "Pliki",
-    "terminal": "Terminal"
+    "terminal": "Terminal",
+    "feedback": "Opinia"
   },
   "terminal": {
     "title": "Terminal",
@@ -3767,6 +3768,36 @@
       "pseudonymTooShort": "Pseudonim musi mieć co najmniej 2 znaki",
       "pseudonymTooLong": "Pseudonim musi mieć mniej niż {{max}} znaków",
       "pseudonymInvalidChars": "Pseudonim może zawierać tylko litery, cyfry, podkreślenia i myślniki"
+    }
+  },
+  "feedback": {
+    "banner": {
+      "message": "Podoba Ci się Hivekeep? Gwiazdka lub krótka opinia bardzo pomaga.",
+      "star": "Gwiazdka",
+      "give": "Prześlij opinię",
+      "later": "Później",
+      "dontAskAgain": "Nie pytaj ponownie"
+    },
+    "dialog": {
+      "title": "Podziel się opinią",
+      "description": "Błąd, pomysł lub po prostu wrażenia: wszystko pomaga ulepszać Hivekeep.",
+      "typeLabel": "Czego dotyczy?",
+      "messageLabel": "Twoja wiadomość",
+      "messagePlaceholder": {
+        "bug": "Opisz, co poszło nie tak i jak to odtworzyć...",
+        "suggestion": "Opisz swój pomysł lub usprawnienie...",
+        "experience": "Napisz, jak Ci się korzysta..."
+      },
+      "emailLabel": "Email (opcjonalnie)",
+      "emailHint": "Zostaw, jeśli chcesz otrzymać odpowiedź.",
+      "emailPlaceholder": "ty@przyklad.com",
+      "submit": "Wyślij",
+      "success": "Dziękujemy za opinię!"
+    },
+    "type": {
+      "bug": "Błąd",
+      "suggestion": "Sugestia",
+      "experience": "Wrażenia"
     }
   }
 }

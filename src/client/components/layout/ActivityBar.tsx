@@ -1,9 +1,10 @@
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Home, FolderKanban, ListTodo, CalendarClock, Folder, Blocks, Boxes, SquareTerminal } from 'lucide-react'
+import { Home, FolderKanban, ListTodo, CalendarClock, Folder, Blocks, Boxes, SquareTerminal, MessageSquarePlus } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 import { useTasksContext } from '@/client/contexts/TasksContext'
 import { useAuth } from '@/client/hooks/useAuth'
+import { useFeedback } from '@/client/contexts/FeedbackContext'
 
 interface ActivityBarItem {
   /** URL prefix that activates this item. */
@@ -39,6 +40,7 @@ export function ActivityBar() {
   const location = useLocation()
   const { activeTasks } = useTasksContext()
   const { user } = useAuth()
+  const { enabled: feedbackEnabled, open: openFeedback } = useFeedback()
   const isAdmin = user?.role === 'admin'
   const items = ITEMS.filter((item) => !item.adminOnly || isAdmin)
 
@@ -100,6 +102,18 @@ export function ActivityBar() {
           </button>
         )
       })}
+
+      {feedbackEnabled && (
+        <button
+          type="button"
+          onClick={openFeedback}
+          title={t('activityBar.feedback')}
+          aria-label={t('activityBar.feedback')}
+          className="relative mt-auto flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <MessageSquarePlus className="size-4.5" strokeWidth={1.75} />
+        </button>
+      )}
     </nav>
   )
 }

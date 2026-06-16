@@ -90,6 +90,7 @@ export default defineConfig({
 						{ label: 'Multi-User and the Household', slug: 'features/multi-user' },
 						{ label: 'MCP (Model Context Protocol)', slug: 'features/mcp' },
 						{ label: 'Token Usage & Cost', slug: 'features/token-usage' },
+						{ label: 'Feedback', slug: 'features/feedback' },
 					],
 				},
 				{

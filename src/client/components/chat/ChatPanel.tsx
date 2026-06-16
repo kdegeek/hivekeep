@@ -6,6 +6,7 @@ import { ScrollArea } from '@/client/components/ui/scroll-area'
 import { MessageBubble } from '@/client/components/chat/MessageBubble'
 import { MessageInput, type MessageInputHandle } from '@/client/components/chat/MessageInput'
 import { AgentToolsModal } from '@/client/components/agent/AgentToolsModal'
+import { FeedbackBanner } from '@/client/components/feedback/FeedbackBanner'
 import { useAgentTools } from '@/client/hooks/useAgentTools'
 import { TypingIndicator } from '@/client/components/chat/TypingIndicator'
 import { ConversationHeader } from '@/client/components/chat/ConversationHeader'
@@ -936,6 +937,7 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
             inside the ScrollArea instead of forcing the row to overflow
             ChatPanel and spill over the adjacent mini-app panel. */}
         <div ref={scrollAreaRef} className="relative min-h-0 min-w-0 flex-1 flex flex-col">
+        {!compact && <FeedbackBanner />}
         <ScrollArea className="min-h-0 flex-1">
           <SearchHighlightProvider value={searchQuery}>
           <MentionLookupProvider users={mentionableUsers} agents={mentionableAgents}>

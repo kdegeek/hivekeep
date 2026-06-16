@@ -3213,7 +3213,8 @@
     "apps": "迷你应用",
     "models": "模型",
     "files": "文件",
-    "terminal": "终端"
+    "terminal": "终端",
+    "feedback": "反馈"
   },
   "terminal": {
     "title": "终端",
@@ -3729,6 +3730,36 @@
       "pseudonymTooShort": "昵称至少需要 2 个字符",
       "pseudonymTooLong": "昵称必须少于 {{max}} 个字符",
       "pseudonymInvalidChars": "昵称只能包含字母、数字、下划线和连字符"
+    }
+  },
+  "feedback": {
+    "banner": {
+      "message": "喜欢 Hivekeep 吗？一个 Star 或一句反馈都很有帮助。",
+      "star": "Star",
+      "give": "提交反馈",
+      "later": "稍后",
+      "dontAskAgain": "不再提示"
+    },
+    "dialog": {
+      "title": "分享你的反馈",
+      "description": "Bug、想法或只是你的体验：任何信息都有助于改进 Hivekeep。",
+      "typeLabel": "关于什么？",
+      "messageLabel": "你的留言",
+      "messagePlaceholder": {
+        "bug": "描述出了什么问题以及如何复现...",
+        "suggestion": "描述你的想法或改进...",
+        "experience": "告诉我们使用感受..."
+      },
+      "emailLabel": "邮箱（可选）",
+      "emailHint": "如需回复请留下邮箱。",
+      "emailPlaceholder": "you@example.com",
+      "submit": "发送",
+      "success": "感谢你的反馈！"
+    },
+    "type": {
+      "bug": "Bug",
+      "suggestion": "建议",
+      "experience": "体验"
     }
   }
 }

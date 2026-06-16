@@ -8,8 +8,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/client/components/ui/dropdown-menu'
-import { User, Settings, LogOut } from 'lucide-react'
+import { User, Settings, LogOut, MessageSquarePlus } from 'lucide-react'
 import { UserAvatar } from '@/client/components/common/UserAvatar'
+import { useFeedback } from '@/client/contexts/FeedbackContext'
 
 interface UserMenuProps {
   user: {
@@ -26,6 +27,7 @@ interface UserMenuProps {
 
 export function UserMenu({ user, onLogout, onOpenSettings, onOpenAccount }: UserMenuProps) {
   const { t } = useTranslation()
+  const { enabled: feedbackEnabled, open: openFeedback } = useFeedback()
 
   return (
     <DropdownMenu>
@@ -48,6 +50,12 @@ export function UserMenu({ user, onLogout, onOpenSettings, onOpenAccount }: User
           <Settings className="size-4" />
           {t('sidebar.settings')}
         </DropdownMenuItem>
+        {feedbackEnabled && (
+          <DropdownMenuItem onClick={openFeedback}>
+            <MessageSquarePlus className="size-4" />
+            {t('activityBar.feedback')}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={onLogout}>
           <LogOut className="size-4" />

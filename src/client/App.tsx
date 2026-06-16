@@ -9,6 +9,7 @@ import { SidePanelProvider } from '@/client/contexts/SidePanelContext'
 import { TasksProvider } from '@/client/contexts/TasksContext'
 import { TicketMentionShell } from '@/client/contexts/TicketMentionShell'
 import { UpdateProvider } from '@/client/contexts/UpdateContext'
+import { FeedbackProvider } from '@/client/contexts/FeedbackContext'
 import { UpdateOverlay } from '@/client/components/common/UpdateOverlay'
 import { GlobalUpdateDialog } from '@/client/components/common/GlobalUpdateDialog'
 import { ActivityBar } from '@/client/components/layout/ActivityBar'
@@ -204,6 +205,7 @@ function AuthenticatedShell() {
     <SidePanelProvider>
     <TasksProvider>
     <UpdateProvider>
+    <FeedbackProvider>
     <TicketMentionShell>
       <div className="flex h-dvh w-screen flex-col overflow-hidden">
         <AppTopBar
@@ -265,6 +267,7 @@ function AuthenticatedShell() {
         <UpdateOverlay />
       </div>
     </TicketMentionShell>
+    </FeedbackProvider>
     </UpdateProvider>
     </TasksProvider>
     </SidePanelProvider>

@@ -406,6 +406,21 @@ Triggers on connected email accounts: a matching incoming email prompts a target
 
 > The update **channel** (`stable` = GitHub releases, `edge` = HEAD of main) is not an env var: it's a runtime admin setting (`app_settings.update_channel`, Settings → Updates), default `stable`. Self-update state lives in `data/update/` (journal, DB snapshots, dist backups, update.log).
 
+## Feedback
+
+In-app feedback: a GitHub "star" call to action plus written feedback (bug / suggestion / experience) relayed to a central collector. The endpoint is a public Cloudflare Worker (no secret, since Hivekeep is open-source and every instance posts to the same place); abuse is bounded by the Worker's per-IP rate limit and Cloudflare. Set `HIVEKEEP_FEEDBACK_ENDPOINT` to an empty string to disable the feature entirely (the feedback entries and banner disappear).
+
+| Env Var | Default | Description |
+|---------|---------|-------------|
+| `HIVEKEEP_FEEDBACK_ENDPOINT` | `https://hivekeep-feedback.hivekeep.workers.dev/feedback` | Collector URL the server relays feedback to. Empty string disables the feature. |
+| `HIVEKEEP_GITHUB_REPO_URL` | `https://github.com/MarlBurroW/hivekeep` | Repo opened by the "star" call to action. |
+| `HIVEKEEP_FEEDBACK_MAX_LENGTH` | `5000` | Max characters accepted in a feedback message. |
+| `HIVEKEEP_FEEDBACK_PROMPT_AFTER_DAYS` | `7` | Account age (days) after which the proactive banner may appear. |
+| `HIVEKEEP_FEEDBACK_PROMPT_MIN_MESSAGES` | `30` | Total user messages after which the banner may appear (either threshold suffices). |
+| `HIVEKEEP_FEEDBACK_SNOOZE_DAYS` | `14` | Days the banner stays hidden after the user clicks "later". |
+
+No secret or PII leaves the instance: feedback carries only the message, optional email, the Hivekeep version, an anonymous per-install id, and the UI locale.
+
 ## MCP
 
 | Env Var | Default | Description |
