@@ -286,6 +286,75 @@ export function TerminalPage() {
       if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols, rows }))
     })
 
+    // Clipboard. xterm wires nothing by itself: selecting text never copies, and
+    // Ctrl+C must stay SIGINT. navigator.clipboard needs a secure context
+    // (https/localhost), so we fall back to execCommand for copy and to xterm's
+    // own native paste for paste, keeping it working over plain http on a LAN.
+    const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent)
+
+    const copyText = async (text: string) => {
+      try {
+        if (typeof navigator.clipboard?.writeText === 'function') {
+          await navigator.clipboard.writeText(text)
+          return
+        }
+      } catch {
+        // fall through to the execCommand path below
+      }
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      try {
+        document.execCommand('copy')
+      } catch {
+        // best effort — nothing else we can do in an insecure context
+      }
+      document.body.removeChild(ta)
+    }
+
+    const pasteText = async () => {
+      try {
+        const text = await navigator.clipboard.readText()
+        if (text) term.paste(text)
+      } catch {
+        // permission denied / insecure context — native paste covers this case
+      }
+    }
+
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.type !== 'keydown') return true
+      const mod = e.ctrlKey || e.metaKey
+      if (!mod) return true
+      const key = e.key.toLowerCase()
+      // Paste: Ctrl+V / Cmd+V / Ctrl+Shift+V.
+      if (key === 'v') {
+        if (typeof navigator.clipboard?.readText === 'function') {
+          e.preventDefault()
+          void pasteText()
+          return false
+        }
+        return true // insecure context: let xterm's native textarea paste run
+      }
+      // Copy: Cmd+C and Ctrl+Shift+C always; plain Ctrl+C only with a selection
+      // (so an empty Ctrl+C still sends SIGINT). Copy clears the selection so the
+      // next Ctrl+C interrupts as usual.
+      if (key === 'c') {
+        const selection = term.getSelection()
+        const copyCombo = e.metaKey || e.shiftKey || (e.ctrlKey && !isMac)
+        if (selection && copyCombo) {
+          e.preventDefault()
+          void copyText(selection)
+          term.clearSelection()
+          return false
+        }
+        return true // no selection (or mac Ctrl+C) → passes through as SIGINT
+      }
+      return true
+    })
+
     const observer = new ResizeObserver(() => {
       if (!disposed) fit.fit()
     })
