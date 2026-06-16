@@ -51,6 +51,7 @@ import { userRoutes } from '@/server/routes/users'
 import { invitationRoutes } from '@/server/routes/invitations'
 import { notificationRoutes } from '@/server/routes/notifications'
 import { settingsRoutes } from '@/server/routes/settings'
+import { feedbackRoutes } from '@/server/routes/feedback'
 import { miniAppRoutes, miniAppSdkRoutes } from '@/server/routes/mini-apps'
 import { pluginRoutes } from '@/server/routes/plugins'
 import { pluginCardRoutes } from '@/server/routes/plugin-cards'
@@ -198,6 +199,7 @@ app.route('/api/users', userRoutes)
 app.route('/api/invitations', invitationRoutes)
 app.route('/api/notifications', notificationRoutes)
 app.route('/api/settings', settingsRoutes)
+app.route('/api/feedback', feedbackRoutes)
 app.route('/api/contacts', contactRoutes)
 app.route('/api/tasks', taskRoutes)
 app.route('/api/crons', cronRoutes)

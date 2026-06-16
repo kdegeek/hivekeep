@@ -887,6 +887,26 @@ export const appSettings = sqliteTable('app_settings', {
   updatedAt: integer('updated_at').notNull(), // Unix ms
 })
 
+// ─── Feedback ────────────────────────────────────────────────────────────────
+// Per-user state driving the proactive feedback banner (the written feedback
+// itself is relayed to an external collector and not stored locally). One row
+// per user, lazily created on first read/update.
+
+export const feedbackState = sqliteTable('feedback_state', {
+  userId: text('user_id').primaryKey().references(() => user.id, { onDelete: 'cascade' }),
+  /** User permanently dismissed the proactive banner ("don't ask again"). */
+  dismissed: integer('dismissed', { mode: 'boolean' }).notNull().default(false),
+  /** Unix ms until which the banner stays hidden after a "later"; null = not snoozed. */
+  snoozedUntil: integer('snoozed_until'),
+  /** Unix ms when the user clicked the GitHub star CTA; null = never. */
+  starredAt: integer('starred_at'),
+  /** Unix ms the banner was last shown (telemetry / future pacing). */
+  lastPromptAt: integer('last_prompt_at'),
+  /** How many written feedbacks this user has submitted. */
+  submitCount: integer('submit_count').notNull().default(0),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
 // ─── Toolboxes ────────────────────────────────────────────────────────────────
 // Global, user-defined (and built-in) named sets of native tools. A task
 // references an array of toolbox ids; the resolved native toolset is

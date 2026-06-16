@@ -194,6 +194,25 @@ export const config = {
     enabled: process.env.HIVEKEEP_MODEL_REGISTRY !== 'false',
   },
 
+  /** In-app feedback (star CTA + written feedback relayed to a central
+   *  collector). The endpoint is a public Cloudflare Worker — no secret, since
+   *  Hivekeep is open-source and every instance phones home to the same place;
+   *  abuse is bounded by the Worker's per-IP rate limit + Cloudflare. Set
+   *  `HIVEKEEP_FEEDBACK_ENDPOINT=` (empty) to disable the feature entirely. */
+  feedback: {
+    endpoint:
+      process.env.HIVEKEEP_FEEDBACK_ENDPOINT ??
+      'https://hivekeep-feedback.hivekeep.workers.dev/feedback',
+    githubRepoUrl: process.env.HIVEKEEP_GITHUB_REPO_URL ?? 'https://github.com/MarlBurroW/hivekeep',
+    /** Max characters accepted in a single feedback message. */
+    maxMessageLength: Number(process.env.HIVEKEEP_FEEDBACK_MAX_LENGTH ?? 5000),
+    /** Usage thresholds before the proactive banner may appear (either suffices). */
+    promptAfterDays: Number(process.env.HIVEKEEP_FEEDBACK_PROMPT_AFTER_DAYS ?? 7),
+    promptMinMessages: Number(process.env.HIVEKEEP_FEEDBACK_PROMPT_MIN_MESSAGES ?? 30),
+    /** Days before the banner reappears after the user clicks "later". */
+    snoozeDays: Number(process.env.HIVEKEEP_FEEDBACK_SNOOZE_DAYS ?? 14),
+  },
+
   compacting: {
     ...parseModelEnv(process.env.COMPACTING_MODEL) as { model?: string; providerId?: string },
     /** Trigger compaction when total context tokens exceed this % of the model's context window. */
