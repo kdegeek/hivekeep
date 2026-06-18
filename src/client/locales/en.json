@@ -206,7 +206,18 @@
       "testSuccess": "Connection successful",
       "testFailed": "Connection failed",
       "nameTip": "A friendly label to identify this provider in your dashboard. If left empty, the provider type name is used.",
-      "getApiKey": "Get your {{provider}} API key"
+      "getApiKey": "Get your {{provider}} API key",
+      "authMethod": "Connection method",
+      "authSignin": "Sign in",
+      "authCliFile": "Credentials file",
+      "signinButton": "Sign in with {{provider}}",
+      "signinPanelHint": "A browser tab will open to sign in to {{provider}}. After you approve, the page shows an authorization code. Paste it below to connect.",
+      "signinReopen": "Reopen sign-in page",
+      "signinCodeLabel": "Authorization code",
+      "signinCodePlaceholder": "Paste the code here",
+      "connect": "Connect",
+      "connecting": "Connecting",
+      "signinOpening": "Opening"
     }
   },
   "sidebar": {

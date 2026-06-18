@@ -67,6 +67,16 @@ import {
 
 const CONFIG_SCHEMA: readonly ConfigField[] = [
   {
+    // 'signin' = tokens obtained via the in-app PKCE flow and stored in the
+    // vault; 'cli' (default for existing setups) = read the CLI creds file.
+    // Set by the sign-in route; the UI toggles it. Non-secret, stored inline.
+    key: 'authMode',
+    type: 'text',
+    label: 'Authentication mode',
+    placeholder: 'cli',
+    description: "Either 'signin' (in-app Claude login) or 'cli' (read the Claude Code credentials file).",
+  },
+  {
     key: 'authFilePath',
     type: 'path',
     label: 'Credentials file (optional)',
@@ -100,8 +110,8 @@ const MODEL_NOTES: Record<string, string> = {
   'claude-opus-4-7[1m]': 'Opus 4.7 reasons internally — this setting may have no visible effect.',
 }
 
-async function fetchOAuthModels(overridePath?: string): Promise<AnthropicOAuthModel[]> {
-  const accessToken = await getOAuthAccessToken(overridePath)
+async function fetchOAuthModels(config: ProviderConfig): Promise<AnthropicOAuthModel[]> {
+  const accessToken = await getOAuthAccessToken(config)
   const response = await fetch('https://api.anthropic.com/v1/models?limit=100', {
     headers: {
       accept: 'application/json',
@@ -147,9 +157,9 @@ function mapModel(raw: AnthropicOAuthModel): LLMModel {
 
 // ─── Custom fetch wrapper (the OAuth glue) ───────────────────────────────────
 
-function buildOAuthFetch(overridePath: string | undefined): typeof fetch {
+function buildOAuthFetch(config: ProviderConfig): typeof fetch {
   return (async (url: URL | RequestInfo, init: RequestInit | undefined) => {
-    const accessToken = await getOAuthAccessToken(overridePath)
+    const accessToken = await getOAuthAccessToken(config)
 
     const headers = new Headers(init?.headers)
     headers.delete('x-api-key')
@@ -215,10 +225,9 @@ function buildOAuthFetch(overridePath: string | undefined): typeof fetch {
 }
 
 function createClient(config: ProviderConfig): Anthropic {
-  const overridePath = config['authFilePath'] || undefined
   return new Anthropic({
     apiKey: 'oauth-placeholder', // overridden by the custom fetch
-    fetch: buildOAuthFetch(overridePath),
+    fetch: buildOAuthFetch(config),
     defaultHeaders: { ...OAUTH_HEADERS },
   })
 }
@@ -244,8 +253,7 @@ export const anthropicOAuthProvider: LLMProvider = {
 
   async authenticate(config: ProviderConfig): Promise<AuthResult> {
     try {
-      const overridePath = config['authFilePath'] || undefined
-      const models = await fetchOAuthModels(overridePath)
+      const models = await fetchOAuthModels(config)
       return { valid: models.length > 0 }
     } catch (err) {
       const mapped = mapApiError(err)
@@ -254,9 +262,8 @@ export const anthropicOAuthProvider: LLMProvider = {
   },
 
   async listModels(config: ProviderConfig): Promise<LLMModel[]> {
-    const overridePath = config['authFilePath'] || undefined
     try {
-      const raw = await fetchOAuthModels(overridePath)
+      const raw = await fetchOAuthModels(config)
       return raw.filter((m) => m.type === 'model').map(mapModel)
     } catch (err) {
       throw mapApiError(err)

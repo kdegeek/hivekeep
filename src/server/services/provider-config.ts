@@ -36,6 +36,12 @@ import {
 import { getSecretFieldKeys } from '@/server/providers/index'
 import { createLogger } from '@/server/logger'
 import type { ProviderConfig } from '@/server/llm/core/types'
+import {
+  PROVIDER_ID_KEY,
+  PROVIDER_TYPE_KEY,
+  oauthVaultKey,
+  deleteTokenBundle,
+} from '@/server/llm/llm/_oauth-token-store'
 
 const log = createLogger('provider-config')
 
@@ -89,14 +95,21 @@ export async function hydrateProviderConfig(
  * Every consumer must call this instead of `JSON.parse(await decrypt(row.configEncrypted))`.
  */
 export async function loadProviderConfig(row: ProviderRowLike): Promise<ProviderConfig> {
-  if (!row.configEncrypted) return {}
+  const base: ProviderConfig = {}
+  // Thread the provider row identity through as reserved runtime-only keys so
+  // mode-aware accessors (e.g. the OAuth providers' vault-backed token store)
+  // can locate per-provider state. These never persist — `vaultifyProviderConfig`
+  // strips `__`-prefixed keys before writing.
+  if (row.id) base[PROVIDER_ID_KEY] = row.id
+  if (row.type) base[PROVIDER_TYPE_KEY] = row.type
+  if (!row.configEncrypted) return base
   let parsed: Record<string, unknown>
   try {
     parsed = JSON.parse(await decrypt(row.configEncrypted)) as Record<string, unknown>
   } catch {
-    return {}
+    return base
   }
-  return hydrateProviderConfig(parsed)
+  return { ...base, ...(await hydrateProviderConfig(parsed)) }
 }
 
 /**
@@ -119,6 +132,10 @@ export async function vaultifyProviderConfig(
   const secretFields = new Set(getSecretFieldKeys(type))
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(rawConfig)) {
+    // Reserved runtime-only keys (e.g. __providerId) must never be persisted —
+    // they're re-injected on every load() and would otherwise round-trip into
+    // the stored config via a PATCH that re-vaultifies loadProviderConfig output.
+    if (k.startsWith('__')) continue
     if (!secretFields.has(k) || isVaultRef(v)) {
       out[k] = v
       continue
@@ -142,6 +159,11 @@ export async function vaultifyProviderConfig(
  * deleting the provider so its `provider_*` vault entries don't dangle.
  */
 export async function deleteProviderVaultSecrets(row: ProviderRowLike): Promise<void> {
+  // CLI-free OAuth providers store their token bundle under a deterministic
+  // key that isn't referenced inline in the config, so clean it up explicitly.
+  if (row.id && row.type) {
+    await deleteTokenBundle(oauthVaultKey(row.type, row.id))
+  }
   if (!row.configEncrypted) return
   let parsed: Record<string, unknown>
   try {

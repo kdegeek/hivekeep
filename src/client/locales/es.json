@@ -206,7 +206,18 @@
       "testSuccess": "Conexión correcta",
       "testFailed": "Error de conexión",
       "nameTip": "Una etiqueta amigable para identificar este proveedor en tu panel. Si lo dejas vacío, se usa el nombre del tipo de proveedor.",
-      "getApiKey": "Consigue tu clave API de {{provider}}"
+      "getApiKey": "Consigue tu clave API de {{provider}}",
+      "authMethod": "Método de conexión",
+      "authSignin": "Iniciar sesión",
+      "authCliFile": "Archivo de credenciales",
+      "signinButton": "Iniciar sesión con {{provider}}",
+      "signinPanelHint": "Se abrirá una pestaña para iniciar sesión en {{provider}}. Tras aprobarlo, la página mostrará un código de autorización. Pégalo abajo para conectar.",
+      "signinReopen": "Reabrir la página de inicio de sesión",
+      "signinCodeLabel": "Código de autorización",
+      "signinCodePlaceholder": "Pega el código aquí",
+      "connect": "Conectar",
+      "connecting": "Conectando",
+      "signinOpening": "Abriendo"
     }
   },
   "sidebar": {

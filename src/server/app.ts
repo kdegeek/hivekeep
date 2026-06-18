@@ -11,6 +11,7 @@ import { authRoutes } from '@/server/routes/auth'
 import { meRoutes } from '@/server/routes/me'
 import { onboardingRoutes } from '@/server/routes/onboarding'
 import { providerRoutes } from '@/server/routes/providers'
+import { providerOAuthRoutes } from '@/server/routes/provider-oauth'
 import { modelRoutes } from '@/server/routes/models'
 import { emailAccountRoutes } from '@/server/routes/email-accounts'
 import { contactsAccountRoutes } from '@/server/routes/contacts-accounts'
@@ -181,6 +182,7 @@ app.route('/api/auth', authRoutes)
 app.route('/api/me', meRoutes)
 app.route('/api/onboarding', onboardingRoutes)
 app.route('/api/providers', providerRoutes)
+app.route('/api/providers/oauth', providerOAuthRoutes)
 app.route('/api/models', modelRoutes)
 app.route('/api/email-accounts', emailAccountRoutes)
 app.route('/api/contacts-accounts', contactsAccountRoutes)

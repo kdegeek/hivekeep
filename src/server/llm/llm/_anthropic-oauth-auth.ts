@@ -30,6 +30,14 @@ import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { createHash, randomBytes, randomUUID } from 'crypto'
 import { join } from 'path'
 import { createLogger } from '@/server/logger'
+import type { ProviderConfig } from '@/server/llm/core/types'
+import type { PkceClient } from '@/server/llm/llm/_oauth-pkce'
+import {
+  readTokenBundle,
+  writeTokenBundle,
+  vaultKeyFromConfig,
+  type OAuthTokenBundle,
+} from '@/server/llm/llm/_oauth-token-store'
 
 const log = createLogger('provider:anthropic-oauth')
 
@@ -38,6 +46,22 @@ const log = createLogger('provider:anthropic-oauth')
 // ---------------------------------------------------------------------------
 const CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e'
 const TOKEN_URL = 'https://console.anthropic.com/v1/oauth/token'
+
+/**
+ * PKCE public-client descriptor for the in-app "Sign in with Claude" flow.
+ * Mirrors the Claude Code CLI's own OAuth client: the authorize page renders
+ * the code as `<code>#<state>` for manual paste (the `code=true` param +
+ * the console callback redirect), and the token exchange is the same
+ * public-client endpoint the refresh grant already uses.
+ */
+export const ANTHROPIC_PKCE_CLIENT: PkceClient = {
+  clientId: CLIENT_ID,
+  authorizeUrl: 'https://claude.ai/oauth/authorize',
+  tokenUrl: TOKEN_URL,
+  redirectUri: 'https://console.anthropic.com/oauth/code/callback',
+  scopes: ['org:create_api_key', 'user:profile', 'user:inference'],
+  authorizeParams: { code: 'true' },
+}
 // Track the latest published Claude Code CLI version. Bump when Anthropic
 // releases new versions to avoid being flagged as an outdated client.
 const CLAUDE_CODE_VERSION = '2.1.120'
@@ -134,23 +158,29 @@ async function refreshToken(
 // ---------------------------------------------------------------------------
 // Credential management — single-flight refresh
 // ---------------------------------------------------------------------------
-let cachedToken: { accessToken: string; expiresAt: number } | null = null
-let refreshPromise: Promise<string> | null = null
+// Both the CLI-file path and the vault (CLI-free sign-in) path share the same
+// in-process access-token cache + single-flight lock, keyed by their storage
+// location (the creds file path, or `vault:<key>`) so multiple OAuth providers
+// don't clobber one another's tokens.
+const accessTokenCache = new Map<string, { accessToken: string; expiresAt: number }>()
+const refreshLocks = new Map<string, Promise<string>>()
 
-async function ensureFreshToken(credsPath: string): Promise<string> {
-  if (cachedToken && cachedToken.expiresAt - Date.now() > BUFFER_MS) {
-    return cachedToken.accessToken
+function ensureFresh(cacheKey: string, refresh: () => Promise<string>): Promise<string> {
+  const cached = accessTokenCache.get(cacheKey)
+  if (cached && cached.expiresAt - Date.now() > BUFFER_MS) {
+    return Promise.resolve(cached.accessToken)
   }
-
-  if (!refreshPromise) {
-    refreshPromise = doRefresh(credsPath).finally(() => {
-      refreshPromise = null
-    })
+  let lock = refreshLocks.get(cacheKey)
+  if (!lock) {
+    lock = refresh().finally(() => refreshLocks.delete(cacheKey))
+    refreshLocks.set(cacheKey, lock)
   }
-  return refreshPromise
+  return lock
 }
 
-async function doRefresh(credsPath: string): Promise<string> {
+// ─── CLI credentials-file path (legacy / existing setups) ────────────────────
+
+async function refreshFromFile(credsPath: string): Promise<string> {
   const raw = readFileSync(credsPath, 'utf8')
   const creds: OAuthCredentials = JSON.parse(raw)
   const oauth = creds.claudeAiOauth
@@ -158,12 +188,12 @@ async function doRefresh(credsPath: string): Promise<string> {
 
   // Re-check after acquiring the "lock"
   if (oauth.expiresAt && oauth.expiresAt - now > BUFFER_MS) {
-    cachedToken = { accessToken: oauth.accessToken, expiresAt: oauth.expiresAt }
+    accessTokenCache.set(credsPath, { accessToken: oauth.accessToken, expiresAt: oauth.expiresAt })
     return oauth.accessToken
   }
 
   const data = await refreshToken(oauth.refreshToken)
-  log.info('OAuth token refreshed successfully')
+  log.info('OAuth token refreshed successfully (file)')
 
   const expiresAt = now + data.expires_in * 1000 - BUFFER_MS
   creds.claudeAiOauth = {
@@ -174,8 +204,37 @@ async function doRefresh(credsPath: string): Promise<string> {
   }
 
   writeFileSync(credsPath, JSON.stringify(creds, null, 2))
-  cachedToken = { accessToken: data.access_token, expiresAt }
+  accessTokenCache.set(credsPath, { accessToken: data.access_token, expiresAt })
 
+  return data.access_token
+}
+
+// ─── Vault path (CLI-free "Sign in with Claude") ─────────────────────────────
+
+async function refreshFromVault(vaultKey: string, hint?: OAuthTokenBundle): Promise<string> {
+  // Re-read the latest bundle in case another worker refreshed it meanwhile.
+  const bundle = (await readTokenBundle(vaultKey)) ?? hint
+  if (!bundle) {
+    throw new Error('No stored Claude sign-in tokens found — reconnect the provider.')
+  }
+  const now = Date.now()
+  if (bundle.expiresAt && bundle.expiresAt - now > BUFFER_MS && bundle.accessToken) {
+    accessTokenCache.set(vaultKey, { accessToken: bundle.accessToken, expiresAt: bundle.expiresAt })
+    return bundle.accessToken
+  }
+
+  const data = await refreshToken(bundle.refreshToken)
+  log.info('OAuth token refreshed successfully (vault)')
+
+  const expiresAt = now + data.expires_in * 1000
+  const next: OAuthTokenBundle = {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    expiresAt,
+    ...(bundle.extra ? { extra: bundle.extra } : {}),
+  }
+  await writeTokenBundle(vaultKey, next)
+  accessTokenCache.set(vaultKey, { accessToken: data.access_token, expiresAt: expiresAt - BUFFER_MS })
   return data.access_token
 }
 
@@ -185,12 +244,26 @@ async function doRefresh(credsPath: string): Promise<string> {
 
 /**
  * Get a fresh OAuth access token for the Anthropic API.
- * Useful for external callers (e.g. the Agent engine) that need
- * the token to pass to the Vercel AI SDK.
+ *
+ * Resolution order:
+ *   1. **Vault** — when the provider row was set up via the in-app sign-in flow
+ *      (a `provider_<type>_<id>_oauth` bundle exists). The row id/type reach us
+ *      through the reserved `__providerId` / `__providerType` config keys.
+ *   2. **CLI file** — the legacy `~/.claude/.credentials.json` (or an explicit
+ *      `authFilePath` override). Keeps existing setups working unchanged.
  */
-export async function getOAuthAccessToken(overridePath?: string): Promise<string> {
-  const credsPath = resolveCredsPath(overridePath)
-  return ensureFreshToken(credsPath)
+export async function getOAuthAccessToken(config: ProviderConfig = {}): Promise<string> {
+  const vaultKey = vaultKeyFromConfig(config)
+  if (vaultKey) {
+    // Hot path: a still-fresh cached access token needs no vault read at all.
+    const cached = accessTokenCache.get(vaultKey)
+    if (cached && cached.expiresAt - Date.now() > BUFFER_MS) return cached.accessToken
+    // Otherwise, sign-in mode iff a stored bundle exists for this provider.
+    const bundle = await readTokenBundle(vaultKey)
+    if (bundle) return ensureFresh(vaultKey, () => refreshFromVault(vaultKey, bundle))
+  }
+  const credsPath = resolveCredsPath(config['authFilePath'] || undefined)
+  return ensureFresh(credsPath, () => refreshFromFile(credsPath))
 }
 
 // Latest published @anthropic-ai/sdk version. The official Claude Code CLI

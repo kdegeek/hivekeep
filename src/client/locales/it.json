@@ -206,7 +206,18 @@
       "testSuccess": "Connessione riuscita",
       "testFailed": "Connessione non riuscita",
       "nameTip": "Un'etichetta amichevole per identificare questo provider nella tua dashboard. Se lasciata vuota, viene usato il nome del tipo di provider.",
-      "getApiKey": "Ottieni la tua chiave API {{provider}}"
+      "getApiKey": "Ottieni la tua chiave API {{provider}}",
+      "authMethod": "Metodo di connessione",
+      "authSignin": "Accedi",
+      "authCliFile": "File delle credenziali",
+      "signinButton": "Accedi con {{provider}}",
+      "signinPanelHint": "Si aprirà una scheda del browser per accedere a {{provider}}. Dopo l'approvazione, la pagina mostra un codice di autorizzazione. Incollalo qui sotto per connettere.",
+      "signinReopen": "Riapri la pagina di accesso",
+      "signinCodeLabel": "Codice di autorizzazione",
+      "signinCodePlaceholder": "Incolla qui il codice",
+      "connect": "Connetti",
+      "connecting": "Connessione",
+      "signinOpening": "Apertura"
     }
   },
   "sidebar": {

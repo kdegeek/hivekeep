@@ -206,7 +206,18 @@
       "testSuccess": "Verbindung erfolgreich",
       "testFailed": "Verbindung fehlgeschlagen",
       "nameTip": "Ein freundliches Label, um diesen Provider in deinem Dashboard zu erkennen. Bleibt es leer, wird der Name des Provider-Typs verwendet.",
-      "getApiKey": "Hol dir deinen {{provider}}-API-Schlüssel"
+      "getApiKey": "Hol dir deinen {{provider}}-API-Schlüssel",
+      "authMethod": "Verbindungsmethode",
+      "authSignin": "Anmelden",
+      "authCliFile": "Anmeldedatei",
+      "signinButton": "Mit {{provider}} anmelden",
+      "signinPanelHint": "Ein Browser-Tab öffnet sich zur Anmeldung bei {{provider}}. Nach der Bestätigung zeigt die Seite einen Autorisierungscode an. Fügen Sie ihn unten ein, um zu verbinden.",
+      "signinReopen": "Anmeldeseite erneut öffnen",
+      "signinCodeLabel": "Autorisierungscode",
+      "signinCodePlaceholder": "Code hier einfügen",
+      "connect": "Verbinden",
+      "connecting": "Verbinden",
+      "signinOpening": "Wird geöffnet"
     }
   },
   "sidebar": {

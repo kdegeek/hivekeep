@@ -208,7 +208,18 @@
       "testSuccess": "Połączenie udane",
       "testFailed": "Połączenie nieudane",
       "nameTip": "Przyjazna etykieta identyfikująca tego dostawcę w panelu. Jeśli zostawisz puste, użyta zostanie nazwa typu dostawcy.",
-      "getApiKey": "Uzyskaj klucz API {{provider}}"
+      "getApiKey": "Uzyskaj klucz API {{provider}}",
+      "authMethod": "Metoda połączenia",
+      "authSignin": "Zaloguj się",
+      "authCliFile": "Plik poświadczeń",
+      "signinButton": "Zaloguj się przez {{provider}}",
+      "signinPanelHint": "Otworzy się karta przeglądarki, aby zalogować się do {{provider}}. Po zatwierdzeniu strona wyświetli kod autoryzacji. Wklej go poniżej, aby połączyć.",
+      "signinReopen": "Otwórz ponownie stronę logowania",
+      "signinCodeLabel": "Kod autoryzacji",
+      "signinCodePlaceholder": "Wklej kod tutaj",
+      "connect": "Połącz",
+      "connecting": "Łączenie",
+      "signinOpening": "Otwieranie"
     }
   },
   "sidebar": {

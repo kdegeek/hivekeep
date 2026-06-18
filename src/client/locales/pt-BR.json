@@ -206,7 +206,18 @@
       "testSuccess": "Conexão bem-sucedida",
       "testFailed": "Falha na conexão",
       "nameTip": "Um rótulo amigável para identificar este provedor no seu painel. Se ficar em branco, o nome do tipo de provedor é usado.",
-      "getApiKey": "Obtenha sua chave de API {{provider}}"
+      "getApiKey": "Obtenha sua chave de API {{provider}}",
+      "authMethod": "Método de conexão",
+      "authSignin": "Entrar",
+      "authCliFile": "Arquivo de credenciais",
+      "signinButton": "Entrar com {{provider}}",
+      "signinPanelHint": "Uma aba do navegador será aberta para entrar no {{provider}}. Após aprovar, a página mostra um código de autorização. Cole-o abaixo para conectar.",
+      "signinReopen": "Reabrir a página de login",
+      "signinCodeLabel": "Código de autorização",
+      "signinCodePlaceholder": "Cole o código aqui",
+      "connect": "Conectar",
+      "connecting": "Conectando",
+      "signinOpening": "Abrindo"
     }
   },
   "sidebar": {

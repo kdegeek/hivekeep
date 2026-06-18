@@ -5,12 +5,13 @@ import { PasswordInput } from '@/client/components/ui/password-input'
 import { Button } from '@/client/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/client/components/ui/select'
 import { Alert, AlertDescription } from '@/client/components/ui/alert'
-import { CheckCircle2, ExternalLink, Loader2, RefreshCw } from 'lucide-react'
+import { CheckCircle2, ExternalLink, Loader2, LogIn, RefreshCw } from 'lucide-react'
 import { FormDialog } from '@/client/components/common/FormDialog'
 import { FormField } from '@/client/components/common/FormField'
 import { ProviderIcon } from '@/client/components/common/ProviderIcon'
 import { api, getErrorMessage } from '@/client/lib/api'
 import { useProviderTypes } from '@/client/hooks/useProviderTypes'
+import { cn } from '@/client/lib/utils'
 import type { ProviderType } from '@/shared/types'
 
 /**
@@ -24,6 +25,18 @@ const CREDENTIALS_PATH_PLACEHOLDERS: Record<string, string> = {
   'anthropic-oauth': '~/.claude/.credentials.json',
   'openai-codex': '~/.codex/auth.json',
 }
+
+/**
+ * Subscription providers that support the in-app OAuth "Sign in" flow (PKCE),
+ * so a user with no CLI installed can still connect. Mirrors the server-side
+ * registry in `routes/provider-oauth.ts` (OAUTH_PROVIDERS). When sign-in is
+ * available the Add dialog offers a "Sign in" / "Credentials file" toggle.
+ */
+const SIGN_IN_PROVIDER_TYPES = new Set<string>(['anthropic-oauth'])
+
+/** Control-only config keys driven by the auth-mode toggle, never typed by the
+ *  user, so they're filtered out of the dynamic field list. */
+const HIDDEN_CONFIG_KEYS = new Set<string>(['authMode'])
 
 interface EditProvider {
   id: string
@@ -67,12 +80,29 @@ export function ProviderFormDialog({ open, onOpenChange, onSaved, provider, prov
    *  payload submitted to the server. */
   const [configValues, setConfigValues] = useState<Record<string, string>>({})
 
+  // ─── In-app OAuth sign-in (CLI-free) ───────────────────────────────────────
+  // 'signin' uses the PKCE paste-code flow; 'cli' uses the credentials file.
+  const [authMode, setAuthMode] = useState<'signin' | 'cli'>('signin')
+  const [signInUrl, setSignInUrl] = useState('')
+  const [signInToken, setSignInToken] = useState('')
+  const [signInCode, setSignInCode] = useState('')
+  const [signInStatus, setSignInStatus] = useState<'idle' | 'starting' | 'awaiting' | 'connecting'>('idle')
+
+  const resetSignIn = () => {
+    setSignInUrl('')
+    setSignInToken('')
+    setSignInCode('')
+    setSignInStatus('idle')
+  }
+
   // Reset config values when the selected type changes — each provider has
   // its own configSchema with its own field names.
   useEffect(() => {
     setConfigValues({})
     setTestPassed(false)
     setError('')
+    setAuthMode('signin')
+    resetSignIn()
   }, [providerType])
 
   const configSchema = catalogue.configSchemas[providerType] ?? []
@@ -152,6 +182,8 @@ export function ProviderFormDialog({ open, onOpenChange, onSaved, provider, prov
     setTestPassed(false)
     setIsTesting(false)
     setIsSaving(false)
+    setAuthMode('signin')
+    resetSignIn()
   }
 
   const handleClose = () => {
@@ -171,6 +203,46 @@ export function ProviderFormDialog({ open, onOpenChange, onSaved, provider, prov
   const isApiKeyOptional = catalogue.withoutApiKey.includes(providerType)
   const hasOptionalApiKey = catalogue.withOptionalApiKey.includes(providerType)
   const apiKeyUrl = catalogue.apiKeyUrls[providerType]
+
+  // Sign-in is only offered when creating a row for a sign-in-capable type.
+  const supportsSignIn = !isEditing && SIGN_IN_PROVIDER_TYPES.has(providerType)
+  const inSignInMode = supportsSignIn && authMode === 'signin'
+  const providerDisplayName = catalogue.displayNames[providerType] ?? providerType
+
+  const handleStartSignIn = async () => {
+    setError('')
+    setSignInStatus('starting')
+    try {
+      const res = await api.post<{ authUrl: string; state: string }>(
+        `/providers/oauth/${providerType}/start`,
+      )
+      setSignInToken(res.state)
+      setSignInUrl(res.authUrl)
+      setSignInStatus('awaiting')
+      window.open(res.authUrl, '_blank', 'noopener,noreferrer')
+    } catch (err: unknown) {
+      setError(getErrorMessage(err) || t('onboarding.providers.testFailed'))
+      setSignInStatus('idle')
+    }
+  }
+
+  const handleCompleteSignIn = async () => {
+    if (!signInCode.trim() || !signInToken) return
+    setError('')
+    setSignInStatus('connecting')
+    try {
+      await api.post(`/providers/oauth/${providerType}/complete`, {
+        state: signInToken,
+        code: signInCode.trim(),
+        name: providerName.trim() || undefined,
+      })
+      onSaved()
+      handleClose()
+    } catch (err: unknown) {
+      setError(getErrorMessage(err) || t('onboarding.providers.testFailed'))
+      setSignInStatus('awaiting')
+    }
+  }
 
   // Families this provider type can serve, in display order. When more than
   // one is available, the form shows checkboxes so the user can opt into a
@@ -337,15 +409,36 @@ export function ProviderFormDialog({ open, onOpenChange, onSaved, provider, prov
       description={isEditing ? t('settings.providers.editHint') : t('onboarding.providers.addProviderHint')}
       size="lg"
       error={error}
-      // Enter submits the currently-valid action: Save when the form is
-      // ready, otherwise Test connection. The footer below mirrors this.
-      onSubmit={canSave ? handleSave : handleTestConnection}
+      // Enter submits the currently-valid action: in sign-in mode, connect once
+      // a code is pasted (otherwise open the sign-in page); otherwise Save when
+      // the form is ready, else Test connection. The footer below mirrors this.
+      onSubmit={
+        inSignInMode
+          ? (signInCode.trim() ? handleCompleteSignIn : handleStartSignIn)
+          : (canSave ? handleSave : handleTestConnection)
+      }
       footer={
         <>
           <Button type="button" variant="outline" onClick={handleClose}>
             {t('common.cancel')}
           </Button>
-          {!canSave ? (
+          {inSignInMode ? (
+            <Button
+              type="button"
+              onClick={handleCompleteSignIn}
+              disabled={signInStatus !== 'awaiting' || !signInCode.trim()}
+              className="btn-shine"
+            >
+              {signInStatus === 'connecting' ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  {t('onboarding.providers.connecting')}
+                </>
+              ) : (
+                t('onboarding.providers.connect')
+              )}
+            </Button>
+          ) : !canSave ? (
             <Button
               type="button"
               variant="secondary"
@@ -425,6 +518,34 @@ export function ProviderFormDialog({ open, onOpenChange, onSaved, provider, prov
         </FormField>
       )}
 
+      {supportsSignIn && (
+        <FormField label={t('onboarding.providers.authMethod')}>
+          <div className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5">
+            {(['signin', 'cli'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => {
+                  setAuthMode(mode)
+                  setError('')
+                  if (mode === 'cli') resetSignIn()
+                }}
+                className={cn(
+                  'rounded-md px-3 py-1.5 text-sm font-medium transition',
+                  authMode === mode
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {mode === 'signin'
+                  ? t('onboarding.providers.authSignin')
+                  : t('onboarding.providers.authCliFile')}
+              </button>
+            ))}
+          </div>
+        </FormField>
+      )}
+
       <FormField
         label={
           <>
@@ -445,13 +566,65 @@ export function ProviderFormDialog({ open, onOpenChange, onSaved, provider, prov
         />
       </FormField>
 
+      {/* CLI-free sign-in panel: open the provider's OAuth page in a new tab,
+          then paste back the authorization code it shows. */}
+      {inSignInMode && (
+        <div className="space-y-3 rounded-lg border border-border/60 bg-card/40 p-4">
+          <p className="text-sm text-muted-foreground">
+            {t('onboarding.providers.signinPanelHint', { provider: providerDisplayName })}
+          </p>
+          {signInStatus === 'idle' || signInStatus === 'starting' ? (
+            <Button
+              type="button"
+              onClick={handleStartSignIn}
+              disabled={signInStatus === 'starting'}
+              className="btn-shine"
+            >
+              {signInStatus === 'starting' ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  {t('onboarding.providers.signinOpening')}
+                </>
+              ) : (
+                <>
+                  <LogIn className="size-4" />
+                  {t('onboarding.providers.signinButton', { provider: providerDisplayName })}
+                </>
+              )}
+            </Button>
+          ) : (
+            <>
+              <a
+                href={signInUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+              >
+                {t('onboarding.providers.signinReopen')}
+                <ExternalLink className="size-3" />
+              </a>
+              <FormField label={t('onboarding.providers.signinCodeLabel')} htmlFor="signInCode">
+                <Input
+                  id="signInCode"
+                  value={signInCode}
+                  onChange={(e) => setSignInCode(e.target.value)}
+                  placeholder={t('onboarding.providers.signinCodePlaceholder')}
+                  autoComplete="off"
+                  autoFocus
+                />
+              </FormField>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Dynamic config form — one input per ConfigField declared by
           the provider's `configSchema` (LLMProvider / EmbeddingProvider
           / ImageProvider). Built-ins and plugin providers go through
           the same path here, so a plugin author can declare `apiToken`,
           `region`, `baseUrl`, … and the form renders accordingly. */}
-      {(configSchema.length > 0
-        ? configSchema
+      {!inSignInMode && (configSchema.length > 0
+        ? configSchema.filter((f) => !HIDDEN_CONFIG_KEYS.has(f.key))
         : [{ key: 'apiKey', type: 'secret' as const, label: t('onboarding.providers.apiKey'), required: true }]
       ).map((field) => {
         const isSecret = field.type === 'secret'

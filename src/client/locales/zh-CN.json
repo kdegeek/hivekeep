@@ -206,7 +206,18 @@
       "testSuccess": "连接成功",
       "testFailed": "连接失败",
       "nameTip": "用于在控制台中识别此提供商的友好名称。留空时使用提供商类型名称。",
-      "getApiKey": "获取你的 {{provider}} API 密钥"
+      "getApiKey": "获取你的 {{provider}} API 密钥",
+      "authMethod": "连接方式",
+      "authSignin": "登录",
+      "authCliFile": "凭据文件",
+      "signinButton": "使用 {{provider}} 登录",
+      "signinPanelHint": "将打开一个浏览器标签页以登录 {{provider}}。批准后，页面会显示一个授权码。将其粘贴到下方以完成连接。",
+      "signinReopen": "重新打开登录页面",
+      "signinCodeLabel": "授权码",
+      "signinCodePlaceholder": "在此粘贴授权码",
+      "connect": "连接",
+      "connecting": "连接中",
+      "signinOpening": "正在打开"
     }
   },
   "sidebar": {

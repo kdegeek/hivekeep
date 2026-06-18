@@ -206,7 +206,18 @@
       "testSuccess": "Connexion réussie",
       "testFailed": "Échec de la connexion",
       "nameTip": "Un nom pour identifier ce provider dans votre tableau de bord. Si vide, le nom du type de provider est utilisé.",
-      "getApiKey": "Obtenir votre clé API {{provider}}"
+      "getApiKey": "Obtenir votre clé API {{provider}}",
+      "authMethod": "Méthode de connexion",
+      "authSignin": "Se connecter",
+      "authCliFile": "Fichier d'identifiants",
+      "signinButton": "Se connecter avec {{provider}}",
+      "signinPanelHint": "Un onglet va s'ouvrir pour vous connecter à {{provider}}. Après validation, la page affiche un code d'autorisation. Collez-le ci-dessous pour connecter.",
+      "signinReopen": "Rouvrir la page de connexion",
+      "signinCodeLabel": "Code d'autorisation",
+      "signinCodePlaceholder": "Collez le code ici",
+      "connect": "Connecter",
+      "connecting": "Connexion",
+      "signinOpening": "Ouverture"
     }
   },
   "sidebar": {

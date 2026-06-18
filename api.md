@@ -182,6 +182,39 @@ Tests the connection to the provider.
 { valid: boolean, capabilities: string[], error?: string }
 ```
 
+### `POST /api/providers/oauth/:type/start`
+
+Begins the CLI-free OAuth sign-in (PKCE public-client flow) for a subscription
+provider that supports it (`anthropic-oauth`). The server mints a code verifier
++ challenge, holds the verifier in memory keyed by `state`, and returns the
+browser authorize URL.
+
+```typescript
+// Response 200
+{ authUrl: string, state: string }
+
+// Error 400 if the type does not support in-app sign-in
+{ error: { code: "NOT_OAUTH_SIGNIN", message: "..." } }
+```
+
+### `POST /api/providers/oauth/:type/complete`
+
+Finishes the flow: exchanges the pasted authorization code (the input may be a
+bare code, Anthropic's `<code>#<state>` fragment, or a full redirect URL) for
+tokens, stores them in the encrypted vault, and creates the provider (or
+re-authenticates an existing one when `providerId` is supplied).
+
+```typescript
+// Request
+{ state: string, code: string, name?: string, providerId?: string }
+
+// Response 201 (create) / 200 (re-auth)
+{ provider: { id: string, slug: string, name: string, type: string, capabilities: string[], isValid: boolean } }
+
+// Errors 400: INVALID_STATE | INVALID_CODE | EXCHANGE_FAILED | NO_REFRESH_TOKEN
+{ error: { code: string, message: string } }
+```
+
 ### `GET /api/providers/models`
 
 Lists all available models across all configured providers.

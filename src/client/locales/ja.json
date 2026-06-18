@@ -206,7 +206,18 @@
       "testSuccess": "接続に成功しました",
       "testFailed": "接続に失敗しました",
       "nameTip": "ダッシュボードでこのプロバイダーを識別するためのラベルです。空欄の場合はプロバイダー種別名が使われます。",
-      "getApiKey": "{{provider}}のAPIキーを取得"
+      "getApiKey": "{{provider}}のAPIキーを取得",
+      "authMethod": "接続方法",
+      "authSignin": "サインイン",
+      "authCliFile": "認証情報ファイル",
+      "signinButton": "{{provider}} でサインイン",
+      "signinPanelHint": "{{provider}} にサインインするためのブラウザタブが開きます。承認すると、ページに認証コードが表示されます。下に貼り付けて接続してください。",
+      "signinReopen": "サインインページを再度開く",
+      "signinCodeLabel": "認証コード",
+      "signinCodePlaceholder": "ここにコードを貼り付け",
+      "connect": "接続",
+      "connecting": "接続中",
+      "signinOpening": "開いています"
     }
   },
   "sidebar": {

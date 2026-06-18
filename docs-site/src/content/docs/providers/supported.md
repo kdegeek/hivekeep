@@ -65,6 +65,15 @@ Providers are configured in **Settings > Providers** in the Hivekeep UI. Each pr
 
 A configured search provider is automatically picked up by the `web_search` tool. To make it the default for all Agents, set it under **Settings > Models & Services > Default Search Provider**: otherwise `web_search` falls back to the first valid configured search provider.
 
+### Subscription providers: sign in without a CLI
+
+The subscription providers bill against your existing Claude or ChatGPT plan instead of a metered API key. **Anthropic (Claude Max)** now supports two connection methods, chosen with a toggle in the **Add provider** dialog:
+
+- **Sign in** (no CLI needed): pick "Sign in", click **Sign in with Claude**, approve in the browser tab that opens, then paste back the authorization code the page shows. Hivekeep completes the OAuth PKCE exchange and stores the resulting tokens in its **encrypted vault**, refreshing them automatically. This is the recommended path and requires nothing installed on the server.
+- **Credentials file**: if you already use the official `claude` CLI on the same machine, leave the toggle on "Credentials file" and Hivekeep reads its OAuth tokens from `~/.claude/.credentials.json` (an explicit path override is available for non-standard environments). Existing setups keep working with no change.
+
+Both methods feed the same provider. Tokens obtained via "Sign in" never touch the CLI files: they live only in the vault, and are removed when the provider is deleted.
+
 ## API Endpoints
 
 Hivekeep exposes several provider management endpoints:
@@ -75,6 +84,8 @@ Hivekeep exposes several provider management endpoints:
 | `POST` | `/api/providers` | Add a new provider (auto-tests connection unless `skipTest: true`) |
 | `PATCH` | `/api/providers/:id` | Update provider config (re-tests connection unless `skipTest: true`) |
 | `DELETE` | `/api/providers/:id` | Delete a provider (warns when removing the last with a given capability; never blocks) |
+| `POST` | `/api/providers/oauth/:type/start` | Begin the CLI-free OAuth sign-in (PKCE) for a subscription provider; returns the authorize URL |
+| `POST` | `/api/providers/oauth/:type/complete` | Finish sign-in: exchange the pasted code, store tokens in the vault, create the provider |
 | `GET` | `/api/providers/types` | List all available provider types (built-in + plugin) |
 | `GET` | `/api/providers/capabilities` | Check which capabilities are currently available |
 | `GET` | `/api/providers/models` | List all available models across valid providers |
