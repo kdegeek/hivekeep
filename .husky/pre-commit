@@ -15,8 +15,12 @@ if [ $? -ne 0 ]; then
 fi
 
 # 2. Unit tests
+# Use `bun run test` (the npm script), not a bare `bun test`: the script passes
+# an explicit, sorted file list. Bare discovery runs test files in an order that
+# leaks global state between them (mock.module is process-global), producing
+# spurious failures. The sorted invocation is the project's source of truth.
 echo "🧪 Running unit tests..."
-bun test 2>&1
+bun run test 2>&1
 if [ $? -ne 0 ]; then
   echo "❌ Unit tests failed. Fix failing tests before committing."
   exit 1
