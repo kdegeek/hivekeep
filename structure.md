@@ -68,7 +68,7 @@ hivekeep/
 │   │   │
 │   │   ├── channels/                  # ChannelAdapters built-in
 │   │   │   ├── adapter.ts             # Interface (cf. @hivekeep/sdk)
-│   │   │   ├── telegram.ts, discord.ts, slack.ts, whatsapp.ts, signal.ts, matrix.ts
+│   │   │   ├── telegram.ts, discord.ts, slack.ts, whatsapp.ts, whatsapp-web.ts, signal.ts, matrix.ts
 │   │   │
 │   │   ├── llm/                       # Providers IA natifs (post-Vercel SDK)
 │   │   │   ├── core/                  # resolve, run-oneshot, types partagés

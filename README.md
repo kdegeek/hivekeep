@@ -110,7 +110,7 @@ This is the surprising part. Hivekeep is not a fixed feature set, it is a base y
 
 ## One inbox for your whole team
 
-Six native channels: **Telegram, Discord, Slack, WhatsApp, Signal, Matrix**, plus the PWA as a seventh surface. The standout is **real-time channel handoff**: `transfer_channel` reassigns a channel from one Agent to another mid-conversation. The address does not change, the Agent does. The new Agent receives handoff context and the causal chain, with async delivery statuses throughout.
+Six native channels: **Telegram, Discord, Slack, WhatsApp, Signal, Matrix**, plus the PWA as a seventh surface. WhatsApp connects either way: the Meta Cloud API, or **QR-code pairing** of a personal number (no business account, like WhatsApp Web). The standout is **real-time channel handoff**: `transfer_channel` reassigns a channel from one Agent to another mid-conversation. The address does not change, the Agent does. The new Agent receives handoff context and the causal chain, with async delivery statuses throughout.
 
 <p align="center"><img src="docs/assets/screenshots/chat-channel.webp" width="760" alt="A smart-home request sent from Telegram: the agent runs the actions and reports back" /></p>
 
@@ -147,7 +147,7 @@ The same building blocks cover a DevOps copilot, a home brain, a personal knowle
 
 ## Providers and plugins
 
-Bring one config per provider and Hivekeep auto-detects its capabilities (`llm`, `embedding`, `image`, `search`, `stt`, `tts`). **Built in today:** Anthropic (API key and Claude Max OAuth), OpenAI (API key and Codex CLI), Google Gemini, OpenRouter, xAI, DeepSeek, MiniMax, Kimi (Moonshot), and a generic **OpenAI-compatible** connector (your own base URL, for NewAPI / LiteLLM / llama.cpp / LM Studio / vLLM / Ollama) for LLMs; OpenAI and Gemini for images; OpenAI and the OpenAI-compatible connector (local models via Ollama, llama.cpp, etc.) for embeddings; OpenAI and ElevenLabs for speech-to-text and text-to-speech; Brave Search, SerpAPI, Tavily, and Perplexity Sonar for web search. Need more? Add any provider as a **plugin** through the typed SDK, no fork required.
+Bring one config per provider and Hivekeep auto-detects its capabilities (`llm`, `embedding`, `image`, `search`, `stt`, `tts`). **Built in today:** Anthropic (API key, or Claude Max via in-app sign-in, no CLI needed), OpenAI (API key, or Codex via in-app sign-in, no CLI needed), Google Gemini, OpenRouter, xAI, DeepSeek, MiniMax, Kimi (Moonshot), and a generic **OpenAI-compatible** connector (your own base URL, for NewAPI / LiteLLM / llama.cpp / LM Studio / vLLM / Ollama) for LLMs; OpenAI and Gemini for images; OpenAI and the OpenAI-compatible connector (local models via Ollama, llama.cpp, etc.) for embeddings; OpenAI and ElevenLabs for speech-to-text and text-to-speech; Brave Search, SerpAPI, Tavily, and Perplexity Sonar for web search. Need more? Add any provider as a **plugin** through the typed SDK, no fork required.
 
 ---
 
