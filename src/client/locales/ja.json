@@ -217,7 +217,9 @@
       "signinCodePlaceholder": "ここにコードを貼り付け",
       "connect": "接続",
       "connecting": "接続中",
-      "signinOpening": "開いています"
+      "signinOpening": "開いています",
+      "signinLoopbackHint": "承認すると、ブラウザは localhost のアドレスを開こうとしてエラーを表示しますが、これは正常です。アドレスバーから完全なアドレスをコピーして、下に貼り付けてください。",
+      "signinLoopbackPlaceholder": "localhost の URL（またはコード）を貼り付け"
     }
   },
   "sidebar": {

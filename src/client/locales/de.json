@@ -217,7 +217,9 @@
       "signinCodePlaceholder": "Code hier einfügen",
       "connect": "Verbinden",
       "connecting": "Verbinden",
-      "signinOpening": "Wird geöffnet"
+      "signinOpening": "Wird geöffnet",
+      "signinLoopbackHint": "Nach der Bestätigung versucht der Browser, eine localhost-Adresse zu öffnen, und zeigt einen Fehler an. Das ist normal: Kopieren Sie die vollständige Adresse aus der Adressleiste und fügen Sie sie unten ein.",
+      "signinLoopbackPlaceholder": "localhost-URL (oder Code) einfügen"
     }
   },
   "sidebar": {

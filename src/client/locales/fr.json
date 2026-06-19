@@ -217,7 +217,9 @@
       "signinCodePlaceholder": "Collez le code ici",
       "connect": "Connecter",
       "connecting": "Connexion",
-      "signinOpening": "Ouverture"
+      "signinOpening": "Ouverture",
+      "signinLoopbackHint": "Après validation, le navigateur tente d'ouvrir une adresse localhost et affiche une erreur : c'est normal. Copiez l'adresse complète depuis la barre d'adresse et collez-la ci-dessous.",
+      "signinLoopbackPlaceholder": "Collez l'URL localhost (ou le code)"
     }
   },
   "sidebar": {

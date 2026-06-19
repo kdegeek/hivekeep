@@ -219,7 +219,9 @@
       "signinCodePlaceholder": "Вставьте код сюда",
       "connect": "Подключить",
       "connecting": "Подключение",
-      "signinOpening": "Открытие"
+      "signinOpening": "Открытие",
+      "signinLoopbackHint": "После подтверждения браузер попытается открыть адрес localhost и покажет ошибку. Это нормально: скопируйте полный адрес из адресной строки и вставьте его ниже.",
+      "signinLoopbackPlaceholder": "Вставьте URL localhost (или код)"
     }
   },
   "sidebar": {

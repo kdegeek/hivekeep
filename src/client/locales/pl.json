@@ -219,7 +219,9 @@
       "signinCodePlaceholder": "Wklej kod tutaj",
       "connect": "Połącz",
       "connecting": "Łączenie",
-      "signinOpening": "Otwieranie"
+      "signinOpening": "Otwieranie",
+      "signinLoopbackHint": "Po zatwierdzeniu przeglądarka spróbuje otworzyć adres localhost i pokaże błąd. To normalne: skopiuj cały adres z paska adresu i wklej go poniżej.",
+      "signinLoopbackPlaceholder": "Wklej adres localhost (lub kod)"
     }
   },
   "sidebar": {

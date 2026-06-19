@@ -217,7 +217,9 @@
       "signinCodePlaceholder": "在此粘贴授权码",
       "connect": "连接",
       "connecting": "连接中",
-      "signinOpening": "正在打开"
+      "signinOpening": "正在打开",
+      "signinLoopbackHint": "批准后，浏览器会尝试打开一个 localhost 地址并显示错误，这是正常的。请从地址栏复制完整地址并粘贴到下方。",
+      "signinLoopbackPlaceholder": "粘贴 localhost 地址（或授权码）"
     }
   },
   "sidebar": {

@@ -217,7 +217,9 @@
       "signinCodePlaceholder": "Paste the code here",
       "connect": "Connect",
       "connecting": "Connecting",
-      "signinOpening": "Opening"
+      "signinOpening": "Opening",
+      "signinLoopbackHint": "After you approve, the browser tries to open a localhost address and shows an error. That's expected: copy the full address from the address bar and paste it below.",
+      "signinLoopbackPlaceholder": "Paste the localhost URL (or the code)"
     }
   },
   "sidebar": {

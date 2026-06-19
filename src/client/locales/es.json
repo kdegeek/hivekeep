@@ -217,7 +217,9 @@
       "signinCodePlaceholder": "Pega el código aquí",
       "connect": "Conectar",
       "connecting": "Conectando",
-      "signinOpening": "Abriendo"
+      "signinOpening": "Abriendo",
+      "signinLoopbackHint": "Tras aprobarlo, el navegador intentará abrir una dirección localhost y mostrará un error: es normal. Copia la dirección completa de la barra de direcciones y pégala abajo.",
+      "signinLoopbackPlaceholder": "Pega la URL de localhost (o el código)"
     }
   },
   "sidebar": {

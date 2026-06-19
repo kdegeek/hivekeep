@@ -34,6 +34,14 @@ const CREDENTIALS_PATH_PLACEHOLDERS: Record<string, string> = {
  */
 const SIGN_IN_PROVIDER_TYPES = new Set<string>(['anthropic-oauth', 'openai-codex'])
 
+/**
+ * Sign-in providers whose OAuth app redirects to a fixed loopback URL
+ * (`http://localhost:1455/...`) instead of showing the code on a page. That
+ * page fails to load when Hivekeep runs on a different machine — the code is in
+ * the browser's address bar, so we tell the user to paste the whole URL.
+ */
+const LOOPBACK_PASTE_TYPES = new Set<string>(['openai-codex'])
+
 /** Control-only config keys driven by the auth-mode toggle, never typed by the
  *  user, so they're filtered out of the dynamic field list. */
 const HIDDEN_CONFIG_KEYS = new Set<string>(['authMode'])
@@ -207,6 +215,7 @@ export function ProviderFormDialog({ open, onOpenChange, onSaved, provider, prov
   // Sign-in is only offered when creating a row for a sign-in-capable type.
   const supportsSignIn = !isEditing && SIGN_IN_PROVIDER_TYPES.has(providerType)
   const inSignInMode = supportsSignIn && authMode === 'signin'
+  const isLoopbackPaste = LOOPBACK_PASTE_TYPES.has(providerType)
   const providerDisplayName = catalogue.displayNames[providerType] ?? providerType
 
   const handleStartSignIn = async () => {
@@ -603,12 +612,21 @@ export function ProviderFormDialog({ open, onOpenChange, onSaved, provider, prov
                 {t('onboarding.providers.signinReopen')}
                 <ExternalLink className="size-3" />
               </a>
+              {isLoopbackPaste && (
+                <p className="rounded-md border border-border/60 bg-muted/40 p-2.5 text-xs text-muted-foreground">
+                  {t('onboarding.providers.signinLoopbackHint')}
+                </p>
+              )}
               <FormField label={t('onboarding.providers.signinCodeLabel')} htmlFor="signInCode">
                 <Input
                   id="signInCode"
                   value={signInCode}
                   onChange={(e) => setSignInCode(e.target.value)}
-                  placeholder={t('onboarding.providers.signinCodePlaceholder')}
+                  placeholder={
+                    isLoopbackPaste
+                      ? t('onboarding.providers.signinLoopbackPlaceholder')
+                      : t('onboarding.providers.signinCodePlaceholder')
+                  }
                   autoComplete="off"
                   autoFocus
                 />
