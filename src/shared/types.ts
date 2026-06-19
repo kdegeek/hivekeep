@@ -1345,4 +1345,15 @@ export interface TerminalSessionDTO {
   lastActiveAt: number
   /** True while a client (any device) is connected to this session. */
   attached: boolean
+  /** True when the session was restored from the DB after a restart and has no
+   *  live shell yet — reattaching revives it. */
+  dormant: boolean
+  /** True when the session is backed by tmux, so its running processes survive
+   *  a process-only server restart (not just its scrollback). */
+  persistent: boolean
+  /** Working directory of the foreground process (or shell when idle). Linux
+   *  only and best-effort: undefined when it can't be inspected. */
+  cwd?: string
+  /** Foreground command currently running, if any (idle shell → undefined). */
+  command?: string
 }

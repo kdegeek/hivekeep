@@ -3278,7 +3278,19 @@
       "closeConfirmTitle": "Zamknąć {{name}}?",
       "closeConfirmDescription": "Powłoka i wszystko, co w niej działa, zostaną zakończone.",
       "attached": "Połączona",
-      "detached": "Odłączona"
+      "detached": "Odłączona",
+      "running": "Działa: {{command}}",
+      "openedFor": "Otwarta od {{duration}}",
+      "resize": "Zmień rozmiar paska bocznego",
+      "dormant": "Uśpiona",
+      "dormantHint": "Kliknij, aby połączyć ponownie: nowa powłoka otworzy się w ostatnim katalogu",
+      "persistent": "Trwała (tmux)"
+    },
+    "tmux": {
+      "persistent": "Trwałe sesje (tmux)",
+      "persistentHint": "Sesje przetrwają restart serwera wraz z uruchomionymi procesami.",
+      "unavailable": "Nie wykryto tmux: sesje nie przetrwają restartu",
+      "unavailableHint": "Zainstaluj tmux na hoście, aby procesy sesji przetrwały restart. Bez niego przywracany jest tylko bufor przewijania."
     }
   },
   "orphanTask": {

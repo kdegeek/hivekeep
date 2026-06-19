@@ -164,6 +164,20 @@ startEmailTriggerPoller()
 // Start quick session cleanup
 startQuickSessionCleanup()
 
+// Restore persisted terminal sessions (dormant) so the Terminal sidebar +
+// scrollback survive a restart; tmux-backed ones reconnect to live shells.
+import { setTerminalPersistence, restorePersistedSessions } from '@/server/services/terminal-sessions'
+import { createDbTerminalPersistence } from '@/server/services/terminal-store'
+if (config.terminal.enabled) {
+  setTerminalPersistence(createDbTerminalPersistence())
+  try {
+    log.info('Restoring persisted terminal sessions...')
+    restorePersistedSessions()
+  } catch (err) {
+    log.error({ err }, 'Failed to restore terminal sessions')
+  }
+}
+
 // Start the stale-worktree sweeper (reclaims sub-task worktrees that
 // outlived their TTL — see config.repos.worktreeKeepFailedSec).
 startStaleWorktreeCleanup()

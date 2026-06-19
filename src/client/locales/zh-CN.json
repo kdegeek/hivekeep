@@ -3260,7 +3260,19 @@
       "closeConfirmTitle": "关闭 {{name}}？",
       "closeConfirmDescription": "该 shell 以及其中运行的所有程序都将被终止。",
       "attached": "已连接",
-      "detached": "已分离"
+      "detached": "已分离",
+      "running": "正在运行：{{command}}",
+      "openedFor": "已打开 {{duration}}",
+      "resize": "调整侧边栏宽度",
+      "dormant": "休眠",
+      "dormantHint": "点击重新连接：在上次的目录中打开新的 shell",
+      "persistent": "持久会话 (tmux)"
+    },
+    "tmux": {
+      "persistent": "持久会话 (tmux)",
+      "persistentHint": "服务器重启后会话及其运行中的进程仍然保留。",
+      "unavailable": "未检测到 tmux：会话无法在重启后保留",
+      "unavailableHint": "在主机上安装 tmux，可让会话的进程在重启后保留。否则仅恢复回滚缓冲区。"
     }
   },
   "orphanTask": {

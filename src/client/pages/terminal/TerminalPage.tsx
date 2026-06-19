@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Navigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { SquareTerminal, Plus, Plug, MoreHorizontal, PanelLeft, Pencil, Trash2 } from 'lucide-react'
+import { SquareTerminal, Plus, Plug, MoreHorizontal, PanelLeft, Pencil, Trash2, Folder, Anchor, TriangleAlert, Moon } from 'lucide-react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -32,6 +32,7 @@ import {
 } from '@/client/components/ui/alert-dialog'
 import { api, ApiRequestError, getErrorMessage } from '@/client/lib/api'
 import { cn } from '@/client/lib/utils'
+import { formatRelativeTime, formatDurationMs } from '@/client/lib/time'
 import type { TerminalSessionDTO } from '@/shared/types'
 
 /**
@@ -46,6 +47,14 @@ import type { TerminalSessionDTO } from '@/shared/types'
 
 const SESSION_KEY = 'hivekeep.terminal.sessionId'
 const PING_INTERVAL_MS = 30_000
+
+// Sessions sidebar width: draggable like the main app sidebar, persisted so it
+// survives reloads. The cards now carry a second line (cwd + command), so they
+// need more room than a fixed-narrow rail allowed.
+const SIDEBAR_WIDTH_KEY = 'hivekeep.terminal.sidebarWidth'
+const SIDEBAR_WIDTH_DEFAULT = 300
+const SIDEBAR_WIDTH_MIN = 200
+const SIDEBAR_WIDTH_MAX = 560
 
 type Status = 'connecting' | 'connected' | 'disconnected' | 'ended' | 'disabled'
 
@@ -73,6 +82,14 @@ const TERMINAL_THEME = {
   brightMagenta: '#d68aef',
   brightCyan: '#66c6d2',
   brightWhite: '#f0f4f8',
+}
+
+/** Compact a path for the sidebar: keep the last two segments so the
+ *  meaningful tail stays visible (full path is shown in the title tooltip). */
+function shortenPath(path: string): string {
+  const segments = path.split('/').filter(Boolean)
+  if (segments.length <= 2) return path
+  return `…/${segments.slice(-2).join('/')}`
 }
 
 function InlineRenameInput({ initial, onSubmit, onCancel }: { initial: string; onSubmit: (name: string) => void; onCancel: () => void }) {
@@ -118,6 +135,44 @@ export function TerminalPage() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [closeTarget, setCloseTarget] = useState<TerminalSessionDTO | null>(null)
+  const [tmuxAvailable, setTmuxAvailable] = useState(false)
+  const [sidebarWidth, setSidebarWidthState] = useState(() => {
+    const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY))
+    return stored >= SIDEBAR_WIDTH_MIN && stored <= SIDEBAR_WIDTH_MAX ? stored : SIDEBAR_WIDTH_DEFAULT
+  })
+  const sidebarWidthRef = useRef(sidebarWidth)
+  const setSidebarWidth = useCallback((w: number) => {
+    sidebarWidthRef.current = w
+    setSidebarWidthState(w)
+  }, [])
+
+  // Drag-to-resize the sessions panel (desktop only — mobile uses the Sheet).
+  // Mirrors the main sidebar's handle: document-level listeners during the drag,
+  // clamped width, persisted to localStorage on release.
+  const startSidebarResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = sidebarWidthRef.current
+    const onMove = (ev: MouseEvent) => {
+      const next = Math.min(SIDEBAR_WIDTH_MAX, Math.max(SIDEBAR_WIDTH_MIN, startWidth + (ev.clientX - startX)))
+      setSidebarWidth(next)
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      try {
+        localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidthRef.current))
+      } catch {
+        // private mode / quota — width just won't persist
+      }
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [setSidebarWidth])
 
   const setStatusBoth = useCallback((s: Status) => {
     statusRef.current = s
@@ -364,8 +419,11 @@ export function TerminalPage() {
     // carries no error body, the REST probe does), then resume the last-used
     // session if it is still alive, else the most recent one, else a new shell.
     api
-      .get<{ enabled: boolean }>('/terminal/status')
-      .then(() => api.get<{ sessions: TerminalSessionDTO[] }>('/terminal/sessions'))
+      .get<{ enabled: boolean; tmux: boolean }>('/terminal/status')
+      .then((status) => {
+        if (!disposed) setTmuxAvailable(status.tmux)
+        return api.get<{ sessions: TerminalSessionDTO[] }>('/terminal/sessions')
+      })
       .then((res) => {
         if (disposed) return
         setSessions(res.sessions)
@@ -408,6 +466,27 @@ export function TerminalPage() {
           <Plus className="size-4" />
         </Button>
       </div>
+      {/* Persistence indicator: tmux-backed sessions survive a restart with their
+          processes; without tmux only the scrollback is restored. */}
+      <div className="shrink-0 border-b border-border px-3 py-1.5">
+        {tmuxAvailable ? (
+          <span
+            className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground"
+            title={t('terminal.tmux.persistentHint')}
+          >
+            <Anchor className="size-3 shrink-0 text-success" />
+            {t('terminal.tmux.persistent')}
+          </span>
+        ) : (
+          <span
+            className="inline-flex items-start gap-1.5 text-[11px] text-warning"
+            title={t('terminal.tmux.unavailableHint')}
+          >
+            <TriangleAlert className="mt-px size-3 shrink-0" />
+            <span>{t('terminal.tmux.unavailable')}</span>
+          </span>
+        )}
+      </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
         {sessions.length === 0 ? (
           <p className="px-2 py-3 text-xs text-muted-foreground">{t('terminal.sessions.empty')}</p>
@@ -422,49 +501,103 @@ export function TerminalPage() {
                 if (e.key === 'Enter' || e.key === ' ') selectSession(session.id)
               }}
               className={cn(
-                'group flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
+                'group flex w-full cursor-pointer flex-col items-stretch gap-1 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
                 session.id === activeId
                   ? 'bg-primary/10 text-primary'
                   : 'text-foreground hover:bg-muted',
               )}
             >
-              <span
-                aria-hidden
-                className={cn('size-1.5 shrink-0 rounded-full', session.attached ? 'bg-success' : 'bg-muted-foreground/40')}
-                title={session.attached ? t('terminal.sessions.attached') : t('terminal.sessions.detached')}
-              />
-              {renamingId === session.id ? (
-                <InlineRenameInput
-                  initial={session.name}
-                  onSubmit={(name) => void renameSession(session.id, name)}
-                  onCancel={() => setRenamingId(null)}
+              <div className="flex items-center gap-2">
+                <span
+                  aria-hidden
+                  className={cn(
+                    'size-1.5 shrink-0 rounded-full',
+                    session.dormant ? 'bg-warning' : session.attached ? 'bg-success' : 'bg-muted-foreground/40',
+                  )}
+                  title={
+                    session.dormant
+                      ? t('terminal.sessions.dormantHint')
+                      : session.attached
+                        ? t('terminal.sessions.attached')
+                        : t('terminal.sessions.detached')
+                  }
                 />
-              ) : (
-                <span className="min-w-0 flex-1 truncate">{session.name}</span>
-              )}
-              {/* "⋯" — hover-revealed on desktop, always visible below md (touch has no hover) */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="rounded-sm p-0.5 text-muted-foreground opacity-100 hover:bg-muted-foreground/20 hover:text-foreground md:opacity-0 md:group-hover:opacity-100 md:data-[state=open]:opacity-100"
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label={`actions ${session.name}`}
+                {renamingId === session.id ? (
+                  <InlineRenameInput
+                    initial={session.name}
+                    onSubmit={(name) => void renameSession(session.id, name)}
+                    onCancel={() => setRenamingId(null)}
+                  />
+                ) : (
+                  <span className="min-w-0 flex-1 truncate">{session.name}</span>
+                )}
+                {session.persistent && (
+                  <span className="shrink-0" title={t('terminal.sessions.persistent')}>
+                    <Anchor className="size-3 text-muted-foreground/70" />
+                  </span>
+                )}
+                {/* "⋯" — hover-revealed on desktop, always visible below md (touch has no hover) */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="rounded-sm p-0.5 text-muted-foreground opacity-100 hover:bg-muted-foreground/20 hover:text-foreground md:opacity-0 md:group-hover:opacity-100 md:data-[state=open]:opacity-100"
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`actions ${session.name}`}
+                    >
+                      <MoreHorizontal className="size-3.5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-44" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenuItem onClick={() => setRenamingId(session.id)}>
+                      <Pencil className="size-4" />
+                      {t('terminal.sessions.rename')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem variant="destructive" onClick={() => setCloseTarget(session)}>
+                      <Trash2 className="size-4" />
+                      {t('terminal.sessions.close')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              {/* Identification line: running command, cwd, last activity. Kept
+                  out of the click target's text flow so it stays muted/compact. */}
+              <div
+                className={cn(
+                  'flex min-w-0 items-center gap-1.5 pl-3.5 text-[11px]',
+                  session.id === activeId ? 'text-primary/70' : 'text-muted-foreground',
+                )}
+              >
+                {session.dormant && (
+                  <span
+                    className="inline-flex shrink-0 items-center gap-1 rounded bg-warning/15 px-1 py-px text-warning"
+                    title={t('terminal.sessions.dormantHint')}
                   >
-                    <MoreHorizontal className="size-3.5" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-44" onClick={(e) => e.stopPropagation()}>
-                  <DropdownMenuItem onClick={() => setRenamingId(session.id)}>
-                    <Pencil className="size-4" />
-                    {t('terminal.sessions.rename')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem variant="destructive" onClick={() => setCloseTarget(session)}>
-                    <Trash2 className="size-4" />
-                    {t('terminal.sessions.close')}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    <Moon className="size-2.5" />
+                    {t('terminal.sessions.dormant')}
+                  </span>
+                )}
+                {session.command && (
+                  <span
+                    className="shrink-0 rounded bg-foreground/10 px-1 py-px font-mono leading-tight"
+                    title={t('terminal.sessions.running', { command: session.command })}
+                  >
+                    {session.command}
+                  </span>
+                )}
+                {session.cwd && (
+                  <span className="inline-flex min-w-0 items-center gap-1 truncate font-mono" title={session.cwd}>
+                    <Folder className="size-3 shrink-0" />
+                    <span className="truncate">{shortenPath(session.cwd)}</span>
+                  </span>
+                )}
+                <span
+                  className="ml-auto shrink-0 tabular-nums"
+                  title={t('terminal.sessions.openedFor', { duration: formatDurationMs(Date.now() - session.createdAt) })}
+                >
+                  {formatRelativeTime(session.lastActiveAt)}
+                </span>
+              </div>
             </div>
           ))
         )}
@@ -528,8 +661,21 @@ export function TerminalPage() {
         </div>
       ) : (
         <div className="flex min-h-0 flex-1">
-          <aside className="hidden w-52 shrink-0 border-r border-border md:flex md:flex-col lg:w-60">
+          <aside
+            style={{ width: sidebarWidth }}
+            className="relative hidden shrink-0 border-r border-border md:flex md:flex-col"
+          >
             {sessionsPanel}
+            {/* Drag handle on the right edge (desktop only). */}
+            <div
+              onMouseDown={startSidebarResize}
+              className="group absolute inset-y-0 right-[-4px] z-20 w-2 cursor-col-resize"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={t('terminal.sessions.resize')}
+            >
+              <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-colors group-hover:bg-primary/30 group-active:bg-primary/50" />
+            </div>
           </aside>
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetContent side="left" className="w-72 p-0 md:hidden">

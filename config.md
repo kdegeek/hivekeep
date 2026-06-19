@@ -297,8 +297,9 @@ Internal tuning parameters — most deployments never touch them, the defaults a
 | `HIVEKEEP_TERMINAL_ENABLED` | `true` | Kill-switch for the admin web terminal. Set to `false` to disable the feature entirely. |
 | `HIVEKEEP_TERMINAL_SHELL` | `$SHELL`, then `/bin/bash` | Shell binary spawned for each terminal session. |
 | `HIVEKEEP_TERMINAL_SCROLLBACK_KB` | `256` | Scrollback kept server-side per session (KB), replayed when a client reattaches. |
-| `HIVEKEEP_TERMINAL_DETACHED_TTL_SEC` | `0` (never) | How long a detached session (no client connected) survives before the shell is killed. `0` = sessions persist until closed from the sidebar or the shell exits (they still die on server restart). |
+| `HIVEKEEP_TERMINAL_DETACHED_TTL_SEC` | `0` (never) | How long a detached session (no client connected) survives before the shell is killed. `0` = sessions persist until closed from the sidebar or the shell exits. |
 | `HIVEKEEP_TERMINAL_MAX_SESSIONS` | `10` | Hard cap of concurrently running PTY sessions across all users. |
+| `HIVEKEEP_TERMINAL_TMUX` | auto-detect | Set to `off` to never back sessions with tmux even when installed. With tmux, sessions survive a process-only restart with live processes; without it, only the scrollback is restored on restart. |
 
 ## Webhooks
 

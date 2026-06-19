@@ -15,11 +15,20 @@ Terminal works like a lightweight tmux. Shells run server-side and **survive dis
 
 The sidebar lists your sessions (sessions are private to each user). From there you can:
 
-- **Create** a new session (the + button) — each gets an auto name like "Session 2", rename it to something meaningful ("claude code prod") via the row menu.
-- **Switch** between sessions — a green dot marks sessions that currently have a client attached.
-- **Close** a session (row menu, with confirmation) — this kills the shell and everything running in it.
+- **Create** a new session (the + button). Each gets an auto name like "Session 2"; rename it to something meaningful ("claude code prod") via the row menu.
+- **Switch** between sessions. Each card shows what the session is doing so you can tell them apart at a glance: the **running command** (e.g. `vim`, `npm`), the **working directory**, and how long ago it was last active. A green dot marks sessions with a client attached.
+- **Close** a session (row menu, with confirmation). This kills the shell and everything running in it.
 
-A session only ends when its shell exits, when you close it from the sidebar, or when the server restarts (sessions live in process memory). If you prefer idle detached sessions to be reaped automatically, set `HIVEKEEP_TERMINAL_DETACHED_TTL_SEC` to a number of seconds (off by default).
+The sessions sidebar is **resizable**: drag its right edge to give long paths more room (the width is remembered).
+
+## Surviving a restart
+
+Sessions are persisted, so the sidebar and recent output come back after Hivekeep restarts. How much comes back depends on whether **tmux** is installed on the host:
+
+- **With tmux** (bundled in the official Docker image): sessions are backed by a tmux session, whose server keeps running independently of Hivekeep. After an in-place update or a process-only restart, reattaching reconnects to the **live** shell with its running processes intact. A full container recreation (or host reboot) still stops the processes, but the scrollback is restored. The sidebar shows a "Persistent sessions (tmux)" indicator and an anchor icon on each card.
+- **Without tmux**: sessions fall back to a plain shell. Their scrollback is saved and replayed, and reattaching opens a **fresh** shell in the session's last working directory. The sidebar then suggests installing tmux for process-surviving sessions. tmux is never required.
+
+Restored sessions appear **dormant** (a moon badge) until you click one, which revives it. A session ends for good only when its shell exits or you close it from the sidebar. If you prefer idle detached sessions to be reaped automatically, set `HIVEKEEP_TERMINAL_DETACHED_TTL_SEC` to a number of seconds (off by default).
 
 Several tabs or devices can view the **same session at once**: output mirrors to every attached client and any of them can type, exactly like a shared tmux session. As in tmux, the terminal is sized to the smallest attached viewer so line wrapping stays coherent everywhere.
 
@@ -45,3 +54,4 @@ A web terminal is equivalent to giving shell access on the server. Hivekeep miti
 | `HIVEKEEP_TERMINAL_SCROLLBACK_KB` | `256` | Output kept server-side per session, replayed on reattach. |
 | `HIVEKEEP_TERMINAL_DETACHED_TTL_SEC` | `0` (never) | Auto-kill a session after this long with no client connected. `0` keeps detached sessions until explicitly closed. |
 | `HIVEKEEP_TERMINAL_MAX_SESSIONS` | `10` | Cap of concurrently running shells across all users. |
+| `HIVEKEEP_TERMINAL_TMUX` | auto-detect | Set to `off` to never back sessions with tmux even when it is installed (sessions then only restore their scrollback). |

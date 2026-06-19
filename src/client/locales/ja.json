@@ -3260,7 +3260,19 @@
       "closeConfirmTitle": "{{name}} を閉じますか？",
       "closeConfirmDescription": "シェルとその中で実行中のすべてのプロセスが終了します。",
       "attached": "接続中",
-      "detached": "切り離し済み"
+      "detached": "切り離し済み",
+      "running": "実行中: {{command}}",
+      "openedFor": "起動して {{duration}}",
+      "resize": "サイドバーの幅を調整",
+      "dormant": "休止中",
+      "dormantHint": "クリックで再接続：最後のディレクトリで新しいシェルが開きます",
+      "persistent": "永続 (tmux)"
+    },
+    "tmux": {
+      "persistent": "永続セッション (tmux)",
+      "persistentHint": "サーバーを再起動しても、実行中のプロセスごとセッションが維持されます。",
+      "unavailable": "tmux が見つかりません：セッションは再起動後に維持されません",
+      "unavailableHint": "ホストに tmux をインストールすると、再起動後もプロセスが維持されます。tmux がない場合はスクロールバックのみ復元されます。"
     }
   },
   "orphanTask": {

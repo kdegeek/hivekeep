@@ -375,6 +375,30 @@ export const quickSessions = sqliteTable('quick_sessions', {
   index('idx_quick_sessions_user').on(table.createdBy),
 ])
 
+/**
+ * Admin web terminal sessions, persisted so the sidebar + scrollback survive a
+ * server restart. tmux-backed rows additionally reconnect to a live shell; pty
+ * rows respawn a fresh shell in `last_cwd`. Rows are deleted when a session is
+ * closed or its shell exits, so a row here means "should be restorable".
+ */
+export const terminalSessions = sqliteTable('terminal_sessions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  /** 'pty' (direct shell) | 'tmux' (backed by a tmux session). */
+  backend: text('backend').notNull().default('pty'),
+  /** tmux session name (`hk-<id>`) when backend is 'tmux', else null. */
+  tmuxName: text('tmux_name'),
+  /** Last known working directory, restored as the shell's cwd on revive. */
+  lastCwd: text('last_cwd'),
+  /** Bounded scrollback tail replayed on revive. */
+  scrollback: text('scrollback').notNull().default(''),
+  createdAt: integer('created_at').notNull(), // Unix ms
+  lastActiveAt: integer('last_active_at').notNull(), // Unix ms
+}, (table) => [
+  index('idx_terminal_sessions_user').on(table.userId),
+])
+
 export const tasks = sqliteTable('tasks', {
   id: text('id').primaryKey(),
   parentAgentId: text('parent_agent_id').notNull().references(() => agents.id),

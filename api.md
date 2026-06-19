@@ -1747,15 +1747,20 @@ Last update attempt (persistent journal `data/update/journal.json`, survives the
 
 ## Terminal (admin only)
 
-Web terminal on the host machine (or the container under Docker). Section `/terminal`, reserved for admins. tmux-style model: each session is a shell (PTY, `bun-pty`) on the server, scoped to its owner, that **survives WebSocket disconnects**: you can close the browser and reattach from another device (the scrollback is replayed). A session only dies when its shell exits, when the user closes it from the sidebar, or (if `HIVEKEEP_TERMINAL_DETACHED_TTL_SEC` > 0, disabled by default) after staying detached too long. Sessions live in memory: a server restart kills them. Disableable globally via `HIVEKEEP_TERMINAL_ENABLED=false`.
+Web terminal on the host machine (or the container under Docker). Section `/terminal`, reserved for admins. tmux-style model: each session is a shell (PTY, `bun-pty`) on the server, scoped to its owner, that **survives WebSocket disconnects**: you can close the browser and reattach from another device (the scrollback is replayed). A session only dies when its shell exits, when the user closes it from the sidebar, or (if `HIVEKEEP_TERMINAL_DETACHED_TTL_SEC` > 0, disabled by default) after staying detached too long. Disableable globally via `HIVEKEEP_TERMINAL_ENABLED=false`.
 
-Any lifecycle change (creation, attach/detach, rename, death) emits `terminal:sessions-changed` (SSE, user scope) with the fresh list: that's what syncs the sidebar across devices.
+**Persistence across restart.** Session metadata and a bounded scrollback tail are persisted to the DB (`terminal_sessions` table). After a restart, sessions come back as **dormant** (no live shell): the sidebar and history are there, and the first reattach revives the session. Reuse depends on the backend:
+- **tmux available** (default in the Docker image): sessions are backed by a tmux session. tmux's server outlives the Bun process, so after a process-only restart (e.g. an in-place self-update) reattaching reconnects to the **live** shell with its running processes intact. A container recreation still loses the processes (tmux dies with the container), but the scrollback is restored.
+- **tmux unavailable**: sessions fall back to a direct PTY. Only the scrollback is persisted; reattaching spawns a **fresh** shell in the last working directory. tmux is never a hard dependency.
+
+Any lifecycle change (creation, attach/detach, rename, death, dormancy) emits `terminal:sessions-changed` (SSE, user scope) with the fresh list: that's what syncs the sidebar across devices.
 
 ### `GET /api/terminal/status`
 
 Probes the feature's availability (the page calls it before opening the WebSocket, because an upgrade refusal carries no error body).
 
-**Response 200**: `{ "enabled": true, "shell": "/bin/bash" }`
+**Response 200**: `{ "enabled": true, "shell": "/bin/bash", "tmux": true }`
+`tmux`: whether tmux backs sessions (so their processes survive a process-only restart). When `false`, only the scrollback is restored. The page surfaces this in the sidebar.
 **403 `TERMINAL_DISABLED`** if disabled by env var. **403 `FORBIDDEN`** if non-admin.
 
 ### `GET /api/terminal/sessions`
@@ -1766,12 +1771,26 @@ Lists the current user's live sessions (sorted by creation date).
 ```json
 {
   "sessions": [
-    { "id": "…", "name": "Session 1", "createdAt": 1765000000000, "lastActiveAt": 1765000050000, "attached": true }
+    {
+      "id": "…",
+      "name": "Session 1",
+      "createdAt": 1765000000000,
+      "lastActiveAt": 1765000050000,
+      "attached": true,
+      "dormant": false,
+      "persistent": true,
+      "cwd": "/home/hivekeep/projects/app",
+      "command": "vim"
+    }
   ]
 }
 ```
 
-`attached`: a client (any device) is currently connected to this session.
+- `attached`: a client (any device) is currently connected to this session.
+- `dormant`: restored from the DB after a restart, no live shell yet (reattaching revives it).
+- `persistent`: backed by tmux, so its running processes survive a process-only restart.
+- `cwd`: working directory of the foreground process (or shell when idle). Best-effort: omitted when it can't be inspected (e.g. non-Linux direct-PTY hosts).
+- `command`: foreground command currently running, if any (omitted at an idle shell prompt).
 
 ### `PATCH /api/terminal/sessions/:id`
 
@@ -1802,7 +1821,7 @@ WebSocket upgrade (Better Auth session cookie required, same guards as `/status`
 |---|---|---|
 | `ready` | `{ "type": "ready", "sessionId": "…", "resumed": false }` | Session attached. If `resumed: true`, the full scrollback follows in an `output` message |
 | `output` | `{ "type": "output", "data": "…" }` | Raw PTY output (ANSI sequences included) |
-| `exit` | `{ "type": "exit" }` | The shell terminated (exit, kill or TTL); the session no longer exists |
+| `exit` | `{ "type": "exit" }` | This attachment ended: the shell terminated (exit, kill, TTL) and the session is gone, OR a tmux-backed session went dormant (its server still holds the shell) and can be reattached |
 | `error` | `{ "type": "error", "code": "TERMINAL_MAX_SESSIONS" }` | Creation refused (`HIVEKEEP_TERMINAL_MAX_SESSIONS` cap reached), the server then closes the socket |
 
 ## Mini-Apps (backend runtime)

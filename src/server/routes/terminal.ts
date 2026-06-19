@@ -13,6 +13,7 @@ import {
   destroySession,
   detach,
   getTerminalConfig,
+  isTmuxAvailable,
   killSession,
   listSessions,
   renameSession,
@@ -55,7 +56,11 @@ async function requireTerminalAccess(c: Context<{ Variables: AppVariables }>, ne
 terminalRoutes.use('*', requireTerminalAccess)
 
 // Lets the page distinguish "disabled instance" from transient WS failures.
-terminalRoutes.get('/status', (c) => c.json({ enabled: true, shell: getTerminalConfig().shell }))
+// `tmux` tells the UI whether sessions survive a restart with live processes
+// (tmux-backed) or only restore their scrollback (direct PTY).
+terminalRoutes.get('/status', (c) =>
+  c.json({ enabled: true, shell: getTerminalConfig().shell, tmux: isTmuxAvailable() }),
+)
 
 // Sessions sidebar: list the caller's live sessions (any device can reattach).
 terminalRoutes.get('/sessions', (c) => {

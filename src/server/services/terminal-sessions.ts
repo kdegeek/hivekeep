@@ -1,4 +1,7 @@
 import os from 'os'
+import { readFileSync, readlinkSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { basename } from 'node:path'
 import { spawn, type IPty } from 'bun-pty'
 import { config } from '@/server/config'
 import { createLogger } from '@/server/logger'
@@ -15,7 +18,18 @@ const log = createLogger('terminal')
  * and reattach to the same shell (scrollback is replayed). A session only dies
  * when its shell exits, when the user closes it from the sessions sidebar, or
  * (if `detachedTtlSec` > 0, off by default) after sitting detached too long.
- * Sessions live in process memory: a server restart kills them.
+ *
+ * Persistence across a server restart has two layers:
+ *  - Always: session metadata + a bounded scrollback tail are persisted to the
+ *    DB (via an injected `TerminalPersistence`, so this module stays pure and
+ *    unit-testable). On boot they come back as *dormant* sessions (no live
+ *    shell); attaching respawns a fresh shell in the last working directory and
+ *    replays the saved scrollback.
+ *  - When `tmux` is available: sessions are backed by a tmux session. tmux's
+ *    server is a separate daemon that outlives the Bun process, so after a
+ *    process-only restart (e.g. an in-place self-update) reattaching reconnects
+ *    to the *live* shell with its running processes intact. When tmux isn't
+ *    installed we fall back to a direct PTY (no hard dependency).
  *
  * Every lifecycle change emits a `terminal:sessions-changed` SSE event to the
  * owner so all their devices keep their sidebar in sync.
@@ -44,17 +58,40 @@ export function getTerminalConfig(): typeof TERMINAL_DEFAULTS {
  *  died between the create and the attach) — without it they would leak. */
 const ORPHAN_GRACE_MS = 60_000
 
+/** Only the tail of the scrollback is persisted — enough to give context on
+ *  reattach without bloating the DB row. The in-memory buffer stays larger. */
+const PERSIST_SCROLLBACK_BYTES = 32 * 1024
+
+type Backend = 'pty' | 'tmux'
+
 interface TerminalClient {
   onClosed: () => void
   cols: number
   rows: number
 }
 
+/** Lightweight inspection of what a session is doing, surfaced on the sidebar
+ *  cards so sessions are identifiable at a glance. Derived from the OS, never
+ *  required — on platforms where it can't be read it simply stays empty. */
+export interface SessionProbe {
+  /** Working directory of the foreground process (or the shell when idle). */
+  cwd?: string
+  /** Foreground command running in the terminal, if any (idle shell → undefined). */
+  command?: string
+}
+
 export interface TerminalSession {
   id: string
   userId: string
   name: string
-  pty: IPty
+  /** Live PTY, or null while the session is dormant (restored from DB after a
+   *  restart, not yet reattached). */
+  pty: IPty | null
+  /** 'tmux' sessions survive a process-only restart with their shell alive;
+   *  'pty' sessions only persist their scrollback and respawn a fresh shell. */
+  backend: Backend
+  /** tmux session name (`hk-<id>`) when backend is 'tmux', else null. */
+  tmuxName: string | null
   createdAt: number
   lastActiveAt: number
   /** Bounded scrollback replayed on (re)attach. */
@@ -67,9 +104,122 @@ export interface TerminalSession {
   /** Pending kill timer while no client is attached. */
   detachTimer: ReturnType<typeof setTimeout> | null
   exited: boolean
+  /** Last inspected cwd/command, refreshed by the probe poller and diffed to
+   *  decide whether a sidebar refresh is worth emitting. */
+  probe: SessionProbe
+  /** Set when in-memory state (scrollback / activity / cwd) has drifted from
+   *  the persisted row; cleared on the next flush. */
+  dirty: boolean
 }
 
 const sessions = new Map<string, TerminalSession>()
+
+// ─── Persistence (injected) ─────────────────────────────────────────────────
+
+/** A row as persisted to the DB. Kept free of live objects so the service has
+ *  no direct DB dependency (real impl wired at boot, absent in unit tests). */
+export interface PersistedTerminalSession {
+  id: string
+  userId: string
+  name: string
+  createdAt: number
+  lastActiveAt: number
+  lastCwd: string | null
+  scrollback: string
+  backend: Backend
+  tmuxName: string | null
+}
+
+export interface TerminalPersistence {
+  loadAll(): PersistedTerminalSession[]
+  upsert(row: PersistedTerminalSession): void
+  remove(id: string): void
+}
+
+let persistence: TerminalPersistence | null = null
+
+/** Wire (or clear, with null) the DB-backed persistence. Called once at boot. */
+export function setTerminalPersistence(p: TerminalPersistence | null) {
+  persistence = p
+}
+
+function toPersisted(session: TerminalSession): PersistedTerminalSession {
+  return {
+    id: session.id,
+    userId: session.userId,
+    name: session.name,
+    createdAt: session.createdAt,
+    lastActiveAt: session.lastActiveAt,
+    lastCwd: session.probe.cwd ?? null,
+    scrollback: session.scrollback.slice(-PERSIST_SCROLLBACK_BYTES),
+    backend: session.backend,
+    tmuxName: session.tmuxName,
+  }
+}
+
+function persistSession(session: TerminalSession) {
+  if (!persistence || session.exited) return
+  try {
+    persistence.upsert(toPersisted(session))
+  } catch (err) {
+    log.warn({ err, sessionId: session.id }, 'Terminal session persist failed')
+  }
+}
+
+function markDirty(session: TerminalSession) {
+  session.dirty = true
+}
+
+// ─── tmux backing (opportunistic) ───────────────────────────────────────────
+
+let tmuxAvail: boolean | null = null
+
+/** Whether tmux is usable on this host. Detected once and cached; sessions
+ *  back themselves with tmux when true (true process survival across a
+ *  process-only restart), and fall back to a direct PTY when false. */
+export function isTmuxAvailable(): boolean {
+  if (process.env.HIVEKEEP_TERMINAL_TMUX === 'off') return false
+  if (tmuxAvail !== null) return tmuxAvail
+  try {
+    execFileSync('tmux', ['-V'], { stdio: 'ignore' })
+    tmuxAvail = true
+  } catch {
+    tmuxAvail = false
+  }
+  return tmuxAvail
+}
+
+function tmuxHasSession(name: string | null): boolean {
+  if (!name || !isTmuxAvailable()) return false
+  try {
+    execFileSync('tmux', ['has-session', '-t', name], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+}
+
+function probeViaTmux(name: string): SessionProbe {
+  try {
+    const out = execFileSync(
+      'tmux',
+      ['display-message', '-p', '-t', name, '#{pane_current_command}\n#{pane_current_path}'],
+      { encoding: 'utf8' },
+    )
+    const [rawCommand, rawCwd] = out.split('\n')
+    const command = rawCommand?.trim()
+    const cwd = rawCwd?.trim()
+    const shellBase = basename(getTerminalConfig().shell)
+    return {
+      cwd: cwd || undefined,
+      command: command && command !== shellBase ? command : undefined,
+    }
+  } catch {
+    return {}
+  }
+}
+
+// ─── Probe (cwd + foreground command) ───────────────────────────────────────
 
 function toDTO(session: TerminalSession): TerminalSessionDTO {
   return {
@@ -78,31 +228,114 @@ function toDTO(session: TerminalSession): TerminalSessionDTO {
     createdAt: session.createdAt,
     lastActiveAt: session.lastActiveAt,
     attached: session.clients.size > 0,
+    dormant: session.pty === null,
+    persistent: session.backend === 'tmux',
+    cwd: session.probe.cwd,
+    command: session.probe.command,
   }
 }
 
-/** Mirrored viewing (tmux-style): the PTY is sized to the smallest attached
- *  client so every viewer sees coherent line wrapping. */
-function applyClientSizes(session: TerminalSession) {
-  if (session.exited || session.clients.size === 0) return
-  let cols = Infinity
-  let rows = Infinity
-  for (const client of session.clients.values()) {
-    cols = Math.min(cols, client.cols)
-    rows = Math.min(rows, client.rows)
+/**
+ * Inspect a session's working directory and foreground command.
+ *
+ * tmux-backed sessions are inspected through tmux itself (reliable and works
+ * even while no client is attached, since the shell lives in the tmux server).
+ * Direct PTY sessions use Linux `/proc`: the controlling terminal's foreground
+ * process group (`tpgid` in `/proc/<pid>/stat`) gives what's actually running,
+ * then its `comm` and `cwd`. When the shell is the foreground process (idle
+ * prompt) no command is reported. Any failure (non-Linux, dormant, a race with
+ * an exiting process) yields an empty probe — the data is best-effort
+ * decoration, never load-bearing.
+ */
+function probeSession(session: TerminalSession): SessionProbe {
+  if (session.backend === 'tmux' && session.tmuxName && tmuxHasSession(session.tmuxName)) {
+    return probeViaTmux(session.tmuxName)
   }
+  const pid = session.pty?.pid
+  if (!pid) return session.probe // dormant: keep last known (restored cwd)
   try {
-    session.pty.resize(Math.max(2, cols), Math.max(2, rows))
-  } catch (err) {
-    log.warn({ err, sessionId: session.id }, 'Terminal resize failed')
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+    // `comm` (field 2) is wrapped in parens and may itself contain spaces or
+    // parens, so split on everything after the final ')'.
+    const afterComm = stat.slice(stat.lastIndexOf(')') + 2).split(' ')
+    // Post-comm fields: state, ppid, pgrp, session, tty_nr, tpgid, ...
+    const tpgid = Number(afterComm[5])
+
+    let command: string | undefined
+    let cwdPid = pid
+    if (tpgid > 0 && tpgid !== pid) {
+      try {
+        command = readFileSync(`/proc/${tpgid}/comm`, 'utf8').trim() || undefined
+        if (command) cwdPid = tpgid
+      } catch {
+        // Foreground process exited between reads — fall back to the shell.
+      }
+    }
+
+    let cwd: string | undefined
+    try {
+      cwd = readlinkSync(`/proc/${cwdPid}/cwd`)
+    } catch {
+      // cwd unreadable (permissions / race) — leave undefined.
+    }
+    return { cwd, command }
+  } catch {
+    return {}
   }
 }
 
-export function listSessions(userId: string): TerminalSessionDTO[] {
+/** Foreground command/cwd change without any lifecycle event firing (the user
+ *  just runs `vim`), so a light poller diffs the probe of every live session
+ *  and pushes a fresh sidebar list only when something actually changed. It
+ *  doubles as the periodic flush of dirty rows to the DB. The timer is unref'd
+ *  and torn down once the last session dies. */
+const PROBE_INTERVAL_MS = 2500
+let probeTimer: ReturnType<typeof setInterval> | null = null
+
+function probesEqual(a: SessionProbe, b: SessionProbe): boolean {
+  return a.cwd === b.cwd && a.command === b.command
+}
+
+function pollProbes() {
+  const changedUsers = new Set<string>()
+  for (const session of sessions.values()) {
+    if (session.exited) continue
+    const next = probeSession(session)
+    if (!probesEqual(session.probe, next)) {
+      session.probe = next
+      session.dirty = true
+      changedUsers.add(session.userId)
+    }
+    if (session.dirty) {
+      session.dirty = false
+      persistSession(session)
+    }
+  }
+  for (const userId of changedUsers) notifySessionsChanged(userId)
+  if (sessions.size === 0) stopProbePoller()
+}
+
+function ensureProbePoller() {
+  if (probeTimer) return
+  probeTimer = setInterval(pollProbes, PROBE_INTERVAL_MS)
+  // Don't keep the process alive just for the terminal probe loop.
+  ;(probeTimer as { unref?: () => void }).unref?.()
+}
+
+function stopProbePoller() {
+  if (!probeTimer) return
+  clearInterval(probeTimer)
+  probeTimer = null
+}
+
+function listSessionsRaw(userId: string): TerminalSession[] {
   return [...sessions.values()]
     .filter((s) => s.userId === userId && !s.exited)
     .sort((a, b) => a.createdAt - b.createdAt)
-    .map(toDTO)
+}
+
+export function listSessions(userId: string): TerminalSessionDTO[] {
+  return listSessionsRaw(userId).map(toDTO)
 }
 
 function notifySessionsChanged(userId: string) {
@@ -144,6 +377,75 @@ function nextSessionName(userId: string): string {
   }
 }
 
+/** Spawn the PTY backing a session — a tmux client (attach-or-create) when the
+ *  session is tmux-backed and tmux is available, otherwise a direct shell. The
+ *  shell starts in `cwd` (the session's last known directory on revive). */
+function spawnForSession(session: TerminalSession, cols: number, rows: number): IPty {
+  const cwd = session.probe.cwd || os.homedir()
+  const env = { ...process.env, TERM: 'xterm-256color' } as Record<string, string>
+  const safeCols = Math.max(2, cols)
+  const safeRows = Math.max(2, rows)
+
+  if (session.backend === 'tmux' && isTmuxAvailable() && session.tmuxName) {
+    // `new-session -A` attaches to the existing tmux session (live shell intact
+    // after a process-only restart) or creates it in `cwd` if it's gone.
+    return spawn(
+      'tmux',
+      ['new-session', '-A', '-s', session.tmuxName, '-c', cwd],
+      { name: 'xterm-256color', cols: safeCols, rows: safeRows, cwd, env },
+    )
+  }
+
+  // tmux was expected but is no longer available — downgrade to a direct PTY.
+  if (session.backend === 'tmux') {
+    session.backend = 'pty'
+    session.tmuxName = null
+  }
+  return spawn(getTerminalConfig().shell, [], {
+    name: 'xterm-256color',
+    cols: safeCols,
+    rows: safeRows,
+    cwd,
+    env,
+  })
+}
+
+/** Wire the PTY's data/exit handlers onto the session. Shared by create and
+ *  revive. tmux client exit is special-cased: if the tmux server still holds
+ *  the session the shell is alive, so we go dormant instead of destroying. */
+function wireSession(session: TerminalSession, pty: IPty) {
+  session.pty = pty
+  pty.onData((data) => {
+    session.lastActiveAt = Date.now()
+    appendScrollback(session, data)
+    markDirty(session)
+    for (const sink of session.clients.keys()) sink(data)
+  })
+  pty.onExit(({ exitCode }) => {
+    if (session.exited) return
+    if (session.backend === 'tmux' && tmuxHasSession(session.tmuxName)) {
+      log.info({ sessionId: session.id }, 'tmux client detached, server still alive — session dormant')
+      becomeDormant(session)
+      return
+    }
+    log.info({ sessionId: session.id, exitCode }, 'Terminal shell exited')
+    session.exited = true
+    // Let the attached clients render the exit before the session disappears.
+    for (const sink of session.clients.keys()) sink(`\r\n[process exited with code ${exitCode}]\r\n`)
+    destroySession(session.id)
+  })
+}
+
+/** Drop the live PTY but keep the (persistent) session around: the tmux server
+ *  still owns the shell, reattaching will reconnect to it. */
+function becomeDormant(session: TerminalSession) {
+  session.pty = null
+  for (const client of session.clients.values()) client.onClosed()
+  session.clients.clear()
+  persistSession(session)
+  notifySessionsChanged(session.userId)
+}
+
 export function createSession(userId: string, cols: number, rows: number): TerminalSession {
   const running = [...sessions.values()].filter((s) => !s.exited)
   if (running.length >= getTerminalConfig().maxSessions) {
@@ -151,19 +453,15 @@ export function createSession(userId: string, cols: number, rows: number): Termi
   }
 
   const id = crypto.randomUUID()
-  const pty = spawn(getTerminalConfig().shell, [], {
-    name: 'xterm-256color',
-    cols: Math.max(2, cols),
-    rows: Math.max(2, rows),
-    cwd: os.homedir(),
-    env: { ...process.env, TERM: 'xterm-256color' } as Record<string, string>,
-  })
+  const backend: Backend = isTmuxAvailable() ? 'tmux' : 'pty'
 
   const session: TerminalSession = {
     id,
     userId,
     name: nextSessionName(userId),
-    pty,
+    pty: null,
+    backend,
+    tmuxName: backend === 'tmux' ? `hk-${id}` : null,
     createdAt: Date.now(),
     lastActiveAt: Date.now(),
     scrollback: '',
@@ -171,33 +469,33 @@ export function createSession(userId: string, cols: number, rows: number): Termi
     everAttached: false,
     detachTimer: null,
     exited: false,
+    probe: {},
+    dirty: false,
   }
   sessions.set(id, session)
 
-  pty.onData((data) => {
-    session.lastActiveAt = Date.now()
-    appendScrollback(session, data)
-    for (const sink of session.clients.keys()) sink(data)
-  })
-  pty.onExit(({ exitCode }) => {
-    log.info({ sessionId: id, exitCode }, 'Terminal shell exited')
-    session.exited = true
-    // Let the attached clients render the exit before the session disappears.
-    for (const sink of session.clients.keys()) sink(`\r\n[process exited with code ${exitCode}]\r\n`)
-    destroySession(id)
-  })
+  const pty = spawnForSession(session, cols, rows)
+  wireSession(session, pty)
+  session.probe = probeSession(session)
 
   // Unattached until the WS handler claims it — the orphan grace ensures a
   // client that died between create and attach can't leak a shell.
   armDetachTimer(session)
+  ensureProbePoller()
+  persistSession(session)
 
-  log.info({ sessionId: id, userId, shell: getTerminalConfig().shell, pid: pty.pid }, 'Terminal session created')
+  log.info(
+    { sessionId: id, userId, backend, shell: getTerminalConfig().shell, pid: pty.pid },
+    'Terminal session created',
+  )
   notifySessionsChanged(userId)
   return session
 }
 
 /** Register a client on the session (any number of tabs/devices can view the
- *  same session simultaneously). Returns the scrollback to replay. */
+ *  same session simultaneously). Reviving a dormant session spawns its shell
+ *  first. Returns the scrollback to replay (empty when reattaching to a live
+ *  tmux session, which repaints its own screen). */
 export function attach(
   sessionId: string,
   userId: string,
@@ -208,6 +506,22 @@ export function attach(
 ): string | null {
   const session = sessions.get(sessionId)
   if (!session || session.exited || session.userId !== userId) return null
+
+  let replay = session.scrollback
+
+  if (!session.pty) {
+    // Dormant → revive. A live tmux session repaints its own screen, so don't
+    // replay our saved scrollback on top (it would duplicate); a fresh shell
+    // (direct PTY, or a tmux session whose server died) gets the saved history.
+    const tmuxLive =
+      session.backend === 'tmux' && tmuxHasSession(session.tmuxName)
+    const pty = spawnForSession(session, cols, rows)
+    wireSession(session, pty)
+    if (tmuxLive) replay = ''
+    log.info({ sessionId, backend: session.backend, tmuxLive }, 'Revived dormant terminal session')
+    persistSession(session)
+  }
+
   session.clients.set(sink, { onClosed, cols, rows })
   session.everAttached = true
   if (session.detachTimer) {
@@ -216,7 +530,24 @@ export function attach(
   }
   applyClientSizes(session)
   notifySessionsChanged(userId)
-  return session.scrollback
+  return replay
+}
+
+/** Mirrored viewing (tmux-style): the PTY is sized to the smallest attached
+ *  client so every viewer sees coherent line wrapping. */
+function applyClientSizes(session: TerminalSession) {
+  if (session.exited || !session.pty || session.clients.size === 0) return
+  let cols = Infinity
+  let rows = Infinity
+  for (const client of session.clients.values()) {
+    cols = Math.min(cols, client.cols)
+    rows = Math.min(rows, client.rows)
+  }
+  try {
+    session.pty.resize(Math.max(2, cols), Math.max(2, rows))
+  } catch (err) {
+    log.warn({ err, sessionId: session.id }, 'Terminal resize failed')
+  }
 }
 
 export function detach(sessionId: string, sink: (data: string) => void) {
@@ -224,6 +555,8 @@ export function detach(sessionId: string, sink: (data: string) => void) {
   if (!session) return
   if (!session.clients.delete(sink)) return
   if (session.exited) return
+  // Flush latest state on disconnect so a restart restores up-to-date scrollback.
+  persistSession(session)
   if (session.clients.size === 0) {
     armDetachTimer(session)
   } else {
@@ -235,8 +568,9 @@ export function detach(sessionId: string, sink: (data: string) => void) {
 
 export function write(sessionId: string, userId: string, data: string) {
   const session = sessions.get(sessionId)
-  if (!session || session.exited || session.userId !== userId) return
+  if (!session || session.exited || session.userId !== userId || !session.pty) return
   session.lastActiveAt = Date.now()
+  markDirty(session)
   session.pty.write(data)
 }
 
@@ -256,6 +590,7 @@ export function renameSession(sessionId: string, userId: string, name: string): 
   const trimmed = name.trim().slice(0, 60)
   if (!trimmed) return null
   session.name = trimmed
+  persistSession(session)
   notifySessionsChanged(userId)
   return toDTO(session)
 }
@@ -275,12 +610,28 @@ export function destroySession(sessionId: string) {
   if (session.detachTimer) clearTimeout(session.detachTimer)
   for (const client of session.clients.values()) client.onClosed()
   session.clients.clear()
+  // Kill the underlying tmux session too — closing from the sidebar means gone,
+  // not just detached (otherwise it would survive in the tmux server).
+  if (session.backend === 'tmux' && session.tmuxName && isTmuxAvailable()) {
+    try {
+      execFileSync('tmux', ['kill-session', '-t', session.tmuxName], { stdio: 'ignore' })
+    } catch {
+      // Already gone — nothing to kill.
+    }
+  }
   if (!session.exited) {
     session.exited = true
     try {
-      session.pty.kill()
+      session.pty?.kill()
     } catch (err) {
       log.warn({ err, sessionId }, 'Terminal kill failed')
+    }
+  }
+  if (persistence) {
+    try {
+      persistence.remove(sessionId)
+    } catch (err) {
+      log.warn({ err, sessionId }, 'Terminal session delete failed')
     }
   }
   notifySessionsChanged(session.userId)
@@ -290,4 +641,51 @@ export function getSession(sessionId: string, userId: string): TerminalSession |
   const session = sessions.get(sessionId)
   if (!session || session.userId !== userId) return null
   return session
+}
+
+/**
+ * Rebuild dormant sessions from the persisted store at boot. Each comes back
+ * without a live PTY; the first attach revives it (reconnecting to a live tmux
+ * session, or spawning a fresh shell in the saved cwd and replaying scrollback).
+ * tmux-backed rows whose server has since died are downgraded to direct PTY so
+ * they don't try to reattach to nothing.
+ */
+export function restorePersistedSessions(): number {
+  if (!persistence) return 0
+  let restored = 0
+  for (const row of persistence.loadAll()) {
+    if (sessions.has(row.id)) continue
+    let backend = row.backend
+    let tmuxName = row.tmuxName
+    if (backend === 'tmux' && !isTmuxAvailable()) {
+      backend = 'pty'
+      tmuxName = null
+    }
+    const session: TerminalSession = {
+      id: row.id,
+      userId: row.userId,
+      name: row.name,
+      pty: null,
+      backend,
+      tmuxName,
+      createdAt: row.createdAt,
+      lastActiveAt: row.lastActiveAt,
+      scrollback: row.scrollback,
+      clients: new Map(),
+      everAttached: true,
+      detachTimer: null,
+      exited: false,
+      probe: { cwd: row.lastCwd ?? undefined },
+      dirty: false,
+    }
+    sessions.set(row.id, session)
+    restored++
+    // Persist the possibly-downgraded backend so the row reflects reality.
+    if (backend !== row.backend) persistSession(session)
+  }
+  if (restored > 0) {
+    ensureProbePoller()
+    log.info({ restored }, 'Restored persisted terminal sessions (dormant)')
+  }
+  return restored
 }

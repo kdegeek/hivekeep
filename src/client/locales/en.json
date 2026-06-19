@@ -3260,7 +3260,19 @@
       "closeConfirmTitle": "Close {{name}}?",
       "closeConfirmDescription": "The shell and everything running in it will be killed.",
       "attached": "Connected",
-      "detached": "Detached"
+      "detached": "Detached",
+      "running": "Running: {{command}}",
+      "openedFor": "Open for {{duration}}",
+      "resize": "Resize sidebar",
+      "dormant": "Dormant",
+      "dormantHint": "Click to reconnect: a fresh shell opens in the last directory",
+      "persistent": "Persistent (tmux)"
+    },
+    "tmux": {
+      "persistent": "Persistent sessions (tmux)",
+      "persistentHint": "Sessions survive a server restart with their running processes.",
+      "unavailable": "tmux not detected: sessions don't survive a restart",
+      "unavailableHint": "Install tmux on the host for sessions whose processes survive a restart. Without it, only the scrollback is restored."
     }
   },
   "orphanTask": {

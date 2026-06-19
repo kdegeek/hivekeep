@@ -1,4 +1,10 @@
 import { describe, it, expect, beforeEach, mock } from 'bun:test'
+import type { PersistedTerminalSession, TerminalPersistence } from '@/server/services/terminal-sessions'
+
+// Force the direct-PTY backend so tests are deterministic regardless of whether
+// tmux is installed on the host/CI (otherwise sessions would back themselves
+// with tmux and shell out to it).
+process.env.HIVEKEEP_TERMINAL_TMUX = 'off'
 
 // Mock bun-pty before importing the service: no real shell is spawned, and the
 // fake PTY lets tests drive onData/onExit deterministically. (mock.module is
@@ -75,7 +81,32 @@ const {
   listSessions,
   renameSession,
   killSession,
+  setTerminalPersistence,
+  restorePersistedSessions,
 } = await import('@/server/services/terminal-sessions')
+
+/** In-memory fake of the injected DB persistence, recording the calls. */
+function makeFakeStore(initial: PersistedTerminalSession[] = []): TerminalPersistence & {
+  upserts: PersistedTerminalSession[]
+  removed: string[]
+} {
+  const map = new Map(initial.map((r) => [r.id, r]))
+  return {
+    upserts: [],
+    removed: [],
+    loadAll() {
+      return [...map.values()]
+    },
+    upsert(row: PersistedTerminalSession) {
+      this.upserts.push(row)
+      map.set(row.id, row)
+    },
+    remove(id: string) {
+      this.removed.push(id)
+      map.delete(id)
+    },
+  }
+}
 
 const terminalConfig = getTerminalConfig()
 
@@ -84,6 +115,8 @@ describe('terminal-sessions', () => {
     // Drain any sessions left by a previous test, then reset the spawn log.
     for (const pty of spawned) pty.emitExit(0)
     spawned.length = 0
+    // Default to no persistence; tests that exercise it opt in explicitly.
+    setTerminalPersistence(null)
   })
 
   it('creates a session and routes input/output through the PTY', () => {
@@ -232,5 +265,53 @@ describe('terminal-sessions', () => {
     } finally {
       terminalConfig.maxSessions = prevMax
     }
+  })
+
+  it('exposes dormant/persistent in the DTO (live, direct-PTY backend)', () => {
+    const session = createSession('user-1', 80, 24)
+    const dto = listSessions('user-1').find((s) => s.id === session.id)!
+    expect(dto.dormant).toBe(false) // freshly created → has a live shell
+    expect(dto.persistent).toBe(false) // tmux forced off → pty backend
+  })
+
+  it('persists a session on create and removes its row on destroy', () => {
+    const store = makeFakeStore()
+    setTerminalPersistence(store)
+    const session = createSession('user-1', 80, 24)
+    expect(store.upserts.some((r) => r.id === session.id && r.backend === 'pty')).toBe(true)
+
+    destroySession(session.id)
+    expect(store.removed).toContain(session.id)
+  })
+
+  it('restores persisted sessions as dormant and revives them on attach', () => {
+    const store = makeFakeStore([
+      {
+        id: 'sess-restore',
+        userId: 'user-1',
+        name: 'Restored',
+        createdAt: 1,
+        lastActiveAt: 2,
+        lastCwd: '/tmp/work',
+        scrollback: 'old output',
+        backend: 'pty',
+        tmuxName: null,
+      },
+    ])
+    setTerminalPersistence(store)
+
+    expect(restorePersistedSessions()).toBe(1)
+
+    const dormant = listSessions('user-1').find((s) => s.id === 'sess-restore')!
+    expect(dormant.dormant).toBe(true)
+    expect(dormant.persistent).toBe(false)
+    expect(dormant.cwd).toBe('/tmp/work') // restored cwd surfaced on the card
+    expect(spawned).toHaveLength(0) // no shell spawned while dormant
+
+    // Reattaching revives it: a fresh shell spawns and the saved scrollback replays.
+    const scrollback = attach('sess-restore', 'user-1', () => {}, () => {})
+    expect(spawned).toHaveLength(1)
+    expect(scrollback).toBe('old output')
+    expect(listSessions('user-1').find((s) => s.id === 'sess-restore')!.dormant).toBe(false)
   })
 })

@@ -43,8 +43,11 @@ RUN sed -i '/"prepare":/d' package.json && \
 # at runtime — `installFromNpm` in services/plugins.ts spawns `npm
 # install` to resolve a plugin's tarball + deps; the oven/bun:1 base
 # image doesn't ship Node/npm so without this the marketplace install
-# flow fails with `Executable not found in $PATH: "npm"`).
-RUN apt-get update && apt-get install -y --no-install-recommends gosu npm && rm -rf /var/lib/apt/lists/*
+# flow fails with `Executable not found in $PATH: "npm"`) + tmux (the
+# admin web terminal backs sessions with tmux when available so they
+# survive a server restart with their running processes — see
+# services/terminal-sessions.ts; without tmux only scrollback is restored).
+RUN apt-get update && apt-get install -y --no-install-recommends gosu npm tmux && rm -rf /var/lib/apt/lists/*
 
 # Install Chromium for Playwright (the browse_url / screenshot_url tools and the
 # browser_* session tools in src/server/tools/ drive a headless Chromium via

@@ -416,6 +416,27 @@ Sessions éphémères pour interactions rapides.
 
 ---
 
+### `terminal_sessions`
+
+Sessions du terminal web admin, persistées pour survivre à un redémarrage (la sidebar et le scrollback reviennent). Les sessions adossées à tmux (`backend = 'tmux'`) se reconnectent au shell vivant ; les sessions `pty` relancent un shell neuf dans `last_cwd`. Une ligne ici signifie "restaurable" : elle est supprimée quand la session est fermée ou que le shell se termine.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | text PK | UUID | |
+| `user_id` | text | FK → user.id, ON DELETE CASCADE, NOT NULL | Propriétaire |
+| `name` | text | NOT NULL | Nom affiché (éditable) |
+| `backend` | text | NOT NULL, DEFAULT 'pty' | 'pty' (shell direct) ou 'tmux' |
+| `tmux_name` | text | | Nom de session tmux (`hk-<id>`) si backend = 'tmux' |
+| `last_cwd` | text | | Dernier répertoire courant, restauré comme cwd au réveil |
+| `scrollback` | text | NOT NULL, DEFAULT '' | Fin de scrollback rejouée au réveil (cappée) |
+| `created_at` | integer | NOT NULL | Unix ms |
+| `last_active_at` | integer | NOT NULL | Unix ms |
+
+**Index** :
+- `idx_terminal_sessions_user` sur `user_id`
+
+---
+
 ### `tasks`
 
 Sous-Agents éphémères (tâches déléguées).

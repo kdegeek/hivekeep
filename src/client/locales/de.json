@@ -3260,7 +3260,19 @@
       "closeConfirmTitle": "{{name}} schließen?",
       "closeConfirmDescription": "Die Shell und alles, was darin läuft, wird beendet.",
       "attached": "Verbunden",
-      "detached": "Getrennt"
+      "detached": "Getrennt",
+      "running": "Läuft: {{command}}",
+      "openedFor": "Geöffnet seit {{duration}}",
+      "resize": "Seitenleiste anpassen",
+      "dormant": "Schlafend",
+      "dormantHint": "Zum Wiederverbinden klicken: eine neue Shell öffnet im letzten Verzeichnis",
+      "persistent": "Dauerhaft (tmux)"
+    },
+    "tmux": {
+      "persistent": "Dauerhafte Sitzungen (tmux)",
+      "persistentHint": "Sitzungen überstehen einen Server-Neustart mitsamt laufenden Prozessen.",
+      "unavailable": "tmux nicht erkannt: Sitzungen überstehen keinen Neustart",
+      "unavailableHint": "Installiere tmux auf dem Host für Sitzungen, deren Prozesse einen Neustart überstehen. Ohne tmux wird nur der Scrollback wiederhergestellt."
     }
   },
   "orphanTask": {

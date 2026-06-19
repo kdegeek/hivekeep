@@ -3260,7 +3260,19 @@
       "closeConfirmTitle": "Fermer {{name}} ?",
       "closeConfirmDescription": "Le shell et tout ce qui y tourne seront arrêtés.",
       "attached": "Connectée",
-      "detached": "Détachée"
+      "detached": "Détachée",
+      "running": "En cours : {{command}}",
+      "openedFor": "Ouverte depuis {{duration}}",
+      "resize": "Redimensionner la barre latérale",
+      "dormant": "Dormante",
+      "dormantHint": "Cliquer pour reconnecter : un nouveau shell s’ouvre dans le dernier dossier",
+      "persistent": "Persistante (tmux)"
+    },
+    "tmux": {
+      "persistent": "Sessions persistantes (tmux)",
+      "persistentHint": "Les sessions survivent à un redémarrage du serveur avec leurs processus en cours.",
+      "unavailable": "tmux non détecté : les sessions ne survivent pas à un redémarrage",
+      "unavailableHint": "Installez tmux sur l’hôte pour des sessions dont les processus survivent à un redémarrage. Sans lui, seul l’historique est restauré."
     }
   },
   "orphanTask": {
