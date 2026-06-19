@@ -99,7 +99,10 @@
     },
     "url": "URL",
     "retry": "Réessayer",
-    "agentLanguageFollowUi": "Identique à l'interface"
+    "agentLanguageFollowUi": "Identique à l'interface",
+    "clearFilters": "Effacer",
+    "perPage": "Par page",
+    "listRange": "{{from}}-{{to}} sur {{total}}"
   },
   "errors": {
     "backendUnavailable": "Impossible de joindre le serveur. Vérifiez que le backend est en cours d'exécution et réessayez.",
@@ -318,7 +321,8 @@
       },
       "search": "Rechercher...",
       "noResults": "Aucun job trouvé",
-      "emptyDescription": "Planifiez des tâches récurrentes pour vos Agents"
+      "emptyDescription": "Planifiez des tâches récurrentes pour vos Agents",
+      "allAgents": "Tous les Agents"
     },
     "miniApps": {
       "title": "Mini-Apps",
@@ -329,7 +333,8 @@
       "noAgentSelected": "Sélectionnez un Agent",
       "noAgentSelectedDescription": "Sélectionnez un Agent pour voir ses mini-apps",
       "viewGrid": "Vue grille",
-      "viewList": "Vue liste"
+      "viewList": "Vue liste",
+      "allAgents": "Tous les Agents"
     },
     "tabs": {
       "tasks": "Tâches",
@@ -1664,7 +1669,8 @@
         "bullet2": "Vous pouvez organiser les secrets par type (clé API, mot de passe, token, etc.) et créer des types personnalisés",
         "bullet3": "Attachez des fichiers aux entrées pour des certificats, fichiers de config ou autres documents sensibles",
         "bullet4": "Marquez des entrées comme favoris pour un accès rapide"
-      }
+      },
+      "search": "Rechercher des secrets..."
     },
     "files": {
       "title": "Fichiers",
@@ -2131,7 +2137,8 @@
       "pendingTitle": "{{count}} email(s) en attente de ta validation",
       "pendingTo": "À",
       "approve": "Approuver & envoyer",
-      "reject": "Rejeter"
+      "reject": "Rejeter",
+      "search": "Rechercher des comptes..."
     },
     "channels": {
       "title": "Canaux",
@@ -2247,7 +2254,13 @@
         "title": "Exiger l'approbation des nouveaux interlocuteurs",
         "description": "Les nouveaux expéditeurs doivent être approuvés avant que l'agent réponde.",
         "warning": "L'approbation est désactivée : toute personne qui écrit à ce canal est automatiquement ajoutée comme contact et peut déclencher l'agent (et ses coûts) sans validation. Un contact distinct est créé pour chaque expéditeur, ne faites donc jamais confiance à une identité revendiquée. Réactivez pour exiger une approbation manuelle."
-      }
+      },
+      "search": "Rechercher des canaux...",
+      "filterAllPlatforms": "Toutes les plateformes",
+      "filterAllStatuses": "Tous les statuts",
+      "statusActive": "Actif",
+      "statusInactive": "Inactif",
+      "statusError": "Erreur"
     },
     "notifications": {
       "title": "Notifications",
@@ -3313,7 +3326,8 @@
       "create": "Nouveau projet",
       "empty": "Aucun projet pour le moment. Crée ton premier projet pour démarrer.",
       "emptyTitle": "Aucun projet",
-      "emptyDescription": "Regroupe tes tickets, lance des tâches et suis le travail de tes Agents."
+      "emptyDescription": "Regroupe tes tickets, lance des tâches et suis le travail de tes Agents.",
+      "search": "Rechercher des projets..."
     },
     "empty": {
       "title": "Aucun projet",

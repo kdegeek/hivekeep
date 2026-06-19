@@ -99,7 +99,10 @@
     },
     "url": "URL",
     "retry": "Erneut versuchen",
-    "agentLanguageFollowUi": "Wie die Oberfläche"
+    "agentLanguageFollowUi": "Wie die Oberfläche",
+    "clearFilters": "Zurücksetzen",
+    "perPage": "Pro Seite",
+    "listRange": "{{from}}-{{to}} von {{total}}"
   },
   "errors": {
     "backendUnavailable": "Server nicht erreichbar. Bitte prüfe, ob das Backend läuft, und versuche es erneut.",
@@ -318,7 +321,8 @@
       },
       "search": "Jobs suchen...",
       "noResults": "Keine passenden Jobs",
-      "emptyDescription": "Plane wiederkehrende Aufgaben für deine Agenten"
+      "emptyDescription": "Plane wiederkehrende Aufgaben für deine Agenten",
+      "allAgents": "Alle Agenten"
     },
     "miniApps": {
       "title": "Mini-Apps",
@@ -329,7 +333,8 @@
       "noAgentSelected": "Wähle einen Agenten",
       "noAgentSelectedDescription": "Wähle einen Agenten, um seine Mini-Apps zu sehen",
       "viewGrid": "Rasteransicht",
-      "viewList": "Listenansicht"
+      "viewList": "Listenansicht",
+      "allAgents": "Alle Agenten"
     },
     "tabs": {
       "tasks": "Aufgaben",
@@ -1664,7 +1669,8 @@
         "bullet2": "Du kannst Secrets nach Typ organisieren (API-Schlüssel, Passwort, Token usw.) und eigene Typen erstellen",
         "bullet3": "Hänge Dateien an Vault-Einträge an, etwa Zertifikate, Konfigurationsdateien oder andere sensible Dokumente",
         "bullet4": "Markiere Einträge als Favoriten für schnellen Zugriff"
-      }
+      },
+      "search": "Geheimnisse suchen..."
     },
     "files": {
       "title": "Dateien",
@@ -2131,7 +2137,8 @@
       "pendingTitle": "{{count}} E-Mail(s) warten auf deine Freigabe",
       "pendingTo": "An",
       "approve": "Freigeben & senden",
-      "reject": "Ablehnen"
+      "reject": "Ablehnen",
+      "search": "Konten suchen..."
     },
     "channels": {
       "title": "Kanäle",
@@ -2247,7 +2254,13 @@
         "title": "Genehmigung für neue Kontakte verlangen",
         "description": "Neue Absender müssen genehmigt werden, bevor der Agent antwortet.",
         "warning": "Die Genehmigung ist deaktiviert: Jeder, der diesem Kanal schreibt, wird automatisch als Kontakt hinzugefügt und kann den Agenten (und dessen Kosten) ohne Prüfung auslösen. Pro Absender wird ein eigener Kontakt erstellt, vertraue also nie einer behaupteten Identität. Wieder aktivieren, um manuelle Genehmigung zu verlangen."
-      }
+      },
+      "search": "Kanäle suchen...",
+      "filterAllPlatforms": "Alle Plattformen",
+      "filterAllStatuses": "Alle Status",
+      "statusActive": "Aktiv",
+      "statusInactive": "Inaktiv",
+      "statusError": "Fehler"
     },
     "notifications": {
       "title": "Benachrichtigungen",
@@ -3313,7 +3326,8 @@
       "create": "Neues Projekt",
       "empty": "Noch keine Projekte. Erstelle dein erstes Projekt, um loszulegen.",
       "emptyTitle": "Noch keine Projekte",
-      "emptyDescription": "Bündle Tickets, starte Aufgaben und verfolge die Arbeit deiner Agenten."
+      "emptyDescription": "Bündle Tickets, starte Aufgaben und verfolge die Arbeit deiner Agenten.",
+      "search": "Projekte suchen..."
     },
     "empty": {
       "title": "Keine Projekte",

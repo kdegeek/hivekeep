@@ -99,7 +99,10 @@
     },
     "url": "URL",
     "retry": "Reintentar",
-    "agentLanguageFollowUi": "Igual que la interfaz"
+    "agentLanguageFollowUi": "Igual que la interfaz",
+    "clearFilters": "Limpiar",
+    "perPage": "Por página",
+    "listRange": "{{from}}-{{to}} de {{total}}"
   },
   "errors": {
     "backendUnavailable": "No se puede conectar con el servidor. Comprueba que el backend está en marcha y vuelve a intentarlo.",
@@ -318,7 +321,8 @@
       },
       "search": "Buscar trabajos...",
       "noResults": "Ningún trabajo coincide",
-      "emptyDescription": "Programa tareas recurrentes para tus Agentes"
+      "emptyDescription": "Programa tareas recurrentes para tus Agentes",
+      "allAgents": "Todos los Agentes"
     },
     "miniApps": {
       "title": "Mini-apps",
@@ -329,7 +333,8 @@
       "noAgentSelected": "Selecciona un Agente",
       "noAgentSelectedDescription": "Selecciona un Agente para ver sus mini-apps",
       "viewGrid": "Vista de cuadrícula",
-      "viewList": "Vista de lista"
+      "viewList": "Vista de lista",
+      "allAgents": "Todos los Agentes"
     },
     "tabs": {
       "tasks": "Tareas",
@@ -1664,7 +1669,8 @@
         "bullet2": "Puedes organizar los secretos por tipo (clave API, contraseña, token, etc.) y crear tipos personalizados",
         "bullet3": "Adjunta archivos a las entradas del vault para certificados, archivos de configuración u otros documentos sensibles",
         "bullet4": "Marca entradas como favoritas para acceder rápido"
-      }
+      },
+      "search": "Buscar secretos..."
     },
     "files": {
       "title": "Archivos",
@@ -2131,7 +2137,8 @@
       "pendingTitle": "{{count}} email(s) esperando tu aprobación",
       "pendingTo": "Para",
       "approve": "Aprobar y enviar",
-      "reject": "Rechazar"
+      "reject": "Rechazar",
+      "search": "Buscar cuentas..."
     },
     "channels": {
       "title": "Canales",
@@ -2247,7 +2254,13 @@
         "title": "Requerir aprobación para nuevos contactos",
         "description": "Los nuevos remitentes deben aprobarse antes de que el Agente responda.",
         "warning": "La aprobación está desactivada: cualquiera que escriba a este canal se añade automáticamente como contacto y puede activar al Agente (y sus costes) sin revisión. Se crea un contacto distinto por cada remitente, así que nunca confíes en una identidad declarada. Vuelve a activarla para exigir aprobación manual."
-      }
+      },
+      "search": "Buscar canales...",
+      "filterAllPlatforms": "Todas las plataformas",
+      "filterAllStatuses": "Todos los estados",
+      "statusActive": "Activo",
+      "statusInactive": "Inactivo",
+      "statusError": "Error"
     },
     "notifications": {
       "title": "Notificaciones",
@@ -3313,7 +3326,8 @@
       "create": "Nuevo proyecto",
       "empty": "Aún no hay proyectos. Crea tu primer proyecto para empezar.",
       "emptyTitle": "Aún no hay proyectos",
-      "emptyDescription": "Agrupa tickets, ejecuta tareas y haz seguimiento del trabajo de tus Agentes."
+      "emptyDescription": "Agrupa tickets, ejecuta tareas y haz seguimiento del trabajo de tus Agentes.",
+      "search": "Buscar proyectos..."
     },
     "empty": {
       "title": "Sin proyectos",

@@ -99,7 +99,10 @@
     },
     "url": "URL",
     "retry": "重试",
-    "agentLanguageFollowUi": "与界面相同"
+    "agentLanguageFollowUi": "与界面相同",
+    "clearFilters": "清除",
+    "perPage": "每页",
+    "listRange": "{{from}}-{{to}}，共 {{total}}"
   },
   "errors": {
     "backendUnavailable": "无法连接到服务器。请确认后端正在运行，然后重试。",
@@ -318,7 +321,8 @@
       },
       "search": "搜索任务...",
       "noResults": "没有匹配的任务",
-      "emptyDescription": "为你的智能体安排周期性任务"
+      "emptyDescription": "为你的智能体安排周期性任务",
+      "allAgents": "所有 Agent"
     },
     "miniApps": {
       "title": "迷你应用",
@@ -329,7 +333,8 @@
       "noAgentSelected": "请选择一个智能体",
       "noAgentSelectedDescription": "选择一个智能体以查看它的迷你应用",
       "viewGrid": "网格视图",
-      "viewList": "列表视图"
+      "viewList": "列表视图",
+      "allAgents": "所有 Agent"
     },
     "tabs": {
       "tasks": "任务",
@@ -1664,7 +1669,8 @@
         "bullet2": "可以按类型（API 密钥、密码、令牌等）组织机密，并创建自定义类型",
         "bullet3": "可为保险库条目附加文件，用于证书、配置文件或其他敏感文档",
         "bullet4": "将条目标记为收藏，方便快速访问"
-      }
+      },
+      "search": "搜索密钥..."
     },
     "files": {
       "title": "文件",
@@ -2131,7 +2137,8 @@
       "pendingTitle": "{{count}} 封邮件等待你的审批",
       "pendingTo": "收件人",
       "approve": "批准并发送",
-      "reject": "拒绝"
+      "reject": "拒绝",
+      "search": "搜索账户..."
     },
     "channels": {
       "title": "渠道",
@@ -2247,7 +2254,13 @@
         "title": "新联系人需要批准",
         "description": "新发送者需获得批准后，Agent 才会回复。",
         "warning": "审批已关闭：任何向该渠道发送消息的人都会被自动添加为联系人，并可在未经审核的情况下触发 Agent（及其费用）。系统会为每个发送者创建一个独立联系人，因此切勿信任任何声称的身份。重新开启以要求手动审批。"
-      }
+      },
+      "search": "搜索频道...",
+      "filterAllPlatforms": "所有平台",
+      "filterAllStatuses": "所有状态",
+      "statusActive": "活跃",
+      "statusInactive": "未激活",
+      "statusError": "错误"
     },
     "notifications": {
       "title": "通知",
@@ -3313,7 +3326,8 @@
       "create": "新建项目",
       "empty": "还没有项目。创建你的第一个项目开始使用。",
       "emptyTitle": "还没有项目",
-      "emptyDescription": "归组工单、运行任务，并跟踪各智能体的工作。"
+      "emptyDescription": "归组工单、运行任务，并跟踪各智能体的工作。",
+      "search": "搜索项目..."
     },
     "empty": {
       "title": "没有项目",

@@ -1353,6 +1353,32 @@ Share: snapshot of a workspace file into file-storage (same semantics as the `st
 
 ---
 
+## Contacts (management via UI)
+
+### `GET /api/contacts`
+
+Admin list of contacts with identifiers, nicknames, platform ids and notes.
+Supports optional server-side search + pagination. With no `limit`, returns the
+full list (the contact-picker callers rely on that shape); `total` and `hasMore`
+are always present.
+
+```typescript
+// Query params (all optional):
+//   ?search={string}   matches name / nickname / identifier / platform id / note
+//   &limit={number}    page size (1-200); omit for the full list
+//   &offset={number}   page offset (default 0); ignored without limit
+// Ordered newest-first when limit or search is provided.
+
+// Response 200
+{
+  contacts: Array<ContactWithDetails>  // see ContactCard data shape
+  total: number                        // size of the filtered set (before paging)
+  hasMore: boolean
+}
+```
+
+---
+
 ## Compacting (management via UI)
 
 ### `POST /api/agents/:id/compacting/purge`

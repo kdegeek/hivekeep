@@ -101,7 +101,10 @@
     },
     "url": "URL",
     "retry": "Spróbuj ponownie",
-    "agentLanguageFollowUi": "Taki sam jak interfejs"
+    "agentLanguageFollowUi": "Taki sam jak interfejs",
+    "clearFilters": "Wyczyść",
+    "perPage": "Na stronę",
+    "listRange": "{{from}}-{{to}} z {{total}}"
   },
   "errors": {
     "backendUnavailable": "Nie można połączyć się z serwerem. Sprawdź, czy backend działa, i spróbuj ponownie.",
@@ -320,7 +323,8 @@
       },
       "search": "Szukaj zadań...",
       "noResults": "Brak pasujących zadań",
-      "emptyDescription": "Planuj cykliczne zadania dla swoich Agentów"
+      "emptyDescription": "Planuj cykliczne zadania dla swoich Agentów",
+      "allAgents": "Wszyscy Agenci"
     },
     "miniApps": {
       "title": "Mini-aplikacje",
@@ -331,7 +335,8 @@
       "noAgentSelected": "Wybierz Agenta",
       "noAgentSelectedDescription": "Wybierz Agenta, aby zobaczyć jego mini-aplikacje",
       "viewGrid": "Widok siatki",
-      "viewList": "Widok listy"
+      "viewList": "Widok listy",
+      "allAgents": "Wszyscy Agenci"
     },
     "tabs": {
       "tasks": "Zadania",
@@ -1680,7 +1685,8 @@
         "bullet2": "Możesz porządkować sekrety według typu (klucz API, hasło, token itd.) i tworzyć własne typy",
         "bullet3": "Dołączaj pliki do wpisów sejfu: certyfikaty, pliki konfiguracyjne i inne wrażliwe dokumenty",
         "bullet4": "Oznaczaj wpisy jako ulubione, aby mieć do nich szybki dostęp"
-      }
+      },
+      "search": "Szukaj sekretów..."
     },
     "files": {
       "title": "Pliki",
@@ -2147,7 +2153,8 @@
       "pendingTitle": "Liczba e-maili oczekujących na Twoje zatwierdzenie: {{count}}",
       "pendingTo": "Do",
       "approve": "Zatwierdź i wyślij",
-      "reject": "Odrzuć"
+      "reject": "Odrzuć",
+      "search": "Szukaj kont..."
     },
     "channels": {
       "title": "Kanały",
@@ -2263,7 +2270,13 @@
         "title": "Wymagaj zatwierdzenia nowych kontaktów",
         "description": "Nowi nadawcy muszą zostać zatwierdzeni, zanim Agent odpowie.",
         "warning": "Zatwierdzanie jest wyłączone: każdy, kto napisze na ten kanał, jest automatycznie dodawany jako kontakt i może uruchomić Agenta (oraz jego koszty) bez weryfikacji. Dla każdego nadawcy tworzony jest osobny kontakt, więc nigdy nie ufaj deklarowanej tożsamości. Włącz ponownie, aby wymagać ręcznego zatwierdzenia."
-      }
+      },
+      "search": "Szukaj kanałów...",
+      "filterAllPlatforms": "Wszystkie platformy",
+      "filterAllStatuses": "Wszystkie statusy",
+      "statusActive": "Aktywny",
+      "statusInactive": "Nieaktywny",
+      "statusError": "Błąd"
     },
     "notifications": {
       "title": "Powiadomienia",
@@ -3331,7 +3344,8 @@
       "create": "Nowy projekt",
       "empty": "Brak projektów. Utwórz pierwszy projekt, aby zacząć.",
       "emptyTitle": "Brak projektów",
-      "emptyDescription": "Grupuj zgłoszenia, uruchamiaj zadania i śledź pracę swoich Agentów."
+      "emptyDescription": "Grupuj zgłoszenia, uruchamiaj zadania i śledź pracę swoich Agentów.",
+      "search": "Szukaj projektów..."
     },
     "empty": {
       "title": "Brak projektów",

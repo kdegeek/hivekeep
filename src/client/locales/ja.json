@@ -99,7 +99,10 @@
     },
     "url": "URL",
     "retry": "再試行",
-    "agentLanguageFollowUi": "インターフェースと同じ"
+    "agentLanguageFollowUi": "インターフェースと同じ",
+    "clearFilters": "クリア",
+    "perPage": "ページあたり",
+    "listRange": "{{total}} 件中 {{from}}-{{to}}"
   },
   "errors": {
     "backendUnavailable": "サーバーに接続できません。バックエンドが起動していることを確認して、もう一度お試しください。",
@@ -318,7 +321,8 @@
       },
       "search": "ジョブを検索...",
       "noResults": "一致するジョブがありません",
-      "emptyDescription": "エージェントの定期タスクをスケジュールしましょう"
+      "emptyDescription": "エージェントの定期タスクをスケジュールしましょう",
+      "allAgents": "すべての Agent"
     },
     "miniApps": {
       "title": "ミニアプリ",
@@ -329,7 +333,8 @@
       "noAgentSelected": "エージェントを選択してください",
       "noAgentSelectedDescription": "エージェントを選択するとそのミニアプリが表示されます",
       "viewGrid": "グリッド表示",
-      "viewList": "リスト表示"
+      "viewList": "リスト表示",
+      "allAgents": "すべての Agent"
     },
     "tabs": {
       "tasks": "タスク",
@@ -1664,7 +1669,8 @@
         "bullet2": "シークレットを種類(APIキー、パスワード、トークンなど)で整理でき、カスタム種類も作成できます",
         "bullet3": "証明書、設定ファイル、その他の機密文書をVaultエントリに添付できます",
         "bullet4": "エントリをお気に入りに登録してすばやくアクセスできます"
-      }
+      },
+      "search": "シークレットを検索..."
     },
     "files": {
       "title": "ファイル",
@@ -2131,7 +2137,8 @@
       "pendingTitle": "{{count}}件のメールが承認待ちです",
       "pendingTo": "宛先",
       "approve": "承認して送信",
-      "reject": "却下"
+      "reject": "却下",
+      "search": "アカウントを検索..."
     },
     "channels": {
       "title": "チャンネル",
@@ -2247,7 +2254,13 @@
         "title": "新しい連絡先に承認を必須にする",
         "description": "新しい送信者は、エージェントが返信する前に承認が必要です。",
         "warning": "承認は無効です。このチャネルにメッセージを送った人は自動的に連絡先として追加され、確認なしでエージェント（およびその費用）を起動できます。送信者ごとに別個の連絡先が作成されるため、主張された身元を決して信用しないでください。手動承認を必須にするには再度有効にしてください。"
-      }
+      },
+      "search": "チャンネルを検索...",
+      "filterAllPlatforms": "すべてのプラットフォーム",
+      "filterAllStatuses": "すべてのステータス",
+      "statusActive": "有効",
+      "statusInactive": "無効",
+      "statusError": "エラー"
     },
     "notifications": {
       "title": "通知",
@@ -3313,7 +3326,8 @@
       "create": "新規プロジェクト",
       "empty": "プロジェクトはまだありません。最初のプロジェクトを作成して始めましょう。",
       "emptyTitle": "プロジェクトはまだありません",
-      "emptyDescription": "チケットをまとめ、タスクを実行し、エージェント全体の作業を追跡しましょう。"
+      "emptyDescription": "チケットをまとめ、タスクを実行し、エージェント全体の作業を追跡しましょう。",
+      "search": "プロジェクトを検索..."
     },
     "empty": {
       "title": "プロジェクトなし",

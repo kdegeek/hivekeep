@@ -99,7 +99,10 @@
     },
     "url": "URL",
     "retry": "Retry",
-    "agentLanguageFollowUi": "Same as the interface"
+    "agentLanguageFollowUi": "Same as the interface",
+    "clearFilters": "Clear",
+    "perPage": "Per page",
+    "listRange": "{{from}}-{{to}} of {{total}}"
   },
   "errors": {
     "backendUnavailable": "Unable to reach the server. Please check that the backend is running and try again.",
@@ -318,7 +321,8 @@
       },
       "search": "Search jobs...",
       "noResults": "No matching jobs",
-      "emptyDescription": "Schedule recurring tasks for your Agents"
+      "emptyDescription": "Schedule recurring tasks for your Agents",
+      "allAgents": "All Agents"
     },
     "miniApps": {
       "title": "Mini-Apps",
@@ -329,7 +333,8 @@
       "noAgentSelected": "Select an Agent",
       "noAgentSelectedDescription": "Select an Agent to see its mini-apps",
       "viewGrid": "Grid view",
-      "viewList": "List view"
+      "viewList": "List view",
+      "allAgents": "All Agents"
     },
     "tabs": {
       "tasks": "Tasks",
@@ -1664,7 +1669,8 @@
         "bullet2": "You can organize secrets by type (API key, password, token, etc.) and create custom types",
         "bullet3": "Attach files to vault entries for certificates, config files, or other sensitive documents",
         "bullet4": "Mark entries as favorites for quick access"
-      }
+      },
+      "search": "Search secrets..."
     },
     "files": {
       "title": "Files",
@@ -2131,7 +2137,8 @@
       "pendingTitle": "{{count}} email(s) waiting for your approval",
       "pendingTo": "To",
       "approve": "Approve & send",
-      "reject": "Reject"
+      "reject": "Reject",
+      "search": "Search accounts..."
     },
     "channels": {
       "title": "Channels",
@@ -2247,7 +2254,13 @@
         "title": "Require approval for new contacts",
         "description": "New senders must be approved before the Agent replies.",
         "warning": "Approval is disabled: anyone who messages this channel is auto-added as a contact and can trigger the Agent (and its costs) without review. A new, distinct contact is created per sender, so never trust a claimed identity. Turn this back on to require manual approval."
-      }
+      },
+      "search": "Search channels...",
+      "filterAllPlatforms": "All platforms",
+      "filterAllStatuses": "All statuses",
+      "statusActive": "Active",
+      "statusInactive": "Inactive",
+      "statusError": "Error"
     },
     "notifications": {
       "title": "Notifications",
@@ -3313,7 +3326,8 @@
       "create": "New project",
       "empty": "No projects yet. Create your first project to get started.",
       "emptyTitle": "No projects yet",
-      "emptyDescription": "Group tickets, run tasks, and track work across your Agents."
+      "emptyDescription": "Group tickets, run tasks, and track work across your Agents.",
+      "search": "Search projects..."
     },
     "empty": {
       "title": "No projects",
