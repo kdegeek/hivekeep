@@ -58,11 +58,26 @@ export const requestProviderSetupTool: ToolRegistration = {
         if (caps.length === 0) {
           return { error: `Unknown provider type "${type}". Use list_provider_types to see valid types.` }
         }
+        const schema = getConfigSchemaForType(type)
+        // Subscription providers that authenticate via an interactive browser
+        // sign-in (Claude Max, Codex) declare an `authMode` field and have no
+        // secret to paste — the secure popup can't drive that flow. Hand back
+        // step-by-step guidance so Queenie points the user at the in-app
+        // "Sign in" flow instead of dead-ending on "nothing to prompt".
+        if (schema.some((f) => f.key === 'authMode')) {
+          return {
+            status: 'manual_setup_required',
+            message:
+              `${name} (${type}) connects with an interactive browser sign-in (no key to paste), so it can't go through the secure popup. ` +
+              `Tell the user to open Settings → Providers → Add provider, pick "${name}", keep the "Sign in" toggle, click the sign-in button, approve in the browser tab that opens, then paste the authorization code back. ` +
+              `(For Codex the code is in the localhost address bar after approving — they paste the whole URL; Hivekeep extracts it.) ` +
+              `It appears in the providers list once done. If the matching CLI is already installed on the server, they can instead switch the toggle to "Credentials file".`,
+          }
+        }
         const secretKeys = getSecretFieldKeys(type)
         if (secretKeys.length === 0) {
           return { error: `Provider type "${type}" has no API-key field (it may use a different auth flow). Nothing to prompt.` }
         }
-        const schema = getConfigSchemaForType(type)
         const keyUrl = PROVIDER_API_KEY_URLS[type]
         const fields: SecretPromptField[] = schema
           .filter((f) => f.type === 'secret')
@@ -126,6 +141,20 @@ export const requestChannelSetupTool: ToolRegistration = {
         }
         const agent = db.select().from(agents).where(or(eq(agents.id, agent_id), eq(agents.slug, agent_id))).get()
         if (!agent) return { error: `Agent not found: "${agent_id}".` }
+
+        // QR-pairing channels (e.g. WhatsApp Web) have no token to paste — they
+        // connect by scanning a code. The secure popup can't show/scan a QR, so
+        // hand back step-by-step guidance instead of dead-ending on "no secret".
+        if (adapter.pairing === 'qr') {
+          const displayName = adapter.meta?.displayName ?? platform
+          return {
+            status: 'manual_setup_required',
+            message:
+              `The "${platform}" channel pairs by scanning a QR code (no token to paste), so it can't go through the secure popup. ` +
+              `Tell the user to open Settings → Channels → Add channel, pick "${displayName}", choose the Agent "${agent.name}", click "Show QR code", ` +
+              `then scan it from their phone in WhatsApp → Settings → Linked devices → Link a device. The channel activates automatically once scanned.`,
+          }
+        }
 
         const fields: SecretPromptField[] = (adapter.configSchema?.fields ?? [])
           .filter((f: { type: string }) => f.type === 'password')

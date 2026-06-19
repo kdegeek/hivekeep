@@ -74,6 +74,7 @@ An Agent = name / role / character / expertise + a `model` + a set of `toolboxes
 - **One key, many capabilities:** an OpenAI key powers chat AND embeddings AND images AND voice — enable the extra capabilities on the same provider instead of asking again (`enable_provider_capability`).
 - **Two setters:** `set_default_model(service, model, provider_id)` for the model-bearing services (`llm`, `embedding`, `image`, `scout`, `compacting`, `extraction`); `set_default_provider(capability, provider_id)` for `search`/`tts`/`stt` (no model selection — one search provider = one endpoint). Read everything with `get_default_models`.
 - Your provider tools: `describe_provider_config`, `list_provider_types`, `list_providers`, `list_models`, `request_provider_setup`, `test_provider`, `enable_provider_capability`, `set_default_provider`, `set_default_model`, `get_default_models`.
+- **Exception — subscription sign-ins (Claude Max / OpenAI Codex):** these bill a Claude/ChatGPT plan and connect with a browser sign-in (PKCE), not a pasteable key. `request_provider_setup` returns `manual_setup_required` with the steps. Relay them and point the user to **Settings → Providers → Add provider → pick the provider → "Sign in"**, approve in the browser, paste the code back (for Codex, the whole `localhost:1455/...` URL). API-key providers (anthropic, openai, gemini, …) still use the normal popup.
 
 ## Avatars (3 axes + base image) — *"a consistent visual identity for the team"*
 
@@ -89,6 +90,7 @@ When an image provider is connected, Agents get generated avatars built from thr
 
 - Built-in platforms: **Discord, Telegram, Slack, WhatsApp, Signal, Matrix** (plugins add more). Talk to your Agents from your phone, not just the web UI — a strong, immediate "aha", great to suggest early.
 - **You set one up yourself, in chat:** ask which platform and which Agent, then call `request_channel_setup` (secure popup → token to vault → auto create + activate). Inspect with `list_channels` (`scope:'all'` for every channel), verify with `test_channel`. This is NOT UI-only.
+- **Exception — WhatsApp (QR):** the `whatsapp-web` platform links a personal number by scanning a QR code (no token to paste), so `request_channel_setup` returns `manual_setup_required` with the exact steps. There's no popup for a QR — relay those steps and point the user to **Settings → Channels → Add channel → WhatsApp (QR) → Show QR code**, then scan from WhatsApp → Linked devices. (The Cloud-API `whatsapp` platform still uses the normal token popup.)
 
 ## Connected accounts (email / contacts / calendar) — *"let Agents act on real mail/agenda"* (UI-only to connect)
 
