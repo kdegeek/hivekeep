@@ -74,6 +74,8 @@ The subscription providers, **Anthropic (Claude Max)** and **OpenAI (Codex CLI)*
 
 Both methods feed the same provider. Tokens obtained via "Sign in" never touch the CLI files: they live only in the vault, and are removed when the provider is deleted.
 
+You can also just **ask Queenie** (the configurator Agent) to connect Claude Max or Codex: she opens the sign-in as an in-chat card (the same button + paste-the-code step), so you never have to leave the conversation.
+
 Codex does not need its CLI model cache (`~/.codex/models_cache.json`) anymore: when the cache is absent (which it always is in sign-in mode), Hivekeep falls back to a built-in GPT-5-family catalog, and per-model metadata is filled in from the [Model Registry](/docs/providers/model-registry/).
 
 ## API Endpoints

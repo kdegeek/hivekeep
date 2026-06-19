@@ -2237,7 +2237,10 @@
         "instructions": "Open WhatsApp on your phone, go to Settings > Linked devices > Link a device, and scan this code.",
         "waiting": "Waiting for you to scan",
         "connected": "WhatsApp connected",
-        "failed": "Pairing failed. Try again."
+        "failed": "Pairing failed. Try again.",
+        "repair": "Re-pair",
+        "repairTitle": "Re-pair {{name}}",
+        "repairHint": "The WhatsApp session needs to be linked again. Scan this code to reconnect."
       }
     },
     "notifications": {

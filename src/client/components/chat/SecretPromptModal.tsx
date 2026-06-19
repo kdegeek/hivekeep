@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ShieldCheck, ExternalLink, Lock, Eye, TriangleAlert, LogIn, Loader2, Smartphone } from 'lucide-react'
+import { ShieldCheck, ExternalLink, Lock, Eye, TriangleAlert, LogIn } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import { Input } from '@/client/components/ui/input'
 import { Label } from '@/client/components/ui/label'
 import { useSecretPrompts } from '@/client/hooks/useSecretPrompts'
 import { useSSE } from '@/client/hooks/useSSE'
+import { QrPairingView } from '@/client/components/channel/QrPairingView'
 
 /**
  * Secure-input modal: appears when the configurator Agent requests a secret
@@ -92,24 +93,7 @@ export function SecretPromptModal({ agentId }: { agentId: string | null }) {
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {isQr && (
-            <div className="flex flex-col items-center gap-3 py-1 text-center">
-              <p className="text-sm text-muted-foreground">{t('settings.channels.qr.instructions')}</p>
-              <div className="rounded-xl border border-border bg-white p-3">
-                {qrImage ? (
-                  <img src={qrImage} alt="WhatsApp QR code" className="size-56" width={224} height={224} />
-                ) : (
-                  <div className="flex size-56 items-center justify-center">
-                    <Loader2 className="size-8 animate-spin text-muted-foreground" />
-                  </div>
-                )}
-              </div>
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Smartphone className="size-3.5" />
-                {t('settings.channels.qr.waiting')}
-              </p>
-            </div>
-          )}
+          {isQr && <QrPairingView qrImage={qrImage} />}
 
           {isOAuth && prompt.oauth && (
             <div className="space-y-3">

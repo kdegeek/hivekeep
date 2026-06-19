@@ -2237,7 +2237,10 @@
         "instructions": "Abra o WhatsApp no seu telefone, vá em Configurações > Aparelhos conectados > Conectar um aparelho e escaneie este código.",
         "waiting": "Aguardando a leitura",
         "connected": "WhatsApp conectado",
-        "failed": "Falha no pareamento. Tente novamente."
+        "failed": "Falha no pareamento. Tente novamente.",
+        "repair": "Reparear",
+        "repairTitle": "Reparear {{name}}",
+        "repairHint": "A sessão do WhatsApp precisa ser vinculada novamente. Escaneie este código para reconectar."
       }
     },
     "notifications": {

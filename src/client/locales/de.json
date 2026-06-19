@@ -2237,7 +2237,10 @@
         "instructions": "Öffnen Sie WhatsApp auf Ihrem Telefon, gehen Sie zu Einstellungen > Verknüpfte Geräte > Gerät verknüpfen und scannen Sie diesen Code.",
         "waiting": "Warten auf das Scannen",
         "connected": "WhatsApp verbunden",
-        "failed": "Kopplung fehlgeschlagen. Versuchen Sie es erneut."
+        "failed": "Kopplung fehlgeschlagen. Versuchen Sie es erneut.",
+        "repair": "Neu koppeln",
+        "repairTitle": "{{name}} neu koppeln",
+        "repairHint": "Die WhatsApp-Sitzung muss erneut verknüpft werden. Scannen Sie diesen Code zum Verbinden."
       }
     },
     "notifications": {

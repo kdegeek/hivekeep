@@ -13,8 +13,9 @@ import { AgentSelector } from '@/client/components/common/AgentSelector'
 import type { AgentOption } from '@/client/components/common/AgentSelectItem'
 import { PlatformSelector } from '@/client/components/common/PlatformSelector'
 import { DynamicField } from '@/client/components/common/DynamicField'
+import { QrPairingView } from '@/client/components/channel/QrPairingView'
 import { Button } from '@/client/components/ui/button'
-import { AlertTriangle, ChevronRight, HelpCircle, Lightbulb, CheckCircle2, Loader2, RefreshCw, Smartphone } from 'lucide-react'
+import { AlertTriangle, ChevronRight, HelpCircle, Lightbulb, RefreshCw } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 import { usePlatforms } from '@/client/hooks/usePlatforms'
 import { useSSE } from '@/client/hooks/useSSE'
@@ -346,31 +347,7 @@ export function ChannelFormDialog({
     >
       {/* QR pairing step (e.g. WhatsApp Web) */}
       {isPairingPlatform && pairStep !== 'form' && (
-        <div className="flex flex-col items-center gap-3 py-2 text-center">
-          {pairStep === 'connected' ? (
-            <>
-              <CheckCircle2 className="size-12 text-primary" />
-              <p className="text-sm font-medium">{t('settings.channels.qr.connected')}</p>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-muted-foreground">{t('settings.channels.qr.instructions')}</p>
-              <div className="rounded-xl border border-border bg-white p-3">
-                {qrImage ? (
-                  <img src={qrImage} alt="WhatsApp QR code" className="size-56" width={224} height={224} />
-                ) : (
-                  <div className="flex size-56 items-center justify-center">
-                    <Loader2 className="size-8 animate-spin text-muted-foreground" />
-                  </div>
-                )}
-              </div>
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Smartphone className="size-3.5" />
-                {t('settings.channels.qr.waiting')}
-              </p>
-            </>
-          )}
-        </div>
+        <QrPairingView qrImage={qrImage} connected={pairStep === 'connected'} />
       )}
 
       {/* Form (hidden once QR pairing begins) */}

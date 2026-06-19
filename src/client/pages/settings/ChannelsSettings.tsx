@@ -12,8 +12,10 @@ import { useSSE } from '@/client/hooks/useSSE'
 import { useAgentList } from '@/client/hooks/useAgentList'
 import { ChannelCard } from '@/client/components/channel/ChannelCard'
 import { ChannelFormDialog } from '@/client/components/channel/ChannelFormDialog'
+import { ChannelRepairDialog } from '@/client/components/channel/ChannelRepairDialog'
 import { ChannelUserMappings } from '@/client/components/channel/ChannelUserMappings'
 import { ChannelWebhookField } from '@/client/components/channel/ChannelWebhookField'
+import { usePlatforms } from '@/client/hooks/usePlatforms'
 import type { ChannelSummary } from '@/shared/types'
 import type { AgentOption } from '@/client/components/common/AgentSelectItem'
 
@@ -25,6 +27,11 @@ export function ChannelsSettings() {
   const agents: AgentOption[] = agentList.map((k) => ({ id: k.id, name: k.name, role: k.role ?? '', avatarUrl: k.avatarUrl }))
   const [modalOpen, setModalOpen] = useState(false)
   const [editingChannel, setEditingChannel] = useState<ChannelSummary | null>(null)
+  const [repairChannel, setRepairChannel] = useState<ChannelSummary | null>(null)
+  // Platforms that pair by QR (generic — read off the platform's `pairing`
+  // capability, never a hardcoded platform name).
+  const { platforms } = usePlatforms()
+  const qrPlatforms = new Set(platforms.filter((p) => p.pairing === 'qr').map((p) => p.platform))
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [testingId, setTestingId] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -210,6 +217,13 @@ export function ChannelsSettings() {
               onDelete={() => handleDelete(channel.id)}
               onToggle={() => handleToggle(channel)}
               onTest={() => handleTest(channel)}
+              // Re-pair (re-scan a fresh QR) is offered for QR channels that
+              // aren't currently connected.
+              onRepair={
+                qrPlatforms.has(channel.platform) && channel.status !== 'active'
+                  ? () => setRepairChannel(channel)
+                  : undefined
+              }
             />
             <CollapsibleContent>
               <div className="border border-t-0 rounded-b-xl bg-card px-4 py-3 space-y-3">
@@ -249,6 +263,13 @@ export function ChannelsSettings() {
         onTransfer={handleTransfer}
         channel={editingChannel}
         agents={agents}
+      />
+
+      {/* Re-pair (re-scan QR) dialog for QR channels */}
+      <ChannelRepairDialog
+        open={!!repairChannel}
+        onOpenChange={(open) => { if (!open) setRepairChannel(null) }}
+        channel={repairChannel}
       />
 
     </div>

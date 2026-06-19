@@ -2237,7 +2237,10 @@
         "instructions": "Abre WhatsApp en tu teléfono, ve a Ajustes > Dispositivos vinculados > Vincular un dispositivo y escanea este código.",
         "waiting": "Esperando que escanees",
         "connected": "WhatsApp conectado",
-        "failed": "Error al vincular. Inténtalo de nuevo."
+        "failed": "Error al vincular. Inténtalo de nuevo.",
+        "repair": "Volver a vincular",
+        "repairTitle": "Volver a vincular {{name}}",
+        "repairHint": "La sesión de WhatsApp debe vincularse de nuevo. Escanea este código para reconectar."
       }
     },
     "notifications": {

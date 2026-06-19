@@ -2237,7 +2237,10 @@
         "instructions": "在手机上打开 WhatsApp，进入 设置 > 已关联的设备 > 关联设备，然后扫描此二维码。",
         "waiting": "等待扫描",
         "connected": "WhatsApp 已连接",
-        "failed": "配对失败，请重试。"
+        "failed": "配对失败，请重试。",
+        "repair": "重新配对",
+        "repairTitle": "重新配对 {{name}}",
+        "repairHint": "WhatsApp 会话需要重新关联。扫描此二维码以重新连接。"
       }
     },
     "notifications": {

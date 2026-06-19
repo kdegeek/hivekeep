@@ -2253,7 +2253,10 @@
         "instructions": "Otwórz WhatsApp w telefonie, przejdź do Ustawienia > Połączone urządzenia > Połącz urządzenie i zeskanuj ten kod.",
         "waiting": "Oczekiwanie na zeskanowanie",
         "connected": "WhatsApp połączony",
-        "failed": "Parowanie nie powiodło się. Spróbuj ponownie."
+        "failed": "Parowanie nie powiodło się. Spróbuj ponownie.",
+        "repair": "Sparuj ponownie",
+        "repairTitle": "Sparuj ponownie {{name}}",
+        "repairHint": "Sesję WhatsApp trzeba połączyć ponownie. Zeskanuj ten kod, aby połączyć."
       }
     },
     "notifications": {

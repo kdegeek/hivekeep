@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/client/components/ui/card'
 import { Switch } from '@/client/components/ui/switch'
 import { PlatformIcon } from '@/client/components/common/PlatformIcon'
 import { AgentBadge } from '@/client/components/common/AgentBadge'
-import { Pencil, Send, MessageSquare, Clock, ChevronDown, Plug, Loader2 } from 'lucide-react'
+import { Pencil, Send, MessageSquare, Clock, ChevronDown, Plug, Loader2, QrCode } from 'lucide-react'
 import { ConfirmDeleteButton } from '@/client/components/common/ConfirmDeleteButton'
 import { cn } from '@/client/lib/utils'
 import type { ChannelSummary } from '@/shared/types'
@@ -19,9 +19,11 @@ interface ChannelCardProps {
   onDelete?: () => void
   onToggle?: () => void
   onTest?: () => void
+  /** Provided only for QR-pairing channels — opens the re-pair (scan) dialog. */
+  onRepair?: () => void
 }
 
-export function ChannelCard({ channel, expanded, testing, onToggleExpand, onEdit, onDelete, onToggle, onTest }: ChannelCardProps) {
+export function ChannelCard({ channel, expanded, testing, onToggleExpand, onEdit, onDelete, onToggle, onTest, onRepair }: ChannelCardProps) {
   const { t } = useTranslation()
 
   return (
@@ -81,6 +83,11 @@ export function ChannelCard({ channel, expanded, testing, onToggleExpand, onEdit
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {onRepair && (
+            <Button variant="ghost" size="icon-xs" onClick={onRepair} title={t('settings.channels.qr.repair')}>
+              <QrCode className="size-3.5" />
+            </Button>
+          )}
           {onTest && (
             <Button variant="ghost" size="icon-xs" onClick={onTest} disabled={testing}>
               {testing ? <Loader2 className="size-3.5 animate-spin" /> : <Plug className="size-3.5" />}

@@ -17,7 +17,9 @@ The **WhatsApp (QR)** platform connects through the WhatsApp **web multi-device*
 3. On your phone, open **WhatsApp > Settings > Linked devices > Link a device** and scan the code.
 4. Once scanned, the channel turns **active**. The session is saved on the server, so it reconnects automatically after a restart.
 
-If the QR expires before you scan it, click **New QR code**. If WhatsApp later reports the device as logged out, the channel flips to an error state and you can re-pair by activating it again.
+If the QR expires before you scan it, click **New QR code**. If WhatsApp later reports the device as logged out, the channel flips to an error state; click the **Re-pair** (QR) button on the channel to scan a fresh code.
+
+You can also just **ask Queenie** to connect WhatsApp: she opens the QR as an in-chat card, so you scan it right from the conversation.
 
 **Notes and limits:**
 

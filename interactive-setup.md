@@ -1,11 +1,18 @@
 # Interactive setup cards (generic OAuth sign-in + QR pairing in chat)
 
-> **Status: SPEC / DRAFT for review.** No code yet. This document exists so we
-> agree on a *generic, declarative* design before building. The guiding fear
-> (rightly): do NOT hardcode `anthropic-oauth` / `openai-codex` / `whatsapp-web`
-> anywhere in the card system. Any provider or channel must be able to opt into
-> these flows by *declaring* a capability, exactly like the secret-paste popup
-> is already driven by `configSchema`.
+> **Status: IMPLEMENTED (P0–P2), P3 polish in progress.** Approach approved; the
+> design is generic and declarative — no `anthropic-oauth` / `openai-codex` /
+> `whatsapp-web` is hardcoded in the card system. A provider/channel opts in by
+> *declaring* a capability (`LLMProvider.oauth` / `ChannelAdapter.pairing`),
+> exactly like the secret-paste popup is driven by `configSchema`.
+>
+> - **P0** (done): `LLMProvider.oauth` declaration + provider-oauth route scans
+>   for it; `SetupCardKind` types.
+> - **P1** (done): OAuth sign-in card (`services/provider-signin.ts`, kind
+>   `'oauth'`); `request_provider_setup` opens it.
+> - **P2** (done): QR pairing card (kind `'qr'`, event-resolved via
+>   `channel:pairing`); `request_channel_setup` opens it.
+> - **P3** (in progress): re-pair an existing channel, docs.
 
 ## 1. Problem
 
