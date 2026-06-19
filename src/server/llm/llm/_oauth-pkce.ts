@@ -19,39 +19,16 @@
  * own endpoints / client id / scopes / redirect uri via `PkceClient`.
  */
 import { createHash, randomBytes } from 'crypto'
+// PkceClient / PkceTokenResponse are declared in the SDK (single source of
+// truth) so plugin providers can declare an `oauth` descriptor too. The runtime
+// dance (mint/build/exchange) stays host-side, here.
+import type { PkceClient, PkceTokenResponse } from '@hivekeep/sdk'
 
-/** Static description of a PKCE public client (no secret). */
-export interface PkceClient {
-  clientId: string
-  authorizeUrl: string
-  tokenUrl: string
-  /** Fixed redirect URI registered with the provider. Not a real callback we
-   *  serve — the provider's redirect page surfaces the code for manual paste. */
-  redirectUri: string
-  scopes: string[]
-  /** Extra static query params merged into the authorize URL (e.g. `code=true`
-   *  for Anthropic's "show the code" mode). */
-  authorizeParams?: Record<string, string>
-  /** Whether to echo `state` back in the token-exchange body. Anthropic
-   *  REQUIRES it; OpenAI/Codex REJECTS it ("Unknown parameter: 'state'"), so
-   *  this is opt-in per provider. Defaults to off. */
-  includeStateInExchange?: boolean
-}
+export type { PkceClient, PkceTokenResponse }
 
 export interface PkcePair {
   verifier: string
   challenge: string
-}
-
-export interface PkceTokenResponse {
-  accessToken: string
-  refreshToken?: string
-  /** Absolute expiry, Unix ms. Derived from `expires_in` when present. */
-  expiresAt?: number
-  /** Raw OIDC id_token when the provider returns one (OpenAI/Codex). */
-  idToken?: string
-  /** The verbatim parsed token payload, for provider-specific extraction. */
-  raw: Record<string, unknown>
 }
 
 function base64url(buf: Buffer): string {

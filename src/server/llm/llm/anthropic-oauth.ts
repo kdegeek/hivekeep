@@ -28,6 +28,7 @@ import {
   REQUIRED_SYSTEM_BLOCK,
   buildBillingHeaderText,
   getOAuthUserId,
+  ANTHROPIC_PKCE_CLIENT,
 } from '@/server/llm/llm/_anthropic-oauth-auth'
 
 import type {
@@ -250,6 +251,9 @@ export const anthropicOAuthProvider: LLMProvider = {
   // Claude Max is a subscription — auto-resolution prefers it over a
   // metered anthropic-key when both serve the same model.
   billing: 'subscription',
+  // Declares the in-app sign-in (PKCE). The card/route layer keys off this,
+  // not the provider type. Anthropic's redirect shows the code on a page.
+  oauth: { client: ANTHROPIC_PKCE_CLIENT, redirectStyle: 'page' },
 
   async authenticate(config: ProviderConfig): Promise<AuthResult> {
     try {

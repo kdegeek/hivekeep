@@ -30,7 +30,6 @@ import {
   buildPkceAuthorizeUrl,
   exchangePkceCode,
   parsePastedCode,
-  type PkceClient,
   type PkceTokenResponse,
 } from '@/server/llm/llm/_oauth-pkce'
 import {
@@ -40,32 +39,19 @@ import {
   PROVIDER_TYPE_KEY,
   type OAuthTokenBundle,
 } from '@/server/llm/llm/_oauth-token-store'
-import { ANTHROPIC_PKCE_CLIENT } from '@/server/llm/llm/_anthropic-oauth-auth'
-import { CODEX_PKCE_CLIENT, codexAccountIdFromTokens } from '@/server/llm/llm/_codex-auth'
+import { getLLMProvider } from '@/server/llm/llm/registry'
 
 const log = createLogger('routes:provider-oauth')
 const providerOAuthRoutes = new Hono()
 
 /**
- * Per-provider PKCE wiring. `buildExtra` lets a provider lift any extra durable
- * field out of the token response into the stored bundle (e.g. Codex needs the
- * ChatGPT account id from the id_token).
+ * The OAuth wiring is DECLARED on the provider (`LLMProvider.oauth`) — no
+ * hand-maintained registry here. A provider (built-in or plugin) that declares
+ * an `oauth` descriptor automatically supports the in-app sign-in. Returns
+ * undefined for types that don't (or aren't registered / are non-LLM).
  */
-interface OAuthProviderEntry {
-  client: PkceClient
-  buildExtra?: (tokens: PkceTokenResponse) => Record<string, string> | undefined
-}
-
-const OAUTH_PROVIDERS: Partial<Record<string, OAuthProviderEntry>> = {
-  'anthropic-oauth': { client: ANTHROPIC_PKCE_CLIENT },
-  // Codex needs the ChatGPT account id (from the id_token) persisted alongside
-  // the tokens — the refresh grant doesn't echo it back.
-  'openai-codex': { client: CODEX_PKCE_CLIENT, buildExtra: codexAccountIdFromTokens },
-}
-
-/** Register a provider's PKCE wiring (used by openai-codex in its own change). */
-export function registerOAuthProvider(type: string, entry: OAuthProviderEntry): void {
-  OAUTH_PROVIDERS[type] = entry
+function getOAuthEntry(type: string) {
+  return getLLMProvider(type)?.oauth
 }
 
 // Short-lived store for in-flight PKCE flows (verifier is secret, never leaves
@@ -81,7 +67,7 @@ function sweepFlows(): void {
 // POST /api/providers/oauth/:type/start — begin the PKCE flow.
 providerOAuthRoutes.post('/:type/start', async (c) => {
   const type = c.req.param('type')
-  const entry = OAUTH_PROVIDERS[type]
+  const entry = getOAuthEntry(type)
   if (!entry) {
     return c.json(
       { error: { code: 'NOT_OAUTH_SIGNIN', message: `${type} does not support in-app sign-in` } },
@@ -103,7 +89,7 @@ providerOAuthRoutes.post('/:type/start', async (c) => {
 //   - providerId (optional) re-authenticates an existing row in place.
 providerOAuthRoutes.post('/:type/complete', async (c) => {
   const type = c.req.param('type')
-  const entry = OAUTH_PROVIDERS[type]
+  const entry = getOAuthEntry(type)
   if (!entry) {
     return c.json(
       { error: { code: 'NOT_OAUTH_SIGNIN', message: `${type} does not support in-app sign-in` } },

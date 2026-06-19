@@ -566,6 +566,39 @@ export interface SecretPromptRequest {
   title: string
   description?: string
   fields: SecretPromptField[]
+  /** Setup-card kind (interactive-setup.md). Absent ⇒ 'fields' (today's
+   *  secret-input popup). 'oauth' / 'qr' carry the extra payload below. */
+  kind?: SetupCardKind
+  /** Present when `kind === 'oauth'`. */
+  oauth?: OAuthCardPayload
+  /** Present when `kind === 'qr'`. */
+  qr?: QrCardPayload
+}
+
+/**
+ * Setup cards generalize the secure-input popup beyond pasting a secret. The
+ * `kind` (carried inside the prompt's JSON `spec`; absent ⇒ `'fields'`) selects
+ * how the card renders and how it resolves. See `interactive-setup.md`.
+ *   - `fields` — masked/secret field inputs (today's behavior)
+ *   - `oauth`  — interactive browser sign-in (button + authorization code)
+ *   - `qr`     — pair by scanning a QR code (live; resolves on connect)
+ */
+export type SetupCardKind = 'fields' | 'oauth' | 'qr'
+
+/** Extra payload for the `oauth` card kind (in the `prompt:secret-request` SSE). */
+export interface OAuthCardPayload {
+  /** Authorize URL the user opens to sign in. */
+  authorizeUrl: string
+  /** Provider display name, for the button/copy. */
+  providerDisplayName: string
+  /** How the code is surfaced, so the paste hint is worded generically. */
+  redirectStyle: 'page' | 'loopback'
+}
+
+/** Extra payload for the `qr` card kind. The QR image itself arrives live via
+ *  the `channel:pairing` SSE event, keyed by `channelId`. */
+export interface QrCardPayload {
+  channelId: string
 }
 
 /** Serialized file as returned by the API and displayed in chat */

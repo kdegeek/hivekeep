@@ -21,6 +21,8 @@ import { join } from 'path'
 import {
   getCodexOAuthCredentials,
   CODEX_BASE_URL,
+  CODEX_PKCE_CLIENT,
+  codexAccountIdFromTokens,
 } from '@/server/llm/llm/_codex-auth'
 
 import type {
@@ -470,6 +472,9 @@ export const openaiCodexProvider: LLMProvider = {
   // ChatGPT Plus / Codex CLI is a subscription — auto-resolution
   // prefers it over a metered openai-key when both serve the same model.
   billing: 'subscription',
+  // Declares the in-app sign-in (PKCE). OpenAI redirects to a loopback URL the
+  // user copies; buildExtra captures the ChatGPT account id from the id_token.
+  oauth: { client: CODEX_PKCE_CLIENT, buildExtra: codexAccountIdFromTokens, redirectStyle: 'loopback' },
 
   async authenticate(config: ProviderConfig): Promise<AuthResult> {
     try {
