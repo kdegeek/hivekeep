@@ -18,7 +18,7 @@ import { createLogger } from '@/server/logger'
 import { sseManager } from '@/server/sse/index'
 import { isPathBlocked } from '@/server/tools/filesystem-tools'
 import { guessMimeType, isBinary } from '@/server/services/file-kind'
-import type { WorkspaceEntry, WorkspaceFileInfo, WorkspaceFileKind } from '@/shared/types'
+import type { WorkspaceEntry, WorkspaceFileInfo, WorkspaceFileKind, WorkspaceSourceRef } from '@/shared/types'
 
 const log = createLogger('workspace-files')
 
@@ -26,8 +26,13 @@ const log = createLogger('workspace-files')
  * Workspace files service — the user-facing Files section API (see files.md).
  *
  * Containment is STRICTER than the agent filesystem tools: a path can never
- * leave the target workspace (no absolute paths, no `..`, no symlink escape —
- * leaf included). Known residual limit: hardlinks (files.md § 7.6).
+ * leave the target root (no absolute paths, no `..`, no symlink escape — leaf
+ * included). Known residual limit: hardlinks (files.md § 7.6).
+ *
+ * The core is **root-based** (`…InTarget(target, …)`): the Files page browses
+ * not just agent workspaces but also project repos and arbitrary FS folders
+ * (see workspace-sources.ts). Every legacy `…(agentId, …)` export is kept as a
+ * thin adapter so agent routes, native tools and tests are untouched.
  */
 
 export type WorkspaceErrorCode =
@@ -58,6 +63,21 @@ const CONTROL_CHARS = /[\x00-\x1f]/
 
 export function workspaceRootFor(agentId: string): string {
   return join(config.workspace.baseDir, agentId)
+}
+
+/**
+ * A resolved browse target: the absolute root on disk + the source it came from
+ * (used to scope the `workspace:changed` SSE emission). The source ref is also
+ * carried on every change event so the client can filter by what it is viewing.
+ */
+export interface WorkspaceTarget {
+  root: string
+  source: WorkspaceSourceRef
+}
+
+/** Legacy agent workspace target — `data/workspaces/<agentId>/`. */
+export function agentTarget(agentId: string): WorkspaceTarget {
+  return { root: workspaceRootFor(agentId), source: { type: 'agent', id: agentId } }
 }
 
 /**
@@ -205,10 +225,10 @@ async function openNoFollow(absPath: string) {
 
 // ─── ls ──────────────────────────────────────────────────────────────────────
 
-export async function listWorkspaceDir(agentId: string, relPath: string): Promise<{ path: string; entries: WorkspaceEntry[] }> {
-  const resolved = await resolveWorkspacePath(agentId, relPath)
+export async function listInTarget(target: WorkspaceTarget, relPath: string): Promise<{ path: string; entries: WorkspaceEntry[] }> {
+  const resolved = await resolveInRoot(target.root, relPath)
   if (!resolved.exists) {
-    // Lazy workspace: the root not existing yet is an empty listing, a missing
+    // Lazy root: the root not existing yet is an empty listing, a missing
     // subdirectory is a 404.
     if (resolved.rel === '') return { path: '', entries: [] }
     throw new WorkspaceFilesError('FILE_NOT_FOUND', `No such directory: ${resolved.rel}`)
@@ -258,12 +278,16 @@ export async function listWorkspaceDir(agentId: string, relPath: string): Promis
   return { path: resolved.rel, entries }
 }
 
+export function listWorkspaceDir(agentId: string, relPath: string): Promise<{ path: string; entries: WorkspaceEntry[] }> {
+  return listInTarget(agentTarget(agentId), relPath)
+}
+
 // ─── read ────────────────────────────────────────────────────────────────────
 
 const maxEditableBytes = () => config.workspaceFiles.maxEditableSizeMb * 1024 * 1024
 
-export async function readWorkspaceFile(agentId: string, relPath: string): Promise<WorkspaceFileInfo> {
-  const resolved = await resolveWorkspacePath(agentId, relPath)
+export async function readInTarget(target: WorkspaceTarget, relPath: string): Promise<WorkspaceFileInfo> {
+  const resolved = await resolveInRoot(target.root, relPath)
   if (!resolved.exists) throw new WorkspaceFilesError('FILE_NOT_FOUND', `No such file: ${resolved.rel}`)
 
   const fileStat = await stat(resolved.abs)
@@ -295,15 +319,19 @@ export async function readWorkspaceFile(agentId: string, relPath: string): Promi
   }
 }
 
+export function readWorkspaceFile(agentId: string, relPath: string): Promise<WorkspaceFileInfo> {
+  return readInTarget(agentTarget(agentId), relPath)
+}
+
 // ─── write ───────────────────────────────────────────────────────────────────
 
-export async function writeWorkspaceFile(
-  agentId: string,
+export async function writeInTarget(
+  target: WorkspaceTarget,
   relPath: string,
   content: string,
   opts: { baseModifiedAt?: number; createOnly?: boolean } = {},
 ): Promise<{ path: string; size: number; modifiedAt: number }> {
-  const resolved = await resolveWorkspacePath(agentId, relPath, { forWrite: true })
+  const resolved = await resolveInRoot(target.root, relPath, { forWrite: true })
   if (resolved.rel === '') throw new WorkspaceFilesError('IS_DIRECTORY', 'Cannot write the workspace root')
 
   if (Buffer.byteLength(content, 'utf8') > maxEditableBytes()) {
@@ -328,8 +356,8 @@ export async function writeWorkspaceFile(
     mkdirSync(dirname(resolved.abs), { recursive: true })
   }
 
-  // O_NOFOLLOW write: resolveWorkspacePath refused symlink leaves, but an agent
-  // shell can plant one between the check and this op (TOCTOU, files.md § 7.2).
+  // O_NOFOLLOW write: resolveInRoot refused symlink leaves, but an agent shell
+  // can plant one between the check and this op (TOCTOU, files.md § 7.2).
   let handle
   try {
     handle = await open(
@@ -349,11 +377,20 @@ export async function writeWorkspaceFile(
   }
 
   const written = await stat(resolved.abs)
-  log.info({ agentId, path: resolved.rel, size: written.size }, 'Workspace file written via Files API')
-  emitWorkspaceChanged(agentId, [
+  log.info({ source: target.source, path: resolved.rel, size: written.size }, 'Workspace file written via Files API')
+  emitForTarget(target, [
     { path: resolved.rel, type: existedBefore ? 'modified' : 'created', isDirectory: false, modifiedAt: written.mtimeMs },
   ])
   return { path: resolved.rel, size: written.size, modifiedAt: written.mtimeMs }
+}
+
+export function writeWorkspaceFile(
+  agentId: string,
+  relPath: string,
+  content: string,
+  opts: { baseModifiedAt?: number; createOnly?: boolean } = {},
+): Promise<{ path: string; size: number; modifiedAt: number }> {
+  return writeInTarget(agentTarget(agentId), relPath, content, opts)
 }
 
 // ─── workspace:changed SSE (files.md § 8) ────────────────────────────────────
@@ -370,22 +407,47 @@ export interface WorkspaceChange {
 /** Recursive ops emit ONE coarse change on the folder; `changes` stays small. */
 const MAX_CHANGES_PER_EVENT = 20
 
+function boundChanges(changes: WorkspaceChange[]): WorkspaceChange[] {
+  return changes.length > MAX_CHANGES_PER_EVENT
+    ? [{ path: commonParentOf(changes.map((c) => c.path)), type: 'modified' as const, isDirectory: true }]
+    : changes
+}
+
 /**
- * Single emission point for every workspace mutation (REST routes AND the
+ * Emit a `workspace:changed` event for a resolved target. Agent sources keep the
+ * legacy per-agent scope (`sendToAgent`); project/folder sources broadcast with a
+ * `source` discriminator the client filters on (files.md § 8.1).
+ */
+export function emitForTarget(target: WorkspaceTarget, changes: WorkspaceChange[]): void {
+  if (changes.length === 0) return
+  if (target.source.type === 'agent') {
+    emitWorkspaceChanged(target.source.id, changes)
+    return
+  }
+  const bounded = boundChanges(changes)
+  try {
+    sseManager.broadcast({
+      type: 'workspace:changed',
+      data: { source: target.source, changes: bounded },
+    })
+  } catch (err) {
+    log.warn({ source: target.source, err: (err as Error).message }, 'workspace:changed broadcast failed')
+  }
+}
+
+/**
+ * Single emission point for agent workspace mutations (REST routes AND the
  * native tools that write into the static workspace). Scope: sendToAgent —
  * event tied to an Agent, the client filters by agentId (sse.md).
  */
 export function emitWorkspaceChanged(agentId: string, changes: WorkspaceChange[]): void {
   if (changes.length === 0) return
-  const bounded =
-    changes.length > MAX_CHANGES_PER_EVENT
-      ? [{ path: commonParentOf(changes.map((c) => c.path)), type: 'modified' as const, isDirectory: true }]
-      : changes
+  const bounded = boundChanges(changes)
   try {
     sseManager.sendToAgent(agentId, {
       type: 'workspace:changed',
       agentId,
-      data: { agentId, changes: bounded },
+      data: { agentId, source: { type: 'agent', id: agentId }, changes: bounded },
     })
   } catch (err) {
     // Real-time sync is best-effort — emission must never break the mutation
@@ -427,33 +489,36 @@ export function emitWorkspaceChangedForTool(
 
 // ─── mutations: mkdir / move / copy / delete / upload ────────────────────────
 
-export async function mkdirWorkspace(agentId: string, relPath: string): Promise<{ path: string }> {
-  const resolved = await resolveWorkspacePath(agentId, relPath, { forWrite: true })
+export async function mkdirInTarget(target: WorkspaceTarget, relPath: string): Promise<{ path: string }> {
+  const resolved = await resolveInRoot(target.root, relPath, { forWrite: true })
   if (resolved.rel === '') throw new WorkspaceFilesError('INVALID_NAME', 'Folder name is required')
   if (resolved.exists) throw new WorkspaceFilesError('DEST_EXISTS', `Already exists: ${resolved.rel}`)
   validateEntryName(basename(resolved.abs))
   mkdirSync(resolved.abs, { recursive: true })
-  log.info({ agentId, path: resolved.rel }, 'Workspace folder created via Files API')
-  emitWorkspaceChanged(agentId, [{ path: resolved.rel, type: 'created', isDirectory: true }])
+  log.info({ source: target.source, path: resolved.rel }, 'Workspace folder created via Files API')
+  emitForTarget(target, [{ path: resolved.rel, type: 'created', isDirectory: true }])
   return { path: resolved.rel }
 }
 
+export function mkdirWorkspace(agentId: string, relPath: string): Promise<{ path: string }> {
+  return mkdirInTarget(agentTarget(agentId), relPath)
+}
+
 /**
- * Move/rename — cross-workspace when fromAgentId differs (files.md § 6.5).
- * `from` is validated against the SOURCE agent's root, `to` against the target's.
+ * Move/rename — cross-target when source and dest differ (files.md § 6.5).
+ * `from` is validated against the SOURCE root, `to` against the DEST root.
  */
-export async function moveWorkspaceEntry(params: {
-  agentId: string
+export async function moveInTargets(params: {
+  sourceTarget: WorkspaceTarget
+  destTarget: WorkspaceTarget
   from: string
   to: string
-  fromAgentId?: string
 }): Promise<{ from: string; to: string }> {
-  const sourceAgent = params.fromAgentId ?? params.agentId
-  const source = await resolveInRoot(workspaceRootFor(sourceAgent), params.from, { unlink: true })
+  const source = await resolveInRoot(params.sourceTarget.root, params.from, { unlink: true })
   if (!source.exists) throw new WorkspaceFilesError('FILE_NOT_FOUND', `No such file: ${source.rel}`)
   if (source.rel === '') throw forbidden('cannot move the workspace root')
 
-  const dest = await resolveWorkspacePath(params.agentId, params.to, { forWrite: true })
+  const dest = await resolveInRoot(params.destTarget.root, params.to, { forWrite: true })
   if (dest.rel === '') throw forbidden('cannot overwrite the workspace root')
   if (dest.exists) throw new WorkspaceFilesError('DEST_EXISTS', `Already exists: ${dest.rel}`)
   validateEntryName(basename(dest.abs))
@@ -461,15 +526,29 @@ export async function moveWorkspaceEntry(params: {
   mkdirSync(dirname(dest.abs), { recursive: true })
   const isDirectory = lstatSync(source.abs).isDirectory()
   renameSync(source.abs, dest.abs)
-  log.info({ agentId: params.agentId, fromAgentId: sourceAgent, from: source.rel, to: dest.rel }, 'Workspace entry moved via Files API')
-  if (sourceAgent !== params.agentId) {
-    // Cross-workspace cut/paste: one event per touched agent.
-    emitWorkspaceChanged(sourceAgent, [{ path: source.rel, type: 'deleted', isDirectory }])
-    emitWorkspaceChanged(params.agentId, [{ path: dest.rel, type: 'created', isDirectory }])
+  log.info({ source: params.sourceTarget.source, dest: params.destTarget.source, from: source.rel, to: dest.rel }, 'Workspace entry moved via Files API')
+  if (source.root !== dest.root) {
+    // Cross-workspace cut/paste: one event per touched target.
+    emitForTarget(params.sourceTarget, [{ path: source.rel, type: 'deleted', isDirectory }])
+    emitForTarget(params.destTarget, [{ path: dest.rel, type: 'created', isDirectory }])
   } else {
-    emitWorkspaceChanged(params.agentId, [{ path: source.rel, type: 'renamed', isDirectory, newPath: dest.rel }])
+    emitForTarget(params.destTarget, [{ path: source.rel, type: 'renamed', isDirectory, newPath: dest.rel }])
   }
   return { from: source.rel, to: dest.rel }
+}
+
+export function moveWorkspaceEntry(params: {
+  agentId: string
+  from: string
+  to: string
+  fromAgentId?: string
+}): Promise<{ from: string; to: string }> {
+  return moveInTargets({
+    sourceTarget: agentTarget(params.fromAgentId ?? params.agentId),
+    destTarget: agentTarget(params.agentId),
+    from: params.from,
+    to: params.to,
+  })
 }
 
 /** "name.ext" → "name (copy).ext" → "name (copy 2).ext" … */
@@ -510,18 +589,17 @@ function copyRecursive(srcAbs: string, dstAbs: string, budget: CopyBudget): void
   copyFileSync(srcAbs, dstAbs)
 }
 
-export async function copyWorkspaceEntry(params: {
-  agentId: string
+export async function copyInTargets(params: {
+  sourceTarget: WorkspaceTarget
+  destTarget: WorkspaceTarget
   from: string
   to: string
-  fromAgentId?: string
 }): Promise<{ from: string; to: string }> {
-  const sourceAgent = params.fromAgentId ?? params.agentId
-  const source = await resolveInRoot(workspaceRootFor(sourceAgent), params.from)
+  const source = await resolveInRoot(params.sourceTarget.root, params.from)
   if (!source.exists) throw new WorkspaceFilesError('FILE_NOT_FOUND', `No such file: ${source.rel}`)
   if (source.rel === '') throw forbidden('cannot copy the workspace root')
 
-  const dest = await resolveWorkspacePath(params.agentId, params.to, { forWrite: true })
+  const dest = await resolveInRoot(params.destTarget.root, params.to, { forWrite: true })
   if (dest.rel === '') throw forbidden('cannot overwrite the workspace root')
   validateEntryName(basename(dest.abs))
 
@@ -541,20 +619,38 @@ export async function copyWorkspaceEntry(params: {
   const finalRel = dest.rel === basename(dest.abs)
     ? basename(finalAbs)
     : `${dirname(dest.rel)}/${basename(finalAbs)}`
-  log.info({ agentId: params.agentId, fromAgentId: sourceAgent, from: source.rel, to: finalRel }, 'Workspace entry copied via Files API')
-  emitWorkspaceChanged(params.agentId, [{ path: finalRel, type: 'created', isDirectory: lstatSync(finalAbs).isDirectory() }])
+  log.info({ source: params.sourceTarget.source, dest: params.destTarget.source, from: source.rel, to: finalRel }, 'Workspace entry copied via Files API')
+  emitForTarget(params.destTarget, [{ path: finalRel, type: 'created', isDirectory: lstatSync(finalAbs).isDirectory() }])
   return { from: source.rel, to: finalRel }
 }
 
-export async function deleteWorkspaceEntry(agentId: string, relPath: string): Promise<{ path: string }> {
-  const resolved = await resolveWorkspacePath(agentId, relPath, { unlink: true })
+export function copyWorkspaceEntry(params: {
+  agentId: string
+  from: string
+  to: string
+  fromAgentId?: string
+}): Promise<{ from: string; to: string }> {
+  return copyInTargets({
+    sourceTarget: agentTarget(params.fromAgentId ?? params.agentId),
+    destTarget: agentTarget(params.agentId),
+    from: params.from,
+    to: params.to,
+  })
+}
+
+export async function deleteInTarget(target: WorkspaceTarget, relPath: string): Promise<{ path: string }> {
+  const resolved = await resolveInRoot(target.root, relPath, { unlink: true })
   if (!resolved.exists) throw new WorkspaceFilesError('FILE_NOT_FOUND', `No such file: ${resolved.rel}`)
   if (resolved.rel === '') throw forbidden('cannot delete the workspace root')
   const isDirectory = lstatSync(resolved.abs).isDirectory()
   rmSync(resolved.abs, { recursive: true, force: false })
-  log.info({ agentId, path: resolved.rel }, 'Workspace entry deleted via Files API')
-  emitWorkspaceChanged(agentId, [{ path: resolved.rel, type: 'deleted', isDirectory }])
+  log.info({ source: target.source, path: resolved.rel }, 'Workspace entry deleted via Files API')
+  emitForTarget(target, [{ path: resolved.rel, type: 'deleted', isDirectory }])
   return { path: resolved.rel }
+}
+
+export function deleteWorkspaceEntry(agentId: string, relPath: string): Promise<{ path: string }> {
+  return deleteInTarget(agentTarget(agentId), relPath)
 }
 
 const maxUploadBytes = () =>
@@ -567,16 +663,16 @@ export interface UploadedWorkspaceFile {
 }
 
 /**
- * Multi-file upload into a workspace directory. Multipart filenames are
- * client-controlled: only their basename survives, and collisions get the
- * " (copy N)" suffix — an upload never silently overwrites (files.md § 6.6).
+ * Multi-file upload into a directory. Multipart filenames are client-controlled:
+ * only their basename survives, and collisions get the " (copy N)" suffix — an
+ * upload never silently overwrites (files.md § 6.6).
  */
-export async function uploadWorkspaceFiles(
-  agentId: string,
+export async function uploadInTarget(
+  target: WorkspaceTarget,
   dirPath: string,
   files: Array<{ name: string; buffer: Buffer }>,
 ): Promise<{ files: UploadedWorkspaceFile[]; errors: Array<{ name: string; code: WorkspaceErrorCode }> }> {
-  const dir = await resolveWorkspacePath(agentId, dirPath, { forWrite: true })
+  const dir = await resolveInRoot(target.root, dirPath, { forWrite: true })
   if (dir.exists && !(await lstat(dir.abs)).isDirectory()) {
     throw new WorkspaceFilesError('NOT_A_DIRECTORY', `Not a directory: ${dir.rel}`)
   }
@@ -612,12 +708,20 @@ export async function uploadWorkspaceFiles(
       })
     }
   }
-  log.info({ agentId, dir: dir.rel, count: uploaded.length, failed: errors.length }, 'Workspace upload via Files API')
-  emitWorkspaceChanged(
-    agentId,
+  log.info({ source: target.source, dir: dir.rel, count: uploaded.length, failed: errors.length }, 'Workspace upload via Files API')
+  emitForTarget(
+    target,
     uploaded.map((f) => ({ path: f.path, type: 'created' as const, isDirectory: false, modifiedAt: f.modifiedAt })),
   )
   return { files: uploaded, errors }
+}
+
+export function uploadWorkspaceFiles(
+  agentId: string,
+  dirPath: string,
+  files: Array<{ name: string; buffer: Buffer }>,
+): Promise<{ files: UploadedWorkspaceFile[]; errors: Array<{ name: string; code: WorkspaceErrorCode }> }> {
+  return uploadInTarget(agentTarget(agentId), dirPath, files)
 }
 
 // ─── search & resolve-paths (chat integrations, files.md § 6.7/6.8) ──────────
@@ -634,9 +738,9 @@ export interface WorkspaceSearchHit {
  * symlinked directories (escape + cycles), skips the heavy dirs the prompt
  * tree skips (IGNORED_DIRS), and stops at the entry budget.
  */
-export async function searchWorkspaceFiles(agentId: string, query: string, limit: number): Promise<WorkspaceSearchHit[]> {
+export async function searchInTarget(target: WorkspaceTarget, query: string, limit: number): Promise<WorkspaceSearchHit[]> {
   const { IGNORED_DIRS } = await import('@/server/services/workspace-tree')
-  const resolved = await resolveWorkspacePath(agentId, '')
+  const resolved = await resolveInRoot(target.root, '')
   if (!resolved.exists) return []
   const cap = Math.min(Math.max(1, limit), config.workspaceFiles.searchMaxResults)
   const needle = query.toLowerCase()
@@ -678,13 +782,17 @@ export async function searchWorkspaceFiles(agentId: string, query: string, limit
   return hits
 }
 
+export function searchWorkspaceFiles(agentId: string, query: string, limit: number): Promise<WorkspaceSearchHit[]> {
+  return searchInTarget(agentTarget(agentId), query, limit)
+}
+
 /** Existence check for candidate paths from chat messages — files only,
  *  invalid/escaping candidates silently dropped (they're regex output). */
-export async function resolveWorkspacePaths(agentId: string, paths: string[]): Promise<string[]> {
+export async function resolvePathsInTarget(target: WorkspaceTarget, paths: string[]): Promise<string[]> {
   const existing: string[] = []
   for (const path of paths.slice(0, 50)) {
     try {
-      const resolved = await resolveWorkspacePath(agentId, path)
+      const resolved = await resolveInRoot(target.root, path)
       if (!resolved.exists) continue
       if ((await lstat(resolved.abs)).isFile()) existing.push(resolved.rel)
     } catch {
@@ -694,18 +802,29 @@ export async function resolveWorkspacePaths(agentId: string, paths: string[]): P
   return existing
 }
 
+export function resolveWorkspacePaths(agentId: string, paths: string[]): Promise<string[]> {
+  return resolvePathsInTarget(agentTarget(agentId), paths)
+}
+
 // ─── raw (download / inline view) ────────────────────────────────────────────
 
-export async function statWorkspaceFileForRaw(
-  agentId: string,
+export async function statForRawInTarget(
+  target: WorkspaceTarget,
   relPath: string,
 ): Promise<{ abs: string; name: string; size: number; mimeType: string }> {
-  const resolved = await resolveWorkspacePath(agentId, relPath)
+  const resolved = await resolveInRoot(target.root, relPath)
   if (!resolved.exists) throw new WorkspaceFilesError('FILE_NOT_FOUND', `No such file: ${resolved.rel}`)
   const fileStat = await stat(resolved.abs)
   if (fileStat.isDirectory()) throw new WorkspaceFilesError('IS_DIRECTORY', `Path is a directory: ${resolved.rel}`)
   const name = basename(resolved.abs)
   return { abs: resolved.abs, name, size: fileStat.size, mimeType: guessMimeType(name) }
+}
+
+export function statWorkspaceFileForRaw(
+  agentId: string,
+  relPath: string,
+): Promise<{ abs: string; name: string; size: number; mimeType: string }> {
+  return statForRawInTarget(agentTarget(agentId), relPath)
 }
 
 export { log as workspaceFilesLog }

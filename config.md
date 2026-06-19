@@ -332,6 +332,7 @@ Triggers on connected email accounts: a matching incoming email prompts a target
 |---------|---------|-------------|
 | `CHANNELS_MAX_PER_KIN` | `5` | Max number of channels connected per Agent. |
 | `CHANNEL_PENDING_ORIGIN_TTL` | `300_000` (5 min) | TTL of the pending origin verification during setup. |
+| `CHANNEL_MAX_PENDING_BUFFERED` | `10` | Max messages buffered per pending contact while they await approval. On approval the buffer is replayed as a single Agent turn; only the most recent N are kept (older ones are dropped). |
 | `WHATSAPP_WEB_DIR` | `<data>/whatsapp-web` | Directory holding the per-channel WhatsApp-Web (QR pairing) session state. One subfolder per channel; persisted so a paired session reconnects after restart. |
 
 ## Tasks (sub-Agents)

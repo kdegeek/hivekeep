@@ -99,7 +99,10 @@
     },
     "url": "URL",
     "retry": "Tentar novamente",
-    "agentLanguageFollowUi": "Igual à interface"
+    "agentLanguageFollowUi": "Igual à interface",
+    "clearFilters": "Limpar",
+    "perPage": "Por página",
+    "listRange": "{{from}}-{{to}} de {{total}}"
   },
   "errors": {
     "backendUnavailable": "Não foi possível conectar ao servidor. Verifique se o backend está em execução e tente novamente.",
@@ -318,7 +321,8 @@
       },
       "search": "Buscar tarefas...",
       "noResults": "Nenhuma tarefa correspondente",
-      "emptyDescription": "Agende tarefas recorrentes para seus Agentes"
+      "emptyDescription": "Agende tarefas recorrentes para seus Agentes",
+      "allAgents": "Todos os Agentes"
     },
     "miniApps": {
       "title": "Mini-Apps",
@@ -329,7 +333,8 @@
       "noAgentSelected": "Selecione um Agente",
       "noAgentSelectedDescription": "Selecione um Agente para ver seus mini-apps",
       "viewGrid": "Visualização em grade",
-      "viewList": "Visualização em lista"
+      "viewList": "Visualização em lista",
+      "allAgents": "Todos os Agentes"
     },
     "tabs": {
       "tasks": "Tarefas",
@@ -1208,7 +1213,8 @@
       "search": "Buscar ícones…",
       "noResults": "Nenhum ícone corresponde à sua busca",
       "truncated": "Mostrando os primeiros {{count}}, refine sua busca"
-    }
+    },
+    "search": "Pesquisar ferramentas..."
   },
   "toolDomains": {
     "title": "Domínios de Ferramentas",
@@ -1235,7 +1241,8 @@
     "errors": {
       "slug": "O slug deve corresponder a ^[a-z][a-z0-9-]*$",
       "label": "O rótulo é obrigatório"
-    }
+    },
+    "search": "Pesquisar domínios..."
   },
   "toolboxes": {
     "title": "Caixas de Ferramentas",
@@ -1293,7 +1300,8 @@
       "bullet2": "Crie suas próprias caixas para tipos de trabalho recorrentes.",
       "bullet3": "Toda tarefa sempre mantém um conjunto básico de ferramentas, independentemente das caixas atribuídas.",
       "bullet4": "Algumas ferramentas nunca podem rodar dentro de uma tarefa. Elas são sinalizadas quando você monta uma caixa."
-    }
+    },
+    "search": "Pesquisar caixas de ferramentas..."
   },
   "settings": {
     "title": "Configurações",
@@ -1453,7 +1461,8 @@
         "bullet2": "Cada Agente pode usar um modelo diferente conforme suas necessidades",
         "bullet3": "Provedores compatíveis com OpenAI (Groq, Together, etc.) funcionam com o mesmo padrão de configuração",
         "bullet4": "Teste a conexão após adicionar para verificar se a chave de API é válida"
-      }
+      },
+      "search": "Pesquisar provedores..."
     },
     "modelRegistry": {
       "title": "Registro de modelos",
@@ -1588,7 +1597,8 @@
         "bullet2": "Os servidores iniciam automaticamente quando um Agente precisa deles e param quando ociosos",
         "bullet3": "Variáveis de ambiente permitem passar chaves de API e segredos com segurança ao processo do servidor",
         "bullet4": "Os Agentes também podem descobrir e adicionar servidores MCP por conta própria (exibidos como \"Aguardando aprovação\")"
-      }
+      },
+      "search": "Pesquisar servidores..."
     },
     "vault": {
       "title": "Cofre",
@@ -1664,7 +1674,8 @@
         "bullet2": "Você pode organizar segredos por tipo (chave de API, senha, token, etc.) e criar tipos personalizados",
         "bullet3": "Anexe arquivos às entradas do cofre para certificados, arquivos de configuração ou outros documentos sensíveis",
         "bullet4": "Marque entradas como favoritas para acesso rápido"
-      }
+      },
+      "search": "Pesquisar segredos..."
     },
     "files": {
       "title": "Arquivos",
@@ -1711,7 +1722,8 @@
       "publicTip": "Arquivos públicos recebem uma URL compartilhável. Arquivos privados são acessíveis apenas pelo Agente proprietário.",
       "passwordTip": "Proteja o arquivo com uma senha. Qualquer pessoa que acessar o arquivo precisará digitá-la.",
       "expiresInTip": "Exclui o arquivo automaticamente após esse número de horas. Deixe vazio para mantê-lo indefinidamente.",
-      "readAndBurnTip": "O arquivo é excluído automaticamente após ser baixado uma vez. Útil para dados sensíveis."
+      "readAndBurnTip": "O arquivo é excluído automaticamente após ser baixado uma vez. Útil para dados sensíveis.",
+      "search": "Pesquisar arquivos..."
     },
     "memories": {
       "title": "Memórias",
@@ -1989,7 +2001,8 @@
         "bullet1": "Crie links de convite com prazo de expiração configurável",
         "bullet2": "Cada usuário tem sua própria conta e conversas",
         "bullet3": "Convites podem ser revogados a qualquer momento antes de serem usados"
-      }
+      },
+      "search": "Pesquisar usuários..."
     },
     "addressBook": {
       "title": "Agendas de Contatos",
@@ -2131,7 +2144,8 @@
       "pendingTitle": "{{count}} e-mail(s) aguardando sua aprovação",
       "pendingTo": "Para",
       "approve": "Aprovar e enviar",
-      "reject": "Rejeitar"
+      "reject": "Rejeitar",
+      "search": "Pesquisar contas..."
     },
     "channels": {
       "title": "Canais",
@@ -2188,7 +2202,8 @@
         "selectContact": "Selecione um contato",
         "searchContacts": "Buscar contatos...",
         "noContacts": "Nenhum contato encontrado",
-        "approve": "Aprovar"
+        "approve": "Aprovar",
+        "bufferedCount": "{{count}} mensagem(ns) aguardando"
       },
       "emptyDescription": "Configure um canal como Telegram ou Discord para que seus Agentes conversem fora da interface web.",
       "setupGuide": {
@@ -2241,7 +2256,18 @@
         "repair": "Reparear",
         "repairTitle": "Reparear {{name}}",
         "repairHint": "A sessão do WhatsApp precisa ser vinculada novamente. Escaneie este código para reconectar."
-      }
+      },
+      "approval": {
+        "title": "Exigir aprovação para novos contatos",
+        "description": "Novos remetentes precisam ser aprovados antes que o Agente responda.",
+        "warning": "A aprovação está desativada: qualquer pessoa que envie mensagem a este canal é adicionada automaticamente como contato e pode acionar o Agente (e seus custos) sem revisão. Um contato distinto é criado para cada remetente, então nunca confie em uma identidade alegada. Reative para exigir aprovação manual."
+      },
+      "search": "Pesquisar canais...",
+      "filterAllPlatforms": "Todas as plataformas",
+      "filterAllStatuses": "Todos os status",
+      "statusActive": "Ativo",
+      "statusInactive": "Inativo",
+      "statusError": "Erro"
     },
     "notifications": {
       "title": "Notificações",
@@ -2349,7 +2375,8 @@
       "updateSuccess": "Plugin atualizado com sucesso",
       "sourceLocal": "Local",
       "resetHealth": "Redefinir estatísticas de saúde",
-      "healthReset": "Estatísticas de saúde redefinidas"
+      "healthReset": "Estatísticas de saúde redefinidas",
+      "search": "Pesquisar plugins..."
     },
     "marketplace": {
       "title": "Explorar Plugins",
@@ -3319,7 +3346,8 @@
       "create": "Novo projeto",
       "empty": "Nenhum projeto ainda. Crie seu primeiro projeto para começar.",
       "emptyTitle": "Nenhum projeto ainda",
-      "emptyDescription": "Agrupe tickets, execute tarefas e acompanhe o trabalho dos seus Agentes."
+      "emptyDescription": "Agrupe tickets, execute tarefas e acompanhe o trabalho dos seus Agentes.",
+      "search": "Pesquisar projetos..."
     },
     "empty": {
       "title": "Nenhum projeto",
@@ -3691,6 +3719,29 @@
     "refresh": "Atualizar",
     "notFound": "Arquivo não encontrado: {{path}}",
     "openError": "Não foi possível abrir este arquivo",
+    "sources": {
+      "agents": "Agentes",
+      "projects": "Projetos",
+      "folders": "Pastas",
+      "addFolder": "Adicionar uma pasta…"
+    },
+    "addFolder": {
+      "title": "Pastas",
+      "description": "Navegue e edite uma pasta arbitrária no servidor. Todos podem ver e editar as pastas que você adicionar.",
+      "add": "Adicionar pasta",
+      "existing": "Pastas adicionadas",
+      "labelField": "Nome",
+      "labelPlaceholder": "Meu projeto",
+      "pathField": "Caminho absoluto",
+      "pathHint": "Um caminho absoluto para um diretório existente no servidor."
+    },
+    "worktree": {
+      "base": "Clone base",
+      "ticket": "#{{number}} · {{branch}}"
+    },
+    "git": {
+      "dirty": "{{count}} alteração(ões) não commitada(s)"
+    },
     "empty": {
       "title": "Este workspace está vazio",
       "description": "Os arquivos criados por este agente aparecerão aqui."

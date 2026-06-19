@@ -17,6 +17,11 @@ import {
 } from '@dnd-kit/sortable'
 import { Input } from '@/client/components/ui/input'
 import { Button } from '@/client/components/ui/button'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/client/components/ui/select'
+import { useListControls } from '@/client/hooks/useListControls'
+import { LIST_FILTER_THRESHOLD } from '@/shared/constants'
 import { CronCard, SortableCronCard } from '@/client/components/crons/CronCard'
 import { useCrons } from '@/client/hooks/useCrons'
 import { useTasksContext } from '@/client/contexts/TasksContext'
@@ -49,23 +54,22 @@ export function CronsPage() {
   const [editCron, setEditCron] = useState<CronSummary | null>(null)
   const [detailCron, setDetailCron] = useState<CronSummary | null>(null)
   const [duplicateDefaults, setDuplicateDefaults] = useState<Partial<CronSummary> | null>(null)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [filterAgentId, setFilterAgentId] = useState<string>('all')
 
   const cronAgents = useMemo(
     () => agents.map((k) => ({ id: k.id, name: k.name, role: k.role, avatarUrl: k.avatarUrl })),
     [agents],
   )
 
-  const filteredCrons = useMemo(() => {
-    if (!searchQuery.trim()) return crons
-    const q = searchQuery.toLowerCase()
-    return crons.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.agentName.toLowerCase().includes(q) ||
-        c.schedule.toLowerCase().includes(q),
-    )
-  }, [crons, searchQuery])
+  // Search (name / Agent / schedule) + per-Agent filter. Search stays in the
+  // PageHeader actions slot (canonical placement); the filter sits beside it.
+  const list = useListControls(crons, {
+    searchText: (c) => [c.name, c.agentName, c.schedule],
+    filter: (c) => filterAgentId === 'all' || c.agentId === filterAgentId,
+  })
+  const filteredCrons = list.filtered
+  const showAgentFilter = agents.length > 1 && crons.length >= LIST_FILTER_THRESHOLD
+  const isFiltering = list.isSearching || filterAgentId !== 'all'
 
   const pendingCrons = useMemo(() => filteredCrons.filter((c) => c.requiresApproval), [filteredCrons])
   const regularCrons = useMemo(() => filteredCrons.filter((c) => !c.requiresApproval), [filteredCrons])
@@ -95,7 +99,9 @@ export function CronsPage() {
   }, [regularCrons, reorderCrons])
 
   const regularCronIds = regularCrons.map((c) => c.id)
-  const isDraggable = !searchQuery.trim()
+  // Reordering a filtered subset would persist a misleading order, so drag is
+  // only enabled when the full list is shown.
+  const isDraggable = !isFiltering
 
   const GRID = 'grid grid-cols-1 gap-3 items-stretch sm:grid-cols-2 xl:grid-cols-3'
 
@@ -107,12 +113,23 @@ export function CronsPage() {
         title={t('activityBar.crons')}
         actions={
           <>
+            {showAgentFilter && (
+              <Select value={filterAgentId} onValueChange={setFilterAgentId}>
+                <SelectTrigger className="h-9 w-full sm:w-44"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('sidebar.crons.allAgents', 'All Agents')}</SelectItem>
+                  {cronAgents.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {crons.length > 0 && (
               <div className="relative w-full sm:w-72">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={list.query}
+                  onChange={(e) => list.setQuery(e.target.value)}
                   placeholder={t('sidebar.crons.search')}
                   className="h-9 pl-8"
                 />
@@ -134,7 +151,7 @@ export function CronsPage() {
       ) : isEmpty ? (
         <div className="flex flex-1 items-center justify-center p-6">
           <div className="w-full max-w-md">
-            {searchQuery ? (
+            {isFiltering ? (
               <p className="text-center text-sm text-muted-foreground">{t('sidebar.crons.noResults')}</p>
             ) : (
               <EmptyState

@@ -3,8 +3,11 @@ import { Button } from '@/client/components/ui/button'
 import { Plus, Cpu } from 'lucide-react'
 import { EmptyState } from '@/client/components/common/EmptyState'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
+import { ListToolbar } from '@/client/components/common/ListToolbar'
 import { SettingsListSkeleton } from '@/client/components/common/SettingsListSkeleton'
 import { TestAllProviders } from '@/client/components/common/TestAllProviders'
+import { useListControls } from '@/client/hooks/useListControls'
+import { LIST_FILTER_THRESHOLD } from '@/shared/constants'
 import { ProviderCard } from '@/client/components/agent/ProviderCard'
 import { ProviderFormDialog } from '@/client/components/agent/AddProviderDialog'
 import { useProviders } from '@/client/hooks/useProviders'
@@ -39,6 +42,10 @@ export function ProvidersSettings() {
     openAdd,
     openEdit,
   } = useProviderActions({ providers, refetch: fetchProviders })
+
+  const list = useListControls(providers, {
+    searchText: (p) => [p.name, p.type, p.slug],
+  })
 
   if (isLoading) {
     return <SettingsListSkeleton count={3} />
@@ -77,7 +84,21 @@ export function ProvidersSettings() {
         />
       )}
 
-      {providers.map((provider) => (
+      {providers.length >= LIST_FILTER_THRESHOLD && (
+        <ListToolbar
+          query={list.query}
+          onQueryChange={list.setQuery}
+          placeholder={t('settings.providers.search', 'Search providers...')}
+          onClear={() => list.setQuery('')}
+          active={list.isSearching}
+        />
+      )}
+
+      {providers.length > 0 && list.total === 0 && (
+        <EmptyState minimal title={t('common.noResults', 'No results found')} />
+      )}
+
+      {list.filtered.map((provider) => (
         <ProviderCard
           key={provider.id}
           provider={provider}

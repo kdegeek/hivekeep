@@ -99,7 +99,10 @@
     },
     "url": "URL",
     "retry": "重试",
-    "agentLanguageFollowUi": "与界面相同"
+    "agentLanguageFollowUi": "与界面相同",
+    "clearFilters": "清除",
+    "perPage": "每页",
+    "listRange": "{{from}}-{{to}}，共 {{total}}"
   },
   "errors": {
     "backendUnavailable": "无法连接到服务器。请确认后端正在运行，然后重试。",
@@ -318,7 +321,8 @@
       },
       "search": "搜索任务...",
       "noResults": "没有匹配的任务",
-      "emptyDescription": "为你的智能体安排周期性任务"
+      "emptyDescription": "为你的智能体安排周期性任务",
+      "allAgents": "所有 Agent"
     },
     "miniApps": {
       "title": "迷你应用",
@@ -329,7 +333,8 @@
       "noAgentSelected": "请选择一个智能体",
       "noAgentSelectedDescription": "选择一个智能体以查看它的迷你应用",
       "viewGrid": "网格视图",
-      "viewList": "列表视图"
+      "viewList": "列表视图",
+      "allAgents": "所有 Agent"
     },
     "tabs": {
       "tasks": "任务",
@@ -1208,7 +1213,8 @@
       "search": "搜索图标…",
       "noResults": "没有匹配的图标",
       "truncated": "仅显示前 {{count}} 个，请细化搜索"
-    }
+    },
+    "search": "搜索工具..."
   },
   "toolDomains": {
     "title": "工具领域",
@@ -1235,7 +1241,8 @@
     "errors": {
       "slug": "Slug 必须匹配 ^[a-z][a-z0-9-]*$",
       "label": "标签为必填项"
-    }
+    },
+    "search": "搜索领域..."
   },
   "toolboxes": {
     "title": "工具箱",
@@ -1293,7 +1300,8 @@
       "bullet2": "创建你自己的工具箱来匹配经常出现的工作类型。",
       "bullet3": "无论分配哪些工具箱，每个任务都始终保留一组核心工具。",
       "bullet4": "有些工具永远无法在任务中运行。构建工具箱时它们会被标记出来。"
-    }
+    },
+    "search": "搜索工具箱..."
   },
   "settings": {
     "title": "设置",
@@ -1453,7 +1461,8 @@
         "bullet2": "每个智能体可以根据需要使用不同的模型",
         "bullet3": "OpenAI 兼容的提供商（Groq、Together 等）使用相同的配置方式",
         "bullet4": "添加后请测试连接，确认 API 密钥有效"
-      }
+      },
+      "search": "搜索提供商..."
     },
     "modelRegistry": {
       "title": "模型注册表",
@@ -1588,7 +1597,8 @@
         "bullet2": "服务器在智能体需要时自动启动，空闲时自动停止",
         "bullet3": "环境变量让你安全地向服务器进程传递 API 密钥和机密",
         "bullet4": "智能体也可以自行发现并添加 MCP 服务器（显示为「待批准」）"
-      }
+      },
+      "search": "搜索服务器..."
     },
     "vault": {
       "title": "保险库",
@@ -1664,7 +1674,8 @@
         "bullet2": "可以按类型（API 密钥、密码、令牌等）组织机密，并创建自定义类型",
         "bullet3": "可为保险库条目附加文件，用于证书、配置文件或其他敏感文档",
         "bullet4": "将条目标记为收藏，方便快速访问"
-      }
+      },
+      "search": "搜索密钥..."
     },
     "files": {
       "title": "文件",
@@ -1711,7 +1722,8 @@
       "publicTip": "公开文件会获得可分享的 URL。私有文件仅所属智能体可访问。",
       "passwordTip": "用密码保护文件。任何访问该文件的人都需要输入密码。",
       "expiresInTip": "在指定小时数后自动删除文件。留空则永久保留。",
-      "readAndBurnTip": "文件被下载一次后自动删除。适合敏感数据。"
+      "readAndBurnTip": "文件被下载一次后自动删除。适合敏感数据。",
+      "search": "搜索文件..."
     },
     "memories": {
       "title": "记忆",
@@ -1989,7 +2001,8 @@
         "bullet1": "创建可配置过期时间的邀请链接",
         "bullet2": "每个用户拥有自己的账户和对话",
         "bullet3": "邀请在被使用之前可以随时撤销"
-      }
+      },
+      "search": "搜索用户..."
     },
     "addressBook": {
       "title": "通讯录",
@@ -2131,7 +2144,8 @@
       "pendingTitle": "{{count}} 封邮件等待你的审批",
       "pendingTo": "收件人",
       "approve": "批准并发送",
-      "reject": "拒绝"
+      "reject": "拒绝",
+      "search": "搜索账户..."
     },
     "channels": {
       "title": "渠道",
@@ -2188,7 +2202,8 @@
         "selectContact": "选择联系人",
         "searchContacts": "搜索联系人...",
         "noContacts": "未找到联系人",
-        "approve": "批准"
+        "approve": "批准",
+        "bufferedCount": "{{count}} 条消息待处理"
       },
       "emptyDescription": "设置 Telegram 或 Discord 等渠道，让你的智能体在网页之外也能聊天。",
       "setupGuide": {
@@ -2241,7 +2256,18 @@
         "repair": "重新配对",
         "repairTitle": "重新配对 {{name}}",
         "repairHint": "WhatsApp 会话需要重新关联。扫描此二维码以重新连接。"
-      }
+      },
+      "approval": {
+        "title": "新联系人需要批准",
+        "description": "新发送者需获得批准后，Agent 才会回复。",
+        "warning": "审批已关闭：任何向该渠道发送消息的人都会被自动添加为联系人，并可在未经审核的情况下触发 Agent（及其费用）。系统会为每个发送者创建一个独立联系人，因此切勿信任任何声称的身份。重新开启以要求手动审批。"
+      },
+      "search": "搜索频道...",
+      "filterAllPlatforms": "所有平台",
+      "filterAllStatuses": "所有状态",
+      "statusActive": "活跃",
+      "statusInactive": "未激活",
+      "statusError": "错误"
     },
     "notifications": {
       "title": "通知",
@@ -2349,7 +2375,8 @@
       "updateSuccess": "插件更新成功",
       "sourceLocal": "本地",
       "resetHealth": "重置健康统计",
-      "healthReset": "健康统计已重置"
+      "healthReset": "健康统计已重置",
+      "search": "搜索插件..."
     },
     "marketplace": {
       "title": "浏览插件",
@@ -3319,7 +3346,8 @@
       "create": "新建项目",
       "empty": "还没有项目。创建你的第一个项目开始使用。",
       "emptyTitle": "还没有项目",
-      "emptyDescription": "归组工单、运行任务，并跟踪各智能体的工作。"
+      "emptyDescription": "归组工单、运行任务，并跟踪各智能体的工作。",
+      "search": "搜索项目..."
     },
     "empty": {
       "title": "没有项目",
@@ -3691,6 +3719,29 @@
     "refresh": "刷新",
     "notFound": "未找到文件：{{path}}",
     "openError": "无法打开此文件",
+    "sources": {
+      "agents": "智能体",
+      "projects": "项目",
+      "folders": "文件夹",
+      "addFolder": "添加文件夹…"
+    },
+    "addFolder": {
+      "title": "文件夹",
+      "description": "浏览并编辑服务器上的任意文件夹。所有人都能查看和编辑你添加的文件夹。",
+      "add": "添加文件夹",
+      "existing": "已添加的文件夹",
+      "labelField": "名称",
+      "labelPlaceholder": "我的项目",
+      "pathField": "绝对路径",
+      "pathHint": "服务器上现有目录的绝对路径。"
+    },
+    "worktree": {
+      "base": "基础克隆",
+      "ticket": "#{{number}} · {{branch}}"
+    },
+    "git": {
+      "dirty": "{{count}} 处未提交的更改"
+    },
     "empty": {
       "title": "此工作区是空的",
       "description": "该智能体创建的文件会显示在这里。"

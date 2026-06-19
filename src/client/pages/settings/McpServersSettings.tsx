@@ -5,7 +5,10 @@ import { Button } from '@/client/components/ui/button'
 import { Plus , Plug} from 'lucide-react'
 import { EmptyState } from '@/client/components/common/EmptyState'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
+import { ListToolbar } from '@/client/components/common/ListToolbar'
 import { SettingsListSkeleton } from '@/client/components/common/SettingsListSkeleton'
+import { useListControls } from '@/client/hooks/useListControls'
+import { LIST_FILTER_THRESHOLD } from '@/shared/constants'
 import { api, getErrorMessage, toastError } from '@/client/lib/api'
 import { FormErrorAlert } from '@/client/components/common/FormErrorAlert'
 import { useSSE } from '@/client/hooks/useSSE'
@@ -82,6 +85,10 @@ export function McpServersSettings() {
     setModalOpen(true)
   }
 
+  const list = useListControls(servers, {
+    searchText: (s) => [s.name, s.command],
+  })
+
   if (isLoading) {
     return <SettingsListSkeleton count={2} />
   }
@@ -126,7 +133,21 @@ export function McpServersSettings() {
         />
       )}
 
-      {servers.map((server) => (
+      {servers.length >= LIST_FILTER_THRESHOLD && (
+        <ListToolbar
+          query={list.query}
+          onQueryChange={list.setQuery}
+          placeholder={t('settings.mcp.search', 'Search servers...')}
+          onClear={() => list.setQuery('')}
+          active={list.isSearching}
+        />
+      )}
+
+      {servers.length > 0 && list.total === 0 && (
+        <EmptyState minimal title={t('common.noResults', 'No results found')} />
+      )}
+
+      {list.filtered.map((server) => (
         <McpServerCard
           key={server.id}
           server={server}

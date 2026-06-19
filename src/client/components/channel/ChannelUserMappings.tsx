@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/client/components/ui/button'
 import { PlatformIcon } from '@/client/components/common/PlatformIcon'
 import { ApprovalDialog } from '@/client/components/channel/ApprovalDialog'
-import { CheckCircle2, Loader2 } from 'lucide-react'
+import { CheckCircle2, Loader2, MessageSquare } from 'lucide-react'
 import { api } from '@/client/lib/api'
 import type { ChannelPendingUser, ChannelPlatform } from '@/shared/types'
 
@@ -67,6 +67,12 @@ export function ChannelUserMappings({ channelId, platform, onCountChange }: Chan
                 </p>
                 {user.platformUsername && user.platformDisplayName && (
                   <p className="text-[11px] text-muted-foreground truncate">@{user.platformUsername}</p>
+                )}
+                {user.bufferedCount > 0 && (
+                  <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <MessageSquare className="size-3 shrink-0" />
+                    {t('settings.channels.approve.bufferedCount', { count: user.bufferedCount })}
+                  </p>
                 )}
               </div>
             </div>

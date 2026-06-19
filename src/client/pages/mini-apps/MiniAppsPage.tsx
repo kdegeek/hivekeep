@@ -6,6 +6,8 @@ import { Button } from '@/client/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/client/components/ui/dialog'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/client/components/ui/select'
 import { useMiniApps } from '@/client/hooks/useMiniApps'
+import { useListControls } from '@/client/hooks/useListControls'
+import { LIST_FILTER_THRESHOLD } from '@/shared/constants'
 import { useAgents } from '@/client/hooks/useAgents'
 import { useSidePanel } from '@/client/contexts/SidePanelContext'
 import { api, getErrorMessage } from '@/client/lib/api'
@@ -28,7 +30,7 @@ export function MiniAppsPage() {
   const { apps, isLoading, deleteApp } = useMiniApps(null, 'all')
   const { agents } = useAgents()
   const { activeAppId, badges, openApp, closePanel } = useSidePanel()
-  const [searchQuery, setSearchQuery] = useState('')
+  const [filterAgentId, setFilterAgentId] = useState<string>('all')
   const [reassignApp, setReassignApp] = useState<MiniAppSummary | null>(null)
   const [reassignAgentId, setReassignAgentId] = useState('')
   const [reassigning, setReassigning] = useState(false)
@@ -41,16 +43,15 @@ export function MiniAppsPage() {
     localStorage.setItem(VIEW_MODE_KEY, mode)
   }
 
-  const filteredApps = useMemo(() => {
-    if (!searchQuery.trim()) return apps
-    const q = searchQuery.toLowerCase()
-    return apps.filter(
-      (a) =>
-        a.name.toLowerCase().includes(q) ||
-        (a.maintainerAgentName ?? '').toLowerCase().includes(q) ||
-        (a.description?.toLowerCase().includes(q)),
-    )
-  }, [apps, searchQuery])
+  // Search (name / maintainer / description) + per-maintainer filter. Search
+  // stays in the PageHeader actions slot; the filter sits beside it.
+  const list = useListControls(apps, {
+    searchText: (a) => [a.name, a.maintainerAgentName, a.description],
+    filter: (a) => filterAgentId === 'all' || a.maintainerAgentId === filterAgentId,
+  })
+  const filteredApps = list.filtered
+  const showAgentFilter = agents.length > 1 && apps.length >= LIST_FILTER_THRESHOLD
+  const isFiltering = list.isSearching || filterAgentId !== 'all'
 
   const handleDelete = useCallback(async (appId: string) => {
     if (appId === activeAppId) closePanel()
@@ -91,12 +92,23 @@ export function MiniAppsPage() {
           title={t('activityBar.apps')}
           actions={
             <>
+              {showAgentFilter && (
+                <Select value={filterAgentId} onValueChange={setFilterAgentId}>
+                  <SelectTrigger className="h-9 w-full sm:w-44"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t('sidebar.miniApps.allAgents', 'All Agents')}</SelectItem>
+                    {agents.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               {apps.length > 0 && (
                 <div className="relative w-full sm:w-72">
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    value={list.query}
+                    onChange={(e) => list.setQuery(e.target.value)}
                     placeholder={t('sidebar.miniApps.search')}
                     className="h-9 pl-8"
                   />
@@ -138,7 +150,7 @@ export function MiniAppsPage() {
         ) : isEmpty ? (
           <div className="flex flex-1 items-center justify-center p-6">
             <div className="w-full max-w-md">
-              {searchQuery ? (
+              {isFiltering ? (
                 <p className="text-center text-sm text-muted-foreground">{t('sidebar.miniApps.noResults')}</p>
               ) : (
                 <EmptyState

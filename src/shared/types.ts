@@ -689,6 +689,8 @@ export interface ChannelPendingUser {
   platformUsername: string | null
   platformDisplayName: string | null
   createdAt: number
+  /** Messages buffered while awaiting approval (replayed as one turn on approve) */
+  bufferedCount: number
 }
 
 /** Platform ID linked to a contact (for channel authorization) */
@@ -1367,6 +1369,49 @@ export interface WorkspaceFileInfo {
   kind: WorkspaceFileKind
   /** Only set when kind === 'text'. */
   content: string | null
+}
+
+// ─── Workspace sources (Files section selector — agent / project / folder) ──
+
+export type WorkspaceSourceType = 'agent' | 'project' | 'folder'
+
+/**
+ * Identifies a browse source for the Files section. `agent` is the legacy
+ * per-agent workspace; `project` browses a cloned repo (optionally a specific
+ * git worktree); `folder` browses a user-added absolute FS path.
+ */
+export interface WorkspaceSourceRef {
+  type: WorkspaceSourceType
+  id: string
+  /** Selected git worktree id (project sources only; absent = the base clone). */
+  worktree?: string
+}
+
+/** A worktree of a project repo, as listed for the worktree sub-selector. */
+export interface WorkspaceWorktreeDTO {
+  /** Stable id used in WorkspaceSourceRef.worktree (the worktree dir basename; '' = base clone). */
+  id: string
+  branch: string
+  isMain: boolean
+  /** Ticket number this worktree was created for, when derivable. */
+  ticketNumber?: number
+}
+
+/** Lightweight git status shown as a badge over a project/repo source. */
+export interface WorkspaceGitStatusDTO {
+  branch: string
+  /** Number of changed (dirty) entries from `git status --porcelain`. */
+  dirtyCount: number
+  ahead?: number
+  behind?: number
+}
+
+/** A user-added arbitrary FS folder source (table workspace_folders). */
+export interface WorkspaceFolderDTO {
+  id: string
+  label: string
+  path: string
+  createdAt: number
 }
 
 // ─── Terminal (admin web terminal — see api.md "Terminal") ──────────────────

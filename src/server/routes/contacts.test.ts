@@ -32,6 +32,12 @@ let mockDeleteUserContactNote: ReturnType<typeof mock>
 function installContactsMock() {
   mock.module('@/server/services/contacts', () => ({
     listContactsWithDetails: (...args: unknown[]) => mockListContactsWithDetails(...args),
+    // The route lists via listContactsPage; with no query params it mirrors the
+    // full-list shape, so delegate to the same stub the GET tests configure.
+    listContactsPage: async () => {
+      const all = mockListContactsWithDetails() as unknown[]
+      return { contacts: all, total: Array.isArray(all) ? all.length : 0, hasMore: false }
+    },
     getContactWithDetails: (...args: unknown[]) => mockGetContactWithDetails(...args),
     getContact: (...args: unknown[]) => mockGetContact(...args),
     createContact: (...args: unknown[]) => mockCreateContact(...args),

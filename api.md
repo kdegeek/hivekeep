@@ -1321,6 +1321,70 @@ Share: snapshot of a workspace file into file-storage (same semantics as the `st
 // Error 413 FILE_TOO_LARGE (file-storage limit FILE_STORAGE_MAX_SIZE)
 ```
 
+> Share is **agent-scoped**: a stored file is owned by an agent, so the Files UI
+> only offers "Share" on agent workspaces (not on project repos or FS folders).
+
+### Generalized workspace sources
+
+The Files **page** browses three kinds of source: an agent workspace, a project
+repo (optionally a specific git worktree), or a user-added FS folder. They share
+one route family, mounted under `/api/workspace/:sourceType/:sourceId`, mirroring
+the agent routes above (`ls`, `file`, `raw`, `PUT file`, `mkdir`, `move`, `copy`,
+`DELETE file`, `upload`, `search`). `:sourceType` is `agent` | `project` | `folder`.
+The containment/confinement guarantees are identical for every source.
+
+```typescript
+// GET /api/workspace/agent/:id/ls?path=docs
+// GET /api/workspace/folder/:id/file?path=notes.md
+// GET /api/workspace/project/:id/ls?path=src&worktree=<worktreeId>   // ?worktree optional
+// PUT /api/workspace/folder/:id/file        // body identical to the agent PUT
+// move/copy accept an optional `fromSource: { type, id, worktree? }` for cross-source paste
+
+// Error 404 SOURCE_NOT_FOUND · 409 SOURCE_NOT_READY (repo not cloned) · 400 SOURCE_INVALID
+//   (plus the same PATH_FORBIDDEN / FILE_NOT_FOUND / CONFLICT / … as the agent routes)
+```
+
+### `GET /api/workspace/project/:projectId/worktrees`
+
+Lists the live worktrees of a project repo (base clone + per-task worktrees) for
+the worktree sub-selector. Worktrees are ephemeral (created/swept with sub-tasks).
+
+```typescript
+// Response 200
+{ worktrees: Array<{
+  id: string,            // worktree dir basename; '' = the base clone
+  branch: string,
+  isMain: boolean,
+  ticketNumber?: number  // parsed from task/<slug>-<num>-<hex> when present
+}> }
+// Non-project sources return { worktrees: [] }.
+```
+
+### `GET /api/workspace/:sourceType/:sourceId/git-status`
+
+Lightweight git badge for any source whose root is a git repo (project repos and
+git FS folders). Carries the same `?worktree=` as the browse routes.
+
+```typescript
+// Response 200
+{ gitStatus: { branch: string, dirtyCount: number, ahead?: number, behind?: number } | null }
+// gitStatus is null when the root is not a git repository.
+```
+
+### `GET/POST/DELETE /api/workspace-folders`
+
+CRUD for the user-added FS folders shown in the Files selector. Open to every
+authenticated user (same access as agent workspaces). The path is canonicalized
+(realpath) and validated on create, and re-validated on every browse.
+
+```typescript
+// GET  /api/workspace-folders → { folders: Array<{ id, label, path, createdAt }> }
+// POST /api/workspace-folders   { label: string, path: string }   // path must be ABSOLUTE
+//   → 201 { folder: { id, label, path, createdAt } }
+//   Error 400 INVALID_LABEL · INVALID_PATH (missing/relative) · NOT_A_DIRECTORY · PATH_BLOCKED
+// DELETE /api/workspace-folders/:id → { success: true } · 404 NOT_FOUND
+```
+
 ---
 
 ## Memories (management via UI)
@@ -1349,6 +1413,32 @@ Share: snapshot of a workspace file into file-storage (same semantics as the `st
 ```typescript
 // Response 200
 { success: true }
+```
+
+---
+
+## Contacts (management via UI)
+
+### `GET /api/contacts`
+
+Admin list of contacts with identifiers, nicknames, platform ids and notes.
+Supports optional server-side search + pagination. With no `limit`, returns the
+full list (the contact-picker callers rely on that shape); `total` and `hasMore`
+are always present.
+
+```typescript
+// Query params (all optional):
+//   ?search={string}   matches name / nickname / identifier / platform id / note
+//   &limit={number}    page size (1-200); omit for the full list
+//   &offset={number}   page offset (default 0); ignored without limit
+// Ordered newest-first when limit or search is provided.
+
+// Response 200
+{
+  contacts: Array<ContactWithDetails>  // see ContactCard data shape
+  total: number                        // size of the filtered set (before paging)
+  hasMore: boolean
+}
 ```
 
 ---
@@ -2016,8 +2106,12 @@ Returns `201 { "ok": true }`. Errors: `503 FEEDBACK_DISABLED` (feature off), `50
 // on the folder (isDirectory: true), never one entry per descendant; the
 // `changes` array is bounded (≤ 20: beyond that, a single change on the common parent).
 // `modifiedAt` (resulting mtime) lets the emitting device ignore its own echo.
+// Scope: agent sources keep the per-agent scope (sendToAgent) and carry `agentId`;
+// project/folder sources are broadcast and carry only `source`. The client filters
+// by the source it is currently viewing (agentId for agents, source otherwise).
 { event: 'workspace:changed', data: {
-  agentId: string,
+  agentId?: string,                                  // present for agent sources
+  source: { type: 'agent' | 'project' | 'folder', id: string, worktree?: string },
   changes: Array<{
     path: string,
     type: 'created' | 'modified' | 'deleted' | 'renamed',

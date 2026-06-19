@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { api, getErrorMessage, ApiRequestError } from '@/client/lib/api'
 import { useSSE } from '@/client/hooks/useSSE'
+import { sourceApiBase, sourceQuery, sourceKey, changeMatchesSource } from '@/client/lib/workspace-source'
 import type { WorkspaceChange } from '@/client/hooks/useWorkspaceFiles'
-import type { WorkspaceFileInfo } from '@/shared/types'
+import type { WorkspaceFileInfo, WorkspaceSourceRef } from '@/shared/types'
 
 /** Per-open-file state (files.md § 3.4/3.5). */
 export interface TabFileState {
@@ -23,7 +24,7 @@ interface PersistedTabs {
   active: string | null
 }
 
-const storageKey = (agentId: string) => `files.tabs.${agentId}`
+const storageKey = (source: WorkspaceSourceRef) => `files.tabs.${sourceKey(source)}`
 
 const emptyState = (): TabFileState => ({
   info: null,
@@ -42,7 +43,7 @@ const emptyState = (): TabFileState => ({
  * sessionStorage persistence per workspace. Unsaved CONTENT is deliberately
  * not persisted (files.md § 3.4) — a beforeunload guard covers the rest.
  */
-export function useWorkspaceTabs(agentId: string | null) {
+export function useWorkspaceTabs(source: WorkspaceSourceRef | null) {
   const [tabs, setTabs] = useState<string[]>([])
   const [active, setActive] = useState<string | null>(null)
   const [states, setStates] = useState<Record<string, TabFileState>>({})
@@ -59,11 +60,11 @@ export function useWorkspaceTabs(agentId: string | null) {
 
   const loadFile = useCallback(
     async (path: string, opts: { keepDraft?: boolean } = {}) => {
-      if (!agentId) return
+      if (!source) return
       setStates((prev) => ({ ...prev, [path]: { ...(prev[path] ?? emptyState()), isLoading: true, error: null } }))
       try {
         const info = await api.get<WorkspaceFileInfo>(
-          `/agents/${encodeURIComponent(agentId)}/workspace/file?path=${encodeURIComponent(path)}`,
+          `${sourceApiBase(source)}/file${sourceQuery(source, { path })}`,
         )
         setStates((prev) => {
           const current = prev[path] ?? emptyState()
@@ -95,7 +96,7 @@ export function useWorkspaceTabs(agentId: string | null) {
         }
       }
     },
-    [agentId],
+    [source],
   )
 
   const openTab = useCallback(
@@ -157,13 +158,13 @@ export function useWorkspaceTabs(agentId: string | null) {
 
   const save = useCallback(
     async (path: string, opts: { force?: boolean } = {}) => {
-      if (!agentId) return
+      if (!source) return
       const state = states[path]
       if (!state?.info) return
       patchState(path, { isSaving: true, error: null })
       try {
         const result = await api.put<{ path: string; size: number; modifiedAt: number }>(
-          `/agents/${encodeURIComponent(agentId)}/workspace/file`,
+          `${sourceApiBase(source)}/file${sourceQuery(source)}`,
           {
             path,
             content: state.draft,
@@ -195,7 +196,7 @@ export function useWorkspaceTabs(agentId: string | null) {
         }
       }
     },
-    [agentId, states, patchState],
+    [source, states, patchState],
   )
 
   /** Rename `from` → `to` across tabs/states/active, draft preserved. */
@@ -221,7 +222,7 @@ export function useWorkspaceTabs(agentId: string | null) {
   statesRef.current = states
   useSSE({
     'workspace:changed': (data) => {
-      if ((data.agentId as string) !== agentId) return
+      if (!source || !changeMatchesSource(data as { agentId?: string; source?: WorkspaceSourceRef }, source)) return
       for (const change of (data.changes as WorkspaceChange[]) ?? []) {
         const affected = (path: string) =>
           path === change.path || (change.isDirectory && path.startsWith(change.path + '/'))
@@ -258,15 +259,16 @@ export function useWorkspaceTabs(agentId: string | null) {
     return () => window.removeEventListener('beforeunload', handler)
   }, [anyDirty])
 
-  // Persist open tab paths per workspace (sessionStorage, content excluded).
-  const restoredForAgent = useRef<string | null>(null)
+  // Persist open tab paths per source (sessionStorage, content excluded).
+  const restoredForSource = useRef<string | null>(null)
+  const key = source ? sourceKey(source) : null
   useEffect(() => {
-    if (!agentId) return
-    if (restoredForAgent.current === agentId) return
-    restoredForAgent.current = agentId
+    if (!source || !key) return
+    if (restoredForSource.current === key) return
+    restoredForSource.current = key
     setStates({})
     try {
-      const raw = sessionStorage.getItem(storageKey(agentId))
+      const raw = sessionStorage.getItem(storageKey(source))
       const persisted = raw ? (JSON.parse(raw) as PersistedTabs) : null
       const restoredTabs = persisted?.tabs ?? []
       setTabs(restoredTabs)
@@ -278,12 +280,13 @@ export function useWorkspaceTabs(agentId: string | null) {
       setTabs([])
       setActive(null)
     }
-  }, [agentId, loadFile])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, loadFile])
 
   useEffect(() => {
-    if (!agentId || restoredForAgent.current !== agentId) return
-    sessionStorage.setItem(storageKey(agentId), JSON.stringify({ tabs, active } satisfies PersistedTabs))
-  }, [agentId, tabs, active])
+    if (!source || !key || restoredForSource.current !== key) return
+    sessionStorage.setItem(storageKey(source), JSON.stringify({ tabs, active } satisfies PersistedTabs))
+  }, [source, key, tabs, active])
 
   return {
     tabs,

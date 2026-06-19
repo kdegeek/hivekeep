@@ -7,10 +7,12 @@ import { ScrollArea } from '@/client/components/ui/scroll-area'
 import { MarkdownContent } from '@/client/components/chat/MarkdownContent'
 import { cn } from '@/client/lib/utils'
 import { getFileIcon, formatFileSize } from '@/client/lib/file-icons'
+import { workspaceRawUrl } from '@/client/lib/workspace-source'
 import type { TabFileState } from '@/client/hooks/useWorkspaceTabs'
+import type { WorkspaceSourceRef } from '@/shared/types'
 
 interface WorkspaceEditorProps {
-  agentId: string
+  source: WorkspaceSourceRef
   path: string
   state: TabFileState
   onChangeDraft: (value: string) => void
@@ -18,9 +20,7 @@ interface WorkspaceEditorProps {
   onReload: () => void
 }
 
-export function workspaceRawUrl(agentId: string, path: string, inline = false): string {
-  return `/api/agents/${encodeURIComponent(agentId)}/workspace/raw?path=${encodeURIComponent(path)}${inline ? '&inline=1' : ''}`
-}
+export { workspaceRawUrl }
 
 const isMarkdown = (name: string) => /\.(md|markdown)$/i.test(name)
 
@@ -30,7 +30,7 @@ const isMarkdown = (name: string) => /\.(md|markdown)$/i.test(name)
  * deleted-on-disk banners, status bar. The text editor IS the shared
  * CodeEditor (extended with filename/onSave), not a fork.
  */
-export function WorkspaceEditor({ agentId, path, state, onChangeDraft, onSave, onReload }: WorkspaceEditorProps) {
+export function WorkspaceEditor({ source, path, state, onChangeDraft, onSave, onReload }: WorkspaceEditorProps) {
   const { t } = useTranslation()
   const [mdView, setMdView] = useState<'edit' | 'preview'>('edit')
 
@@ -53,7 +53,7 @@ export function WorkspaceEditor({ agentId, path, state, onChangeDraft, onSave, o
 
   const downloadButton = info && (
     <Button asChild variant="outline" size="sm" className="gap-1.5">
-      <a href={workspaceRawUrl(agentId, path)} download={name}>
+      <a href={workspaceRawUrl(source, path)} download={name}>
         <Download className="size-4" />
         {t('files.editor.download')}
       </a>
@@ -120,7 +120,7 @@ export function WorkspaceEditor({ agentId, path, state, onChangeDraft, onSave, o
         body = (
           <div className="flex h-full items-center justify-center overflow-auto bg-muted/30 p-4">
             <img
-              src={workspaceRawUrl(agentId, path, true)}
+              src={workspaceRawUrl(source, path, true)}
               alt={name}
               className="max-h-full max-w-full rounded-md border border-border object-contain"
             />
@@ -128,7 +128,7 @@ export function WorkspaceEditor({ agentId, path, state, onChangeDraft, onSave, o
         )
         break
       case 'pdf':
-        body = <iframe src={workspaceRawUrl(agentId, path, true)} title={name} className="h-full w-full border-0" />
+        body = <iframe src={workspaceRawUrl(source, path, true)} title={name} className="h-full w-full border-0" />
         break
       default:
         body = (

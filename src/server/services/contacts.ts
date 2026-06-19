@@ -242,6 +242,96 @@ export async function listContactsWithDetails(): Promise<ContactWithDetails[]> {
   })
 }
 
+/** Collect the set of contact IDs matching a free-text query across every
+ *  searchable surface (name, nicknames, identifiers, platform ids, notes).
+ *  Admin view: all notes are searched (no scope restriction). */
+function contactIdsMatchingSearch(query: string): Set<string> {
+  const pattern = `%${query}%`
+  const byName = db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(or(like(contacts.firstName, pattern), like(contacts.lastName, pattern)))
+    .all()
+  const byNickname = db
+    .select({ id: contactNicknames.contactId })
+    .from(contactNicknames)
+    .where(like(contactNicknames.nickname, pattern))
+    .all()
+  const byIdentifier = db
+    .select({ id: contactIdentifiers.contactId })
+    .from(contactIdentifiers)
+    .where(or(like(contactIdentifiers.value, pattern), like(contactIdentifiers.label, pattern)))
+    .all()
+  const byPlatformId = db
+    .select({ id: contactPlatformIds.contactId })
+    .from(contactPlatformIds)
+    .where(or(like(contactPlatformIds.platform, pattern), like(contactPlatformIds.platformId, pattern)))
+    .all()
+  const byNote = db
+    .select({ id: contactNotes.contactId })
+    .from(contactNotes)
+    .where(like(contactNotes.content, pattern))
+    .all()
+  return new Set([
+    ...byName.map((r) => r.id),
+    ...byNickname.map((r) => r.id),
+    ...byIdentifier.map((r) => r.id),
+    ...byPlatformId.map((r) => r.id),
+    ...byNote.map((r) => r.id),
+  ])
+}
+
+export interface ListContactsPageOptions {
+  /** Free-text query; when omitted/empty, every contact is in scope. */
+  search?: string
+  /** Page size. When undefined, the full (filtered) set is returned. */
+  limit?: number
+  offset?: number
+}
+
+export interface ContactsPage {
+  contacts: ContactWithDetails[]
+  /** Size of the filtered set (before the page slice). */
+  total: number
+  hasMore: boolean
+}
+
+/**
+ * Server-side search + pagination for the contacts admin view. Contacts grow
+ * unboundedly (auto-created from channels), so filtering and paging happen here
+ * rather than shipping the whole table to the client. Ordered newest-first for
+ * stable paging. With no `search` and no `limit` it is equivalent to
+ * `listContactsWithDetails` (the picker callers rely on that full-list shape).
+ */
+export async function listContactsPage(opts: ListContactsPageOptions = {}): Promise<ContactsPage> {
+  const search = opts.search?.trim()
+  if (!search && opts.limit == null) {
+    const all = await listContactsWithDetails()
+    return { contacts: all, total: all.length, hasMore: false }
+  }
+
+  let rows = db
+    .select({ id: contacts.id, createdAt: contacts.createdAt })
+    .from(contacts)
+    .all()
+  if (search) {
+    const matches = contactIdsMatchingSearch(search)
+    rows = rows.filter((r) => matches.has(r.id))
+  }
+  rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+  const total = rows.length
+  const offset = Math.max(opts.offset ?? 0, 0)
+  const pageRows = opts.limit == null ? rows : rows.slice(offset, offset + opts.limit)
+
+  const details: ContactWithDetails[] = []
+  for (const r of pageRows) {
+    const detail = await getContactWithDetails(r.id) // admin view (all notes)
+    if (detail) details.push(detail)
+  }
+  return { contacts: details, total, hasMore: offset + pageRows.length < total }
+}
+
 export async function createContact(input: CreateContactInput) {
   if (input.linkedUserId) {
     const existing = findContactByLinkedUserId(input.linkedUserId)

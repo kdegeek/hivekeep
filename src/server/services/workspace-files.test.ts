@@ -26,6 +26,10 @@ import {
   normalizeRelPath,
   validateEntryName,
   WorkspaceFilesError,
+  writeInTarget,
+  listInTarget,
+  deleteInTarget,
+  type WorkspaceTarget,
 } from '@/server/services/workspace-files'
 
 /**
@@ -295,6 +299,31 @@ describe('mutations (mkdir / move / copy / delete / upload)', () => {
     ])
     expect(existsSync(join(root, '..', 'etc'))).toBe(false)
     expect(result.errors).toEqual([{ name: 'x'.repeat(300), code: 'INVALID_NAME' }])
+  })
+})
+
+describe('target-based ops on a non-agent root (project/folder sources)', () => {
+  // Confinement and mutations must work identically for an arbitrary root, not
+  // just `data/workspaces/<agentId>` — that is the whole point of generalizing
+  // the service for project repos and FS folders.
+  const folderTarget = (): WorkspaceTarget => ({ root, source: { type: 'folder', id: 'f1' } })
+
+  test('write + list + delete on an arbitrary folder root', async () => {
+    const written = await writeInTarget(folderTarget(), 'sub/note.txt', 'hi')
+    expect(written.path).toBe('sub/note.txt')
+    expect(readFileSync(join(root, 'sub/note.txt'), 'utf8')).toBe('hi')
+
+    const listed = await listInTarget(folderTarget(), 'sub')
+    expect(listed.entries.map((e) => e.name)).toContain('note.txt')
+
+    await deleteInTarget(folderTarget(), 'sub')
+    expect(existsSync(join(root, 'sub'))).toBe(false)
+  })
+
+  test('still confines: symlink escape rejected on a folder root', async () => {
+    symlinkSync(join(outside, 'secret.txt'), join(root, 'leak'))
+    await expectForbidden(writeInTarget(folderTarget(), 'leak', 'pwned'))
+    expect(readFileSync(join(outside, 'secret.txt'), 'utf8')).toBe('top secret')
   })
 })
 

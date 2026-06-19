@@ -1,15 +1,23 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/client/components/ui/button'
+import { Switch } from '@/client/components/ui/switch'
 import { Collapsible, CollapsibleContent } from '@/client/components/ui/collapsible'
-import { Plus , MessageCircle} from 'lucide-react'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/client/components/ui/select'
+import { Plus, MessageCircle, AlertTriangle } from 'lucide-react'
 import { EmptyState } from '@/client/components/common/EmptyState'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
+import { ListToolbar } from '@/client/components/common/ListToolbar'
 import { SettingsListSkeleton } from '@/client/components/common/SettingsListSkeleton'
+import { useListControls } from '@/client/hooks/useListControls'
+import { LIST_FILTER_THRESHOLD } from '@/shared/constants'
 import { api, toastError } from '@/client/lib/api'
 import { useSSE } from '@/client/hooks/useSSE'
 import { useAgentList } from '@/client/hooks/useAgentList'
+import { PlatformIcon } from '@/client/components/common/PlatformIcon'
 import { ChannelCard } from '@/client/components/channel/ChannelCard'
 import { ChannelFormDialog } from '@/client/components/channel/ChannelFormDialog'
 import { ChannelRepairDialog } from '@/client/components/channel/ChannelRepairDialog'
@@ -35,6 +43,24 @@ export function ChannelsSettings() {
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [testingId, setTestingId] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [platformFilter, setPlatformFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+
+  // Search (name / platform / Agent) + platform & status filters. The bar only
+  // appears once the list is long enough to warrant it (LIST_FILTER_THRESHOLD).
+  const list = useListControls(channels, {
+    searchText: (c) => [c.name, c.platform, c.agentName],
+    filter: (c) =>
+      (platformFilter === 'all' || c.platform === platformFilter) &&
+      (statusFilter === 'all' || c.status === statusFilter),
+  })
+  const platformsPresent = useMemo(
+    () => [...new Set(channels.map((c) => c.platform))],
+    [channels],
+  )
+  const showToolbar = channels.length >= LIST_FILTER_THRESHOLD
+  const filtersActive = list.isSearching || platformFilter !== 'all' || statusFilter !== 'all'
+  const clearFilters = () => { list.setQuery(''); setPlatformFilter('all'); setStatusFilter('all') }
 
   const fetchChannels = useCallback(async () => {
     try {
@@ -86,6 +112,20 @@ export function ChannelsSettings() {
     await api.patch(`/channels/${channelId}`, data)
     await fetchChannels()
     toast.success(t('settings.channels.saved'))
+  }
+
+  // Toggle the per-channel approval requirement. The switch shows
+  // "require approval" (= !autoCreateContacts); turning it off auto-creates
+  // contacts and lets unknown senders through immediately (a security tradeoff
+  // surfaced by the warning below).
+  const handleToggleApproval = async (channel: ChannelSummary) => {
+    try {
+      await api.patch(`/channels/${channel.id}`, { autoCreateContacts: !channel.autoCreateContacts })
+      await fetchChannels()
+      toast.success(t('settings.channels.saved'))
+    } catch (err: unknown) {
+      toastError(err)
+    }
   }
 
   const handleTransfer = async (
@@ -200,7 +240,45 @@ export function ChannelsSettings() {
         />
       )}
 
-      {channels.map((channel) => {
+      {showToolbar && (
+        <ListToolbar
+          query={list.query}
+          onQueryChange={list.setQuery}
+          placeholder={t('settings.channels.search', 'Search channels...')}
+          onClear={clearFilters}
+          active={filtersActive}
+        >
+          <Select value={platformFilter} onValueChange={setPlatformFilter}>
+            <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('settings.channels.filterAllPlatforms', 'All platforms')}</SelectItem>
+              {platformsPresent.map((p) => (
+                <SelectItem key={p} value={p}>
+                  <span className="flex items-center gap-2">
+                    <PlatformIcon platform={p} variant="color" className="size-4" />
+                    <span className="capitalize">{p}</span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('settings.channels.filterAllStatuses', 'All statuses')}</SelectItem>
+              <SelectItem value="active">{t('settings.channels.statusActive', 'Active')}</SelectItem>
+              <SelectItem value="inactive">{t('settings.channels.statusInactive', 'Inactive')}</SelectItem>
+              <SelectItem value="error">{t('settings.channels.statusError', 'Error')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </ListToolbar>
+      )}
+
+      {channels.length > 0 && list.filtered.length === 0 && (
+        <EmptyState minimal title={t('common.noResults', 'No results found')} />
+      )}
+
+      {list.filtered.map((channel) => {
         const isExpanded = expandedId === channel.id
         return (
           <Collapsible
@@ -228,6 +306,30 @@ export function ChannelsSettings() {
             <CollapsibleContent>
               <div className="border border-t-0 rounded-b-xl bg-card px-4 py-3 space-y-3">
                 {channel.webhookUrl && <ChannelWebhookField url={channel.webhookUrl} />}
+                {/* Approval requirement toggle (secure default: ON) */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                        {t('settings.channels.approval.title')}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {t('settings.channels.approval.description')}
+                      </p>
+                    </div>
+                    <Switch
+                      size="sm"
+                      checked={!channel.autoCreateContacts}
+                      onCheckedChange={() => handleToggleApproval(channel)}
+                    />
+                  </div>
+                  {channel.autoCreateContacts && (
+                    <p className="flex items-start gap-1.5 rounded-lg bg-warning/10 border border-warning/20 px-3 py-2 text-xs text-warning">
+                      <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
+                      <span>{t('settings.channels.approval.warning')}</span>
+                    </p>
+                  )}
+                </div>
                 <div className="space-y-1.5">
                   <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                     {t('settings.channels.manageUsers')}

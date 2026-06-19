@@ -71,6 +71,15 @@ interface GitResult {
   stderr: string
 }
 
+/**
+ * Run a git command in any directory (`git -C <cwd> …`). Exported so the Files
+ * section can list worktrees and read git status without re-implementing the
+ * Bun.spawn plumbing. Never throws on a non-zero exit — inspect `.exitCode`.
+ */
+export function runGit(cwd: string, args: string[], env?: Record<string, string>): Promise<GitResult> {
+  return gitInClone(cwd, args, env)
+}
+
 async function gitInClone(
   cloneDir: string,
   args: string[],

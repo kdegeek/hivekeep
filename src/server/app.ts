@@ -58,6 +58,8 @@ import { pluginRoutes } from '@/server/routes/plugins'
 import { pluginCardRoutes } from '@/server/routes/plugin-cards'
 import { knowledgeRoutes } from '@/server/routes/knowledge'
 import { workspaceFilesRoutes } from '@/server/routes/workspace-files'
+import { workspaceSourceRoutes } from '@/server/routes/workspace-sources'
+import { workspaceFolderRoutes } from '@/server/routes/workspace-folders'
 import { logRoutes } from '@/server/routes/logs'
 import { terminalRoutes } from '@/server/routes/terminal'
 import { usageRoutes } from '@/server/routes/usage'
@@ -224,6 +226,8 @@ app.route('/api/channels/signal/webhook', channelSignalRoutes)
 app.route('/api/channels', channelRoutes)
 app.route('/api/agents/:agentId/knowledge', knowledgeRoutes)
 app.route('/api/agents/:agentId/workspace', workspaceFilesRoutes)
+app.route('/api/workspace/:sourceType/:sourceId', workspaceSourceRoutes)
+app.route('/api/workspace-folders', workspaceFolderRoutes)
 app.route('/api/agents/:agentId/quick-sessions', quickSessionAgentRoutes)
 app.route('/api/quick-sessions', quickSessionDetailRoutes)
 app.route('/api/mini-apps/sdk', miniAppSdkRoutes)

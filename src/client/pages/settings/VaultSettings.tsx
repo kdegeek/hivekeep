@@ -5,7 +5,10 @@ import { Button } from '@/client/components/ui/button'
 import { Plus, Lock, Settings2 } from 'lucide-react'
 import { EmptyState } from '@/client/components/common/EmptyState'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
+import { ListToolbar } from '@/client/components/common/ListToolbar'
 import { SettingsListSkeleton } from '@/client/components/common/SettingsListSkeleton'
+import { useListControls } from '@/client/hooks/useListControls'
+import { LIST_FILTER_THRESHOLD } from '@/shared/constants'
 import { api, getErrorMessage, toastError } from '@/client/lib/api'
 import { useAgentList } from '@/client/hooks/useAgentList'
 import { VaultSecretCard, type VaultSecretData } from '@/client/components/vault/VaultSecretCard'
@@ -109,12 +112,18 @@ export function VaultSettings() {
     return list
   }, [t, customTypes])
 
-  // Filter entries by active tab
-  const filteredEntries = useMemo(() => {
-    if (activeTab === ALL_TAB) return entries
-    if (activeTab === FAVORITES_TAB) return entries.filter((e) => e.isFavorite)
-    return entries.filter((e) => (e.entryType ?? 'text') === activeTab)
-  }, [entries, activeTab])
+  // Active-tab predicate + cross-tab text search (key / description). The
+  // search box only shows once there are enough secrets to warrant it.
+  const list = useListControls(entries, {
+    filter: (e) => {
+      if (activeTab === ALL_TAB) return true
+      if (activeTab === FAVORITES_TAB) return !!e.isFavorite
+      return (e.entryType ?? 'text') === activeTab
+    },
+    searchText: (e) => [e.key, e.description],
+  })
+  const filteredEntries = list.filtered
+  const showSearch = entries.length >= LIST_FILTER_THRESHOLD
 
   if (isLoading) {
     return <SettingsListSkeleton count={2} />
@@ -157,6 +166,16 @@ export function VaultSettings() {
         storageKey="help.vault.open"
       />
 
+      {showSearch && (
+        <ListToolbar
+          query={list.query}
+          onQueryChange={list.setQuery}
+          placeholder={t('settings.vault.search', 'Search secrets...')}
+          onClear={() => list.setQuery('')}
+          active={list.isSearching}
+        />
+      )}
+
       {/* Type filter tabs */}
       <div className="flex flex-wrap gap-1.5">
         {tabs.map((tab) => (
@@ -175,13 +194,17 @@ export function VaultSettings() {
       </div>
 
       {filteredEntries.length === 0 && (
-        <EmptyState
-          icon={Lock}
-          title={activeTab === ALL_TAB ? t('settings.vault.empty') : t('settings.vault.emptyFiltered')}
-          description={activeTab === ALL_TAB ? t('settings.vault.emptyDescription') : undefined}
-          actionLabel={t('settings.vault.add')}
-          onAction={openAdd}
-        />
+        list.isSearching ? (
+          <EmptyState minimal title={t('common.noResults', 'No results found')} />
+        ) : (
+          <EmptyState
+            icon={Lock}
+            title={activeTab === ALL_TAB ? t('settings.vault.empty') : t('settings.vault.emptyFiltered')}
+            description={activeTab === ALL_TAB ? t('settings.vault.emptyDescription') : undefined}
+            actionLabel={t('settings.vault.add')}
+            onAction={openAdd}
+          />
+        )
       )}
 
       {filteredEntries.map((entry) => (

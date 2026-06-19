@@ -7,7 +7,10 @@ import { Plus, Wrench, Pencil, Code2 } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 import { EmptyState } from '@/client/components/common/EmptyState'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
+import { ListToolbar } from '@/client/components/common/ListToolbar'
 import { SettingsListSkeleton } from '@/client/components/common/SettingsListSkeleton'
+import { useListControls } from '@/client/hooks/useListControls'
+import { LIST_FILTER_THRESHOLD } from '@/shared/constants'
 import { ConfirmDeleteButton } from '@/client/components/common/ConfirmDeleteButton'
 import { ToolDomainBadge } from '@/client/components/common/ToolDomainBadge'
 import { CustomToolFormDialog } from '@/client/components/toolbox/CustomToolFormDialog'
@@ -57,9 +60,14 @@ export function CustomToolsSettings() {
     }
   }
 
+  const list = useListControls(tools, {
+    searchText: (tool) => [tool.name, tool.slug, tool.description],
+    sort: (a, b) => a.slug.localeCompare(b.slug),
+  })
+
   if (isLoading) return <SettingsListSkeleton count={3} />
 
-  const sorted = [...tools].sort((a, b) => a.slug.localeCompare(b.slug))
+  const sorted = list.filtered
 
   return (
     <div className="space-y-4">
@@ -71,7 +79,7 @@ export function CustomToolsSettings() {
         storageKey="help.customTools.open"
       />
 
-      {sorted.length === 0 && (
+      {tools.length === 0 && (
         <EmptyState
           icon={Code2}
           title={t('customTools.empty')}
@@ -79,6 +87,20 @@ export function CustomToolsSettings() {
           actionLabel={t('customTools.create')}
           onAction={openCreate}
         />
+      )}
+
+      {tools.length >= LIST_FILTER_THRESHOLD && (
+        <ListToolbar
+          query={list.query}
+          onQueryChange={list.setQuery}
+          placeholder={t('customTools.search', 'Search tools...')}
+          onClear={() => list.setQuery('')}
+          active={list.isSearching}
+        />
+      )}
+
+      {tools.length > 0 && sorted.length === 0 && (
+        <EmptyState minimal title={t('common.noResults', 'No results found')} />
       )}
 
       {sorted.map((tool) => (

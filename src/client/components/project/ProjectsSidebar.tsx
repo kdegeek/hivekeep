@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
-import { Kanban, Plus, Pencil } from 'lucide-react'
+import { Kanban, Plus, Pencil, Search } from 'lucide-react'
 import { Button } from '@/client/components/ui/button'
+import { Input } from '@/client/components/ui/input'
 import {
   Sidebar,
   SidebarContent,
@@ -9,6 +10,8 @@ import {
 } from '@/client/components/ui/sidebar'
 import { EmptyState } from '@/client/components/common/EmptyState'
 import { ActiveAgentsIndicator } from '@/client/components/project/ActiveAgentsIndicator'
+import { useListControls } from '@/client/hooks/useListControls'
+import { LIST_FILTER_THRESHOLD } from '@/shared/constants'
 import { cn } from '@/client/lib/utils'
 import type { ProjectSummary } from '@/shared/types'
 
@@ -31,7 +34,14 @@ interface ProjectsSidebarProps {
 export function ProjectsSidebar({ projects, selectedId, onSelect, onCreate, onEdit }: ProjectsSidebarProps) {
   const { t } = useTranslation()
 
-  const sorted = [...projects].sort((a, b) => b.updatedAt - a.updatedAt)
+  // Search by title/slug, newest first. The box only appears once the rail
+  // holds enough projects to be worth filtering (LIST_FILTER_THRESHOLD).
+  const list = useListControls(projects, {
+    searchText: (p) => [p.title, p.slug],
+    sort: (a, b) => b.updatedAt - a.updatedAt,
+  })
+  const sorted = list.filtered
+  const showSearch = projects.length >= LIST_FILTER_THRESHOLD
 
   return (
     <Sidebar className="surface-sidebar">
@@ -42,10 +52,21 @@ export function ProjectsSidebar({ projects, selectedId, onSelect, onCreate, onEd
             <Plus className="size-4" />
           </Button>
         </div>
+        {showSearch && (
+          <div className="relative px-1">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={list.query}
+              onChange={(e) => list.setQuery(e.target.value)}
+              placeholder={t('projects.sidebar.search', 'Search projects...')}
+              className="h-8 pl-8"
+            />
+          </div>
+        )}
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup className="p-2">
-          {sorted.length === 0 && (
+          {projects.length === 0 && (
             <EmptyState
               compact
               icon={Kanban}
@@ -54,6 +75,11 @@ export function ProjectsSidebar({ projects, selectedId, onSelect, onCreate, onEd
               actionLabel={t('projects.sidebar.create')}
               onAction={onCreate}
             />
+          )}
+          {projects.length > 0 && sorted.length === 0 && (
+            <p className="px-2 py-4 text-center text-xs text-muted-foreground">
+              {t('common.noResults', 'No results found')}
+            </p>
           )}
           <ul className="space-y-1">
             {sorted.map((project) => {

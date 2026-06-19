@@ -1,8 +1,8 @@
-import { eq, and, desc, count } from 'drizzle-orm'
+import { eq, and, asc, desc, count, inArray } from 'drizzle-orm'
 import { v4 as uuid } from 'uuid'
 import { db } from '@/server/db/index'
 import { createLogger } from '@/server/logger'
-import { messages, channels, channelUserMappings, channelMessageLinks, contactPlatformIds, contactNicknames, agents, contacts, userProfiles } from '@/server/db/schema'
+import { messages, channels, channelUserMappings, channelPendingMessages, channelMessageLinks, contactPlatformIds, contactNicknames, agents, contacts, userProfiles } from '@/server/db/schema'
 import { enqueueMessage } from '@/server/services/queue'
 import { downloadChannelAttachments } from '@/server/services/files'
 import { createSecret, deleteSecret, getSecretValue, getSecretByKey } from '@/server/services/vault'
@@ -283,7 +283,10 @@ export async function createChannel(params: CreateChannelParams) {
     platform: params.platform,
     platformConfig: JSON.stringify(stored),
     status: 'inactive',
-    autoCreateContacts: params.autoCreateContacts ?? true,
+    // Default to requiring approval for new contacts (the secure default).
+    // When true, unknown senders are auto-created as contacts and skip the
+    // approval gate — see resolveChannelContact.
+    autoCreateContacts: params.autoCreateContacts ?? false,
     messagesReceived: 0,
     messagesSent: 0,
     createdBy: params.createdBy ?? 'user',
@@ -538,6 +541,43 @@ export async function handleIncomingChannelMessage(channelId: string, incoming: 
 
   // Resolve contact via contactPlatformIds or create pending mapping
   const { contact, pendingMappingId } = await resolveChannelContact(channel, incoming)
+  const senderName = channelSenderName(contact, incoming)
+
+  // ─── Approval gate ────────────────────────────────────────────────────────
+  // The contact is still pending approval: buffer this message (capped) instead
+  // of dropping it, so approving the contact can replay the backlog as a single
+  // Agent turn. We do NOT enqueue while pending.
+  if (pendingMappingId) {
+    await bufferPendingChannelMessage(channel, pendingMappingId, incoming)
+    return
+  }
+  // ─── End approval gate ────────────────────────────────────────────────────
+
+  // Handle bot commands (/start, /start@botname, /start deeplink)
+  if (/^\/start(?:\s|@|$)/.test(incoming.content)) {
+    await handleBotStart(channel, incoming, senderName)
+    return
+  }
+
+  await enqueueChannelTurn(channel, contact, [incoming])
+
+  // Update stats (one inbound message counted)
+  await db
+    .update(channels)
+    .set({
+      messagesReceived: channel.messagesReceived + 1,
+      lastActivityAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(channels.id, channelId))
+}
+
+/** Resolve the human-readable sender name for a channel message: the contact's
+ *  display name (falling back to its first nickname), else the platform handle. */
+function channelSenderName(
+  contact: typeof contacts.$inferSelect | null,
+  incoming: IncomingMessage,
+): string {
   let contactDisplayName: string | null = null
   if (contact) {
     // If firstName/lastName both missing, look up the first nickname as fallback
@@ -558,100 +598,149 @@ export async function handleIncomingChannelMessage(channelId: string, incoming: 
     })
     contactDisplayName = name === 'Unnamed contact' ? null : name
   }
-  const senderName = contactDisplayName ?? incoming.platformDisplayName ?? incoming.platformUsername ?? 'Unknown'
+  return contactDisplayName ?? incoming.platformDisplayName ?? incoming.platformUsername ?? 'Unknown'
+}
 
-  // ─── Approval gate ────────────────────────────────────────────────────────
-  if (pendingMappingId) {
+/**
+ * Buffer a message from a still-pending contact (capped at
+ * config.channels.maxPendingBufferedMessages, keeping the most recent). The
+ * "pending approval" reply is sent only once (on the first buffered message) to
+ * avoid spamming the sender on every message. Stats are counted here so each
+ * inbound is counted exactly once (the replay on approval does not re-count).
+ */
+async function bufferPendingChannelMessage(
+  channel: typeof channels.$inferSelect,
+  mappingId: string,
+  incoming: IncomingMessage,
+) {
+  const priorCount =
+    db.select({ value: count() }).from(channelPendingMessages).where(eq(channelPendingMessages.mappingId, mappingId)).get()
+      ?.value ?? 0
+
+  await db.insert(channelPendingMessages).values({
+    id: uuid(),
+    mappingId,
+    payload: JSON.stringify(incoming),
+    createdAt: new Date(),
+  })
+
+  // Enforce the cap: keep only the most recent N (drop the oldest overflow).
+  const cap = config.channels.maxPendingBufferedMessages
+  if (priorCount + 1 > cap) {
+    const rows = db
+      .select({ id: channelPendingMessages.id })
+      .from(channelPendingMessages)
+      .where(eq(channelPendingMessages.mappingId, mappingId))
+      .orderBy(asc(channelPendingMessages.createdAt))
+      .all()
+    const overflow = rows.slice(0, Math.max(0, rows.length - cap))
+    for (const r of overflow) {
+      await db.delete(channelPendingMessages).where(eq(channelPendingMessages.id, r.id))
+    }
+  }
+
+  // Notify the sender once that they are pending approval.
+  if (priorCount === 0) {
     const adapter = channelAdapters.get(channel.platform)
     if (adapter) {
       const adapterCfg = JSON.parse(channel.platformConfig) as Record<string, unknown>
-      adapter.sendMessage(channel.id, adapterCfg, {
-        chatId: incoming.platformChatId,
-        content: 'Your access is pending approval. Please wait for an admin to approve your access.',
-        replyToMessageId: incoming.platformMessageId,
-      }).catch((err) => log.warn({ channelId, err }, 'Failed to send pending-approval message'))
+      adapter
+        .sendMessage(channel.id, adapterCfg, {
+          chatId: incoming.platformChatId,
+          content: 'Your access is pending approval. Please wait for an admin to approve your access.',
+          replyToMessageId: incoming.platformMessageId,
+        })
+        .catch((err) => log.warn({ channelId: channel.id, err }, 'Failed to send pending-approval message'))
     }
-
-    // Update stats but do NOT enqueue
-    await db
-      .update(channels)
-      .set({
-        messagesReceived: channel.messagesReceived + 1,
-        lastActivityAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(channels.id, channelId))
-    return
-  }
-  // ─── End approval gate ────────────────────────────────────────────────────
-
-  // Handle bot commands (/start, /start@botname, /start deeplink)
-  if (/^\/start(?:\s|@|$)/.test(incoming.content)) {
-    await handleBotStart(channel, incoming, senderName)
-    return
   }
 
-  // Format content with sender context
-  // When the contact is not resolved, include platform metadata so the Agent can identify/create the contact
-  let content: string
-  if (contact) {
-    content = `[${channel.platform}:${senderName}] ${incoming.content}`
-  } else {
-    const parts = [`${channel.platform}_id: ${incoming.platformUserId}`]
-    if (incoming.platformUsername) parts.push(`username: ${incoming.platformUsername}`)
-    content = `[${channel.platform}:${senderName} (unknown — ${parts.join(', ')})] ${incoming.content}`
-  }
+  // Count the inbound message even though it is not enqueued yet.
+  await db
+    .update(channels)
+    .set({
+      messagesReceived: channel.messagesReceived + 1,
+      lastActivityAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(channels.id, channel.id))
+}
 
-  // Download and store any file attachments
-  let fileIds: string[] | undefined
-  if (incoming.attachments && incoming.attachments.length > 0) {
-    const result = await downloadChannelAttachments(channel.agentId, incoming.attachments)
-    fileIds = result.fileIds.length > 0 ? result.fileIds : undefined
+/**
+ * Build and enqueue a SINGLE Agent turn from one or more channel messages.
+ * Used both for the live path (one message) and the approval replay (the
+ * accumulated backlog), so a freshly-approved contact triggers exactly one
+ * turn carrying everything they said. Attachments across all messages are
+ * downloaded and merged. Stats are NOT updated here (the caller owns counting).
+ */
+async function enqueueChannelTurn(
+  channel: typeof channels.$inferSelect,
+  contact: typeof contacts.$inferSelect | null,
+  messages: IncomingMessage[],
+) {
+  const first = messages[0]
+  if (!first) return
 
-    // Inform the Agent about files that couldn't be processed
-    if (result.failedAttachments.length > 0) {
-      const failedLines = result.failedAttachments
-        .map((f) => `- ${f.fileName ?? f.mimeType ?? 'unknown file'}: ${f.reason}`)
-        .join('\n')
-      content += `\n\n[System: The user sent ${incoming.attachments.length} file(s), but ${result.failedAttachments.length} could not be processed:\n${failedLines}]`
+  const channelId = channel.id
+  const last = messages[messages.length - 1] ?? first
+  const senderName = channelSenderName(contact, first)
+
+  // Sender prefix (once). When the contact is unresolved, include platform
+  // metadata so the Agent can identify/create the contact itself.
+  const head = contact
+    ? `[${channel.platform}:${senderName}]`
+    : (() => {
+        const parts = [`${channel.platform}_id: ${first.platformUserId}`]
+        if (first.platformUsername) parts.push(`username: ${first.platformUsername}`)
+        return `[${channel.platform}:${senderName} (unknown, ${parts.join(', ')})]`
+      })()
+
+  const bodies = messages.map((m) => m.content).filter((c) => c && c.trim().length > 0)
+  let content = bodies.length > 0 ? `${head} ${bodies.join('\n')}` : head
+
+  // Download and merge file attachments from every buffered message.
+  const fileIdSet: string[] = []
+  let totalAttachments = 0
+  const failedLines: string[] = []
+  for (const m of messages) {
+    if (!m.attachments || m.attachments.length === 0) continue
+    totalAttachments += m.attachments.length
+    const result = await downloadChannelAttachments(channel.agentId, m.attachments)
+    fileIdSet.push(...result.fileIds)
+    for (const f of result.failedAttachments) {
+      failedLines.push(`- ${f.fileName ?? f.mimeType ?? 'unknown file'}: ${f.reason}`)
     }
+  }
+  const fileIds = fileIdSet.length > 0 ? fileIdSet : undefined
+  if (failedLines.length > 0) {
+    content += `\n\n[System: The user sent ${totalAttachments} file(s), but ${failedLines.length} could not be processed:\n${failedLines.join('\n')}]`
   }
 
   // Pre-generate ID so the queue item can self-reference as its own channelOriginId
   const originId = uuid()
 
-  // Adapter-provided context line (already localized) for the conversation UI.
-  // Built from the same `incoming.metadata` the LLM gets via <channel-context>,
-  // but rendered as a subtle hint below the bubble — not injected in the prompt.
+  // Adapter-provided context line (already localized) for the conversation UI,
+  // built from the most recent message's metadata.
   let inboundContextLine: string | null = null
-  if (incoming.metadata && Object.keys(incoming.metadata).length > 0) {
+  if (last.metadata && Object.keys(last.metadata).length > 0) {
     const adapter = channelAdapters.get(channel.platform)
     if (adapter?.formatInboundContext) {
       try {
         const locale = resolveChannelLocale(channelId)
-        inboundContextLine = adapter.formatInboundContext(incoming.metadata, locale)
+        inboundContextLine = adapter.formatInboundContext(last.metadata, locale)
       } catch (err) {
         log.warn({ channelId, err }, 'formatInboundContext threw, ignoring')
       }
     }
   }
 
-  // One-shot transfer hint: when a transfer_channel call was made before
-  // this inbound, surface the handoff context to the new Agent via the same
-  // <channel-context> block. Consumed (popped) on first inbound after the
-  // transfer; subsequent inbounds carry no hint.
+  // One-shot transfer hint consumed on the first inbound after a transfer_channel.
   const transferHint = popChannelTransferHint(channelId)
 
-  // Enqueue message to Agent's queue.
-  // Channel adapters can attach free-form structured context via incoming.metadata
-  // (modality, presence, channel info, etc.). It is stored under the `channel`
-  // key of the user message metadata so the agent-engine can inject it as a
-  // <channel-context> block in the prompt.
   const messageMetadata: Record<string, unknown> | undefined = (() => {
-    const hasChannelMeta = incoming.metadata && Object.keys(incoming.metadata).length > 0
+    const hasChannelMeta = last.metadata && Object.keys(last.metadata).length > 0
     if (!hasChannelMeta && !inboundContextLine && !transferHint) return undefined
     const out: Record<string, unknown> = {}
-    if (hasChannelMeta) out.channel = incoming.metadata
+    if (hasChannelMeta) out.channel = last.metadata
     if (inboundContextLine) out.channelContextLine = inboundContextLine
     if (transferHint) out.channelTransfer = transferHint
     return out
@@ -670,20 +759,19 @@ export async function handleIncomingChannelMessage(channelId: string, incoming: 
     messageMetadata,
   })
 
-  // Store channel metadata in one-shot sideband for direct channel response
+  // Reply threading / direct response targets the most recent message.
   setChannelQueueMeta(queueItemId, {
     channelId,
-    platformChatId: incoming.platformChatId,
-    platformMessageId: incoming.platformMessageId,
-    platformUserId: incoming.platformUserId,
+    platformChatId: last.platformChatId,
+    platformMessageId: last.platformMessageId,
+    platformUserId: last.platformUserId,
   })
 
-  // Store origin metadata for causal chain tracking (persists for follow-up turns)
   setChannelOriginMeta(originId, {
     channelId,
-    platformChatId: incoming.platformChatId,
-    platformMessageId: incoming.platformMessageId,
-    platformUserId: incoming.platformUserId,
+    platformChatId: last.platformChatId,
+    platformMessageId: last.platformMessageId,
+    platformUserId: last.platformUserId,
     createdAt: Date.now(),
     ttlMs: config.channels.pendingOriginTtlMs,
   })
@@ -692,18 +780,8 @@ export async function handleIncomingChannelMessage(channelId: string, incoming: 
   const adapter = channelAdapters.get(channel.platform)
   if (adapter?.sendTypingIndicator) {
     const adapterCfg = JSON.parse(channel.platformConfig) as Record<string, unknown>
-    adapter.sendTypingIndicator(channel.id, adapterCfg, incoming.platformChatId).catch(() => {})
+    adapter.sendTypingIndicator(channel.id, adapterCfg, last.platformChatId).catch(() => {})
   }
-
-  // Update stats
-  await db
-    .update(channels)
-    .set({
-      messagesReceived: channel.messagesReceived + 1,
-      lastActivityAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(channels.id, channelId))
 
   // Emit SSE event for web UI
   sseManager.sendToAgent(channel.agentId, {
@@ -712,7 +790,10 @@ export async function handleIncomingChannelMessage(channelId: string, incoming: 
     data: { channelId, platform: channel.platform, sender: senderName },
   })
 
-  log.info({ channelId, agentId: channel.agentId, sender: senderName, platform: channel.platform }, 'Channel message received')
+  log.info(
+    { channelId, agentId: channel.agentId, sender: senderName, platform: channel.platform, messages: messages.length },
+    'Channel message received',
+  )
 }
 
 // ─── Bot /start command ──────────────────────────────────────────────────────
@@ -1347,6 +1428,49 @@ interface ResolvedChannelUser {
   pendingMappingId: string | null
 }
 
+/**
+ * Auto-create and authorize a contact for an unknown sender on a channel whose
+ * approval gate is disabled (autoCreateContacts). Always creates a NEW distinct
+ * contact identified only by the platform handle (nickname), then binds the
+ * (platform, platformUserId) → contact authorization. Returns the contact, or
+ * null if creation failed (caller falls back to the approval flow).
+ */
+async function autoCreateChannelContact(
+  channel: typeof channels.$inferSelect,
+  incoming: IncomingMessage,
+): Promise<typeof contacts.$inferSelect | null> {
+  const handle =
+    incoming.platformDisplayName ??
+    incoming.platformUsername ??
+    `${channel.platform}:${incoming.platformUserId}`
+
+  const result = await createContact({ nicknames: [handle] })
+  if ('error' in result) {
+    log.warn(
+      { channelId: channel.id, platformUserId: incoming.platformUserId, linked: result.linkedContactName },
+      'Auto-create contact failed; falling back to approval flow',
+    )
+    return null
+  }
+
+  const now = new Date()
+  await db.insert(contactPlatformIds).values({
+    id: uuid(),
+    contactId: result.id,
+    platform: channel.platform,
+    platformId: incoming.platformUserId,
+    createdAt: now,
+    updatedAt: now,
+  })
+
+  log.info(
+    { channelId: channel.id, contactId: result.id, platform: channel.platform },
+    'Auto-created contact (approval disabled for channel)',
+  )
+
+  return db.select().from(contacts).where(eq(contacts.id, result.id)).get() ?? null
+}
+
 async function resolveChannelContact(
   channel: typeof channels.$inferSelect,
   incoming: IncomingMessage,
@@ -1355,6 +1479,18 @@ async function resolveChannelContact(
   const contact = findContactByPlatformId(channel.platform, incoming.platformUserId)
   if (contact) {
     return { contact, pendingMappingId: null }
+  }
+
+  // 1b. Approval disabled for this channel → auto-create a brand-new contact and
+  // authorize it immediately, skipping the pending gate. SECURITY: we always
+  // create a DISTINCT new contact (never auto-link to an existing one based on a
+  // claimed identity) and only ever bind the platform id to this fresh contact.
+  // The contact carries only the platform handle as a nickname (no "verified"
+  // name) so it stays visibly distinct from a validated contact.
+  if (channel.autoCreateContacts) {
+    const created = await autoCreateChannelContact(channel, incoming)
+    if (created) return { contact: created, pendingMappingId: null }
+    // Fall through to the approval flow if auto-create failed for any reason.
   }
 
   // 2. Check for existing pending mapping on this channel
@@ -1432,7 +1568,7 @@ async function resolveChannelContact(
 // ─── User mappings (pending only) ───────────────────────────────────────────
 
 export async function listPendingUsers(channelId: string) {
-  return db
+  const mappings = db
     .select({
       id: channelUserMappings.id,
       channelId: channelUserMappings.channelId,
@@ -1445,6 +1581,19 @@ export async function listPendingUsers(channelId: string) {
     .where(and(eq(channelUserMappings.channelId, channelId), eq(channelUserMappings.status, 'pending')))
     .orderBy(desc(channelUserMappings.createdAt))
     .all()
+
+  if (mappings.length === 0) return []
+
+  // Number of buffered messages awaiting replay per pending mapping.
+  const counts = db
+    .select({ mappingId: channelPendingMessages.mappingId, value: count() })
+    .from(channelPendingMessages)
+    .where(inArray(channelPendingMessages.mappingId, mappings.map((m) => m.id)))
+    .groupBy(channelPendingMessages.mappingId)
+    .all()
+  const countByMapping = new Map(counts.map((c) => [c.mappingId, c.value]))
+
+  return mappings.map((m) => ({ ...m, bufferedCount: countByMapping.get(m.id) ?? 0 }))
 }
 
 // ─── Approval ───────────────────────────────────────────────────────────────
@@ -1459,6 +1608,15 @@ export async function approveChannelUser(mappingId: string, params: ApproveParam
 
   const channel = await getChannel(mapping.channelId)
   if (!channel) return null
+
+  // Load any buffered messages BEFORE the mapping (and its cascade) is removed,
+  // so we can replay them as a single Agent turn once the contact is authorized.
+  const bufferedRows = db
+    .select({ payload: channelPendingMessages.payload })
+    .from(channelPendingMessages)
+    .where(eq(channelPendingMessages.mappingId, mappingId))
+    .orderBy(asc(channelPendingMessages.createdAt))
+    .all()
 
   const now = new Date()
   let contactId: string
@@ -1492,6 +1650,26 @@ export async function approveChannelUser(mappingId: string, params: ApproveParam
     createdAt: now,
     updatedAt: now,
   })
+
+  // Replay the buffered backlog as a single Agent turn now that the contact is
+  // authorized, then clear the buffer (cascade on the mapping delete is a
+  // backstop; we don't rely on PRAGMA foreign_keys being on).
+  if (bufferedRows.length > 0) {
+    const contactRow = db.select().from(contacts).where(eq(contacts.id, contactId)).get() ?? null
+    const buffered = bufferedRows
+      .map((r) => {
+        try {
+          return JSON.parse(r.payload) as IncomingMessage
+        } catch {
+          return null
+        }
+      })
+      .filter((m): m is IncomingMessage => m !== null)
+    if (contactRow && buffered.length > 0) {
+      await enqueueChannelTurn(channel, contactRow, buffered)
+    }
+    await db.delete(channelPendingMessages).where(eq(channelPendingMessages.mappingId, mappingId))
+  }
 
   // Delete this pending mapping
   await db.delete(channelUserMappings).where(eq(channelUserMappings.id, mappingId))

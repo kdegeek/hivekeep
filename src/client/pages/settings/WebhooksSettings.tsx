@@ -23,10 +23,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/client/components/ui/select'
-import { Plus, Copy, Eye, EyeOff, Webhook, Search } from 'lucide-react'
+import { Plus, Copy, Eye, EyeOff, Webhook } from 'lucide-react'
 import { EmptyState } from '@/client/components/common/EmptyState'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
+import { ListToolbar } from '@/client/components/common/ListToolbar'
+import { ListPagination } from '@/client/components/common/ListPagination'
 import { SettingsListSkeleton } from '@/client/components/common/SettingsListSkeleton'
+import { useListControls } from '@/client/hooks/useListControls'
+import { LIST_FILTER_THRESHOLD } from '@/shared/constants'
 import { api, toastError } from '@/client/lib/api'
 import { useSSE } from '@/client/hooks/useSSE'
 import { useAgentList } from '@/client/hooks/useAgentList'
@@ -54,18 +58,17 @@ export function WebhooksSettings() {
   // Token reveal state (after create or regenerate)
   const [revealedToken, setRevealedToken] = useState<{ url: string; token: string; name: string } | null>(null)
   const [showToken, setShowToken] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
   const [filterAgentId, setFilterAgentId] = useState<string>('')
 
-  const filteredWebhooks = webhooks.filter((webhook) => {
-    if (filterAgentId && webhook.agentId !== filterAgentId) return false
-    if (!searchQuery.trim()) return true
-    const q = searchQuery.toLowerCase()
-    if (webhook.name.toLowerCase().includes(q)) return true
-    if (webhook.description?.toLowerCase().includes(q)) return true
-    if (webhook.agentName?.toLowerCase().includes(q)) return true
-    return false
+  // Search (name / description / Agent) + per-Agent filter + pagination.
+  const list = useListControls(webhooks, {
+    searchText: (w) => [w.name, w.description, w.agentName],
+    filter: (w) => !filterAgentId || w.agentId === filterAgentId,
+    pageSize: 20,
   })
+  const showToolbar = webhooks.length >= LIST_FILTER_THRESHOLD
+  const filtersActive = list.isSearching || !!filterAgentId
+  const clearFilters = () => { list.setQuery(''); setFilterAgentId('') }
 
   const fetchWebhooks = useCallback(async () => {
     try {
@@ -203,20 +206,17 @@ export function WebhooksSettings() {
         storageKey="help.webhooks.open"
       />
 
-      {webhooks.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          <div className="relative min-w-[180px] flex-1">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder={t('settings.webhooks.search', 'Search webhooks...')}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
+      {showToolbar && (
+        <ListToolbar
+          query={list.query}
+          onQueryChange={list.setQuery}
+          placeholder={t('settings.webhooks.search', 'Search webhooks...')}
+          onClear={clearFilters}
+          active={filtersActive}
+        >
           {agents.length > 1 && (
             <Select value={filterAgentId || '__all__'} onValueChange={(v) => setFilterAgentId(v === '__all__' ? '' : v)}>
-              <SelectTrigger className="w-auto min-w-[140px]">
+              <SelectTrigger className="w-full sm:w-auto sm:min-w-[140px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -227,7 +227,7 @@ export function WebhooksSettings() {
               </SelectContent>
             </Select>
           )}
-        </div>
+        </ListToolbar>
       )}
 
       {webhooks.length === 0 && (
@@ -240,7 +240,11 @@ export function WebhooksSettings() {
         />
       )}
 
-      {filteredWebhooks.map((webhook) => (
+      {webhooks.length > 0 && list.total === 0 && (
+        <EmptyState minimal title={t('common.noResults', 'No results found')} />
+      )}
+
+      {list.paged.map((webhook) => (
         <WebhookCard
           key={webhook.id}
           webhook={webhook}
@@ -251,6 +255,17 @@ export function WebhooksSettings() {
           onViewLogs={() => setLogsWebhook(webhook)}
         />
       ))}
+
+      <ListPagination
+        page={list.page}
+        pageCount={list.pageCount}
+        total={list.total}
+        rangeFrom={list.rangeFrom}
+        rangeTo={list.rangeTo}
+        onPageChange={list.setPage}
+        perPage={list.perPage}
+        onPerPageChange={list.setPerPage}
+      />
 
       <Button variant="outline" onClick={openAdd} className="w-full">
         <Plus className="size-4" />

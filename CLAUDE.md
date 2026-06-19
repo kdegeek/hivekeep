@@ -18,6 +18,7 @@ Read these files **before starting any phase**. They are the source of truth.
 | `queenie.md` | **Conversational onboarding** spec — the `Queenie` configurator Agent, vault-centralized secrets, secure-input tools, avatar-style customization (Phase 27) |
 | `files.md` | **Files section** spec — workspace file browser/editor (tree + tabs + CodeMirror), workspace REST API + `workspace:changed` SSE, share-to-file-storage, chat integrations (`@` file palette, clickable paths) |
 | `interactive-setup.md` | **Interactive setup cards** spec — generic, declarative in-chat OAuth sign-in + QR pairing (setup *methods* `secret`/`oauth`/`qr`), extending the `secret_prompts` card machinery without a DB migration |
+| `testing-instance.md` | **Local test instance** — a ready, LLM-capable seeded DB (`~/.local/share/hivekeep-testdata/`, Claude Max provider via host creds) for booting the real app to verify changes. Read it before running the app locally: this shell inherits PROD env (port 3000 + live DB) — `scripts/seed-test-db.ts` regenerates the seed. |
 
 ## Tech stack
 

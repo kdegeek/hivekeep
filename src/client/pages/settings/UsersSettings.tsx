@@ -21,7 +21,10 @@ import { FormDialog } from '@/client/components/common/FormDialog'
 import { FormField } from '@/client/components/common/FormField'
 import { EmptyState } from '@/client/components/common/EmptyState'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
+import { ListToolbar } from '@/client/components/common/ListToolbar'
 import { api, toastError, getErrorMessage } from '@/client/lib/api'
+import { useListControls } from '@/client/hooks/useListControls'
+import { LIST_FILTER_THRESHOLD } from '@/shared/constants'
 import { useAuth } from '@/client/hooks/useAuth'
 import type { UserSummary, InvitationSummary } from '@/shared/types'
 
@@ -109,6 +112,10 @@ export function UsersSettings() {
     }
   }
 
+  const usersList = useListControls(users, {
+    searchText: (u) => [u.firstName, u.lastName, u.pseudonym, u.email],
+  })
+
   const { copy: copyToClipboard } = useCopyToClipboard()
 
   const getInvitationStatus = (inv: InvitationSummary): 'active' | 'used' | 'expired' => {
@@ -152,7 +159,21 @@ export function UsersSettings() {
           />
         )}
 
-        {users.map((u) => {
+        {users.length >= LIST_FILTER_THRESHOLD && (
+          <ListToolbar
+            query={usersList.query}
+            onQueryChange={usersList.setQuery}
+            placeholder={t('settings.users.search', 'Search users...')}
+            onClear={() => usersList.setQuery('')}
+            active={usersList.isSearching}
+          />
+        )}
+
+        {users.length > 0 && usersList.total === 0 && (
+          <EmptyState minimal title={t('common.noResults', 'No results found')} />
+        )}
+
+        {usersList.filtered.map((u) => {
           const isSelf = u.id === currentUser?.id
           return (
             <div

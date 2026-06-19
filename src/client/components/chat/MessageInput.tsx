@@ -131,7 +131,7 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
   // conversation agent, server-side search-as-you-type.
   const { hits: mentionFileHits } = useWorkspaceFileSearch({
     query: mentionQuery ?? '',
-    agentId: agentId ?? null,
+    source: agentId ? { type: 'agent', id: agentId } : null,
     enabled: mentionQuery !== null && !!agentId,
   })
   const isMentionOpen =

@@ -5,7 +5,11 @@ import { Button } from '@/client/components/ui/button'
 import { Plus , FileUp} from 'lucide-react'
 import { EmptyState } from '@/client/components/common/EmptyState'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
+import { ListToolbar } from '@/client/components/common/ListToolbar'
+import { ListPagination } from '@/client/components/common/ListPagination'
 import { SettingsListSkeleton } from '@/client/components/common/SettingsListSkeleton'
+import { useListControls } from '@/client/hooks/useListControls'
+import { LIST_FILTER_THRESHOLD } from '@/shared/constants'
 import { api, getErrorMessage, toastError } from '@/client/lib/api'
 import { useAgentList } from '@/client/hooks/useAgentList'
 import { FileStorageCard, type StoredFileData } from '@/client/components/file-storage/FileStorageCard'
@@ -62,6 +66,11 @@ export function FileStorageSettings() {
     setModalOpen(true)
   }
 
+  const list = useListControls(files, {
+    searchText: (f) => [f.name, f.originalName, f.description],
+    pageSize: 20,
+  })
+
   if (isLoading) {
     return <SettingsListSkeleton count={2} />
   }
@@ -109,7 +118,21 @@ export function FileStorageSettings() {
         />
       )}
 
-      {files.map((file) => (
+      {files.length >= LIST_FILTER_THRESHOLD && (
+        <ListToolbar
+          query={list.query}
+          onQueryChange={list.setQuery}
+          placeholder={t('settings.files.search', 'Search files...')}
+          onClear={() => list.setQuery('')}
+          active={list.isSearching}
+        />
+      )}
+
+      {files.length > 0 && list.total === 0 && (
+        <EmptyState minimal title={t('common.noResults', 'No results found')} />
+      )}
+
+      {list.paged.map((file) => (
         <FileStorageCard
           key={file.id}
           file={file}
@@ -119,6 +142,17 @@ export function FileStorageSettings() {
           onDelete={() => handleDeleteFile(file.id)}
         />
       ))}
+
+      <ListPagination
+        page={list.page}
+        pageCount={list.pageCount}
+        total={list.total}
+        rangeFrom={list.rangeFrom}
+        rangeTo={list.rangeTo}
+        onPageChange={list.setPage}
+        perPage={list.perPage}
+        onPerPageChange={list.setPerPage}
+      />
 
       <Button variant="outline" onClick={openAdd} className="w-full">
         <Plus className="size-4" />

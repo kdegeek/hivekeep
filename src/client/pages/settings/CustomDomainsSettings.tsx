@@ -6,9 +6,12 @@ import { Badge } from '@/client/components/ui/badge'
 import { Plus, Shapes, Lock, Pencil } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 import { EmptyState } from '@/client/components/common/EmptyState'
+import { ListToolbar } from '@/client/components/common/ListToolbar'
 import { SettingsListSkeleton } from '@/client/components/common/SettingsListSkeleton'
 import { ConfirmDeleteButton } from '@/client/components/common/ConfirmDeleteButton'
 import { DomainFormDialog } from '@/client/components/toolbox/DomainFormDialog'
+import { useListControls } from '@/client/hooks/useListControls'
+import { LIST_FILTER_THRESHOLD } from '@/shared/constants'
 import { ToolDomainIcon } from '@/client/components/common/ToolDomainIcon'
 import { useToolDomains } from '@/client/hooks/useToolDomains'
 import { getErrorMessage, toastError } from '@/client/lib/api'
@@ -47,18 +50,20 @@ export function CustomDomainsSettings() {
     }
   }
 
+  const list = useListControls(domains, {
+    searchText: (d) => [d.label, d.slug, d.description],
+    sort: (a, b) => (a.builtin !== b.builtin ? (a.builtin ? -1 : 1) : a.slug.localeCompare(b.slug)),
+  })
+
   if (isLoading) return <SettingsListSkeleton count={4} />
 
-  const sorted = [...domains].sort((a, b) => {
-    if (a.builtin !== b.builtin) return a.builtin ? -1 : 1
-    return a.slug.localeCompare(b.slug)
-  })
+  const sorted = list.filtered
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">{t('toolDomains.description')}</p>
 
-      {sorted.length === 0 && (
+      {domains.length === 0 && (
         <EmptyState
           icon={Shapes}
           title={t('toolDomains.empty')}
@@ -66,6 +71,20 @@ export function CustomDomainsSettings() {
           actionLabel={t('toolDomains.create')}
           onAction={openCreate}
         />
+      )}
+
+      {domains.length >= LIST_FILTER_THRESHOLD && (
+        <ListToolbar
+          query={list.query}
+          onQueryChange={list.setQuery}
+          placeholder={t('toolDomains.search', 'Search domains...')}
+          onClear={() => list.setQuery('')}
+          active={list.isSearching}
+        />
+      )}
+
+      {domains.length > 0 && sorted.length === 0 && (
+        <EmptyState minimal title={t('common.noResults', 'No results found')} />
       )}
 
       {sorted.map((d) => {

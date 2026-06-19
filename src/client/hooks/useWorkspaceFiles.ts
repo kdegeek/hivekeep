@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { api, getErrorMessage } from '@/client/lib/api'
 import { useSSE, useSSEResync } from '@/client/hooks/useSSE'
-import type { WorkspaceEntry } from '@/shared/types'
+import { sourceApiBase, sourceQuery, changeMatchesSource, sameSource } from '@/client/lib/workspace-source'
+import type { WorkspaceEntry, WorkspaceSourceRef } from '@/shared/types'
 
 /** Payload of the workspace:changed SSE event (files.md § 8.1). */
 export interface WorkspaceChange {
@@ -21,7 +22,7 @@ export const parentDirOf = (path: string) => (path.includes('/') ? path.slice(0,
  * OS clipboard (a server file cannot live there).
  */
 export interface WorkspaceClipboard {
-  agentId: string
+  source: WorkspaceSourceRef
   path: string
   isDirectory: boolean
   op: 'copy' | 'cut'
@@ -64,16 +65,16 @@ interface LsResponse {
  * fetched lazily on expansion, refetched on resume (SSE has no replay), and
  * patched live by `workspace:changed` (wired in P5).
  */
-export function useWorkspaceFiles(agentId: string | null) {
+export function useWorkspaceFiles(source: WorkspaceSourceRef | null) {
   // Keyed by dir path ('' = workspace root).
   const [dirs, setDirs] = useState<Record<string, WorkspaceDirState>>({})
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  // Guards against out-of-order responses after rapid agent switches.
+  // Guards against out-of-order responses after rapid source switches.
   const generationRef = useRef(0)
 
   const loadDir = useCallback(
     async (path: string) => {
-      if (!agentId) return
+      if (!source) return
       const generation = generationRef.current
       setDirs((prev) => ({
         ...prev,
@@ -81,7 +82,7 @@ export function useWorkspaceFiles(agentId: string | null) {
       }))
       try {
         const data = await api.get<LsResponse>(
-          `/agents/${encodeURIComponent(agentId)}/workspace/ls?path=${encodeURIComponent(path)}`,
+          `${sourceApiBase(source)}/ls${sourceQuery(source, { path })}`,
         )
         if (generation !== generationRef.current) return
         setDirs((prev) => ({ ...prev, [path]: { entries: data.entries, isLoading: false, error: null } }))
@@ -93,7 +94,7 @@ export function useWorkspaceFiles(agentId: string | null) {
         }))
       }
     },
-    [agentId],
+    [source],
   )
 
   const toggleDir = useCallback(
@@ -132,19 +133,19 @@ export function useWorkspaceFiles(agentId: string | null) {
 
   /** Refetch the root and every expanded directory (refresh button / resume). */
   const refresh = useCallback(() => {
-    if (!agentId) return
+    if (!source) return
     void loadDir('')
     for (const dir of expanded) void loadDir(dir)
-  }, [agentId, loadDir, expanded])
+  }, [source, loadDir, expanded])
 
-  // Reset and reload when switching workspaces.
+  // Reset and reload when switching sources.
   useEffect(() => {
     generationRef.current++
     setDirs({})
     setExpanded(new Set())
-    if (agentId) void loadDir('')
+    if (source) void loadDir('')
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentId])
+  }, [source])
 
   // SSE has no event replay: refetch visible state on tab resume / reconnect.
   const refreshRef = useRef(refresh)
@@ -261,63 +262,65 @@ export function useWorkspaceFiles(agentId: string | null) {
 
   useSSE({
     'workspace:changed': (data) => {
-      if ((data.agentId as string) !== agentId) return
+      if (!source || !changeMatchesSource(data as { agentId?: string; source?: WorkspaceSourceRef }, source)) return
       for (const change of (data.changes as WorkspaceChange[]) ?? []) applyChange(change)
     },
   })
 
   // ── Mutations (files.md § 4/6.5/6.6) — each reloads the affected dirs ──────
 
-  const base = useCallback(
-    () => `/agents/${encodeURIComponent(agentId ?? '')}/workspace`,
-    [agentId],
+  /** Build a request URL for the active source (carries the worktree query). */
+  const reqUrl = useCallback(
+    (suffix: string, params: Record<string, string> = {}) =>
+      source ? `${sourceApiBase(source)}${suffix}${sourceQuery(source, params)}` : '',
+    [source],
   )
 
   const createFile = useCallback(
     async (dirPath: string, name: string): Promise<string> => {
       const path = dirPath ? `${dirPath}/${name}` : name
-      await api.put(`${base()}/file`, { path, content: '', createOnly: true })
+      await api.put(reqUrl('/file'), { path, content: '', createOnly: true })
       await loadDir(dirPath)
       return path
     },
-    [base, loadDir],
+    [reqUrl, loadDir],
   )
 
   const createDir = useCallback(
     async (dirPath: string, name: string): Promise<string> => {
       const path = dirPath ? `${dirPath}/${name}` : name
-      await api.post(`${base()}/mkdir`, { path })
+      await api.post(reqUrl('/mkdir'), { path })
       await loadDir(dirPath)
       return path
     },
-    [base, loadDir],
+    [reqUrl, loadDir],
   )
 
   const movePath = useCallback(
-    async (from: string, to: string, fromAgentId?: string): Promise<string> => {
-      const result = await api.post<{ from: string; to: string }>(`${base()}/move`, { from, to, fromAgentId })
+    async (from: string, to: string, fromSource?: WorkspaceSourceRef): Promise<string> => {
+      const result = await api.post<{ from: string; to: string }>(reqUrl('/move'), { from, to, fromSource })
       await loadDir(parentDirOf(to))
-      if (!fromAgentId || fromAgentId === agentId) await loadDir(parentDirOf(from))
+      if (!fromSource || sameSource(fromSource, source)) await loadDir(parentDirOf(from))
       return result.to
     },
-    [base, loadDir, agentId],
+    [reqUrl, loadDir, source],
   )
 
   const copyPath = useCallback(
-    async (from: string, to: string, fromAgentId?: string): Promise<string> => {
-      const result = await api.post<{ from: string; to: string }>(`${base()}/copy`, { from, to, fromAgentId })
+    async (from: string, to: string, fromSource?: WorkspaceSourceRef): Promise<string> => {
+      const result = await api.post<{ from: string; to: string }>(reqUrl('/copy'), { from, to, fromSource })
       await loadDir(parentDirOf(result.to))
       return result.to
     },
-    [base, loadDir],
+    [reqUrl, loadDir],
   )
 
   const removePath = useCallback(
     async (path: string): Promise<void> => {
-      await api.delete(`${base()}/file?path=${encodeURIComponent(path)}`)
+      await api.delete(reqUrl('/file', { path }))
       await loadDir(parentDirOf(path))
     },
-    [base, loadDir],
+    [reqUrl, loadDir],
   )
 
   const uploadFiles = useCallback(
@@ -327,7 +330,7 @@ export function useWorkspaceFiles(agentId: string | null) {
       const formData = new FormData()
       formData.append('path', dirPath)
       for (const file of files) formData.append('file', file)
-      const res = await fetch(`/api${base()}/upload`, { method: 'POST', credentials: 'include', body: formData })
+      const res = await fetch(`/api${reqUrl('/upload')}`, { method: 'POST', credentials: 'include', body: formData })
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
         throw new Error(data?.error?.message ?? 'Upload failed')
@@ -336,7 +339,7 @@ export function useWorkspaceFiles(agentId: string | null) {
       await loadDir(dirPath)
       return result
     },
-    [base, loadDir],
+    [reqUrl, loadDir],
   )
 
   return {

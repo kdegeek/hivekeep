@@ -7,18 +7,28 @@ Every Agent has a **workspace**: a directory on your server where it reads and w
 
 The typical moment: an Agent says "I saved the report in `reports/q2.md`" and you want to tweak it yourself, right now. Open Files (or click the path in the chat), edit, save. None of this triggers an LLM turn — it is a direct view of the disk.
 
-Files is available to all authenticated users, from the activity bar (folder icon) or at `/files`.
+Files is available to all authenticated users, from the activity bar (folder icon) or at `/files`. Beyond Agent workspaces, the same browser also opens **project repositories** (including their git worktrees) and **arbitrary server folders** you add — see [Browse sources](#browse-sources).
 
 ## The layout
 
 The page works like a lightweight code editor:
 
-- **Workspace selector** — a dropdown at the top of the left panel switches between Agents. Each Agent has exactly one workspace; the last one you visited is remembered.
+- **Source selector** — a grouped dropdown at the top of the left panel switches between three kinds of source: **Agents** (each Agent's workspace), **Projects** (a project's cloned repo), and **Folders** (any folder on the server you add yourself). The last source you visited is remembered. See [Browse sources](#browse-sources) below.
 - **File tree** — folders load lazily as you expand them (a workspace can contain a cloned repo with `node_modules`; nothing is walked until you open it). Everything on disk is shown, dotfiles included. On mobile the tree lives in a slide-in drawer.
 - **Tabs** — every opened file gets a tab, with a dirty indicator for unsaved changes. Tabs are remembered per workspace for the session. Closing a dirty tab asks for confirmation, and the browser warns you before leaving the page with unsaved work.
 - **Editor / viewers** — the server decides how a file is displayed: text files open in the code editor (with syntax highlighting by extension), images and PDFs render inline, binary or oversized files show a metadata panel with a download button.
 
 You can also jump straight to a specific Agent's files from its agent card or from the conversation header menu ("Browse files").
+
+## Browse sources
+
+The same browser, editor, tabs, search and file operations work over three kinds of source, picked from the grouped selector:
+
+- **Agents** — an Agent's workspace (`data/workspaces/<agentId>/`). This is the default and the only source with the chat integrations (Share, Insert in chat, `@` mentions), since those are tied to a conversation.
+- **Projects** — the cloned repository of a [project](/docs/features/projects/) that has a GitHub repo attached (only repos that finished cloning appear). You can edit the repo directly from the browser. When the repo has **git worktrees** (created for sub-task work), a second selector under the source picker lets you switch between the base clone and each live worktree. A small **branch badge** shows the current branch and the number of uncommitted changes — editing the base checkout makes it git-dirty, which the badge surfaces. Worktrees are ephemeral: they come and go as sub-tasks run, and the list reflects whatever git reports right now.
+- **Folders** — any absolute folder on the server. Click **Add a folder…** in the selector, give it a name and an absolute path, and it shows up for everyone. Folders are full read/write like a workspace. Use the same dialog to remove a folder later. (Because a folder has no owning Agent, the chat-only actions are hidden for folder sources.)
+
+Project repos and folders are deep-linkable as `/files/project/<id>` and `/files/folder/<id>` (with `?path=` and, for projects, `?worktree=`). Every source goes through the exact same strict path confinement described under [Security notes](#security-notes).
 
 ## Editing and conflicts
 
@@ -88,7 +98,9 @@ The Files section has a few server-side limits, all overridable by environment v
 
 ## Security notes
 
-The HTTP API behind this section is **stricter than the Agents' own filesystem tools**: a path can never leave the target workspace (no absolute paths, no `..`, no symlink escape). Raw file serving never lets the browser sniff content types, and only inert formats (images, PDF, plain text) are ever displayed inline — active formats like SVG or HTML are always downloaded instead.
+The HTTP API behind this section is **stricter than the Agents' own filesystem tools**: a path can never leave the target source root (no absolute paths, no `..`, no symlink escape) — and that holds identically for agent workspaces, project repos and folders. Raw file serving never lets the browser sniff content types, and only inert formats (images, PDF, plain text) are ever displayed inline — active formats like SVG or HTML are always downloaded instead.
+
+One deliberate trade-off: a **Folder** source points at an arbitrary absolute path on the server, and (like Agent workspaces) folders are visible and editable by every authenticated user. Add a folder only when you are comfortable with that. The path is canonicalized and re-checked on every browse, so a folder removed from disk fails cleanly rather than escaping its root.
 
 ## Related
 

@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import {
   listContactsWithDetails,
+  listContactsPage,
   getContactWithDetails,
   getContact,
   createContact,
@@ -32,10 +33,19 @@ import type { AppVariables } from '@/server/app'
 const log = createLogger('routes:contacts')
 const contactRoutes = new Hono<{ Variables: AppVariables }>()
 
-// GET /api/contacts — list all contacts with identifiers and notes (admin view)
+// GET /api/contacts — list contacts with identifiers and notes (admin view).
+// Supports optional server-side search + pagination via ?search=&limit=&offset=.
+// With no `limit`, returns the full list (the contact-picker callers rely on
+// that shape); `total`/`hasMore` are always included (additive, ignored by
+// callers that don't paginate).
 contactRoutes.get('/', async (c) => {
-  const contactsWithDetails = await listContactsWithDetails()
-  return c.json({ contacts: contactsWithDetails })
+  const search = c.req.query('search') ?? undefined
+  const limitRaw = c.req.query('limit')
+  const offsetRaw = c.req.query('offset')
+  const limit = limitRaw != null ? Math.min(Math.max(parseInt(limitRaw, 10) || 0, 1), 200) : undefined
+  const offset = offsetRaw != null ? Math.max(parseInt(offsetRaw, 10) || 0, 0) : undefined
+  const page = await listContactsPage({ search, limit, offset })
+  return c.json(page)
 })
 
 // GET /api/contacts/:id — full contact detail (identifiers + all notes for admin view)

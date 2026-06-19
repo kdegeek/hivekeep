@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '@/client/lib/api'
+import { sourceApiBase } from '@/client/lib/workspace-source'
+import type { WorkspaceSourceRef } from '@/shared/types'
 
 export interface WorkspaceFileHit {
   path: string
@@ -9,17 +11,18 @@ export interface WorkspaceFileHit {
 }
 
 /** Pure URL builder (tested separately — repo convention: hooks stay thin). */
-export function buildWorkspaceSearchUrl(params: { agentId: string | null; query: string; limit: number }): string | null {
-  if (!params.agentId) return null
+export function buildWorkspaceSearchUrl(params: { source: WorkspaceSourceRef | null; query: string; limit: number }): string | null {
+  if (!params.source) return null
   const qs = new URLSearchParams()
   if (params.query) qs.set('q', params.query)
   qs.set('limit', String(Math.max(1, Math.min(params.limit, 50))))
-  return `/agents/${encodeURIComponent(params.agentId)}/workspace/search?${qs.toString()}`
+  if (params.source.worktree) qs.set('worktree', params.source.worktree)
+  return `${sourceApiBase(params.source)}/search?${qs.toString()}`
 }
 
 interface UseWorkspaceFileSearchOptions {
   query: string
-  agentId: string | null
+  source: WorkspaceSourceRef | null
   enabled: boolean
   debounceMs?: number
   limit?: number
@@ -32,7 +35,7 @@ interface UseWorkspaceFileSearchOptions {
  */
 export function useWorkspaceFileSearch({
   query,
-  agentId,
+  source,
   enabled,
   debounceMs = 150,
   limit = 8,
@@ -42,12 +45,12 @@ export function useWorkspaceFileSearch({
   const requestSeqRef = useRef(0)
 
   useEffect(() => {
-    if (!enabled || !agentId) {
+    if (!enabled || !source) {
       setHits([])
       setIsLoading(false)
       return
     }
-    const url = buildWorkspaceSearchUrl({ agentId, query, limit })
+    const url = buildWorkspaceSearchUrl({ source, query, limit })
     if (!url) return
     const seq = ++requestSeqRef.current
     setIsLoading(true)
@@ -64,7 +67,7 @@ export function useWorkspaceFileSearch({
       }
     }, debounceMs)
     return () => clearTimeout(handle)
-  }, [query, agentId, enabled, debounceMs, limit])
+  }, [query, source, enabled, debounceMs, limit])
 
   return { hits, isLoading }
 }

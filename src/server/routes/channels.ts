@@ -469,6 +469,7 @@ channelRoutes.get('/:id/user-mappings', async (c) => {
       platformUsername: m.platformUsername,
       platformDisplayName: m.platformDisplayName,
       createdAt: new Date(m.createdAt).getTime(),
+      bufferedCount: m.bufferedCount,
     })),
   })
 })

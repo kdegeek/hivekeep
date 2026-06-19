@@ -915,6 +915,20 @@ Snapshots de version des fichiers d'une app (max 20, auto-élagués). Les fichie
 
 ---
 
+### `workspace_folders`
+
+Dossiers FS arbitraires ajoutés par l'utilisateur, affichés dans le sélecteur de la section Files à côté des workspaces d'agents et des repos de projet. Le chemin est canonicalisé (realpath) à la création et re-validé à chaque navigation. Visible et éditable par tous les utilisateurs authentifiés (décision fondateur).
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | text PK | UUID | |
+| `label` | text | NOT NULL | Nom affiché dans le sélecteur |
+| `path` | text | NOT NULL | Dossier absolu, canonicalisé (realpath) |
+| `created_by` | text | | Utilisateur ayant ajouté le dossier (audit) |
+| `created_at` | integer | NOT NULL | Unix ms |
+
+---
+
 ## Tables virtuelles (FTS5 + sqlite-vec)
 
 ### `memories_fts` (FTS5)

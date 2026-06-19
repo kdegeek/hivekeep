@@ -99,7 +99,10 @@
     },
     "url": "URL",
     "retry": "Retry",
-    "agentLanguageFollowUi": "Same as the interface"
+    "agentLanguageFollowUi": "Same as the interface",
+    "clearFilters": "Clear",
+    "perPage": "Per page",
+    "listRange": "{{from}}-{{to}} of {{total}}"
   },
   "errors": {
     "backendUnavailable": "Unable to reach the server. Please check that the backend is running and try again.",
@@ -318,7 +321,8 @@
       },
       "search": "Search jobs...",
       "noResults": "No matching jobs",
-      "emptyDescription": "Schedule recurring tasks for your Agents"
+      "emptyDescription": "Schedule recurring tasks for your Agents",
+      "allAgents": "All Agents"
     },
     "miniApps": {
       "title": "Mini-Apps",
@@ -329,7 +333,8 @@
       "noAgentSelected": "Select an Agent",
       "noAgentSelectedDescription": "Select an Agent to see its mini-apps",
       "viewGrid": "Grid view",
-      "viewList": "List view"
+      "viewList": "List view",
+      "allAgents": "All Agents"
     },
     "tabs": {
       "tasks": "Tasks",
@@ -1208,7 +1213,8 @@
       "search": "Search icons…",
       "noResults": "No icons match your search",
       "truncated": "Showing first {{count}} - refine your search"
-    }
+    },
+    "search": "Search tools..."
   },
   "toolDomains": {
     "title": "Tool Domains",
@@ -1235,7 +1241,8 @@
     "errors": {
       "slug": "Slug must match ^[a-z][a-z0-9-]*$",
       "label": "Label is required"
-    }
+    },
+    "search": "Search domains..."
   },
   "toolboxes": {
     "title": "Toolboxes",
@@ -1293,7 +1300,8 @@
       "bullet2": "Create your own toolboxes to fit recurring kinds of work.",
       "bullet3": "Every task always keeps a core set of tools, regardless of the toolboxes you assign.",
       "bullet4": "Some tools can never run inside a task. They are flagged when you build a toolbox."
-    }
+    },
+    "search": "Search toolboxes..."
   },
   "settings": {
     "title": "Settings",
@@ -1453,7 +1461,8 @@
         "bullet2": "Each Agent can use a different model depending on your needs",
         "bullet3": "OpenAI-compatible providers (Groq, Together, etc.) work with the same configuration pattern",
         "bullet4": "Test the connection after adding to verify the API key is valid"
-      }
+      },
+      "search": "Search providers..."
     },
     "modelRegistry": {
       "title": "Model registry",
@@ -1588,7 +1597,8 @@
         "bullet2": "Servers are started automatically when an Agent needs them and stopped when idle",
         "bullet3": "Environment variables let you pass API keys and secrets securely to the server process",
         "bullet4": "Agents can also discover and add MCP servers on their own (shown as \"Pending approval\")"
-      }
+      },
+      "search": "Search servers..."
     },
     "vault": {
       "title": "Vault",
@@ -1664,7 +1674,8 @@
         "bullet2": "You can organize secrets by type (API key, password, token, etc.) and create custom types",
         "bullet3": "Attach files to vault entries for certificates, config files, or other sensitive documents",
         "bullet4": "Mark entries as favorites for quick access"
-      }
+      },
+      "search": "Search secrets..."
     },
     "files": {
       "title": "Files",
@@ -1711,7 +1722,8 @@
       "publicTip": "Public files get a shareable URL. Private files are only accessible by the owning Agent.",
       "passwordTip": "Protect the file with a password. Anyone accessing the file will need to enter it.",
       "expiresInTip": "Auto-delete the file after this many hours. Leave empty to keep it indefinitely.",
-      "readAndBurnTip": "The file is automatically deleted after being downloaded once. Useful for sensitive data."
+      "readAndBurnTip": "The file is automatically deleted after being downloaded once. Useful for sensitive data.",
+      "search": "Search files..."
     },
     "memories": {
       "title": "Memories",
@@ -1989,7 +2001,8 @@
         "bullet1": "Create invitation links with a configurable expiration time",
         "bullet2": "Each user has their own account and conversations",
         "bullet3": "Invitations can be revoked at any time before they are used"
-      }
+      },
+      "search": "Search users..."
     },
     "addressBook": {
       "title": "Address Books",
@@ -2131,7 +2144,8 @@
       "pendingTitle": "{{count}} email(s) waiting for your approval",
       "pendingTo": "To",
       "approve": "Approve & send",
-      "reject": "Reject"
+      "reject": "Reject",
+      "search": "Search accounts..."
     },
     "channels": {
       "title": "Channels",
@@ -2188,7 +2202,8 @@
         "selectContact": "Select a contact",
         "searchContacts": "Search contacts...",
         "noContacts": "No contacts found",
-        "approve": "Approve"
+        "approve": "Approve",
+        "bufferedCount": "{{count}} message(s) waiting"
       },
       "emptyDescription": "Set up a channel like Telegram or Discord so your Agents can chat outside the web UI.",
       "setupGuide": {
@@ -2241,7 +2256,18 @@
         "repair": "Re-pair",
         "repairTitle": "Re-pair {{name}}",
         "repairHint": "The WhatsApp session needs to be linked again. Scan this code to reconnect."
-      }
+      },
+      "approval": {
+        "title": "Require approval for new contacts",
+        "description": "New senders must be approved before the Agent replies.",
+        "warning": "Approval is disabled: anyone who messages this channel is auto-added as a contact and can trigger the Agent (and its costs) without review. A new, distinct contact is created per sender, so never trust a claimed identity. Turn this back on to require manual approval."
+      },
+      "search": "Search channels...",
+      "filterAllPlatforms": "All platforms",
+      "filterAllStatuses": "All statuses",
+      "statusActive": "Active",
+      "statusInactive": "Inactive",
+      "statusError": "Error"
     },
     "notifications": {
       "title": "Notifications",
@@ -2349,7 +2375,8 @@
       "updateSuccess": "Plugin updated successfully",
       "sourceLocal": "Local",
       "resetHealth": "Reset health stats",
-      "healthReset": "Health stats reset"
+      "healthReset": "Health stats reset",
+      "search": "Search plugins..."
     },
     "marketplace": {
       "title": "Browse Plugins",
@@ -3319,7 +3346,8 @@
       "create": "New project",
       "empty": "No projects yet. Create your first project to get started.",
       "emptyTitle": "No projects yet",
-      "emptyDescription": "Group tickets, run tasks, and track work across your Agents."
+      "emptyDescription": "Group tickets, run tasks, and track work across your Agents.",
+      "search": "Search projects..."
     },
     "empty": {
       "title": "No projects",
@@ -3691,6 +3719,29 @@
     "refresh": "Refresh",
     "notFound": "File not found: {{path}}",
     "openError": "Could not open this file",
+    "sources": {
+      "agents": "Agents",
+      "projects": "Projects",
+      "folders": "Folders",
+      "addFolder": "Add a folder…"
+    },
+    "addFolder": {
+      "title": "Folders",
+      "description": "Browse and edit an arbitrary folder on the server. Everyone can see and edit folders you add.",
+      "add": "Add folder",
+      "existing": "Added folders",
+      "labelField": "Name",
+      "labelPlaceholder": "My project",
+      "pathField": "Absolute path",
+      "pathHint": "An absolute path to an existing directory on the server."
+    },
+    "worktree": {
+      "base": "Base clone",
+      "ticket": "#{{number}} · {{branch}}"
+    },
+    "git": {
+      "dirty": "{{count}} uncommitted change(s)"
+    },
     "empty": {
       "title": "This workspace is empty",
       "description": "Files created by this agent will appear here."

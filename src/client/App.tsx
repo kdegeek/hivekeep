@@ -229,6 +229,7 @@ function AuthenticatedShell() {
                 <Route path="/crons" element={<CronsPage />} />
                 <Route path="/files" element={<FilesPage />} />
                 <Route path="/files/:agentId" element={<FilesPage />} />
+                <Route path="/files/:sourceType/:sourceId" element={<FilesPage />} />
                 <Route path="/mini-apps" element={<MiniAppsPage />} />
                 <Route path="/models" element={<ModelRegistryPage />} />
                 <Route path="/terminal" element={<TerminalPage />} />

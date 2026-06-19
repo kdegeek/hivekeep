@@ -30,7 +30,10 @@ import {
 import { FormDialog } from '@/client/components/common/FormDialog'
 import { FormField } from '@/client/components/common/FormField'
 import { EmptyState } from '@/client/components/common/EmptyState'
+import { ListToolbar } from '@/client/components/common/ListToolbar'
 import { SettingsListSkeleton } from '@/client/components/common/SettingsListSkeleton'
+import { useListControls } from '@/client/hooks/useListControls'
+import { LIST_FILTER_THRESHOLD } from '@/shared/constants'
 import { api, toastError } from '@/client/lib/api'
 import { useSSE } from '@/client/hooks/useSSE'
 import {
@@ -271,6 +274,10 @@ export function PluginsSettings() {
     }
   }
 
+  const list = useListControls(plugins, {
+    searchText: (p) => [p.displayName, p.name, p.description, p.author],
+  })
+
   if (isLoading) return <SettingsListSkeleton />
 
   return (
@@ -315,7 +322,19 @@ export function PluginsSettings() {
         />
       ) : (
         <div className="space-y-3">
-          {plugins.map((plugin) => (
+          {plugins.length >= LIST_FILTER_THRESHOLD && (
+            <ListToolbar
+              query={list.query}
+              onQueryChange={list.setQuery}
+              placeholder={t('settings.plugins.search', 'Search plugins...')}
+              onClear={() => list.setQuery('')}
+              active={list.isSearching}
+            />
+          )}
+          {list.total === 0 && (
+            <EmptyState minimal title={t('common.noResults', 'No results found')} />
+          )}
+          {list.filtered.map((plugin) => (
             <div
               key={plugin.name}
               className="rounded-lg border p-4 surface-card"

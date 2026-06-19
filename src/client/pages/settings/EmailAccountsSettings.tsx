@@ -31,9 +31,12 @@ import { FormDialog } from '@/client/components/common/FormDialog'
 import { FormField } from '@/client/components/common/FormField'
 import { EmptyState } from '@/client/components/common/EmptyState'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
+import { ListToolbar } from '@/client/components/common/ListToolbar'
 import { SettingsListSkeleton } from '@/client/components/common/SettingsListSkeleton'
 import { ConfirmDeleteButton } from '@/client/components/common/ConfirmDeleteButton'
 import { ProviderIcon } from '@/client/components/common/ProviderIcon'
+import { useListControls } from '@/client/hooks/useListControls'
+import { LIST_FILTER_THRESHOLD } from '@/shared/constants'
 import { useEmailAccounts, type EmailAccount, type EmailProviderInfo } from '@/client/hooks/useEmailAccounts'
 import { usePendingEmailSends } from '@/client/hooks/usePendingEmailSends'
 import { AccountTriggersSection } from '@/client/components/account-trigger/AccountTriggersSection'
@@ -43,6 +46,13 @@ export function EmailAccountsSettings() {
   const { t } = useTranslation()
   const { accounts, providers, redirectUri, isLoading, refetch } = useEmailAccounts()
   const [addOpen, setAddOpen] = useState(false)
+
+  // Search connected accounts by label / address / provider once there are
+  // enough to scroll. Hooks must run before the loading early-return below.
+  const list = useListControls(accounts, {
+    searchText: (a) => [a.label, a.name, a.type],
+  })
+  const showToolbar = accounts.length >= LIST_FILTER_THRESHOLD
 
   if (isLoading) return <SettingsListSkeleton count={2} />
 
@@ -89,9 +99,22 @@ export function EmailAccountsSettings() {
           />
         ) : (
           <>
-            {accounts.map((a) => (
-              <EmailAccountCard key={a.id} account={a} onChange={refetch} />
-            ))}
+            {showToolbar && (
+              <ListToolbar
+                query={list.query}
+                onQueryChange={list.setQuery}
+                placeholder={t('settings.emailAccounts.search', 'Search accounts...')}
+                onClear={() => list.setQuery('')}
+                active={list.isSearching}
+              />
+            )}
+            {list.total === 0 ? (
+              <EmptyState minimal title={t('common.noResults', 'No results found')} />
+            ) : (
+              list.filtered.map((a) => (
+                <EmailAccountCard key={a.id} account={a} onChange={refetch} />
+              ))
+            )}
             <Button variant="outline" className="w-full" onClick={() => setAddOpen(true)}>
               <Plus className="size-4" />
               {t('settings.emailAccounts.add')}

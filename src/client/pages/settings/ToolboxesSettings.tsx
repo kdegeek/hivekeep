@@ -6,9 +6,12 @@ import { Badge } from '@/client/components/ui/badge'
 import { Plus, Wrench, Lock, Pencil, Asterisk } from 'lucide-react'
 import { EmptyState } from '@/client/components/common/EmptyState'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
+import { ListToolbar } from '@/client/components/common/ListToolbar'
 import { SettingsListSkeleton } from '@/client/components/common/SettingsListSkeleton'
 import { ConfirmDeleteButton } from '@/client/components/common/ConfirmDeleteButton'
 import { ToolboxFormDialog } from '@/client/components/toolbox/ToolboxFormDialog'
+import { useListControls } from '@/client/hooks/useListControls'
+import { LIST_FILTER_THRESHOLD } from '@/shared/constants'
 import { useToolboxes } from '@/client/hooks/useToolboxes'
 import { getErrorMessage, toastError } from '@/client/lib/api'
 import type { Toolbox } from '@/shared/types'
@@ -38,15 +41,17 @@ export function ToolboxesSettings() {
     }
   }
 
+  // Search (name/description); built-ins first, then alphabetical.
+  const list = useListControls(toolboxes, {
+    searchText: (tb) => [tb.name, tb.description],
+    sort: (a, b) => (a.builtin !== b.builtin ? (a.builtin ? -1 : 1) : a.name.localeCompare(b.name)),
+  })
+
   if (isLoading) {
     return <SettingsListSkeleton count={3} />
   }
 
-  // Built-ins first (alphabetical), then user toolboxes (alphabetical).
-  const sorted = [...toolboxes].sort((a, b) => {
-    if (a.builtin !== b.builtin) return a.builtin ? -1 : 1
-    return a.name.localeCompare(b.name)
-  })
+  const sorted = list.filtered
 
   return (
     <div className="space-y-4">
@@ -63,7 +68,7 @@ export function ToolboxesSettings() {
         storageKey="help.toolboxes.open"
       />
 
-      {sorted.length === 0 && (
+      {toolboxes.length === 0 && (
         <EmptyState
           icon={Wrench}
           title={t('toolboxes.empty')}
@@ -71,6 +76,20 @@ export function ToolboxesSettings() {
           actionLabel={t('toolboxes.add')}
           onAction={openCreate}
         />
+      )}
+
+      {toolboxes.length >= LIST_FILTER_THRESHOLD && (
+        <ListToolbar
+          query={list.query}
+          onQueryChange={list.setQuery}
+          placeholder={t('toolboxes.search', 'Search toolboxes...')}
+          onClear={() => list.setQuery('')}
+          active={list.isSearching}
+        />
+      )}
+
+      {toolboxes.length > 0 && sorted.length === 0 && (
+        <EmptyState minimal title={t('common.noResults', 'No results found')} />
       )}
 
       {sorted.map((toolbox) => {
