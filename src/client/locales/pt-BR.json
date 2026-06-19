@@ -3679,6 +3679,22 @@
     "refresh": "Atualizar",
     "notFound": "Arquivo não encontrado: {{path}}",
     "openError": "Não foi possível abrir este arquivo",
+    "sources": {
+      "agents": "Agentes",
+      "projects": "Projetos",
+      "folders": "Pastas",
+      "addFolder": "Adicionar uma pasta…"
+    },
+    "addFolder": {
+      "title": "Pastas",
+      "description": "Navegue e edite uma pasta arbitrária no servidor. Todos podem ver e editar as pastas que você adicionar.",
+      "add": "Adicionar pasta",
+      "existing": "Pastas adicionadas",
+      "labelField": "Nome",
+      "labelPlaceholder": "Meu projeto",
+      "pathField": "Caminho absoluto",
+      "pathHint": "Um caminho absoluto para um diretório existente no servidor."
+    },
     "empty": {
       "title": "Este workspace está vazio",
       "description": "Os arquivos criados por este agente aparecerão aqui."

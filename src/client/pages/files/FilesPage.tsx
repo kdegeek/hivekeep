@@ -6,7 +6,6 @@ import { Folder, FolderTree, RefreshCw, Loader2, FilePlus2, Search } from 'lucid
 import { toastError } from '@/client/lib/api'
 import { PageHeader } from '@/client/components/layout/PageHeader'
 import { EmptyState } from '@/client/components/common/EmptyState'
-import { AgentSelector } from '@/client/components/common/AgentSelector'
 import { UnsavedChangesDialog } from '@/client/components/common/UnsavedChangesDialog'
 import { Button } from '@/client/components/ui/button'
 import { Sheet, SheetContent, SheetTitle } from '@/client/components/ui/sheet'
@@ -21,6 +20,7 @@ import {
   AlertDialogTitle,
 } from '@/client/components/ui/alert-dialog'
 import { useAgentList } from '@/client/hooks/useAgentList'
+import { useWorkspaceFolders } from '@/client/hooks/useWorkspaceFolders'
 import { appendToDraft } from '@/client/hooks/useDraftMessage'
 import {
   useWorkspaceFiles,
@@ -30,6 +30,8 @@ import {
 } from '@/client/hooks/useWorkspaceFiles'
 import { useWorkspaceTabs } from '@/client/hooks/useWorkspaceTabs'
 import { WorkspaceTree, type WorkspaceTreeActions } from '@/client/components/files/WorkspaceTree'
+import { WorkspaceSourceSelector } from '@/client/components/files/WorkspaceSourceSelector'
+import { AddFolderDialog } from '@/client/components/files/AddFolderDialog'
 import { FileStorageFormDialog } from '@/client/components/file-storage/FileStorageFormDialog'
 import { WorkspaceEditor, workspaceRawUrl } from '@/client/components/files/WorkspaceEditor'
 import { FileTabs } from '@/client/components/files/FileTabs'
@@ -37,40 +39,68 @@ import { WorkspaceQuickOpen } from '@/client/components/files/WorkspaceQuickOpen
 import { sameSource } from '@/client/lib/workspace-source'
 import type { WorkspaceEntry, WorkspaceSourceRef } from '@/shared/types'
 
-const LAST_AGENT_KEY = 'files.lastAgentId'
+const LAST_SOURCE_KEY = 'files.lastSource'
+
+function readLastSource(): WorkspaceSourceRef | null {
+  try {
+    const raw = localStorage.getItem(LAST_SOURCE_KEY)
+    return raw ? (JSON.parse(raw) as WorkspaceSourceRef) : null
+  } catch {
+    return null
+  }
+}
 
 /**
- * Files section (files.md § 3-4): VSCode-like browser/editor over agent
- * workspaces. Deep-linkable as /files/:agentId?path=relative/path.
+ * Files section (files.md § 3-4): VSCode-like browser/editor over a workspace
+ * SOURCE — an agent workspace, a project repo (optionally a git worktree) or a
+ * user-added FS folder. Deep-linkable as /files/:agentId, /files/folder/:id or
+ * /files/project/:id (with ?path= and ?worktree=).
  */
 export function FilesPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { agentId: routeAgentId } = useParams<{ agentId?: string }>()
+  const params = useParams<{ agentId?: string; sourceType?: string; sourceId?: string }>()
   const [searchParams] = useSearchParams()
   const requestedPath = searchParams.get('path')
+  const requestedWorktree = searchParams.get('worktree') ?? undefined
 
   const { agents, isLoading: agentsLoading } = useAgentList()
+  const foldersApi = useWorkspaceFolders()
+  const [addFolderOpen, setAddFolderOpen] = useState(false)
 
-  // Active workspace: route param > localStorage > first agent.
-  const storedAgentId = localStorage.getItem(LAST_AGENT_KEY)
-  const activeAgentId =
-    (routeAgentId ? (agents.find((a) => a.id === routeAgentId || a.slug === routeAgentId)?.id ?? null) : null) ??
-    (storedAgentId && agents.some((a) => a.id === storedAgentId) ? storedAgentId : null) ??
-    agents[0]?.id ??
-    null
+  // Source from the route: explicit project/folder, or legacy agent id/slug.
+  const routeSource = useMemo<WorkspaceSourceRef | null>(() => {
+    if (params.sourceType && params.sourceId && (params.sourceType === 'project' || params.sourceType === 'folder')) {
+      return { type: params.sourceType, id: params.sourceId, worktree: requestedWorktree }
+    }
+    if (params.agentId) {
+      const agent = agents.find((a) => a.id === params.agentId || a.slug === params.agentId)
+      if (agent) return { type: 'agent', id: agent.id }
+    }
+    return null
+  }, [params.sourceType, params.sourceId, params.agentId, requestedWorktree, agents])
+
+  // Fallback when no route source: last-used (if still valid) else first agent.
+  const fallbackSource = useMemo<WorkspaceSourceRef | null>(() => {
+    const last = readLastSource()
+    if (last) {
+      if (last.type === 'agent' && agents.some((a) => a.id === last.id)) return last
+      if (last.type === 'folder' && foldersApi.folders.some((f) => f.id === last.id)) return last
+      if (last.type === 'project') return last // validity re-checked server-side (P4)
+    }
+    return agents[0] ? { type: 'agent', id: agents[0].id } : null
+  }, [agents, foldersApi.folders])
+
+  const source = routeSource ?? fallbackSource
+  const activeAgentId = source?.type === 'agent' ? source.id : null
 
   useEffect(() => {
-    if (activeAgentId) localStorage.setItem(LAST_AGENT_KEY, activeAgentId)
-  }, [activeAgentId])
+    if (source) localStorage.setItem(LAST_SOURCE_KEY, JSON.stringify(source))
+  }, [source])
 
-  // Browse source for the hooks. P2 only exposes agent sources; projects and
-  // folders are added to the selector in P3/P4. Memoized so its identity (and
-  // thus the hooks' effects) only changes when the source actually changes.
-  const source = useMemo<WorkspaceSourceRef | null>(
-    () => (activeAgentId ? { type: 'agent', id: activeAgentId } : null),
-    [activeAgentId],
-  )
+  const handleSourceChange = (next: WorkspaceSourceRef) => {
+    navigate(next.type === 'agent' ? `/files/${next.id}` : `/files/${next.type}/${next.id}`)
+  }
 
   const workspace = useWorkspaceFiles(source)
   const tabsApi = useWorkspaceTabs(source)
@@ -93,12 +123,12 @@ export function FilesPage() {
     [workspace, tabsApi],
   )
 
-  // Deep link: open ?path= once the agent list resolved the workspace.
+  // Deep link: open ?path= once the source resolved.
   useEffect(() => {
-    if (!activeAgentId || !requestedPath) return
+    if (!source || !requestedPath) return
     openPath(requestedPath)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAgentId, requestedPath])
+  }, [source, requestedPath])
 
   // Dead deep-link feedback (file vanished): the tab state flags deletedOnDisk.
   useEffect(() => {
@@ -195,15 +225,19 @@ export function FilesPage() {
         toastError(err)
       }
     },
-    share: (entry) => setShareTarget(entry),
-    insertInChat: (entry) => {
-      if (!activeAgentId) return
-      // Write the draft BEFORE navigating (no composer mount race) — the path
-      // goes in backticks, same convention as the @ palette (files.md § 5.3).
-      appendToDraft(activeAgentId, `\`${entry.path}\``)
-      const agent = agents.find((a) => a.id === activeAgentId)
-      navigate(`/agent/${agent?.slug ?? activeAgentId}`)
-    },
+    // Share + insert-in-chat are agent-only: a folder/project repo has no
+    // associated conversation. Omitting the handler hides the menu item (no
+    // dead affordance). Share is generalized to every source in P6.
+    share: activeAgentId ? (entry) => setShareTarget(entry) : undefined,
+    insertInChat: activeAgentId
+      ? (entry) => {
+          // Write the draft BEFORE navigating (no composer mount race) — the
+          // path goes in backticks, same convention as the @ palette (§ 5.3).
+          appendToDraft(activeAgentId, `\`${entry.path}\``)
+          const agent = agents.find((a) => a.id === activeAgentId)
+          navigate(`/agent/${agent?.slug ?? activeAgentId}`)
+        }
+      : undefined,
     uploadTo: async (dirPath, files) => {
       try {
         const result = await workspace.uploadFiles(dirPath, files)
@@ -260,8 +294,6 @@ export function FilesPage() {
     openPath(entry.path)
   }
 
-  const handleAgentChange = (id: string) => navigate(`/files/${id}`)
-
   const requestCloseTab = (path: string) => {
     if (tabsApi.states[path]?.dirty) {
       setClosingTab(path)
@@ -278,10 +310,12 @@ export function FilesPage() {
   const treePanel = (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 border-b border-border p-2">
-        <AgentSelector
-          value={activeAgentId ?? ''}
-          onValueChange={handleAgentChange}
+        <WorkspaceSourceSelector
+          value={source}
+          onChange={handleSourceChange}
           agents={agents.map((a) => ({ id: a.id, name: a.name, role: a.role, avatarUrl: a.avatarUrl }))}
+          folders={foldersApi.folders}
+          onAddFolder={() => setAddFolderOpen(true)}
           placeholder={t('files.selectWorkspace')}
         />
       </div>
@@ -353,7 +387,7 @@ export function FilesPage() {
             <div className="flex flex-1 items-center justify-center">
               <Loader2 className="size-5 animate-spin text-muted-foreground" />
             </div>
-          ) : !activeAgentId ? (
+          ) : !source ? (
             <div className="flex flex-1 items-center justify-center p-6">
               <EmptyState icon={Folder} title={t('files.noAgents.title')} description={t('files.noAgents.description')} />
             </div>
@@ -406,6 +440,15 @@ export function FilesPage() {
         onOpenChange={setQuickOpenOpen}
         source={source}
         onPick={(path) => openPath(path)}
+      />
+
+      <AddFolderDialog
+        open={addFolderOpen}
+        onOpenChange={setAddFolderOpen}
+        folders={foldersApi.folders}
+        onCreate={foldersApi.create}
+        onRemove={foldersApi.remove}
+        onAdded={(folder) => navigate(`/files/folder/${folder.id}`)}
       />
 
       {activeAgentId && (

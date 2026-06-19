@@ -3679,6 +3679,22 @@
     "refresh": "Rafraîchir",
     "notFound": "Fichier introuvable : {{path}}",
     "openError": "Impossible d'ouvrir ce fichier",
+    "sources": {
+      "agents": "Agents",
+      "projects": "Projets",
+      "folders": "Dossiers",
+      "addFolder": "Ajouter un dossier…"
+    },
+    "addFolder": {
+      "title": "Dossiers",
+      "description": "Parcourir et éditer un dossier arbitraire du serveur. Tout le monde peut voir et éditer les dossiers que vous ajoutez.",
+      "add": "Ajouter le dossier",
+      "existing": "Dossiers ajoutés",
+      "labelField": "Nom",
+      "labelPlaceholder": "Mon projet",
+      "pathField": "Chemin absolu",
+      "pathHint": "Un chemin absolu vers un dossier existant sur le serveur."
+    },
     "empty": {
       "title": "Ce workspace est vide",
       "description": "Les fichiers créés par cet agent apparaîtront ici."

@@ -887,6 +887,20 @@ export const appSettings = sqliteTable('app_settings', {
   updatedAt: integer('updated_at').notNull(), // Unix ms
 })
 
+// ─── Workspace folders (Files section — user-added arbitrary FS sources) ──────
+// Absolute on-disk folders surfaced in the Files selector alongside agent
+// workspaces and project repos. Path is canonicalized (realpath) on create.
+
+export const workspaceFolders = sqliteTable('workspace_folders', {
+  id: text('id').primaryKey(),
+  label: text('label').notNull(),
+  /** Absolute, realpath-canonicalized directory. */
+  path: text('path').notNull(),
+  /** User who added it (audit only; folders are visible to everyone). */
+  createdBy: text('created_by'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
 // ─── Feedback ────────────────────────────────────────────────────────────────
 // Per-user state driving the proactive feedback banner (the written feedback
 // itself is relayed to an external collector and not stored locally). One row

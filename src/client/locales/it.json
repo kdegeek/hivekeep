@@ -3679,6 +3679,22 @@
     "refresh": "Aggiorna",
     "notFound": "File non trovato: {{path}}",
     "openError": "Impossibile aprire questo file",
+    "sources": {
+      "agents": "Agenti",
+      "projects": "Progetti",
+      "folders": "Cartelle",
+      "addFolder": "Aggiungi una cartella…"
+    },
+    "addFolder": {
+      "title": "Cartelle",
+      "description": "Esplora e modifica una cartella arbitraria sul server. Tutti possono vedere e modificare le cartelle che aggiungi.",
+      "add": "Aggiungi cartella",
+      "existing": "Cartelle aggiunte",
+      "labelField": "Nome",
+      "labelPlaceholder": "Il mio progetto",
+      "pathField": "Percorso assoluto",
+      "pathHint": "Un percorso assoluto verso una directory esistente sul server."
+    },
     "empty": {
       "title": "Questo workspace è vuoto",
       "description": "I file creati da questo agente appariranno qui."

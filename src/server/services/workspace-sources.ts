@@ -1,5 +1,7 @@
+import { realpathSync } from 'node:fs'
 import { resolveAgentByIdOrSlug } from '@/server/services/agent-resolver'
 import { agentTarget, WorkspaceFilesError, type WorkspaceTarget } from '@/server/services/workspace-files'
+import { getWorkspaceFolder } from '@/server/services/workspace-folders'
 import type { WorkspaceSourceType } from '@/shared/types'
 
 /**
@@ -40,6 +42,19 @@ export async function resolveWorkspaceSource(
       if (!agent) throw new WorkspaceSourceError('SOURCE_NOT_FOUND', 'Agent not found')
       // Use the canonical id so the SSE scope matches sendToAgent.
       return agentTarget(agent.id)
+    }
+    case 'folder': {
+      const folder = getWorkspaceFolder(id)
+      if (!folder) throw new WorkspaceSourceError('SOURCE_NOT_FOUND', 'Folder not found')
+      // Re-canonicalize on every browse: a folder removed from disk must fail
+      // cleanly, not silently resolve to an empty/escaped root.
+      let root: string
+      try {
+        root = realpathSync(folder.path)
+      } catch {
+        throw new WorkspaceSourceError('SOURCE_NOT_FOUND', 'Folder no longer exists on disk')
+      }
+      return { root, source: { type: 'folder', id } }
     }
     default:
       throw new WorkspaceSourceError('SOURCE_INVALID', `Unknown source type: ${type}`)

@@ -3679,6 +3679,22 @@
     "refresh": "Aktualisieren",
     "notFound": "Datei nicht gefunden: {{path}}",
     "openError": "Diese Datei konnte nicht geöffnet werden",
+    "sources": {
+      "agents": "Agenten",
+      "projects": "Projekte",
+      "folders": "Ordner",
+      "addFolder": "Ordner hinzufügen…"
+    },
+    "addFolder": {
+      "title": "Ordner",
+      "description": "Einen beliebigen Ordner auf dem Server durchsuchen und bearbeiten. Alle können von Ihnen hinzugefügte Ordner sehen und bearbeiten.",
+      "add": "Ordner hinzufügen",
+      "existing": "Hinzugefügte Ordner",
+      "labelField": "Name",
+      "labelPlaceholder": "Mein Projekt",
+      "pathField": "Absoluter Pfad",
+      "pathHint": "Ein absoluter Pfad zu einem vorhandenen Verzeichnis auf dem Server."
+    },
     "empty": {
       "title": "Dieser Workspace ist leer",
       "description": "Von diesem Agenten erstellte Dateien erscheinen hier."

@@ -3679,6 +3679,22 @@
     "refresh": "更新",
     "notFound": "ファイルが見つかりません:{{path}}",
     "openError": "このファイルを開けませんでした",
+    "sources": {
+      "agents": "エージェント",
+      "projects": "プロジェクト",
+      "folders": "フォルダ",
+      "addFolder": "フォルダを追加…"
+    },
+    "addFolder": {
+      "title": "フォルダ",
+      "description": "サーバー上の任意のフォルダを参照・編集します。追加したフォルダは全員が閲覧・編集できます。",
+      "add": "フォルダを追加",
+      "existing": "追加済みフォルダ",
+      "labelField": "名前",
+      "labelPlaceholder": "マイプロジェクト",
+      "pathField": "絶対パス",
+      "pathHint": "サーバー上の既存ディレクトリへの絶対パス。"
+    },
     "empty": {
       "title": "このワークスペースは空です",
       "description": "このエージェントが作成したファイルがここに表示されます。"

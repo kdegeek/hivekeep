@@ -3717,6 +3717,22 @@
     "refresh": "Odśwież",
     "notFound": "Nie znaleziono pliku: {{path}}",
     "openError": "Nie udało się otworzyć tego pliku",
+    "sources": {
+      "agents": "Agenci",
+      "projects": "Projekty",
+      "folders": "Foldery",
+      "addFolder": "Dodaj folder…"
+    },
+    "addFolder": {
+      "title": "Foldery",
+      "description": "Przeglądaj i edytuj dowolny folder na serwerze. Każdy może widzieć i edytować dodane przez Ciebie foldery.",
+      "add": "Dodaj folder",
+      "existing": "Dodane foldery",
+      "labelField": "Nazwa",
+      "labelPlaceholder": "Mój projekt",
+      "pathField": "Ścieżka bezwzględna",
+      "pathHint": "Bezwzględna ścieżka do istniejącego katalogu na serwerze."
+    },
     "empty": {
       "title": "Ta przestrzeń robocza jest pusta",
       "description": "Pliki utworzone przez tego agenta pojawią się tutaj."

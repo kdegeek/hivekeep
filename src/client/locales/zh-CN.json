@@ -3679,6 +3679,22 @@
     "refresh": "刷新",
     "notFound": "未找到文件：{{path}}",
     "openError": "无法打开此文件",
+    "sources": {
+      "agents": "智能体",
+      "projects": "项目",
+      "folders": "文件夹",
+      "addFolder": "添加文件夹…"
+    },
+    "addFolder": {
+      "title": "文件夹",
+      "description": "浏览并编辑服务器上的任意文件夹。所有人都能查看和编辑你添加的文件夹。",
+      "add": "添加文件夹",
+      "existing": "已添加的文件夹",
+      "labelField": "名称",
+      "labelPlaceholder": "我的项目",
+      "pathField": "绝对路径",
+      "pathHint": "服务器上现有目录的绝对路径。"
+    },
     "empty": {
       "title": "此工作区是空的",
       "description": "该智能体创建的文件会显示在这里。"
