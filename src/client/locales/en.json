@@ -2188,7 +2188,8 @@
         "selectContact": "Select a contact",
         "searchContacts": "Search contacts...",
         "noContacts": "No contacts found",
-        "approve": "Approve"
+        "approve": "Approve",
+        "bufferedCount": "{{count}} message(s) waiting"
       },
       "emptyDescription": "Set up a channel like Telegram or Discord so your Agents can chat outside the web UI.",
       "setupGuide": {
@@ -2241,6 +2242,11 @@
         "repair": "Re-pair",
         "repairTitle": "Re-pair {{name}}",
         "repairHint": "The WhatsApp session needs to be linked again. Scan this code to reconnect."
+      },
+      "approval": {
+        "title": "Require approval for new contacts",
+        "description": "New senders must be approved before the Agent replies.",
+        "warning": "Approval is disabled: anyone who messages this channel is auto-added as a contact and can trigger the Agent (and its costs) without review. A new, distinct contact is created per sender, so never trust a claimed identity. Turn this back on to require manual approval."
       }
     },
     "notifications": {

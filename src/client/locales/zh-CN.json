@@ -2188,7 +2188,8 @@
         "selectContact": "选择联系人",
         "searchContacts": "搜索联系人...",
         "noContacts": "未找到联系人",
-        "approve": "批准"
+        "approve": "批准",
+        "bufferedCount": "{{count}} 条消息待处理"
       },
       "emptyDescription": "设置 Telegram 或 Discord 等渠道，让你的智能体在网页之外也能聊天。",
       "setupGuide": {
@@ -2241,6 +2242,11 @@
         "repair": "重新配对",
         "repairTitle": "重新配对 {{name}}",
         "repairHint": "WhatsApp 会话需要重新关联。扫描此二维码以重新连接。"
+      },
+      "approval": {
+        "title": "新联系人需要批准",
+        "description": "新发送者需获得批准后，Agent 才会回复。",
+        "warning": "审批已关闭：任何向该渠道发送消息的人都会被自动添加为联系人，并可在未经审核的情况下触发 Agent（及其费用）。系统会为每个发送者创建一个独立联系人，因此切勿信任任何声称的身份。重新开启以要求手动审批。"
       }
     },
     "notifications": {

@@ -72,14 +72,34 @@ These tools are available to main agents only.
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `CHANNELS_MAX_PER_KIN` | 5 | Maximum channel connections per Agent |
+| `CHANNEL_MAX_PENDING_BUFFERED` | 10 | Messages buffered per pending contact (replayed as one turn on approval; most recent kept) |
 
 ## User Mapping & Contacts
 
-When a user messages through a channel for the first time, Hivekeep can automatically create a **contact** linked to their platform identity. This enables:
+A channel message is only delivered to the Agent once the sender is a known, authorized **contact** (linked to their platform identity). A known contact enables:
 
 - Consistent user identification across conversations
 - The Agent remembering who someone is across sessions
 - Proactive messaging to known users via `send_channel_message`
+
+### Contact approval
+
+By default, each channel **requires approval** for new senders (the secure default). When an unknown sender writes in:
+
+1. They are placed in a pending queue and notified that their access is awaiting approval (sent once, not on every message).
+2. Their messages are **buffered** (up to `CHANNEL_MAX_PENDING_BUFFERED`, default 10, keeping the most recent) instead of being dropped.
+3. An admin approves them from **Settings → Channels** (expand the channel). Approval creates or links a contact and authorizes their platform id.
+4. On approval, the buffered backlog is replayed to the Agent as a **single turn**, so nothing the sender said while waiting is lost and the Agent responds with full context.
+
+### Disabling approval (auto-create contacts)
+
+Each channel has a per-channel **"Require approval for new contacts"** toggle. Turning it off (which sets `autoCreateContacts`) makes unknown senders flow straight through: a brand-new contact is auto-created and their message is delivered immediately, with no approval step.
+
+:::caution
+Disabling approval means **anyone** who messages the channel can trigger the Agent (and incur its costs) without review. Only disable it on channels you intend to be public.
+:::
+
+**Anti-impersonation safeguards.** Auto-create always creates a **new, distinct contact** identified only by the platform handle. It never links an unknown sender to an existing contact based on a claimed identity, and no Agent tool can reassign a platform-id authorization. If you let the Agent tidy up auto-created duplicates, it must verify identity before merging, and never treat a claimed name (for example "I'm the boss") as proof, otherwise an impostor could inherit a privileged contact's entries.
 
 ## Causal Chain Delivery
 

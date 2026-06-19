@@ -689,6 +689,8 @@ export interface ChannelPendingUser {
   platformUsername: string | null
   platformDisplayName: string | null
   createdAt: number
+  /** Messages buffered while awaiting approval (replayed as one turn on approve) */
+  bufferedCount: number
 }
 
 /** Platform ID linked to a contact (for channel authorization) */

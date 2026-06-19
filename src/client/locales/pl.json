@@ -2204,7 +2204,8 @@
         "selectContact": "Wybierz kontakt",
         "searchContacts": "Szukaj kontaktów...",
         "noContacts": "Nie znaleziono kontaktów",
-        "approve": "Zatwierdź"
+        "approve": "Zatwierdź",
+        "bufferedCount": "{{count}} wiadomość(i) w oczekiwaniu"
       },
       "emptyDescription": "Skonfiguruj kanał, np. Telegram lub Discord, aby Twoi Agenci mogli rozmawiać poza interfejsem webowym.",
       "setupGuide": {
@@ -2257,6 +2258,11 @@
         "repair": "Sparuj ponownie",
         "repairTitle": "Sparuj ponownie {{name}}",
         "repairHint": "Sesję WhatsApp trzeba połączyć ponownie. Zeskanuj ten kod, aby połączyć."
+      },
+      "approval": {
+        "title": "Wymagaj zatwierdzenia nowych kontaktów",
+        "description": "Nowi nadawcy muszą zostać zatwierdzeni, zanim Agent odpowie.",
+        "warning": "Zatwierdzanie jest wyłączone: każdy, kto napisze na ten kanał, jest automatycznie dodawany jako kontakt i może uruchomić Agenta (oraz jego koszty) bez weryfikacji. Dla każdego nadawcy tworzony jest osobny kontakt, więc nigdy nie ufaj deklarowanej tożsamości. Włącz ponownie, aby wymagać ręcznego zatwierdzenia."
       }
     },
     "notifications": {

@@ -2188,7 +2188,8 @@
         "selectContact": "Selecione um contato",
         "searchContacts": "Buscar contatos...",
         "noContacts": "Nenhum contato encontrado",
-        "approve": "Aprovar"
+        "approve": "Aprovar",
+        "bufferedCount": "{{count}} mensagem(ns) aguardando"
       },
       "emptyDescription": "Configure um canal como Telegram ou Discord para que seus Agentes conversem fora da interface web.",
       "setupGuide": {
@@ -2241,6 +2242,11 @@
         "repair": "Reparear",
         "repairTitle": "Reparear {{name}}",
         "repairHint": "A sessão do WhatsApp precisa ser vinculada novamente. Escaneie este código para reconectar."
+      },
+      "approval": {
+        "title": "Exigir aprovação para novos contatos",
+        "description": "Novos remetentes precisam ser aprovados antes que o Agente responda.",
+        "warning": "A aprovação está desativada: qualquer pessoa que envie mensagem a este canal é adicionada automaticamente como contato e pode acionar o Agente (e seus custos) sem revisão. Um contato distinto é criado para cada remetente, então nunca confie em uma identidade alegada. Reative para exigir aprovação manual."
       }
     },
     "notifications": {

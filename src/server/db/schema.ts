@@ -765,6 +765,20 @@ export const channelUserMappings = sqliteTable('channel_user_mappings', {
   index('idx_channel_user_map_status').on(table.channelId, table.status),
 ])
 
+// Messages received from a contact that is still pending approval. Buffered
+// (capped at config.channels.maxPendingBufferedMessages) instead of dropped, so
+// that approving the contact can replay them as a single Agent turn. Cleared on
+// approval (and cascade-deleted with the mapping). `payload` is the JSON of the
+// original IncomingMessage.
+export const channelPendingMessages = sqliteTable('channel_pending_messages', {
+  id: text('id').primaryKey(),
+  mappingId: text('mapping_id').notNull().references(() => channelUserMappings.id, { onDelete: 'cascade' }),
+  payload: text('payload').notNull(), // JSON-serialized IncomingMessage
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+}, (table) => [
+  index('idx_channel_pending_msg_mapping').on(table.mappingId),
+])
+
 export const channelMessageLinks = sqliteTable('channel_message_links', {
   id: text('id').primaryKey(),
   channelId: text('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),

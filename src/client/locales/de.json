@@ -2188,7 +2188,8 @@
         "selectContact": "Kontakt auswählen",
         "searchContacts": "Kontakte suchen...",
         "noContacts": "Keine Kontakte gefunden",
-        "approve": "Freigeben"
+        "approve": "Freigeben",
+        "bufferedCount": "{{count}} Nachricht(en) warten"
       },
       "emptyDescription": "Richte einen Kanal wie Telegram oder Discord ein, damit deine Agenten außerhalb der Web-Oberfläche chatten können.",
       "setupGuide": {
@@ -2241,6 +2242,11 @@
         "repair": "Neu koppeln",
         "repairTitle": "{{name}} neu koppeln",
         "repairHint": "Die WhatsApp-Sitzung muss erneut verknüpft werden. Scannen Sie diesen Code zum Verbinden."
+      },
+      "approval": {
+        "title": "Genehmigung für neue Kontakte verlangen",
+        "description": "Neue Absender müssen genehmigt werden, bevor der Agent antwortet.",
+        "warning": "Die Genehmigung ist deaktiviert: Jeder, der diesem Kanal schreibt, wird automatisch als Kontakt hinzugefügt und kann den Agenten (und dessen Kosten) ohne Prüfung auslösen. Pro Absender wird ein eigener Kontakt erstellt, vertraue also nie einer behaupteten Identität. Wieder aktivieren, um manuelle Genehmigung zu verlangen."
       }
     },
     "notifications": {

@@ -390,3 +390,86 @@ describe('buildDeliveryContextLine contract', () => {
     expect(buildDeliveryContextLine({ status: 'unknown' }, 'Twilio SMS', 'en')).toBe('unknown · Twilio SMS')
   })
 })
+
+// ─── Pending-message buffer cap ──────────────────────────────────────────────
+// Mirrors the cap trimming in bufferPendingChannelMessage() (channels.ts): when
+// a pending contact accumulates more than maxPendingBufferedMessages, only the
+// most recent N are kept (oldest dropped) so the replay turn stays bounded.
+
+function trimToCap<T>(buffer: T[], cap: number): T[] {
+  // Buffer is ordered oldest → newest. Drop the oldest overflow.
+  if (buffer.length <= cap) return buffer
+  return buffer.slice(buffer.length - cap)
+}
+
+describe('pending buffer cap contract', () => {
+  it('keeps everything when under the cap', () => {
+    expect(trimToCap([1, 2, 3], 10)).toEqual([1, 2, 3])
+  })
+
+  it('keeps everything when exactly at the cap', () => {
+    expect(trimToCap([1, 2, 3], 3)).toEqual([1, 2, 3])
+  })
+
+  it('drops the oldest when over the cap (keeps most recent N)', () => {
+    expect(trimToCap([1, 2, 3, 4, 5], 3)).toEqual([3, 4, 5])
+  })
+
+  it('keeps only the last message with a cap of 1', () => {
+    expect(trimToCap(['a', 'b', 'c'], 1)).toEqual(['c'])
+  })
+})
+
+// ─── Grouped channel-turn content ────────────────────────────────────────────
+// Mirrors the content builder in enqueueChannelTurn() (channels.ts): the sender
+// prefix is emitted once, then every non-empty message body is joined by
+// newlines so an approved contact's backlog becomes a single turn. An
+// unresolved contact carries platform metadata in the prefix instead.
+
+function buildChannelTurnContent(
+  platform: string,
+  senderName: string,
+  contactResolved: boolean,
+  messages: { content: string; platformUserId: string; platformUsername?: string }[],
+): string {
+  const first = messages[0]!
+  const head = contactResolved
+    ? `[${platform}:${senderName}]`
+    : (() => {
+        const parts = [`${platform}_id: ${first.platformUserId}`]
+        if (first.platformUsername) parts.push(`username: ${first.platformUsername}`)
+        return `[${platform}:${senderName} (unknown, ${parts.join(', ')})]`
+      })()
+  const bodies = messages.map((m) => m.content).filter((c) => c && c.trim().length > 0)
+  return bodies.length > 0 ? `${head} ${bodies.join('\n')}` : head
+}
+
+describe('grouped channel-turn content contract', () => {
+  const msg = (content: string) => ({ content, platformUserId: 'u1', platformUsername: 'bob' })
+
+  it('formats a single resolved-contact message', () => {
+    expect(buildChannelTurnContent('whatsapp', 'Bob', true, [msg('hello')])).toBe('[whatsapp:Bob] hello')
+  })
+
+  it('joins multiple buffered messages into one turn with a single prefix', () => {
+    expect(
+      buildChannelTurnContent('whatsapp', 'Bob', true, [msg('one'), msg('two'), msg('three')]),
+    ).toBe('[whatsapp:Bob] one\ntwo\nthree')
+  })
+
+  it('skips empty/whitespace bodies when joining', () => {
+    expect(buildChannelTurnContent('whatsapp', 'Bob', true, [msg('one'), msg('   '), msg('two')])).toBe(
+      '[whatsapp:Bob] one\ntwo',
+    )
+  })
+
+  it('embeds platform metadata in the prefix for an unresolved contact', () => {
+    expect(buildChannelTurnContent('telegram', 'Stranger', false, [msg('hi')])).toBe(
+      '[telegram:Stranger (unknown, telegram_id: u1, username: bob)] hi',
+    )
+  })
+
+  it('emits just the prefix when there is no text (attachment-only)', () => {
+    expect(buildChannelTurnContent('whatsapp', 'Bob', true, [msg('')])).toBe('[whatsapp:Bob]')
+  })
+})

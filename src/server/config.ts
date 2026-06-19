@@ -607,6 +607,10 @@ export const config = {
     maxPerAgent: Number(process.env.CHANNELS_MAX_PER_KIN ?? 5),
     telegramWebhookPath: '/api/channels/telegram',
     pendingOriginTtlMs: Number(process.env.CHANNEL_PENDING_ORIGIN_TTL ?? 300_000),
+    // Max messages buffered per pending contact while they await approval. On
+    // approval the buffer is replayed as a single Agent turn; only the most
+    // recent N are kept (older ones are dropped).
+    maxPendingBufferedMessages: Number(process.env.CHANNEL_MAX_PENDING_BUFFERED ?? 10),
     // Per-channel WhatsApp-Web (Baileys) multi-file auth state. One subfolder
     // per channel id; survives restarts so a paired session reconnects.
     whatsappWebDir: process.env.WHATSAPP_WEB_DIR ?? `${dataDir}/whatsapp-web`,
