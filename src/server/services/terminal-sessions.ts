@@ -355,6 +355,26 @@ function appendScrollback(session: TerminalSession, data: string) {
   }
 }
 
+/**
+ * Strip terminal capability *queries* from a scrollback before replaying it.
+ *
+ * Full-screen programs (tmux especially) probe the terminal on startup by
+ * emitting Device Attributes (DA1 `ESC[c`, DA2 `ESC[>c`, DA3 `ESC[=c`) and
+ * Device Status Report (`ESC[6n`, `ESC[5n`) queries. These end up in the saved
+ * scrollback. Replaying them verbatim on (re)attach makes xterm.js answer them
+ * a second time, and the answer (e.g. `ESC[?1;2c`) lands on the now-idle shell
+ * prompt where it shows up as visible junk like `1;2c` / `0;276;0c`.
+ *
+ * The queries are zero-width, so removing them from the replay copy doesn't
+ * change what the user sees. The live PTY stream is never touched, so the real
+ * startup handshake still works.
+ */
+function stripTerminalQueries(data: string): string {
+  // CSI [private-prefix] [params] (c|n) — DA and DSR queries/answers.
+  // eslint-disable-next-line no-control-regex
+  return data.replace(/\x1b\[[?>=]?[0-9;]*[cn]/g, '')
+}
+
 /** Arm the pending-kill timer for an unattached session. Detached sessions
  *  persist by default (TTL 0); never-attached orphans always get a short grace. */
 function armDetachTimer(session: TerminalSession) {
@@ -530,7 +550,9 @@ export function attach(
   }
   applyClientSizes(session)
   notifySessionsChanged(userId)
-  return replay
+  // Strip capability queries so replaying the scrollback doesn't make the client
+  // re-answer them (the answer would echo as junk like `1;2c` on the prompt).
+  return stripTerminalQueries(replay)
 }
 
 /** Mirrored viewing (tmux-style): the PTY is sized to the smallest attached

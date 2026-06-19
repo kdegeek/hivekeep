@@ -274,6 +274,15 @@ describe('terminal-sessions', () => {
     expect(dto.persistent).toBe(false) // tmux forced off → pty backend
   })
 
+  it('strips terminal capability queries (DA/DSR) from the replayed scrollback', () => {
+    const session = createSession('user-1', 80, 24)
+    // tmux-style startup probes (DA1, DA2, DSR) interleaved with real output.
+    spawned[0]!.emitData('hello\x1b[c world\x1b[>0c done\x1b[6n!')
+    const replay = attach(session.id, 'user-1', () => {}, () => {})
+    // Queries gone, visible content intact — no `1;2c`-style echo on reattach.
+    expect(replay).toBe('hello world done!')
+  })
+
   it('persists a session on create and removes its row on destroy', () => {
     const store = makeFakeStore()
     setTerminalPersistence(store)
