@@ -9,11 +9,12 @@ import {
 } from '@/client/components/ui/command'
 import { getFileIcon, formatFileSize } from '@/client/lib/file-icons'
 import { useWorkspaceFileSearch } from '@/client/hooks/useWorkspaceFileSearch'
+import type { WorkspaceSourceRef } from '@/shared/types'
 
 interface WorkspaceQuickOpenProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  agentId: string | null
+  source: WorkspaceSourceRef | null
   onPick: (path: string) => void
 }
 
@@ -21,10 +22,10 @@ interface WorkspaceQuickOpenProps {
  * Ctrl/Cmd+P quick open (files.md § 3.6) — same server search as the chat `@`
  * palette. Results are server-filtered: cmdk's own filtering is disabled.
  */
-export function WorkspaceQuickOpen({ open, onOpenChange, agentId, onPick }: WorkspaceQuickOpenProps) {
+export function WorkspaceQuickOpen({ open, onOpenChange, source, onPick }: WorkspaceQuickOpenProps) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
-  const { hits, isLoading } = useWorkspaceFileSearch({ query, agentId, enabled: open, limit: 20 })
+  const { hits, isLoading } = useWorkspaceFileSearch({ query, source, enabled: open, limit: 20 })
 
   useEffect(() => {
     if (!open) setQuery('')

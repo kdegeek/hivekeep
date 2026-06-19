@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -34,7 +34,8 @@ import { FileStorageFormDialog } from '@/client/components/file-storage/FileStor
 import { WorkspaceEditor, workspaceRawUrl } from '@/client/components/files/WorkspaceEditor'
 import { FileTabs } from '@/client/components/files/FileTabs'
 import { WorkspaceQuickOpen } from '@/client/components/files/WorkspaceQuickOpen'
-import type { WorkspaceEntry } from '@/shared/types'
+import { sameSource } from '@/client/lib/workspace-source'
+import type { WorkspaceEntry, WorkspaceSourceRef } from '@/shared/types'
 
 const LAST_AGENT_KEY = 'files.lastAgentId'
 
@@ -63,8 +64,16 @@ export function FilesPage() {
     if (activeAgentId) localStorage.setItem(LAST_AGENT_KEY, activeAgentId)
   }, [activeAgentId])
 
-  const workspace = useWorkspaceFiles(activeAgentId)
-  const tabsApi = useWorkspaceTabs(activeAgentId)
+  // Browse source for the hooks. P2 only exposes agent sources; projects and
+  // folders are added to the selector in P3/P4. Memoized so its identity (and
+  // thus the hooks' effects) only changes when the source actually changes.
+  const source = useMemo<WorkspaceSourceRef | null>(
+    () => (activeAgentId ? { type: 'agent', id: activeAgentId } : null),
+    [activeAgentId],
+  )
+
+  const workspace = useWorkspaceFiles(source)
+  const tabsApi = useWorkspaceTabs(source)
   const tabsApiRef = useRef(tabsApi)
   tabsApiRef.current = tabsApi
 
@@ -154,9 +163,9 @@ export function FilesPage() {
     },
     requestDelete: (entry) => setDeleteTarget(entry),
     download: (entry) => {
-      if (!activeAgentId) return
+      if (!source) return
       const anchor = document.createElement('a')
-      anchor.href = workspaceRawUrl(activeAgentId, entry.path)
+      anchor.href = workspaceRawUrl(source, entry.path)
       anchor.download = entry.name
       anchor.click()
     },
@@ -165,20 +174,21 @@ export function FilesPage() {
       toast.success(t('files.tree.pathCopied'))
     },
     clipboardSet: (entry, op) => {
-      if (!activeAgentId) return
-      setWorkspaceClipboard({ agentId: activeAgentId, path: entry.path, isDirectory: entry.type === 'dir', op })
+      if (!source) return
+      setWorkspaceClipboard({ source, path: entry.path, isDirectory: entry.type === 'dir', op })
     },
     clipboardPaste: async (destDir) => {
       const clip = getWorkspaceClipboard()
-      if (!clip || !activeAgentId) return
+      if (!clip || !source) return
       const name = clip.path.split('/').pop() ?? clip.path
       const to = destDir ? `${destDir}/${name}` : name
-      const fromAgentId = clip.agentId !== activeAgentId ? clip.agentId : undefined
+      // Cross-source paste passes the origin source so the server validates each side.
+      const fromSource = sameSource(clip.source, source) ? undefined : clip.source
       try {
         if (clip.op === 'copy') {
-          await workspace.copyPath(clip.path, to, fromAgentId)
+          await workspace.copyPath(clip.path, to, fromSource)
         } else {
-          await workspace.movePath(clip.path, to, fromAgentId)
+          await workspace.movePath(clip.path, to, fromSource)
           setWorkspaceClipboard(null)
         }
       } catch (err) {
@@ -359,9 +369,9 @@ export function FilesPage() {
                 }}
                 onClose={requestCloseTab}
               />
-              {activeTab && activeState ? (
+              {activeTab && activeState && source ? (
                 <WorkspaceEditor
-                  agentId={activeAgentId}
+                  source={source}
                   path={activeTab}
                   state={activeState}
                   onChangeDraft={(value) => tabsApi.updateDraft(activeTab, value)}
@@ -394,7 +404,7 @@ export function FilesPage() {
       <WorkspaceQuickOpen
         open={quickOpenOpen}
         onOpenChange={setQuickOpenOpen}
-        agentId={activeAgentId}
+        source={source}
         onPick={(path) => openPath(path)}
       />
 

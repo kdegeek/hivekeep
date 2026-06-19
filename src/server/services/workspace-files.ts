@@ -18,7 +18,7 @@ import { createLogger } from '@/server/logger'
 import { sseManager } from '@/server/sse/index'
 import { isPathBlocked } from '@/server/tools/filesystem-tools'
 import { guessMimeType, isBinary } from '@/server/services/file-kind'
-import type { WorkspaceEntry, WorkspaceFileInfo, WorkspaceFileKind } from '@/shared/types'
+import type { WorkspaceEntry, WorkspaceFileInfo, WorkspaceFileKind, WorkspaceSourceRef } from '@/shared/types'
 
 const log = createLogger('workspace-files')
 
@@ -66,19 +66,9 @@ export function workspaceRootFor(agentId: string): string {
 }
 
 /**
- * Reference to a browse source, carried on every change event so the client can
- * filter by the source it is viewing. `agent` is the legacy/default path.
- */
-export interface WorkspaceSourceRef {
-  type: 'agent' | 'project' | 'folder'
-  id: string
-  /** Project worktree path (relative to the repos worktrees dir), if any. */
-  worktree?: string
-}
-
-/**
  * A resolved browse target: the absolute root on disk + the source it came from
- * (used to scope the `workspace:changed` SSE emission).
+ * (used to scope the `workspace:changed` SSE emission). The source ref is also
+ * carried on every change event so the client can filter by what it is viewing.
  */
 export interface WorkspaceTarget {
   root: string
