@@ -168,8 +168,17 @@ export function useCrons() {
     return [...pending, ...sorted]
   }, [crons, cronOrder])
 
+  // Agent-created crons awaiting user approval — surfaced as a badge on the
+  // Crons nav item (ActivityBar + mobile top bar) so the action is discoverable
+  // without opening the section.
+  const pendingApprovalCount = useMemo(
+    () => crons.filter((c) => c.requiresApproval).length,
+    [crons],
+  )
+
   return {
     crons: sortedCrons,
+    pendingApprovalCount,
     isLoading,
     createCron,
     updateCron,

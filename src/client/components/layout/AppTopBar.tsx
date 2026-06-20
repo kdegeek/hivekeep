@@ -10,6 +10,7 @@ import {
 import { cn } from '@/client/lib/utils'
 import { useAuth } from '@/client/hooks/useAuth'
 import { useTasksContext } from '@/client/contexts/TasksContext'
+import { useCronsContext } from '@/client/contexts/CronsContext'
 import { HivekeepLogo } from '@/client/components/common/HivekeepLogo'
 import { ThemeToggle } from '@/client/components/common/ThemeToggle'
 import { PaletteToggle } from '@/client/components/common/PaletteToggle'
@@ -44,10 +45,16 @@ export function AppTopBar({ onOpenSettings, onOpenAccount }: AppTopBarProps) {
   const location = useLocation()
   const { t } = useTranslation()
   const { activeTasks } = useTasksContext()
+  const { pendingApprovalCount: pendingCronCount } = useCronsContext()
   const activeTaskCount = activeTasks.length
   const hasAwaitingTask = activeTasks.some(
     (task) => task.status === 'awaiting_human_input' || task.status === 'awaiting_agent_response',
   )
+  // Aggregate signal for the collapsed (<sm) dropdown trigger: any section that
+  // would show a badge contributes. Pending cron approvals always read as
+  // warning (they need user action), same as a task awaiting input.
+  const attentionCount = activeTaskCount + pendingCronCount
+  const hasWarning = hasAwaitingTask || pendingCronCount > 0
 
   // Mobile mode switch — the left ActivityBar rail is hidden below md, so the
   // section nav moves into this always-present top bar as a compact icon-only
@@ -57,20 +64,27 @@ export function AppTopBar({ onOpenSettings, onOpenAccount }: AppTopBarProps) {
   const path = location.pathname
   const sectionPrefixes = ['/projects', '/tasks', '/crons', '/files', '/mini-apps', '/models', '/terminal']
   const isSection = (prefix: string) => path.startsWith(prefix)
-  const modeItems: Array<{ key: string; to: string; icon: typeof Home; active: boolean; label: string; badge: boolean }> = [
-    { key: 'agents', to: '/', icon: Home, active: !sectionPrefixes.some(isSection), label: t('activityBar.agents'), badge: false },
-    { key: 'projects', to: '/projects', icon: FolderKanban, active: isSection('/projects'), label: t('activityBar.projects'), badge: false },
-    { key: 'tasks', to: '/tasks', icon: ListTodo, active: isSection('/tasks'), label: t('activityBar.tasks'), badge: true },
-    { key: 'crons', to: '/crons', icon: CalendarClock, active: isSection('/crons'), label: t('activityBar.crons'), badge: false },
-    { key: 'files', to: '/files', icon: Folder, active: isSection('/files'), label: t('activityBar.files'), badge: false },
-    { key: 'apps', to: '/mini-apps', icon: Blocks, active: isSection('/mini-apps'), label: t('activityBar.apps'), badge: false },
+  const modeItems: Array<{ key: string; to: string; icon: typeof Home; active: boolean; label: string; badgeKey?: 'tasks' | 'crons' }> = [
+    { key: 'agents', to: '/', icon: Home, active: !sectionPrefixes.some(isSection), label: t('activityBar.agents') },
+    { key: 'projects', to: '/projects', icon: FolderKanban, active: isSection('/projects'), label: t('activityBar.projects') },
+    { key: 'tasks', to: '/tasks', icon: ListTodo, active: isSection('/tasks'), label: t('activityBar.tasks'), badgeKey: 'tasks' },
+    { key: 'crons', to: '/crons', icon: CalendarClock, active: isSection('/crons'), label: t('activityBar.crons'), badgeKey: 'crons' },
+    { key: 'files', to: '/files', icon: Folder, active: isSection('/files'), label: t('activityBar.files') },
+    { key: 'apps', to: '/mini-apps', icon: Blocks, active: isSection('/mini-apps'), label: t('activityBar.apps') },
     ...(isAdmin
       ? [
-          { key: 'models', to: '/models', icon: Boxes, active: isSection('/models'), label: t('activityBar.models'), badge: false },
-          { key: 'terminal', to: '/terminal', icon: SquareTerminal, active: isSection('/terminal'), label: t('activityBar.terminal'), badge: false },
+          { key: 'models', to: '/models', icon: Boxes, active: isSection('/models'), label: t('activityBar.models') },
+          { key: 'terminal', to: '/terminal', icon: SquareTerminal, active: isSection('/terminal'), label: t('activityBar.terminal') },
         ]
       : []),
   ]
+
+  // Resolve a mode item's badge from the live counts (mirrors ActivityBar).
+  const badgeFor = (badgeKey?: 'tasks' | 'crons'): { count: number; warning: boolean } | null => {
+    if (badgeKey === 'tasks') return activeTaskCount > 0 ? { count: activeTaskCount, warning: hasAwaitingTask } : null
+    if (badgeKey === 'crons') return pendingCronCount > 0 ? { count: pendingCronCount, warning: true } : null
+    return null
+  }
 
   return (
     <header className="surface-header sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b px-2.5 sm:gap-3 sm:px-4">
@@ -101,14 +115,14 @@ export function AppTopBar({ onOpenSettings, onOpenAccount }: AppTopBarProps) {
               return <ActiveIcon className="size-4" strokeWidth={1.75} />
             })()}
             <ChevronDown className="size-3 text-muted-foreground" />
-            {activeTaskCount > 0 && (
+            {attentionCount > 0 && (
               <span
                 className={cn(
                   'absolute -right-1 -top-1 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[8px] font-semibold leading-none',
-                  hasAwaitingTask ? 'animate-pulse bg-warning text-warning-foreground' : 'bg-primary text-primary-foreground',
+                  hasWarning ? 'animate-pulse bg-warning text-warning-foreground' : 'bg-primary text-primary-foreground',
                 )}
               >
-                {activeTaskCount}
+                {attentionCount}
               </span>
             )}
           </button>
@@ -116,13 +130,19 @@ export function AppTopBar({ onOpenSettings, onOpenAccount }: AppTopBarProps) {
         <DropdownMenuContent align="start" className="w-48">
           {modeItems.map((item) => {
             const Icon = item.icon
+            const badge = badgeFor(item.badgeKey)
             return (
               <DropdownMenuItem key={item.key} onClick={() => navigate(item.to)} className={item.active ? 'text-primary' : undefined}>
                 <Icon className="size-4" />
                 {item.label}
-                {item.badge && activeTaskCount > 0 && (
-                  <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-none text-primary-foreground">
-                    {activeTaskCount}
+                {badge && (
+                  <span
+                    className={cn(
+                      'ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-semibold leading-none',
+                      badge.warning ? 'bg-warning text-warning-foreground' : 'bg-primary text-primary-foreground',
+                    )}
+                  >
+                    {badge.count}
                   </span>
                 )}
               </DropdownMenuItem>
@@ -139,6 +159,7 @@ export function AppTopBar({ onOpenSettings, onOpenAccount }: AppTopBarProps) {
       >
         {modeItems.map((item) => {
           const Icon = item.icon
+          const badge = badgeFor(item.badgeKey)
           return (
             <button
               key={item.key}
@@ -157,16 +178,16 @@ export function AppTopBar({ onOpenSettings, onOpenAccount }: AppTopBarProps) {
               )}
             >
               <Icon className="size-4" strokeWidth={1.75} />
-              {item.badge && activeTaskCount > 0 && (
+              {badge && (
                 <span
                   className={cn(
                     'absolute -right-1 -top-1 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[8px] font-semibold leading-none',
-                    hasAwaitingTask
+                    badge.warning
                       ? 'animate-pulse bg-warning text-warning-foreground'
                       : 'bg-primary text-primary-foreground',
                   )}
                 >
-                  {activeTaskCount}
+                  {badge.count}
                 </span>
               )}
             </button>

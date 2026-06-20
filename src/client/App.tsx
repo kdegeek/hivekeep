@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { api } from '@/client/lib/api'
 import { SidePanelProvider } from '@/client/contexts/SidePanelContext'
 import { TasksProvider } from '@/client/contexts/TasksContext'
+import { CronsProvider } from '@/client/contexts/CronsContext'
 import { TicketMentionShell } from '@/client/contexts/TicketMentionShell'
 import { UpdateProvider } from '@/client/contexts/UpdateContext'
 import { FeedbackProvider } from '@/client/contexts/FeedbackContext'
@@ -204,6 +205,7 @@ function AuthenticatedShell() {
     <TooltipProvider delayDuration={0}>
     <SidePanelProvider>
     <TasksProvider>
+    <CronsProvider>
     <UpdateProvider>
     <FeedbackProvider>
     <TicketMentionShell>
@@ -270,6 +272,7 @@ function AuthenticatedShell() {
     </TicketMentionShell>
     </FeedbackProvider>
     </UpdateProvider>
+    </CronsProvider>
     </TasksProvider>
     </SidePanelProvider>
     </TooltipProvider>

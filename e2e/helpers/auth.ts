@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 
 export const TEST_USER = {
   firstName: 'Test',
@@ -6,6 +6,16 @@ export const TEST_USER = {
   email: 'test@hivekeep.local',
   pseudonym: 'Tester',
   password: 'TestPassword123!',
+}
+
+/**
+ * Open the app and wait for onboarding step 1 to be ready.
+ * The step indicator becoming visible is the synchronization point, so there is
+ * no need for a discouraged `waitForLoadState('networkidle')`.
+ */
+export async function gotoOnboarding(page: Page) {
+  await page.goto('/')
+  await expect(page.getByText('Step 1 of 5')).toBeVisible({ timeout: 15_000 })
 }
 
 /**

@@ -23,7 +23,7 @@ import {
 import { useListControls } from '@/client/hooks/useListControls'
 import { LIST_FILTER_THRESHOLD } from '@/shared/constants'
 import { CronCard, SortableCronCard } from '@/client/components/crons/CronCard'
-import { useCrons } from '@/client/hooks/useCrons'
+import { useCronsContext } from '@/client/contexts/CronsContext'
 import { useTasksContext } from '@/client/contexts/TasksContext'
 import { useAgents } from '@/client/hooks/useAgents'
 import { useToolboxes } from '@/client/hooks/useToolboxes'
@@ -48,7 +48,7 @@ export function CronsPage() {
     deleteCron,
     approveCron,
     reorderCrons,
-  } = useCrons()
+  } = useCronsContext()
 
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editCron, setEditCron] = useState<CronSummary | null>(null)
