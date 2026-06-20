@@ -3743,7 +3743,10 @@
       "agents": "Agentes",
       "projects": "Proyectos",
       "folders": "Carpetas",
-      "addFolder": "Añadir una carpeta…"
+      "addFolder": "Añadir una carpeta…",
+      "all": "Todos",
+      "searchPlaceholder": "Buscar fuentes…",
+      "empty": "No se encontró ninguna fuente"
     },
     "addFolder": {
       "title": "Carpetas",

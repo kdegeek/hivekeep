@@ -3743,7 +3743,10 @@
       "agents": "智能体",
       "projects": "项目",
       "folders": "文件夹",
-      "addFolder": "添加文件夹…"
+      "addFolder": "添加文件夹…",
+      "all": "全部",
+      "searchPlaceholder": "搜索来源…",
+      "empty": "未找到来源"
     },
     "addFolder": {
       "title": "文件夹",

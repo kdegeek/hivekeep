@@ -3781,7 +3781,10 @@
       "agents": "Agenci",
       "projects": "Projekty",
       "folders": "Foldery",
-      "addFolder": "Dodaj folder…"
+      "addFolder": "Dodaj folder…",
+      "all": "Wszystkie",
+      "searchPlaceholder": "Szukaj źródeł…",
+      "empty": "Nie znaleziono źródła"
     },
     "addFolder": {
       "title": "Foldery",

@@ -3743,7 +3743,10 @@
       "agents": "Agentes",
       "projects": "Projetos",
       "folders": "Pastas",
-      "addFolder": "Adicionar uma pasta…"
+      "addFolder": "Adicionar uma pasta…",
+      "all": "Todos",
+      "searchPlaceholder": "Buscar fontes…",
+      "empty": "Nenhuma fonte encontrada"
     },
     "addFolder": {
       "title": "Pastas",

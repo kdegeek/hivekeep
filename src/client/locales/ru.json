@@ -3790,7 +3790,10 @@
       "agents": "Агенты",
       "projects": "Проекты",
       "folders": "Папки",
-      "addFolder": "Добавить папку…"
+      "addFolder": "Добавить папку…",
+      "all": "Все",
+      "searchPlaceholder": "Поиск источников…",
+      "empty": "Источники не найдены"
     },
     "addFolder": {
       "title": "Папки",

@@ -3743,7 +3743,10 @@
       "agents": "Agenti",
       "projects": "Progetti",
       "folders": "Cartelle",
-      "addFolder": "Aggiungi una cartella…"
+      "addFolder": "Aggiungi una cartella…",
+      "all": "Tutti",
+      "searchPlaceholder": "Cerca fonti…",
+      "empty": "Nessuna fonte trovata"
     },
     "addFolder": {
       "title": "Cartelle",

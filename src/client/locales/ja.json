@@ -3743,7 +3743,10 @@
       "agents": "エージェント",
       "projects": "プロジェクト",
       "folders": "フォルダ",
-      "addFolder": "フォルダを追加…"
+      "addFolder": "フォルダを追加…",
+      "all": "すべて",
+      "searchPlaceholder": "ソースを検索…",
+      "empty": "ソースが見つかりません"
     },
     "addFolder": {
       "title": "フォルダ",

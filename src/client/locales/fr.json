@@ -3743,7 +3743,10 @@
       "agents": "Agents",
       "projects": "Projets",
       "folders": "Dossiers",
-      "addFolder": "Ajouter un dossier…"
+      "addFolder": "Ajouter un dossier…",
+      "all": "Tous",
+      "searchPlaceholder": "Rechercher une source…",
+      "empty": "Aucune source trouvée"
     },
     "addFolder": {
       "title": "Dossiers",
