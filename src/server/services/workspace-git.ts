@@ -1,5 +1,5 @@
 import { realpathSync } from 'node:fs'
-import { basename } from 'node:path'
+import { basename, resolve, sep } from 'node:path'
 import { getProject } from '@/server/services/projects'
 import { getCloneDir } from '@/server/services/repo-clone'
 import { runGit } from '@/server/services/worktree'
@@ -62,6 +62,30 @@ export async function listProjectWorktrees(projectId: string): Promise<Workspace
   const res = await runGit(cloneDir, ['worktree', 'list', '--porcelain'])
   if (res.exitCode !== 0) return []
   return parseWorktreeList(res.stdout, cloneDir)
+}
+
+/**
+ * Unified working-tree diff of one file vs HEAD (or vs empty for an untracked
+ * file). `isRepo` is false when `dir` is not a git work tree. The path is
+ * re-confined to `dir` before it reaches git, so a `../` cannot escape.
+ */
+export async function gitDiffFile(dir: string, relPath: string): Promise<{ diff: string; isRepo: boolean }> {
+  const inside = await runGit(dir, ['rev-parse', '--is-inside-work-tree'])
+  if (inside.exitCode !== 0 || inside.stdout.trim() !== 'true') return { diff: '', isRepo: false }
+
+  // Containment: dir is the workspace root — never let a relative path walk out.
+  const abs = resolve(dir, relPath)
+  if (abs !== dir && !abs.startsWith(dir + sep)) return { diff: '', isRepo: true }
+  const rel = abs === dir ? '.' : abs.slice(dir.length + 1)
+
+  const tracked = await runGit(dir, ['ls-files', '--error-unmatch', '--', rel])
+  if (tracked.exitCode !== 0) {
+    // Untracked file: show the whole content as additions (exit 1 = differs).
+    const res = await runGit(dir, ['diff', '--no-index', '--', '/dev/null', rel])
+    return { diff: res.stdout, isRepo: true }
+  }
+  const res = await runGit(dir, ['diff', 'HEAD', '--', rel])
+  return { diff: res.stdout, isRepo: true }
 }
 
 /** Branch + dirty count for any directory; null when it is not a git repo. */

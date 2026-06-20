@@ -3832,7 +3832,9 @@
         "overwrite": "上書き"
       },
       "wrap": "折り返し",
-      "lineCol": "行 {{line}}, 列 {{col}}"
+      "lineCol": "行 {{line}}, 列 {{col}}",
+      "diff": "差分",
+      "noChanges": "HEAD との差分なし"
     },
     "browseWorkspace": "ファイルを参照",
     "share": {

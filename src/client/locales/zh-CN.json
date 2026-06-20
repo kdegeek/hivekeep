@@ -3832,7 +3832,9 @@
         "overwrite": "覆盖"
       },
       "wrap": "自动换行",
-      "lineCol": "行 {{line}}，列 {{col}}"
+      "lineCol": "行 {{line}}，列 {{col}}",
+      "diff": "差异",
+      "noChanges": "与 HEAD 无差异"
     },
     "browseWorkspace": "浏览文件",
     "share": {

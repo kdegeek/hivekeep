@@ -15,7 +15,7 @@ import {
   type WorkspaceTarget,
 } from '@/server/services/workspace-files'
 import { resolveWorkspaceSource, WorkspaceSourceError, type ResolveSourceOpts } from '@/server/services/workspace-sources'
-import { listProjectWorktrees, gitStatusSummary } from '@/server/services/workspace-git'
+import { listProjectWorktrees, gitStatusSummary, gitDiffFile } from '@/server/services/workspace-git'
 import { isInlineSafeMime } from '@/server/services/file-kind'
 import type { WorkspaceSourceRef } from '@/shared/types'
 import type { AppVariables } from '@/server/app'
@@ -208,6 +208,16 @@ workspaceSourceRoutes.get('/git-status', async (c) => {
   try {
     const target = await resolveRouteTarget(c)
     return c.json({ gitStatus: await gitStatusSummary(target.root) })
+  } catch (err) {
+    return handleError(c, err)
+  }
+})
+
+// GET /api/workspace/:type/:id/git-diff?path=… — working-tree diff of one file
+workspaceSourceRoutes.get('/git-diff', async (c) => {
+  try {
+    const target = await resolveRouteTarget(c)
+    return c.json(await gitDiffFile(target.root, c.req.query('path') ?? ''))
   } catch (err) {
     return handleError(c, err)
   }

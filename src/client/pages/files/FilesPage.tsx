@@ -478,6 +478,7 @@ export function FilesPage() {
                   onChangeDraft={(value) => tabsApi.updateDraft(activeTab, value)}
                   onSave={(opts) => void tabsApi.save(activeTab, opts)}
                   onReload={() => void tabsApi.reload(activeTab)}
+                  gitRepo={!!gitStatus}
                   onRevealDir={(dir) => {
                     setSelectedPath(dir)
                     workspace.expandTo(`${dir}/x`)

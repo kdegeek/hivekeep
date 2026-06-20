@@ -3870,7 +3870,9 @@
         "overwrite": "Nadpisz"
       },
       "wrap": "Zawijanie wierszy",
-      "lineCol": "Wrsz {{line}}, Kol {{col}}"
+      "lineCol": "Wrsz {{line}}, Kol {{col}}",
+      "diff": "Diff",
+      "noChanges": "Brak zmian względem HEAD"
     },
     "browseWorkspace": "Przeglądaj pliki",
     "share": {

@@ -3832,7 +3832,9 @@
         "overwrite": "Overwrite"
       },
       "wrap": "Word wrap",
-      "lineCol": "Ln {{line}}, Col {{col}}"
+      "lineCol": "Ln {{line}}, Col {{col}}",
+      "diff": "Diff",
+      "noChanges": "No changes vs HEAD"
     },
     "browseWorkspace": "Browse files",
     "share": {

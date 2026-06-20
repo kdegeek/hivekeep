@@ -1371,6 +1371,21 @@ git FS folders). Carries the same `?worktree=` as the browse routes.
 // gitStatus is null when the root is not a git repository.
 ```
 
+### `GET /api/workspace/:sourceType/:sourceId/git-diff`
+
+Unified working-tree diff of a single file vs `HEAD` (or vs empty for an
+untracked file), for the in-editor Diff toggle. The `?path=` is re-confined to
+the source root before reaching git. Carries the same `?worktree=` as the browse
+routes.
+
+```typescript
+// Query: ?path=src/main.ts
+// Response 200
+{ diff: string, isRepo: boolean }
+// isRepo is false when the source root is not a git work tree (diff is "").
+// diff is "" when the tracked file has no changes vs HEAD.
+```
+
 ### `GET/POST/DELETE /api/workspace-folders`
 
 CRUD for the user-added FS folders shown in the Files selector. Open to every

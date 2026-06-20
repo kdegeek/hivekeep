@@ -3832,7 +3832,9 @@
         "overwrite": "Sobrescribir"
       },
       "wrap": "Ajuste de línea",
-      "lineCol": "Ln {{line}}, Col {{col}}"
+      "lineCol": "Ln {{line}}, Col {{col}}",
+      "diff": "Diff",
+      "noChanges": "Sin cambios respecto a HEAD"
     },
     "browseWorkspace": "Explorar archivos",
     "share": {

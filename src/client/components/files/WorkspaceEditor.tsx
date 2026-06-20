@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, Download, Eye, FileWarning, Loader2, Pencil, Save, WrapText } from 'lucide-react'
+import { AlertTriangle, Download, Eye, FileWarning, GitCompare, Loader2, Pencil, Save, WrapText } from 'lucide-react'
 import { Button } from '@/client/components/ui/button'
 import { CodeEditor } from '@/client/components/ui/code-editor'
 import { ScrollArea } from '@/client/components/ui/scroll-area'
@@ -13,6 +13,7 @@ import {
   BreadcrumbSeparator,
 } from '@/client/components/ui/breadcrumb'
 import { MarkdownContent } from '@/client/components/chat/MarkdownContent'
+import { WorkspaceDiffView } from '@/client/components/files/WorkspaceDiffView'
 import { cn } from '@/client/lib/utils'
 import { getFileIcon, formatFileSize } from '@/client/lib/file-icons'
 import { workspaceRawUrl } from '@/client/lib/workspace-source'
@@ -28,6 +29,8 @@ interface WorkspaceEditorProps {
   onReload: () => void
   /** Reveal a parent directory of the file in the tree (breadcrumb segment click). */
   onRevealDir?: (dirPath: string) => void
+  /** Source is a git repo: enables the per-file Diff toggle. */
+  gitRepo?: boolean
 }
 
 export { workspaceRawUrl }
@@ -41,16 +44,22 @@ const WRAP_KEY = 'files.editor.wrap'
  * deleted-on-disk banners, status bar. The text editor IS the shared
  * CodeEditor (extended with filename/onSave), not a fork.
  */
-export function WorkspaceEditor({ source, path, state, onChangeDraft, onSave, onReload, onRevealDir }: WorkspaceEditorProps) {
+export function WorkspaceEditor({ source, path, state, onChangeDraft, onSave, onReload, onRevealDir, gitRepo }: WorkspaceEditorProps) {
   const { t } = useTranslation()
   const [mdView, setMdView] = useState<'edit' | 'preview'>('edit')
   const [wrap, setWrap] = useState(() => localStorage.getItem(WRAP_KEY) !== 'false')
   const [cursor, setCursor] = useState<{ line: number; col: number; selLen: number } | null>(null)
   const [language, setLanguage] = useState<string | null>(null)
+  const [showDiff, setShowDiff] = useState(false)
 
   useEffect(() => {
     localStorage.setItem(WRAP_KEY, String(wrap))
   }, [wrap])
+
+  // Drop diff mode when switching files.
+  useEffect(() => {
+    setShowDiff(false)
+  }, [path])
 
   const { info } = state
   const name = path.split('/').pop() ?? path
@@ -129,7 +138,9 @@ export function WorkspaceEditor({ source, path, state, onChangeDraft, onSave, on
             onSave={() => onSave()}
           />
         )
-        body = isMarkdown(name) && mdView === 'preview' ? (
+        body = showDiff ? (
+          <WorkspaceDiffView source={source} path={path} />
+        ) : isMarkdown(name) && mdView === 'preview' ? (
           <ScrollArea className="h-full">
             <MarkdownContent content={state.draft} disableChatPlugins className="max-w-3xl p-4" />
           </ScrollArea>
@@ -221,6 +232,19 @@ export function WorkspaceEditor({ source, path, state, onChangeDraft, onSave, on
             </div>
           )}
           <div className="ml-auto flex items-center gap-1.5">
+            {gitRepo && (
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-pressed={showDiff}
+                className={cn(showDiff && 'text-primary')}
+                onClick={() => setShowDiff((d) => !d)}
+                title={t('files.editor.diff')}
+                aria-label={t('files.editor.diff')}
+              >
+                <GitCompare className="size-4" />
+              </Button>
+            )}
             <Button
               size="icon-sm"
               variant="ghost"
