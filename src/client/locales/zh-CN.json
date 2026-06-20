@@ -3837,7 +3837,10 @@
       "wrap": "自动换行",
       "lineCol": "行 {{line}}，列 {{col}}",
       "diff": "差异",
-      "noChanges": "与 HEAD 无差异"
+      "noChanges": "与 HEAD 无差异",
+      "zoomIn": "放大",
+      "zoomOut": "缩小",
+      "fit": "适应屏幕"
     },
     "browseWorkspace": "浏览文件",
     "share": {

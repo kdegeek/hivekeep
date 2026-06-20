@@ -3884,7 +3884,10 @@
       "wrap": "Перенос строк",
       "lineCol": "Стр {{line}}, Кол {{col}}",
       "diff": "Diff",
-      "noChanges": "Нет изменений относительно HEAD"
+      "noChanges": "Нет изменений относительно HEAD",
+      "zoomIn": "Увеличить",
+      "zoomOut": "Уменьшить",
+      "fit": "По размеру экрана"
     },
     "browseWorkspace": "Обзор файлов",
     "share": {

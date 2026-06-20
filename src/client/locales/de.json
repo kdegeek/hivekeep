@@ -3837,7 +3837,10 @@
       "wrap": "Zeilenumbruch",
       "lineCol": "Z {{line}}, Sp {{col}}",
       "diff": "Diff",
-      "noChanges": "Keine Änderungen gegenüber HEAD"
+      "noChanges": "Keine Änderungen gegenüber HEAD",
+      "zoomIn": "Vergrößern",
+      "zoomOut": "Verkleinern",
+      "fit": "An Bildschirm anpassen"
     },
     "browseWorkspace": "Dateien durchsuchen",
     "share": {

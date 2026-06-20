@@ -3837,7 +3837,10 @@
       "wrap": "Ajuste de línea",
       "lineCol": "Ln {{line}}, Col {{col}}",
       "diff": "Diff",
-      "noChanges": "Sin cambios respecto a HEAD"
+      "noChanges": "Sin cambios respecto a HEAD",
+      "zoomIn": "Acercar",
+      "zoomOut": "Alejar",
+      "fit": "Ajustar a la pantalla"
     },
     "browseWorkspace": "Explorar archivos",
     "share": {

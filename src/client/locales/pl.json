@@ -3875,7 +3875,10 @@
       "wrap": "Zawijanie wierszy",
       "lineCol": "Wrsz {{line}}, Kol {{col}}",
       "diff": "Diff",
-      "noChanges": "Brak zmian względem HEAD"
+      "noChanges": "Brak zmian względem HEAD",
+      "zoomIn": "Powiększ",
+      "zoomOut": "Pomniejsz",
+      "fit": "Dopasuj do ekranu"
     },
     "browseWorkspace": "Przeglądaj pliki",
     "share": {

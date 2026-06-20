@@ -3837,7 +3837,10 @@
       "wrap": "Word wrap",
       "lineCol": "Ln {{line}}, Col {{col}}",
       "diff": "Diff",
-      "noChanges": "No changes vs HEAD"
+      "noChanges": "No changes vs HEAD",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "fit": "Fit to screen"
     },
     "browseWorkspace": "Browse files",
     "share": {

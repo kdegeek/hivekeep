@@ -14,6 +14,7 @@ import {
 } from '@/client/components/ui/breadcrumb'
 import { MarkdownContent } from '@/client/components/chat/MarkdownContent'
 import { WorkspaceDiffView } from '@/client/components/files/WorkspaceDiffView'
+import { WorkspaceImageView } from '@/client/components/files/WorkspaceImageView'
 import { cn } from '@/client/lib/utils'
 import { getFileIcon, formatFileSize } from '@/client/lib/file-icons'
 import { workspaceRawUrl } from '@/client/lib/workspace-source'
@@ -152,15 +153,7 @@ export function WorkspaceEditor({ source, path, state, onChangeDraft, onSave, on
         break
       }
       case 'image':
-        body = (
-          <div className="flex h-full items-center justify-center overflow-auto bg-muted/30 p-4">
-            <img
-              src={workspaceRawUrl(source, path, true)}
-              alt={name}
-              className="max-h-full max-w-full rounded-md border border-border object-contain"
-            />
-          </div>
-        )
+        body = <WorkspaceImageView src={workspaceRawUrl(source, path, true)} alt={name} />
         break
       case 'pdf':
         body = <iframe src={workspaceRawUrl(source, path, true)} title={name} className="h-full w-full border-0" />

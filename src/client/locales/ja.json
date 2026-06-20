@@ -3837,7 +3837,10 @@
       "wrap": "折り返し",
       "lineCol": "行 {{line}}, 列 {{col}}",
       "diff": "差分",
-      "noChanges": "HEAD との差分なし"
+      "noChanges": "HEAD との差分なし",
+      "zoomIn": "拡大",
+      "zoomOut": "縮小",
+      "fit": "画面に合わせる"
     },
     "browseWorkspace": "ファイルを参照",
     "share": {
