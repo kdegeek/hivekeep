@@ -3883,7 +3883,8 @@
       "placeholder": "Szukaj pliku po nazwie lub ścieżce…",
       "noResults": "Brak pasujących plików",
       "open": "Szybkie otwieranie (Ctrl+P)"
-    }
+    },
+    "resizeTree": "Zmień szerokość drzewa plików"
   },
   "updateOverlay": {
     "title": "Aktualizowanie Hivekeep",

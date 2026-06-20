@@ -3845,7 +3845,8 @@
       "placeholder": "Search a file by name or path…",
       "noResults": "No matching file",
       "open": "Quick open (Ctrl+P)"
-    }
+    },
+    "resizeTree": "Resize the file tree"
   },
   "updateOverlay": {
     "title": "Updating Hivekeep",

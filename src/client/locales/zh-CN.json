@@ -3845,7 +3845,8 @@
       "placeholder": "按名称或路径搜索文件…",
       "noResults": "没有匹配的文件",
       "open": "快速打开（Ctrl+P）"
-    }
+    },
+    "resizeTree": "调整文件树宽度"
   },
   "updateOverlay": {
     "title": "正在更新 Hivekeep",

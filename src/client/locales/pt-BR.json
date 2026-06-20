@@ -3845,7 +3845,8 @@
       "placeholder": "Buscar um arquivo por nome ou caminho…",
       "noResults": "Nenhum arquivo correspondente",
       "open": "Abertura rápida (Ctrl+P)"
-    }
+    },
+    "resizeTree": "Redimensionar a árvore de arquivos"
   },
   "updateOverlay": {
     "title": "Atualizando o Hivekeep",

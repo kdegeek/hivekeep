@@ -3845,7 +3845,8 @@
       "placeholder": "Busca un archivo por nombre o ruta…",
       "noResults": "Ningún archivo coincide",
       "open": "Apertura rápida (Ctrl+P)"
-    }
+    },
+    "resizeTree": "Redimensionar el árbol de archivos"
   },
   "updateOverlay": {
     "title": "Actualizando Hivekeep",

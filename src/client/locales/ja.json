@@ -3845,7 +3845,8 @@
       "placeholder": "名前またはパスでファイルを検索…",
       "noResults": "一致するファイルがありません",
       "open": "クイックオープン(Ctrl+P)"
-    }
+    },
+    "resizeTree": "ファイルツリーの幅を変更"
   },
   "updateOverlay": {
     "title": "Hivekeep を更新中",

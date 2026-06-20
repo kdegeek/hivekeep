@@ -39,6 +39,7 @@ import { AddFolderDialog } from '@/client/components/files/AddFolderDialog'
 import { FileStorageFormDialog } from '@/client/components/file-storage/FileStorageFormDialog'
 import { WorkspaceEditor, workspaceRawUrl } from '@/client/components/files/WorkspaceEditor'
 import { FileTabs, type FileTabActions } from '@/client/components/files/FileTabs'
+import { ResizableSidebar } from '@/client/components/files/ResizableSidebar'
 import { WorkspaceQuickOpen } from '@/client/components/files/WorkspaceQuickOpen'
 import { sameSource } from '@/client/lib/workspace-source'
 import type { WorkspaceEntry, WorkspaceSourceRef } from '@/shared/types'
@@ -438,7 +439,7 @@ export function FilesPage() {
       />
 
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-64 shrink-0 border-r border-border md:flex md:flex-col lg:w-72">{treePanel}</aside>
+        <ResizableSidebar storageKey="files.treeWidth">{treePanel}</ResizableSidebar>
         <Sheet open={treeSheetOpen} onOpenChange={setTreeSheetOpen}>
           <SheetContent side="left" className="w-80 p-0 md:hidden">
             <SheetTitle className="sr-only">{t('activityBar.files')}</SheetTitle>

@@ -3845,7 +3845,8 @@
       "placeholder": "Datei nach Name oder Pfad suchen…",
       "noResults": "Keine passende Datei",
       "open": "Schnell öffnen (Ctrl+P)"
-    }
+    },
+    "resizeTree": "Dateibaum-Breite ändern"
   },
   "updateOverlay": {
     "title": "Hivekeep wird aktualisiert",
