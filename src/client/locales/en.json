@@ -3798,6 +3798,15 @@
         "folderDescription": "This folder and everything inside it will be permanently deleted."
       }
     },
+    "tabs": {
+      "menu": "Tab actions",
+      "close": "Close",
+      "closeOthers": "Close others",
+      "closeToRight": "Close to the right",
+      "closeAll": "Close all",
+      "copyPath": "Copy relative path",
+      "reveal": "Reveal in tree"
+    },
     "editor": {
       "download": "Download",
       "tooLarge": "This text file is too large to edit here ({{size}}). Download it instead.",

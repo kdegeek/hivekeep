@@ -37,7 +37,7 @@ import { WorkspaceProjectBar } from '@/client/components/files/WorkspaceProjectB
 import { AddFolderDialog } from '@/client/components/files/AddFolderDialog'
 import { FileStorageFormDialog } from '@/client/components/file-storage/FileStorageFormDialog'
 import { WorkspaceEditor, workspaceRawUrl } from '@/client/components/files/WorkspaceEditor'
-import { FileTabs } from '@/client/components/files/FileTabs'
+import { FileTabs, type FileTabActions } from '@/client/components/files/FileTabs'
 import { WorkspaceQuickOpen } from '@/client/components/files/WorkspaceQuickOpen'
 import { sameSource } from '@/client/lib/workspace-source'
 import type { WorkspaceEntry, WorkspaceSourceRef } from '@/shared/types'
@@ -321,6 +321,29 @@ export function FilesPage() {
   const requestCloseTabRef = useRef(requestCloseTab)
   requestCloseTabRef.current = requestCloseTab
 
+  // Bulk close keeps dirty tabs open (no silent data loss); clean tabs close now.
+  const closeCleanTabs = (paths: string[]) => {
+    for (const p of paths) {
+      if (!tabsApi.states[p]?.dirty) tabsApi.forceCloseTab(p)
+    }
+  }
+  const tabActions: FileTabActions = {
+    closeOthers: (path) => closeCleanTabs(tabsApi.tabs.filter((p) => p !== path)),
+    closeToRight: (path) => closeCleanTabs(tabsApi.tabs.slice(tabsApi.tabs.indexOf(path) + 1)),
+    closeAll: () => closeCleanTabs([...tabsApi.tabs]),
+    copyPath: (path) => {
+      void navigator.clipboard.writeText(path)
+      toast.success(t('files.tree.pathCopied'))
+    },
+    reveal: (path) => {
+      setSelectedPath(path)
+      workspace.expandTo(path)
+      if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
+        setTreeSheetOpen(true)
+      }
+    },
+  }
+
   const rootState = workspace.dirs['']
   const workspaceIsEmpty = rootState?.entries != null && rootState.entries.length === 0
 
@@ -429,6 +452,7 @@ export function FilesPage() {
                 }}
                 onClose={requestCloseTab}
                 onReorder={tabsApi.reorderTabs}
+                actions={tabActions}
               />
               {activeTab && activeState && source ? (
                 <WorkspaceEditor

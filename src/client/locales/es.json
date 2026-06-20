@@ -3798,6 +3798,15 @@
         "folderDescription": "Esta carpeta y todo su contenido se eliminarán permanentemente."
       }
     },
+    "tabs": {
+      "menu": "Acciones de la pestaña",
+      "close": "Cerrar",
+      "closeOthers": "Cerrar las demás",
+      "closeToRight": "Cerrar las de la derecha",
+      "closeAll": "Cerrar todas",
+      "copyPath": "Copiar ruta relativa",
+      "reveal": "Mostrar en el árbol"
+    },
     "editor": {
       "download": "Descargar",
       "tooLarge": "Este archivo de texto es demasiado grande para editarlo aquí ({{size}}). Descárgalo en su lugar.",

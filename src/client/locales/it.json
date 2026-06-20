@@ -3798,6 +3798,15 @@
         "folderDescription": "Questa cartella e tutto il suo contenuto saranno eliminati definitivamente."
       }
     },
+    "tabs": {
+      "menu": "Azioni scheda",
+      "close": "Chiudi",
+      "closeOthers": "Chiudi le altre",
+      "closeToRight": "Chiudi quelle a destra",
+      "closeAll": "Chiudi tutte",
+      "copyPath": "Copia percorso relativo",
+      "reveal": "Mostra nell'albero"
+    },
     "editor": {
       "download": "Scarica",
       "tooLarge": "Questo file di testo è troppo grande per essere modificato qui ({{size}}). Scaricalo invece.",

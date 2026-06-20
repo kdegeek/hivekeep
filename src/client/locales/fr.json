@@ -3798,6 +3798,15 @@
         "folderDescription": "Ce dossier et tout son contenu seront définitivement supprimés."
       }
     },
+    "tabs": {
+      "menu": "Actions de l'onglet",
+      "close": "Fermer",
+      "closeOthers": "Fermer les autres",
+      "closeToRight": "Fermer ceux de droite",
+      "closeAll": "Tout fermer",
+      "copyPath": "Copier le chemin relatif",
+      "reveal": "Révéler dans l'arbre"
+    },
     "editor": {
       "download": "Télécharger",
       "tooLarge": "Ce fichier texte est trop volumineux pour être édité ici ({{size}}). Téléchargez-le.",

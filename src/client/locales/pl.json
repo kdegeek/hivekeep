@@ -3836,6 +3836,15 @@
         "folderDescription": "Ten folder wraz z całą zawartością zostanie trwale usunięty."
       }
     },
+    "tabs": {
+      "menu": "Akcje karty",
+      "close": "Zamknij",
+      "closeOthers": "Zamknij pozostałe",
+      "closeToRight": "Zamknij po prawej",
+      "closeAll": "Zamknij wszystkie",
+      "copyPath": "Kopiuj ścieżkę względną",
+      "reveal": "Pokaż w drzewie"
+    },
     "editor": {
       "download": "Pobierz",
       "tooLarge": "Ten plik tekstowy jest zbyt duży, aby edytować go tutaj ({{size}}). Pobierz go zamiast tego.",

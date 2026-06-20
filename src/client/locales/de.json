@@ -3798,6 +3798,15 @@
         "folderDescription": "Dieser Ordner und alles darin wird dauerhaft gelöscht."
       }
     },
+    "tabs": {
+      "menu": "Tab-Aktionen",
+      "close": "Schließen",
+      "closeOthers": "Andere schließen",
+      "closeToRight": "Rechts davon schließen",
+      "closeAll": "Alle schließen",
+      "copyPath": "Relativen Pfad kopieren",
+      "reveal": "Im Baum anzeigen"
+    },
     "editor": {
       "download": "Herunterladen",
       "tooLarge": "Diese Textdatei ist zu groß, um sie hier zu bearbeiten ({{size}}). Lade sie stattdessen herunter.",

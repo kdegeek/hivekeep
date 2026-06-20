@@ -3798,6 +3798,15 @@
         "folderDescription": "此文件夹及其中的所有内容将被永久删除。"
       }
     },
+    "tabs": {
+      "menu": "标签页操作",
+      "close": "关闭",
+      "closeOthers": "关闭其他",
+      "closeToRight": "关闭右侧",
+      "closeAll": "全部关闭",
+      "copyPath": "复制相对路径",
+      "reveal": "在文件树中显示"
+    },
     "editor": {
       "download": "下载",
       "tooLarge": "此文本文件过大，无法在这里编辑（{{size}}）。请下载后查看。",
