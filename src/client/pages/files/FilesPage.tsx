@@ -380,6 +380,7 @@ export function FilesPage() {
           gitStatus={gitStatus}
           worktrees={worktrees}
           onSelectWorktree={handleSelectWorktree}
+          onOpenFile={openPath}
         />
       )}
       <WorkspaceTree

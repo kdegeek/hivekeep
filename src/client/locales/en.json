@@ -3765,7 +3765,9 @@
       "ticket": "#{{number}} · {{branch}}"
     },
     "git": {
-      "dirty": "{{count}} uncommitted change(s)"
+      "dirty": "{{count}} uncommitted change(s)",
+      "changedTitle": "Changed files",
+      "clean": "Working tree clean"
     },
     "empty": {
       "title": "This workspace is empty",

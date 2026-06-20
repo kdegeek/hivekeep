@@ -3765,7 +3765,9 @@
       "ticket": "#{{number}} · {{branch}}"
     },
     "git": {
-      "dirty": "未コミットの変更 {{count}} 件"
+      "dirty": "未コミットの変更 {{count}} 件",
+      "changedTitle": "変更されたファイル",
+      "clean": "作業ツリーはクリーンです"
     },
     "empty": {
       "title": "このワークスペースは空です",

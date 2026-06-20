@@ -88,6 +88,31 @@ export async function gitDiffFile(dir: string, relPath: string): Promise<{ diff:
   return { diff: res.stdout, isRepo: true }
 }
 
+/**
+ * List the working-tree changes of a repo (porcelain), each with its two-letter
+ * status code. `core.quotepath=false` keeps accented/UTF-8 paths literal (common
+ * in French file names). Returns [] when `dir` is not a git work tree.
+ */
+export async function gitChangedFiles(dir: string): Promise<{ path: string; status: string }[]> {
+  const inside = await runGit(dir, ['rev-parse', '--is-inside-work-tree'])
+  if (inside.exitCode !== 0 || inside.stdout.trim() !== 'true') return []
+  const res = await runGit(dir, ['-c', 'core.quotepath=false', 'status', '--porcelain'])
+  if (res.exitCode !== 0) return []
+  const out: { path: string; status: string }[] = []
+  for (const line of res.stdout.split('\n')) {
+    if (!line.trim()) continue
+    const status = line.slice(0, 2).trim()
+    let path = line.slice(3)
+    // "R  old -> new" / "C  old -> new": keep the destination path.
+    const arrow = path.indexOf(' -> ')
+    if (arrow !== -1) path = path.slice(arrow + 4)
+    // git only wraps paths in quotes for unusual bytes; strip them when present.
+    if (path.startsWith('"') && path.endsWith('"')) path = path.slice(1, -1)
+    out.push({ path, status })
+  }
+  return out
+}
+
 /** Branch + dirty count for any directory; null when it is not a git repo. */
 export async function gitStatusSummary(dir: string): Promise<WorkspaceGitStatusDTO | null> {
   const head = await runGit(dir, ['rev-parse', '--abbrev-ref', 'HEAD'])

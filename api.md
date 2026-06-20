@@ -1371,6 +1371,18 @@ git FS folders). Carries the same `?worktree=` as the browse routes.
 // gitStatus is null when the root is not a git repository.
 ```
 
+### `GET /api/workspace/:sourceType/:sourceId/git-changes`
+
+Working-tree change list (porcelain) for the changed-files panel opened from the
+git badge. `core.quotepath=false` keeps UTF-8 paths literal. Carries `?worktree=`.
+
+```typescript
+// Response 200
+{ changes: Array<{ path: string, status: string }> }
+// status is the two-letter porcelain code (e.g. "M", "??", "A", "D", "R").
+// changes is [] when the source root is not a git work tree.
+```
+
 ### `GET /api/workspace/:sourceType/:sourceId/git-diff`
 
 Unified working-tree diff of a single file vs `HEAD` (or vs empty for an

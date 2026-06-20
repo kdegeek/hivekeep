@@ -3803,7 +3803,9 @@
       "ticket": "#{{number}} · {{branch}}"
     },
     "git": {
-      "dirty": "{{count}} niezacommitowanych zmian"
+      "dirty": "{{count}} niezacommitowanych zmian",
+      "changedTitle": "Zmienione pliki",
+      "clean": "Drzewo robocze czyste"
     },
     "empty": {
       "title": "Ta przestrzeń robocza jest pusta",

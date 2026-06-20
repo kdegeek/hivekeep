@@ -3765,7 +3765,9 @@
       "ticket": "#{{number}} · {{branch}}"
     },
     "git": {
-      "dirty": "{{count}} 处未提交的更改"
+      "dirty": "{{count}} 处未提交的更改",
+      "changedTitle": "已更改的文件",
+      "clean": "工作区干净"
     },
     "empty": {
       "title": "此工作区是空的",
