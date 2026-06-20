@@ -68,6 +68,8 @@ interface LsResponse {
 export function useWorkspaceFiles(source: WorkspaceSourceRef | null) {
   // Keyed by dir path ('' = workspace root).
   const [dirs, setDirs] = useState<Record<string, WorkspaceDirState>>({})
+  const dirsRef = useRef(dirs)
+  dirsRef.current = dirs
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   // Guards against out-of-order responses after rapid source switches.
   const generationRef = useRef(0)
@@ -114,6 +116,19 @@ export function useWorkspaceFiles(source: WorkspaceSourceRef | null) {
     },
     [loadDir],
   )
+
+  const collapseAll = useCallback(() => setExpanded(new Set()), [])
+
+  /** Expand every already-loaded directory (lazy children still load on demand). */
+  const expandAllLoaded = useCallback(() => {
+    setExpanded(() => {
+      const next = new Set<string>()
+      for (const [p, st] of Object.entries(dirsRef.current)) {
+        if (p !== '' && st?.entries) next.add(p)
+      }
+      return next
+    })
+  }, [])
 
   /** Expand every ancestor directory of `path` (deep links, reveal-in-tree). */
   const expandTo = useCallback(
@@ -348,6 +363,8 @@ export function useWorkspaceFiles(source: WorkspaceSourceRef | null) {
     loadDir,
     toggleDir,
     expandTo,
+    collapseAll,
+    expandAllLoaded,
     refresh,
     setDirs,
     createFile,

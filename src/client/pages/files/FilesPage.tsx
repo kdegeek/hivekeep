@@ -390,6 +390,8 @@ export function FilesPage() {
         onSelectDir={(entry) => setSelectedPath(entry.path)}
         onRetryDir={(path) => void workspace.loadDir(path)}
         onRefresh={workspace.refresh}
+        onCollapseAll={workspace.collapseAll}
+        onExpandAll={workspace.expandAllLoaded}
         actions={treeActions}
       />
       {workspaceIsEmpty && (

@@ -102,7 +102,8 @@
     "agentLanguageFollowUi": "Identique à l'interface",
     "clearFilters": "Effacer",
     "perPage": "Par page",
-    "listRange": "{{from}}-{{to}} sur {{total}}"
+    "listRange": "{{from}}-{{to}} sur {{total}}",
+    "clear": "Effacer"
   },
   "errors": {
     "backendUnavailable": "Impossible de joindre le serveur. Vérifiez que le backend est en cours d'exécution et réessayez.",
@@ -3800,7 +3801,11 @@
         "title": "Supprimer « {{name}} » ?",
         "fileDescription": "Ce fichier sera définitivement supprimé du workspace.",
         "folderDescription": "Ce dossier et tout son contenu seront définitivement supprimés."
-      }
+      },
+      "filter": "Filtrer les fichiers",
+      "collapseAll": "Tout replier",
+      "expandAll": "Tout déplier",
+      "noMatch": "Aucun fichier ne correspond"
     },
     "tabs": {
       "menu": "Actions de l'onglet",

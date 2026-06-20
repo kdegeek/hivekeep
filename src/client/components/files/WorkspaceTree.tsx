@@ -1,7 +1,9 @@
-import { useState, useRef, useEffect, useCallback, type ComponentType, type ReactNode } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo, type ComponentType, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
   ClipboardPaste,
   Copy,
   Download,
@@ -14,8 +16,10 @@ import {
   Pencil,
   RefreshCw,
   Scissors,
+  Search,
   Trash2,
   Upload,
+  X,
 } from 'lucide-react'
 import {
   DndContext,
@@ -49,6 +53,7 @@ import {
   DropdownMenuSeparator,
 } from '@/client/components/ui/dropdown-menu'
 import { getFileIcon } from '@/client/lib/file-icons'
+import { EmptyState } from '@/client/components/common/EmptyState'
 import { useWorkspaceClipboard, parentDirOf } from '@/client/hooks/useWorkspaceFiles'
 import type { WorkspaceEntry } from '@/shared/types'
 import type { WorkspaceDirState } from '@/client/hooks/useWorkspaceFiles'
@@ -87,6 +92,8 @@ interface WorkspaceTreeProps {
   onSelectDir?: (entry: WorkspaceEntry) => void
   onRetryDir: (path: string) => void
   onRefresh: () => void
+  onCollapseAll?: () => void
+  onExpandAll?: () => void
   actions: WorkspaceTreeActions
 }
 
@@ -125,11 +132,14 @@ export function WorkspaceTree({
   onSelectDir,
   onRetryDir,
   onRefresh,
+  onCollapseAll,
+  onExpandAll,
   actions,
 }: WorkspaceTreeProps) {
   const { t } = useTranslation()
   const clipboard = useWorkspaceClipboard()
   const [editing, setEditing] = useState<EditingState | null>(null)
+  const [filter, setFilter] = useState('')
   const [osDropDir, setOsDropDir] = useState<string | null>(null)
   const [draggingEntry, setDraggingEntry] = useState<WorkspaceEntry | null>(null)
   // Directory a drop would land in during an intra-move drag (highlighted like
@@ -153,6 +163,38 @@ export function WorkspaceTree({
     },
     [dirs],
   )
+
+  // Quick filter over already-loaded nodes (files.md v2): a node is visible when
+  // its own name matches or a loaded descendant matches; matching folders are
+  // force-expanded so the hits show through. Null when no filter is active.
+  const query = filter.trim().toLowerCase()
+  const filtered = useMemo(() => {
+    if (!query) return null
+    const visible = new Set<string>()
+    const forceExpand = new Set<string>()
+    const visit = (dirPath: string): boolean => {
+      let any = false
+      for (const e of dirs[dirPath]?.entries ?? []) {
+        const selfMatch = e.name.toLowerCase().includes(query)
+        if (e.type === 'dir') {
+          const childHas = visit(e.path)
+          if (selfMatch || childHas) {
+            visible.add(e.path)
+            if (childHas) forceExpand.add(e.path)
+            any = true
+          }
+        } else if (selfMatch) {
+          visible.add(e.path)
+          any = true
+        }
+      }
+      return any
+    }
+    visit('')
+    return { visible, forceExpand }
+  }, [query, dirs])
+
+  const isOpen = (path: string) => (filtered ? filtered.forceExpand.has(path) : expanded.has(path))
 
   const clearAutoExpand = useCallback(() => {
     if (autoExpandRef.current) {
@@ -365,8 +407,9 @@ export function WorkspaceTree({
         </button>
       )
     }
-    const entries = state.entries ?? []
-    if (entries.length === 0 && path !== '' && !editRow) {
+    const allEntries = state.entries ?? []
+    const entries = filtered ? allEntries.filter((e) => filtered.visible.has(e.path)) : allEntries
+    if (allEntries.length === 0 && path !== '' && !editRow && !filtered) {
       return (
         <div className="px-2 py-1 text-xs italic text-muted-foreground" style={{ paddingLeft: indentFor(depth) + 8 }}>
           {t('files.tree.emptyFolder')}
@@ -381,7 +424,7 @@ export function WorkspaceTree({
             key={entry.path}
             entry={entry}
             depth={depth}
-            isExpanded={entry.type === 'dir' && expanded.has(entry.path)}
+            isExpanded={entry.type === 'dir' && isOpen(entry.path)}
             isSelected={selectedPath === entry.path}
             isCut={clipboard?.op === 'cut' && clipboard.path === entry.path}
             isOsDropTarget={osDropDir === entry.path}
@@ -396,7 +439,7 @@ export function WorkspaceTree({
             onOsDropDir={setOsDropDir}
             onOsDropFiles={(dirPath, files) => actions.uploadTo(dirPath, files)}
           >
-            {entry.type === 'dir' && expanded.has(entry.path) && renderDir(entry.path, depth + 1)}
+            {entry.type === 'dir' && isOpen(entry.path) && renderDir(entry.path, depth + 1)}
           </TreeRow>
         ))}
       </>
@@ -408,24 +451,56 @@ export function WorkspaceTree({
   return (
     <div className="flex h-full min-h-0 flex-col" onKeyDown={handleKeyDown}>
       {/* Tree header: visible entry points (rule 11) for create/upload/paste */}
-      <div className="flex shrink-0 items-center gap-0.5 border-b border-border px-1.5 py-1">
-        <span className="px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          {t('files.tree.title')}
-        </span>
-        <div className="ml-auto flex items-center">
-          <Button variant="ghost" size="icon-xs" title={t('files.tree.newFile')} aria-label={t('files.tree.newFile')} onClick={() => startEdit({ mode: 'create-file', dirPath: rootEditTarget(selectedPath, dirs) })}>
-            <FilePlus2 className="size-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon-xs" title={t('files.tree.newFolder')} aria-label={t('files.tree.newFolder')} onClick={() => startEdit({ mode: 'create-dir', dirPath: rootEditTarget(selectedPath, dirs) })}>
-            <FolderPlus className="size-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon-xs" title={t('files.tree.upload')} aria-label={t('files.tree.upload')} onClick={() => openUploadPicker(rootEditTarget(selectedPath, dirs))}>
-            <Upload className="size-3.5" />
-          </Button>
-          {clipboard && (
-            <Button variant="ghost" size="icon-xs" title={t('files.tree.paste')} aria-label={t('files.tree.paste')} onClick={() => void actions.clipboardPaste(rootEditTarget(selectedPath, dirs))}>
-              <ClipboardPaste className="size-3.5" />
+      <div className="shrink-0 border-b border-border px-1.5 py-1">
+        <div className="flex items-center gap-0.5">
+          <span className="px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {t('files.tree.title')}
+          </span>
+          <div className="ml-auto flex items-center">
+            <Button variant="ghost" size="icon-xs" title={t('files.tree.newFile')} aria-label={t('files.tree.newFile')} onClick={() => startEdit({ mode: 'create-file', dirPath: rootEditTarget(selectedPath, dirs) })}>
+              <FilePlus2 className="size-3.5" />
             </Button>
+            <Button variant="ghost" size="icon-xs" title={t('files.tree.newFolder')} aria-label={t('files.tree.newFolder')} onClick={() => startEdit({ mode: 'create-dir', dirPath: rootEditTarget(selectedPath, dirs) })}>
+              <FolderPlus className="size-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon-xs" title={t('files.tree.upload')} aria-label={t('files.tree.upload')} onClick={() => openUploadPicker(rootEditTarget(selectedPath, dirs))}>
+              <Upload className="size-3.5" />
+            </Button>
+            {clipboard && (
+              <Button variant="ghost" size="icon-xs" title={t('files.tree.paste')} aria-label={t('files.tree.paste')} onClick={() => void actions.clipboardPaste(rootEditTarget(selectedPath, dirs))}>
+                <ClipboardPaste className="size-3.5" />
+              </Button>
+            )}
+            {onExpandAll && (
+              <Button variant="ghost" size="icon-xs" title={t('files.tree.expandAll')} aria-label={t('files.tree.expandAll')} onClick={onExpandAll}>
+                <ChevronsUpDown className="size-3.5" />
+              </Button>
+            )}
+            {onCollapseAll && (
+              <Button variant="ghost" size="icon-xs" title={t('files.tree.collapseAll')} aria-label={t('files.tree.collapseAll')} onClick={onCollapseAll}>
+                <ChevronsDownUp className="size-3.5" />
+              </Button>
+            )}
+          </div>
+        </div>
+        <div className="relative mt-1">
+          <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder={t('files.tree.filter')}
+            className="h-7 pl-7 pr-7 text-xs"
+            aria-label={t('files.tree.filter')}
+          />
+          {filter && (
+            <button
+              type="button"
+              onClick={() => setFilter('')}
+              aria-label={t('common.clear')}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="size-3.5" />
+            </button>
           )}
         </div>
       </div>
@@ -483,7 +558,13 @@ export function WorkspaceTree({
               }
             }}
           >
-            {renderDir('', 0)}
+            {filtered && filtered.visible.size === 0 ? (
+              <div className="px-2 py-6">
+                <EmptyState minimal icon={Search} title={t('files.tree.noMatch')} />
+              </div>
+            ) : (
+              renderDir('', 0)
+            )}
           </div>
         </ScrollArea>
         <DragOverlay dropAnimation={null}>

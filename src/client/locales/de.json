@@ -102,7 +102,8 @@
     "agentLanguageFollowUi": "Wie die Oberfläche",
     "clearFilters": "Zurücksetzen",
     "perPage": "Pro Seite",
-    "listRange": "{{from}}-{{to}} von {{total}}"
+    "listRange": "{{from}}-{{to}} von {{total}}",
+    "clear": "Löschen"
   },
   "errors": {
     "backendUnavailable": "Server nicht erreichbar. Bitte prüfe, ob das Backend läuft, und versuche es erneut.",
@@ -3800,7 +3801,11 @@
         "title": "„{{name}}“ löschen?",
         "fileDescription": "Diese Datei wird dauerhaft aus dem Workspace gelöscht.",
         "folderDescription": "Dieser Ordner und alles darin wird dauerhaft gelöscht."
-      }
+      },
+      "filter": "Dateien filtern",
+      "collapseAll": "Alle einklappen",
+      "expandAll": "Alle ausklappen",
+      "noMatch": "Keine Datei passt"
     },
     "tabs": {
       "menu": "Tab-Aktionen",

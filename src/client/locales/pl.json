@@ -104,7 +104,8 @@
     "agentLanguageFollowUi": "Taki sam jak interfejs",
     "clearFilters": "Wyczyść",
     "perPage": "Na stronę",
-    "listRange": "{{from}}-{{to}} z {{total}}"
+    "listRange": "{{from}}-{{to}} z {{total}}",
+    "clear": "Wyczyść"
   },
   "errors": {
     "backendUnavailable": "Nie można połączyć się z serwerem. Sprawdź, czy backend działa, i spróbuj ponownie.",
@@ -3838,7 +3839,11 @@
         "title": "Usunąć „{{name}}”?",
         "fileDescription": "Ten plik zostanie trwale usunięty z przestrzeni roboczej.",
         "folderDescription": "Ten folder wraz z całą zawartością zostanie trwale usunięty."
-      }
+      },
+      "filter": "Filtruj pliki",
+      "collapseAll": "Zwiń wszystko",
+      "expandAll": "Rozwiń wszystko",
+      "noMatch": "Brak pasujących plików"
     },
     "tabs": {
       "menu": "Akcje karty",

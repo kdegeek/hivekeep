@@ -102,7 +102,8 @@
     "agentLanguageFollowUi": "与界面相同",
     "clearFilters": "清除",
     "perPage": "每页",
-    "listRange": "{{from}}-{{to}}，共 {{total}}"
+    "listRange": "{{from}}-{{to}}，共 {{total}}",
+    "clear": "清除"
   },
   "errors": {
     "backendUnavailable": "无法连接到服务器。请确认后端正在运行，然后重试。",
@@ -3800,7 +3801,11 @@
         "title": "删除「{{name}}」？",
         "fileDescription": "此文件将从工作区永久删除。",
         "folderDescription": "此文件夹及其中的所有内容将被永久删除。"
-      }
+      },
+      "filter": "筛选文件",
+      "collapseAll": "全部折叠",
+      "expandAll": "全部展开",
+      "noMatch": "没有匹配的文件"
     },
     "tabs": {
       "menu": "标签页操作",

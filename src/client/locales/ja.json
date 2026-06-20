@@ -102,7 +102,8 @@
     "agentLanguageFollowUi": "インターフェースと同じ",
     "clearFilters": "クリア",
     "perPage": "ページあたり",
-    "listRange": "{{total}} 件中 {{from}}-{{to}}"
+    "listRange": "{{total}} 件中 {{from}}-{{to}}",
+    "clear": "クリア"
   },
   "errors": {
     "backendUnavailable": "サーバーに接続できません。バックエンドが起動していることを確認して、もう一度お試しください。",
@@ -3800,7 +3801,11 @@
         "title": "「{{name}}」を削除しますか?",
         "fileDescription": "このファイルはワークスペースから完全に削除されます。",
         "folderDescription": "このフォルダーとその中のすべてが完全に削除されます。"
-      }
+      },
+      "filter": "ファイルを絞り込み",
+      "collapseAll": "すべて折りたたむ",
+      "expandAll": "すべて展開",
+      "noMatch": "一致するファイルがありません"
     },
     "tabs": {
       "menu": "タブの操作",

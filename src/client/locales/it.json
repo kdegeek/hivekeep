@@ -102,7 +102,8 @@
     "agentLanguageFollowUi": "Come l'interfaccia",
     "clearFilters": "Cancella",
     "perPage": "Per pagina",
-    "listRange": "{{from}}-{{to}} di {{total}}"
+    "listRange": "{{from}}-{{to}} di {{total}}",
+    "clear": "Cancella"
   },
   "errors": {
     "backendUnavailable": "Impossibile raggiungere il server. Verifica che il backend sia in esecuzione e riprova.",
@@ -3800,7 +3801,11 @@
         "title": "Eliminare “{{name}}”?",
         "fileDescription": "Questo file sarà eliminato definitivamente dal workspace.",
         "folderDescription": "Questa cartella e tutto il suo contenuto saranno eliminati definitivamente."
-      }
+      },
+      "filter": "Filtra file",
+      "collapseAll": "Comprimi tutto",
+      "expandAll": "Espandi tutto",
+      "noMatch": "Nessun file corrisponde"
     },
     "tabs": {
       "menu": "Azioni scheda",
