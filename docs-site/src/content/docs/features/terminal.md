@@ -32,7 +32,7 @@ Restored sessions appear **dormant** (a moon badge) until you click one, which r
 
 Several tabs or devices can view the **same session at once**: output mirrors to every attached client and any of them can type, exactly like a shared tmux session. As in tmux, the terminal is sized to the smallest attached viewer so line wrapping stays coherent everywhere.
 
-On hosts with tmux, sessions keep a large scrollback (50,000 lines) and the **mouse wheel scrolls back** through it. Mouse selection copies to your clipboard (via tmux); hold **Shift** while selecting if you prefer the browser's own text selection. tmux runs on a dedicated socket, isolated from any personal tmux you run on the host.
+On hosts with tmux, sessions keep a large scrollback (50,000 lines). Selecting text with the mouse copies it natively (so copying long blocks works reliably), and `Ctrl+B [` enters tmux's scroll/copy mode to page back through that history. tmux runs on a dedicated socket, isolated from any personal tmux you run on the host.
 
 ## Session presets
 

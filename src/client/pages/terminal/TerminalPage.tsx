@@ -434,22 +434,6 @@ export function TerminalPage() {
       }
     }
 
-    // OSC 52: tmux-backed sessions run with `set-clipboard on`, so copying in
-    // tmux (e.g. a mouse selection, which tmux owns once mouse mode is on) emits
-    // an OSC 52 sequence. Mirror it to the system clipboard so copy keeps
-    // working. Payload is "<selection>;<base64>"; "?" is a read query we ignore.
-    term.parser.registerOscHandler(52, (data) => {
-      const b64 = data.slice(data.indexOf(';') + 1)
-      if (!b64 || b64 === '?') return true
-      try {
-        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
-        void copyText(new TextDecoder().decode(bytes))
-      } catch {
-        // malformed payload — ignore
-      }
-      return true
-    })
-
     term.attachCustomKeyEventHandler((e) => {
       if (e.type !== 'keydown') return true
       const mod = e.ctrlKey || e.metaKey

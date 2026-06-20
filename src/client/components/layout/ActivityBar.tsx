@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Home, FolderKanban, ListTodo, CalendarClock, Folder, Blocks, Boxes, SquareTerminal, MessageSquarePlus } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 import { useTasksContext } from '@/client/contexts/TasksContext'
+import { useCronsContext } from '@/client/contexts/CronsContext'
 import { useAuth } from '@/client/hooks/useAuth'
 import { useFeedback } from '@/client/contexts/FeedbackContext'
 
@@ -13,8 +14,8 @@ interface ActivityBarItem {
   navigateTo: string
   icon: typeof Home
   labelKey: string
-  /** When true, shows the active-task badge. */
-  badge?: boolean
+  /** Which live count drives this item's badge, if any. */
+  badgeKey?: 'tasks' | 'crons'
   /** When true, the item is only shown to admin users. */
   adminOnly?: boolean
 }
@@ -24,8 +25,8 @@ const ITEMS: ActivityBarItem[] = [
   // Default landing — "Agents" matches any path not claimed by a section below.
   { matchPrefix: '/', navigateTo: '/', icon: Home, labelKey: 'activityBar.agents' },
   { matchPrefix: '/projects', navigateTo: '/projects', icon: FolderKanban, labelKey: 'activityBar.projects' },
-  { matchPrefix: '/tasks', navigateTo: '/tasks', icon: ListTodo, labelKey: 'activityBar.tasks', badge: true },
-  { matchPrefix: '/crons', navigateTo: '/crons', icon: CalendarClock, labelKey: 'activityBar.crons' },
+  { matchPrefix: '/tasks', navigateTo: '/tasks', icon: ListTodo, labelKey: 'activityBar.tasks', badgeKey: 'tasks' },
+  { matchPrefix: '/crons', navigateTo: '/crons', icon: CalendarClock, labelKey: 'activityBar.crons', badgeKey: 'crons' },
   { matchPrefix: '/files', navigateTo: '/files', icon: Folder, labelKey: 'activityBar.files' },
   { matchPrefix: '/mini-apps', navigateTo: '/mini-apps', icon: Blocks, labelKey: 'activityBar.apps' },
   { matchPrefix: '/models', navigateTo: '/models', icon: Boxes, labelKey: 'activityBar.models', adminOnly: true },
@@ -39,6 +40,7 @@ export function ActivityBar() {
   const navigate = useNavigate()
   const location = useLocation()
   const { activeTasks } = useTasksContext()
+  const { pendingApprovalCount } = useCronsContext()
   const { user } = useAuth()
   const { enabled: feedbackEnabled, open: openFeedback } = useFeedback()
   const isAdmin = user?.role === 'admin'
@@ -48,6 +50,17 @@ export function ActivityBar() {
   const hasAwaiting = activeTasks.some(
     (task) => task.status === 'awaiting_human_input' || task.status === 'awaiting_agent_response',
   )
+
+  // Resolve an item's badge from the live counts. `warning` uses the louder,
+  // pulsing treatment for states that need user action (a task awaiting input,
+  // a cron awaiting approval).
+  function badgeFor(item: ActivityBarItem): { count: number; warning: boolean } | null {
+    if (item.badgeKey === 'tasks') return activeCount > 0 ? { count: activeCount, warning: hasAwaiting } : null
+    if (item.badgeKey === 'crons') {
+      return pendingApprovalCount > 0 ? { count: pendingApprovalCount, warning: true } : null
+    }
+    return null
+  }
 
   function isActive(item: ActivityBarItem): boolean {
     if (item.matchPrefix === '/') {
@@ -87,18 +100,22 @@ export function ActivityBar() {
               />
             )}
             <Icon className="size-4.5" strokeWidth={1.75} />
-            {item.badge && activeCount > 0 && (
-              <span
-                className={cn(
-                  'absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-semibold leading-none',
-                  hasAwaiting
-                    ? 'animate-pulse bg-warning text-warning-foreground'
-                    : 'bg-primary text-primary-foreground',
-                )}
-              >
-                {activeCount}
-              </span>
-            )}
+            {(() => {
+              const badge = badgeFor(item)
+              if (!badge) return null
+              return (
+                <span
+                  className={cn(
+                    'absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-semibold leading-none',
+                    badge.warning
+                      ? 'animate-pulse bg-warning text-warning-foreground'
+                      : 'bg-primary text-primary-foreground',
+                  )}
+                >
+                  {badge.count}
+                </span>
+              )
+            })()}
           </button>
         )
       })}

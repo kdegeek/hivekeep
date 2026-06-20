@@ -452,6 +452,8 @@ const dict: typeof en = {
         'token 与上下文透明',
       ],
       legend: '✓ 原生支持 · ✕ 基本没有 · 其余为部分支持或不明确。标注基于公开文档尽力整理。',
+      disclosure:
+        '<b>它是怎么做的：</b>Hivekeep 由一名独立开发者大量借助 AI 编程助手构建。架构、决策与代码审查都由我负责；很大一部分代码是在我的指导下由 AI 编写的。我更愿意如实说明，而不是假装并非如此。如果你发现看起来像是未经审查的低质代码，对我而言那是真正的 bug，请<a href="https://github.com/MarlBurroW/hivekeep/issues" rel="noopener" target="_blank">提交 issue</a>。',
     },
 
     getstarted: {

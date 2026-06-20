@@ -450,6 +450,8 @@ const dict: typeof en = {
         'Transparencia de tokens y contexto',
       ],
       legend: '✓ nativo · ✕ realmente no · el resto es parcial o poco claro. Las marcas son una estimación a partir de la documentación pública.',
+      disclosure:
+        '<b>Cómo está hecho:</b> Hivekeep lo desarrolla una sola persona con un uso intensivo de asistentes de código con IA. La arquitectura, las decisiones y la revisión son mías; gran parte del código lo escribe la IA bajo esa dirección. Prefiero decirlo a fingir lo contrario. Si detectas código que parece slop sin revisar, para mí es un bug de verdad, <a href="https://github.com/MarlBurroW/hivekeep/issues" rel="noopener" target="_blank">abre una issue</a>.',
     },
 
     getstarted: {

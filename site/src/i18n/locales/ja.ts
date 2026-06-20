@@ -450,6 +450,8 @@ const dict: typeof en = {
         'トークンとコンテキストの透明性',
       ],
       legend: '✓ ネイティブ対応 · ✕ 実質非対応 · 残りは部分対応または不明。評価は公開ドキュメントに基づくベストエフォートです。',
+      disclosure:
+        '<b>どう作っているか：</b>Hivekeep は個人開発者が AI コーディングアシスタントを多用して作っています。アーキテクチャ、判断、レビューは私が担い、コードの多くはその方針のもとで AI が書いています。隠すより正直に言うことを選びます。レビューされていない雑なコードのように見える箇所を見つけたら、それは私にとって本物のバグです。<a href="https://github.com/MarlBurroW/hivekeep/issues" rel="noopener" target="_blank">issue を立ててください</a>。',
     },
 
     getstarted: {

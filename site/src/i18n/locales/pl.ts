@@ -450,6 +450,8 @@ const dict: typeof en = {
         'Przejrzystość tokenów i kontekstu',
       ],
       legend: '✓ natywnie · ✕ raczej nie · reszta jest częściowa lub niejasna. Oceny w dobrej wierze, na podstawie publicznej dokumentacji.',
+      disclosure:
+        '<b>Jak to powstaje:</b> Hivekeep tworzy jeden programista, intensywnie korzystając z asystentów kodu opartych na AI. Architektura, decyzje i przegląd kodu są moje; duża część kodu jest pisana przez AI pod tym kierunkiem. Wolę to powiedzieć, niż udawać, że jest inaczej. Jeśli zauważysz kod, który wygląda jak nieprzejrzany slop, to dla mnie prawdziwy błąd, <a href="https://github.com/MarlBurroW/hivekeep/issues" rel="noopener" target="_blank">zgłoś issue</a>.',
     },
 
     getstarted: {

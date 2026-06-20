@@ -421,17 +421,18 @@ function spawnForSession(session: TerminalSession, cols: number, rows: number): 
   const safeRows = Math.max(2, rows)
 
   if (session.backend === 'tmux' && isTmuxAvailable() && session.tmuxName) {
-    // Start (or reuse) the dedicated server and set generous scrollback + mouse
-    // scrolling + clipboard passthrough BEFORE the pane exists (history-limit is
-    // read at pane creation; mouse/set-clipboard apply live), then `new-session
-    // -A` attaches to the live session or creates it in `cwd`.
+    // Start (or reuse) the dedicated server and raise the scrollback BEFORE the
+    // pane exists (history-limit is read at pane creation), then `new-session
+    // -A` attaches to the live session or creates it in `cwd`. We deliberately
+    // leave tmux `mouse` off: turning it on routes selection through tmux (with
+    // OSC 52 copy, which is size-limited and fights mouse-aware TUIs like Claude
+    // Code), which broke copying long text. With mouse off, xterm's own native
+    // selection handles copy reliably.
     return spawn(
       'tmux',
       tmuxArgs(
         'start-server', ';',
         'set-option', '-g', 'history-limit', String(TMUX_HISTORY_LIMIT), ';',
-        'set-option', '-g', 'mouse', 'on', ';',
-        'set-option', '-g', 'set-clipboard', 'on', ';',
         'new-session', '-A', '-s', session.tmuxName, '-c', cwd,
       ),
       { name: 'xterm-256color', cols: safeCols, rows: safeRows, cwd, env },

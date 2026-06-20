@@ -460,6 +460,8 @@ export default {
         'Token & context transparency',
       ],
       legend: '✓ native · ✕ not really · the rest is partial or unclear. Marks are best-effort from public docs.',
+      disclosure:
+        '<b>How this is built:</b> Hivekeep is made by a solo developer with heavy use of AI coding assistants. The architecture, decisions and reviews are mine; a lot of the code is AI-written under that direction. I would rather say so than pretend otherwise. If you spot code that reads like unreviewed slop, that is a real bug to me, <a href="https://github.com/MarlBurroW/hivekeep/issues" rel="noopener" target="_blank">open an issue</a>.',
     },
 
     getstarted: {

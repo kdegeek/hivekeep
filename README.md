@@ -175,6 +175,14 @@ Self-hosted AI assistants like **OpenClaw** and **Hermes** are excellent: they w
 
 ---
 
+## How this project is built
+
+Hivekeep is built by a solo developer with **heavy use of AI coding assistants**. I am not hiding it, it is how I ship a project this size on my own. The architecture, the decisions, and the reviews are mine; a lot of the code is AI-written under that direction.
+
+The honest flip side is that some AI rough edges slip through, and I would rather say so than pretend otherwise. The bar I am aiming for is AI-assisted code that is **orchestrated, reviewed, and owned**, not generated and dumped. If you spot code that reads like unreviewed slop, that is a real bug to me: please [open an issue](https://github.com/MarlBurroW/hivekeep/issues) and point at it. That feedback is genuinely how this gets better.
+
+---
+
 ## Get started
 
 One command. No `docker-compose`, no YAML, no database to provision.
@@ -220,6 +228,19 @@ bash <(curl -fsSL https://raw.githubusercontent.com/MarlBurroW/hivekeep/main/ins
 > **Back up your encryption key.** On first boot Hivekeep generates and persists an AES-256-GCM key at `data/.encryption-key` and encrypts all vault secrets with it. If you instead set `ENCRYPTION_KEY` yourself, you must provide the same value on every restart. Keep this key (or the `data/` directory) backed up, or you lose access to encrypted secrets.
 
 To expose Hivekeep on your network or behind a reverse proxy, add `-e HOST=0.0.0.0` and `-e PUBLIC_URL=https://your-domain`. See the [configuration reference](config.md) for every environment variable.
+
+### Hardware requirements
+
+Hivekeep does **not** run the models. It calls your provider (Anthropic, OpenAI, etc.) or a local OpenAI-compatible endpoint, so the inference cost lives there, not in the app. The platform itself is a single Bun process over SQLite, with no GPU and no extra services.
+
+| Resource | Minimum | Comfortable |
+|---|---|---|
+| CPU | 1 core (x86-64 or ARM64) | 2 cores |
+| RAM | ~512 MB | 1 GB+ |
+| Disk | ~1 GB (image + SQLite, grows with history) | a few GB |
+| GPU | none | none |
+
+Agents are activated **serially per message** (not all at once), and persistent memory keeps each context small instead of replaying everything, so running several agents does not multiply local load, it just routes more calls to your provider. If you point Hivekeep at **local models** (llama.cpp, LM Studio, Ollama, vLLM), the hardware question moves to your inference server, exactly as it would with any other client. Reference instance: it runs in well under 1 GB of RAM on a small home server.
 
 ---
 
