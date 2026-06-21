@@ -1,9 +1,10 @@
 # Reliability with low-end / self-hosted LLMs
 
-**Status:** analysis, plus R1 and R2 now implemented. This maps the problem and proposes
-fixes ranked by impact and effort, for the maintainer to decide on. R1 (tolerant
-tool-argument parsing) and R2 (schema validation with a correctable error) have since been
-built; the remaining items R3 to R6 are still proposals.
+**Status:** analysis, plus R1, R2, and R6's sampling fix now implemented. This maps the
+problem and proposes fixes ranked by impact and effort, for the maintainer to decide on.
+Built so far: R1 (tolerant tool-argument parsing), R2 (schema validation with a correctable
+error), and the low-temperature-for-tool-turns part of R6. R3 to R5 and R6's tool-scoping /
+prompt-slimming parts remain proposals.
 
 **Origin:** user feedback that Hivekeep is the #1-cited adoption blocker for the
 self-hosted / local-LLM audience. The platform works well with Claude, but small and
@@ -534,10 +535,14 @@ does not regress strong models. Gate strictly behind R4.
 
 Three smaller, independent wins:
 
-- **Sampling:** set a low default `temperature` (and optionally `top_p`) for
-  tool-enabled turns. Add it where the request is built (`agent-engine.ts:1612-1622`); the
-  plumbing already exists (`openai-compatible.ts:510-512`). Low effort, low risk. **Needs a
-  product decision** on the default value and whether it is user-overridable.
+- **Sampling: IMPLEMENTED.** `toolTurnSampling` (`src/server/services/tool-sampling.ts`,
+  with tests) pins `config.tools.temperature` (default `0`, env `TOOLS_TEMPERATURE`, `off`
+  to defer to the backend) on tool-enabled turns, applied at all three request sites
+  (`agent-engine.ts` main + quick-session, `tasks.ts`). Reasoning-capable models are
+  exempted (they advertise `thinking.efforts`): OpenAI o-series 400 on a custom
+  temperature and Anthropic requires 1 when thinking is on, while small/local models have
+  no efforts and are exactly the ones helped. Still open as a product call: the default
+  value and a user-facing override (deferred to R4's per-model profile).
 - **Tool scoping:** for small models, reduce the surface to a relevant subset rather than
   the numeric `capTools` truncation (`agent-engine.ts:110-187`). Options: a relevance pass,
   smaller default toolboxes for local models, or a much lower `maxTools` default keyed off

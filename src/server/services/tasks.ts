@@ -20,6 +20,7 @@ import { wrapToolsWithSpill } from '@/server/services/tool-output-spill'
 import { executeToolBatch } from '@/server/services/tool-executor'
 import { recordUsage, aggregateUsages, getTaskTotals } from '@/server/services/token-usage'
 import { runStreamStep, type ReasoningSegment } from '@/server/services/stream-runner'
+import { toolTurnSampling } from '@/server/services/tool-sampling'
 import type { TaskStatus, TaskMode, AgentThinkingConfig } from '@/shared/types'
 
 const log = createLogger('tasks')
@@ -1533,6 +1534,7 @@ async function executeSubAgent(taskId: string, isNudge = false) {
           ...(taskSystem ? { system: taskSystem } : {}),
           ...(taskHivekeepTools ? { tools: taskHivekeepTools } : {}),
           ...(taskThinkingEffort ? { thinkingEffort: taskThinkingEffort } : {}),
+          ...toolTurnSampling(taskResolved.model, !!taskHivekeepTools),
           signal: abortController.signal,
         },
         taskResolved.config,

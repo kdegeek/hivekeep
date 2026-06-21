@@ -465,6 +465,14 @@ export const config = {
 
   tools: {
     maxSteps: Number(process.env.TOOLS_MAX_STEPS ?? 0), // 0 (default) = truly unlimited (no cap); > 0 = hard cap at this value
+    // Temperature for tool-enabled turns. Local/self-hosted backends default to
+    // ~0.7-0.8, which makes structured tool-call JSON unreliable on small models;
+    // a low value steadies it. Reasoning models are exempted in code (they reject
+    // a custom temperature). Set TOOLS_TEMPERATURE=off to defer to the backend.
+    temperature:
+      process.env.TOOLS_TEMPERATURE === 'off'
+        ? null
+        : Number(process.env.TOOLS_TEMPERATURE ?? 0),
     // Max parallel concurrency-safe tool calls within a single batch.
     // HIVEKEEP_MAX_TOOL_USE_CONCURRENCY is the canonical name (aligned with
     // Claude Code's CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY). TOOLS_CONCURRENCY_CAP

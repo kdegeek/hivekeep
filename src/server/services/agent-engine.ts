@@ -26,6 +26,7 @@ import { listActiveTriggerSummariesForAgent } from '@/server/services/account-tr
 import { buildSegmentedMessages } from '@/server/services/llm-cache-hints'
 import { stringifyToolResultValue } from '@/server/llm/core/vercel-bridge'
 import { DEFAULT_MAX_LLM_TOOLS, getMaxToolsForRequest } from '@/server/services/tool-cap'
+import { toolTurnSampling } from '@/server/services/tool-sampling'
 import { dequeueMessage, markQueueItemDone, isAgentProcessing, getQueueSize, recoverStaleProcessingItems, popQueueMessageMetadata } from '@/server/services/queue'
 import { recoverStaleTasks, promoteGlobalQueue } from '@/server/services/tasks'
 import { sseManager } from '@/server/sse/index'
@@ -1616,6 +1617,7 @@ export async function processNextMessage(agentId: string): Promise<boolean> {
           ...(hivekeepSystem ? { system: hivekeepSystem } : {}),
           ...(hivekeepTools ? { tools: hivekeepTools } : {}),
           ...(thinkingEffort ? { thinkingEffort } : {}),
+          ...toolTurnSampling(resolved.model, !!hivekeepTools),
           signal: abortController.signal,
         },
         resolved.config,
@@ -2387,6 +2389,7 @@ export async function processQuickMessage(agentId: string): Promise<boolean> {
           ...(qsSystem ? { system: qsSystem } : {}),
           ...(qsHivekeepTools ? { tools: qsHivekeepTools } : {}),
           ...(qsThinkingEffort ? { thinkingEffort: qsThinkingEffort } : {}),
+          ...toolTurnSampling(qsResolved.model, !!qsHivekeepTools),
           signal: abortController.signal,
         },
         qsResolved.config,
