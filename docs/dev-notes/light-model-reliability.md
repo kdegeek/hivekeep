@@ -3,8 +3,9 @@
 **Status:** analysis, plus R1, R2, and R6's sampling fix now implemented. This maps the
 problem and proposes fixes ranked by impact and effort, for the maintainer to decide on.
 Built so far: R1 (tolerant tool-argument parsing), R2 (schema validation with a correctable
-error), and the low-temperature-for-tool-turns part of R6. R3 to R5 and R6's tool-scoping /
-prompt-slimming parts remain proposals.
+error), and the low-temperature-for-tool-turns part of R6. R3 was re-scoped after research
+(the client-side constrained-decoding knob does not apply to tool-call arguments; see R3).
+R4, R5, and R6's tool-scoping / prompt-slimming parts remain proposals.
 
 **Origin:** user feedback that Hivekeep is the #1-cited adoption blocker for the
 self-hosted / local-LLM audience. The platform works well with Claude, but small and
@@ -369,10 +370,39 @@ is the implicit tool-error path; this makes it explicit and bounded.
 distinct from `config.tools.maxSteps`). **Risk:** Medium; must cap retries and avoid
 infinite loops and token blow-ups. New config keys (see R6).
 
-### R3. Constrained decoding when the backend supports it (highest ceiling, medium effort)
+### R3. Constrained decoding when the backend supports it (highest ceiling, medium effort) — RE-SCOPED AFTER RESEARCH
 
-**What:** When the model emits a tool call, pass the backend's native structured-output
-knob so invalid JSON is impossible:
+**Research finding (2026-06-21): the client-side knob does not apply to tool-call
+arguments, so R3 as first conceived is mostly a no-op or unsafe for our use case.** The
+structured-output knobs constrain the assistant's *text content*, not the arguments of a
+native tool call, and every target backend already constrains tool calls its own way
+server-side:
+
+- **Ollama:** `format` (JSON schema) constrains the response *content*, not tool-call
+  arguments. Tool calling is a separate, template-driven path. Sending `format` does
+  nothing for tool args. ([Ollama tool calling](https://docs.ollama.com/capabilities/tool-calling),
+  [structured outputs](https://ollama.com/blog/structured-outputs))
+- **llama.cpp:** with `--jinja`, function calling applies its own internal grammar per
+  model, and "you cannot use grammar with function calling" (mutually exclusive). There is
+  no extra knob to send. ([function-calling.md](https://github.com/ggml-org/llama.cpp/blob/master/docs/function-calling.md))
+- **vLLM:** `tool_choice: "required"` does guided-decode the args to the schema, but it
+  *forces* a tool call every turn, which breaks turns where the agent should answer in
+  prose. Not a safe default. ([vLLM tool calling](https://docs.vllm.ai/en/stable/usage/tool_calling.html))
+- **OpenAI / compatible:** `strict: true` on the function constrains args, but requires the
+  schema to fit OpenAI's strict subset (all-required/nullable, `additionalProperties:
+  false`, limited keywords) or it 400s; vLLM accepts `strict` but ignores it.
+
+Implication: the Gemma-on-Ollama breakage the users report is most likely a weak or generic
+server-side tool *template* (a known issue for Gemma / Llama / Qwen templates), not a
+missing client knob. The lever that actually addresses that is **R5** (a prompt-based tool
+protocol Hivekeep controls, bypassing the server template), backed by R1/R2 (already built)
+for the parse/validate/repair safety net. The original per-knob plan is kept below for
+reference, but it should not be built blindly for the tool-calling path. A genuinely useful
+but out-of-scope spin-off: Ollama/OpenAI content-JSON modes (`format` / `response_format`)
+*would* help Hivekeep's non-tool structured extraction (memory pipeline, summaries) — track
+that separately.
+
+**Original plan (kept for reference) — pass the backend's native structured-output knob:**
 - Ollama: `format` = the tool's JSON Schema.
 - vLLM: `guided_json` (or set `tool_choice: "required"`, which auto-enables guided
   decoding), migrating to `structured_outputs`.
