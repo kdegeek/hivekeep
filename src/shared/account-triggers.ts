@@ -20,7 +20,7 @@ export const BODY_FIELDS: readonly ConditionField[] = ['body', 'attachment_name'
 
 const ALL_FIELDS: readonly ConditionField[] = [
   'sender_email', 'sender_domain', 'sender_name', 'subject', 'snippet',
-  'recipient', 'has_attachment', 'unread', 'label', 'thread_id',
+  'recipient', 'has_attachment', 'unread', 'label', 'thread_id', 'in_reply_to',
   'body', 'attachment_name', 'attachment_type',
 ]
 
@@ -39,9 +39,19 @@ export const FIELD_OPS: Record<ConditionField, ConditionOp[]> = {
   unread: ['is_true', 'is_false'],
   label: ['equals', 'contains', 'in'],
   thread_id: ['equals', 'in'],
+  in_reply_to: ['equals', 'in'],
   body: ['contains', 'matches'],
   attachment_name: ['equals', 'contains', 'ends_with', 'matches'],
   attachment_type: ['equals', 'contains', 'in'],
+}
+
+/** Strip the angle brackets and any trailing ids from an RFC Message-ID so a
+ *  sent message's id and an incoming `In-Reply-To` normalize to the same value.
+ *  Shared by the IMAP provider (populating `inReplyTo`) and the reply-watch
+ *  trigger (storing the sent id) so `in_reply_to equals` actually matches. */
+export function stripMessageId(raw: string | undefined): string {
+  const first = (raw ?? '').trim().split(/\s+/)[0] ?? ''
+  return first.replace(/^<+|>+$/g, '').trim()
 }
 
 export type ConditionValueKind = 'string' | 'list' | 'none'
@@ -138,6 +148,7 @@ export interface EmailMatchContext {
   unread: boolean
   labels: string[]
   threadId: string
+  inReplyTo: string
   body?: string
   attachmentNames?: string[]
   attachmentTypes?: string[]
@@ -180,6 +191,7 @@ function fieldValues(field: ConditionField, ctx: EmailMatchContext): string[] {
     case 'recipient': return ctx.recipients
     case 'label': return ctx.labels
     case 'thread_id': return [ctx.threadId]
+    case 'in_reply_to': return [ctx.inReplyTo]
     case 'body': return [ctx.body ?? '']
     case 'attachment_name': return ctx.attachmentNames ?? []
     case 'attachment_type': return ctx.attachmentTypes ?? []
@@ -212,7 +224,7 @@ export function evaluateConditions(node: ConditionNode, ctx: EmailMatchContext):
 const FIELD_LABEL: Record<ConditionField, string> = {
   sender_email: 'sender', sender_domain: 'sender domain', sender_name: 'sender name',
   subject: 'subject', snippet: 'preview', recipient: 'recipient',
-  has_attachment: 'attachment', unread: 'unread', label: 'label', thread_id: 'thread',
+  has_attachment: 'attachment', unread: 'unread', label: 'label', thread_id: 'thread', in_reply_to: 'in reply to',
   body: 'body', attachment_name: 'attachment name', attachment_type: 'attachment type',
 }
 

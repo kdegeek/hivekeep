@@ -27,6 +27,7 @@ import type {
   SendEmailResult,
 } from '@/server/email/types'
 import type { ProviderConfig, AuthResult } from '@hivekeep/sdk'
+import { stripMessageId } from '@/shared/account-triggers'
 
 // ─── Pure helpers (exported for tests) ───────────────────────────────────────
 
@@ -137,6 +138,7 @@ interface ImapEnvelope {
     date?: Date
     from?: AddressObject[]
     to?: AddressObject[]
+    inReplyTo?: string
   }
   internalDate?: Date
   flags?: Set<string>
@@ -194,6 +196,7 @@ async function withMailbox<T>(
 
 function envelopeToSummary(msg: ImapEnvelope, mailbox: string): EmailSummary {
   const env = msg.envelope ?? {}
+  const inReplyTo = stripMessageId(env.inReplyTo)
   return {
     id: formatMessageId(mailbox, msg.uid),
     from: toAddr(env.from?.[0]),
@@ -203,6 +206,7 @@ function envelopeToSummary(msg: ImapEnvelope, mailbox: string): EmailSummary {
     unread: msg.flags ? !msg.flags.has('\\Seen') : undefined,
     hasAttachments: structureHasAttachments(msg.bodyStructure),
     labels: [mailbox],
+    ...(inReplyTo ? { inReplyTo } : {}),
   }
 }
 

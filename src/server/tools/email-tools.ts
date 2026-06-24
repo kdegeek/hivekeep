@@ -270,9 +270,9 @@ export const sendEmailTool: ToolRegistration = {
           .boolean()
           .optional()
           .describe(
-            'Wake up when this email gets a reply. Creates a one-shot trigger on the ' +
-            'thread that starts a new turn on the first reply, regardless of sender. ' +
-            'Requires a provider that threads messages (e.g. Gmail).',
+            'Wake up when this email gets a reply. Creates a one-shot trigger that ' +
+            'starts a new turn on the first reply, regardless of sender: by thread on ' +
+            'Gmail/Microsoft, by the In-Reply-To header on IMAP/iCloud.',
           ),
         watch_reply_prompt: z
           .string()
@@ -334,6 +334,7 @@ export const sendEmailTool: ToolRegistration = {
                 accountId: account.id,
                 targetAgentId: ctx.agentId,
                 threadId: sent.threadId,
+                messageId: sent.id,
                 subject: args.subject,
                 prompt: args.watch_reply_prompt,
               })
@@ -341,7 +342,7 @@ export const sendEmailTool: ToolRegistration = {
                 ? trigger.requiresApproval
                   ? { status: 'pending_approval', triggerId: trigger.id }
                   : { status: 'active', triggerId: trigger.id }
-                : { status: 'unsupported', message: 'The account provider does not thread messages, so no reply-watch was created.' }
+                : { status: 'unsupported', message: 'The provider returned neither a thread id nor a message id for the sent email, so no reply-watch was created.' }
             } catch (err) {
               log.warn({ agentId: ctx.agentId, account: account.slug, err }, 'reply-watch trigger creation failed')
               result.replyWatch = { status: 'failed', message: err instanceof Error ? err.message : String(err) }

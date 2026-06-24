@@ -457,7 +457,7 @@ export type TriggerDispatchMode = 'conversation' | 'task'
  *  summary; `body` / `attachment_*` require fetching the full message. */
 export type ConditionField =
   | 'sender_email' | 'sender_domain' | 'sender_name' | 'subject' | 'snippet'
-  | 'recipient' | 'has_attachment' | 'unread' | 'label' | 'thread_id'
+  | 'recipient' | 'has_attachment' | 'unread' | 'label' | 'thread_id' | 'in_reply_to'
   | 'body' | 'attachment_name' | 'attachment_type'
 
 export type ConditionOp =

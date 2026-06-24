@@ -1824,6 +1824,11 @@ export interface EmailSummary {
   hasAttachments?: boolean
   /** Folder or labels the message lives in (provider-dependent). */
   labels?: string[]
+  /** RFC `In-Reply-To` header (the Message-ID this message replies to), without
+   *  angle brackets, when the provider exposes it. Lets IMAP/iCloud reply-watch
+   *  triggers match a reply back to a sent message by header, since IMAP has no
+   *  thread id. Empty/undefined for messages that are not replies. */
+  inReplyTo?: string
 }
 
 /** Full message content returned by `getMessage`. */

@@ -19,7 +19,7 @@ import { config } from '@/server/config'
 import { listEmailAccounts } from '@/server/services/email-accounts'
 import { getAgentTriggersRequireApproval } from '@/server/services/app-settings'
 import { agentAvatarUrl } from '@/server/services/field-validator'
-import { validateConditionTree, treeNeedsBody, summarizeConditions } from '@/shared/account-triggers'
+import { validateConditionTree, treeNeedsBody, summarizeConditions, stripMessageId } from '@/shared/account-triggers'
 import type {
   AccountTriggerSummary,
   ConditionNode,
@@ -181,26 +181,32 @@ export async function createAccountTrigger(params: CreateTriggerParams): Promise
 }
 
 /**
- * Create a one-shot trigger that watches a thread for its first reply. Used by
- * `send_email`'s `watch_reply` option: the sent message's `threadId` becomes a
- * `thread_id equals` condition, so any reply in the thread fires the trigger
- * regardless of who sends it. Returns null when the provider gives no threadId
- * (no threading support, so reply-watch can't be set up).
+ * Create a one-shot trigger that watches for the first reply to a sent message.
+ * Used by `send_email`'s `watch_reply` option. The match strategy depends on
+ * what the provider returned for the sent message:
+ *  - `threadId` set (Gmail/Microsoft): `thread_id equals <threadId>`, so any
+ *    reply in the thread fires it, whoever sends it.
+ *  - no threadId but a RFC `messageId` (IMAP/iCloud): `in_reply_to equals
+ *    <messageId>`, matching a reply that references the sent Message-ID.
+ * Returns null when neither is available (reply-watch can't be set up).
  */
 export async function createReplyWatchTrigger(params: {
   accountId: string
   targetAgentId: string
   threadId: string | undefined
+  messageId: string | undefined
   subject: string
   prompt?: string
 }): Promise<AccountTriggerSummary | null> {
-  if (!params.threadId) return null
+  const messageId = stripMessageId(params.messageId)
+  const leaf: ConditionNode | null = params.threadId
+    ? { type: 'leaf', field: 'thread_id', op: 'equals', value: params.threadId }
+    : messageId
+      ? { type: 'leaf', field: 'in_reply_to', op: 'equals', value: messageId }
+      : null
+  if (!leaf) return null
   const subject = params.subject.trim() || '(no subject)'
-  const conditions: ConditionNode = {
-    type: 'group',
-    op: 'and',
-    children: [{ type: 'leaf', field: 'thread_id', op: 'equals', value: params.threadId }],
-  }
+  const conditions: ConditionNode = { type: 'group', op: 'and', children: [leaf] }
   const prompt =
     params.prompt?.trim() ||
     `A reply arrived to the email you sent ("${subject}"). Read it and continue the exchange.`

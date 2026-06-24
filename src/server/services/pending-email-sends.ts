@@ -128,6 +128,7 @@ export async function approvePendingSend(id: string): Promise<{ ok: boolean; err
           accountId: row.accountId,
           targetAgentId: row.agentId,
           threadId: sent.threadId,
+          messageId: sent.id,
           subject: params.subject,
           prompt,
         })
