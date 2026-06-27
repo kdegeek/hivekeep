@@ -6,6 +6,9 @@
 //   - site/public/logo.svg                               (Astro <img> copy)
 // The dynamic, theme-aware logo is <HivekeepLogo/>; these SVGs are for plain
 // <img>/README/OG contexts. Run: bun scripts/gen-logo-assets.mjs
+// NOTE: this does NOT regenerate the PWA raster icons (favicon/app/apple/
+// maskable) under src/client/public/. After changing the logo, also run
+// `bun scripts/gen-pwa-icons.mjs` (it rasterizes from the logo.svg written here).
 import { readFileSync, writeFileSync } from 'node:fs'
 
 const { paths } = JSON.parse(

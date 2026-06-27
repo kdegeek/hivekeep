@@ -1,7 +1,7 @@
 {
   "name": "Hivekeep",
   "short_name": "Hivekeep",
-  "description": "AI-powered chatbot management platform",
+  "description": "Self-hosted platform of specialized AI agents",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1a1a2e",
@@ -10,15 +10,17 @@
     {
       "src": "/hivekeep-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/hivekeep-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "/hivekeep-512.png",
+      "src": "/hivekeep-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
