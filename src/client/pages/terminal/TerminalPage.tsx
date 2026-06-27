@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Navigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -106,21 +105,16 @@ function toControlChar(ch: string): string {
   return ch
 }
 
-// Height reserved at the bottom of the terminal column for the fixed key bar, so
-// it never covers the last rows when the keyboard is closed. Matches the bar's
-// own height (button h-8 + py-1.5). Kept in sync with MOBILE_KEY_BAR below.
-const MOBILE_KEY_BAR_HEIGHT = 'h-12'
-
-/** Touch-reachable bar of keys a phone keyboard lacks (Esc, Tab, arrows) plus a
- *  Ctrl toggle that modifies the next typed letter.
+/** Bar of keys a phone keyboard lacks (Esc, Tab, arrows) plus a Ctrl toggle that
+ *  modifies the next typed letter. Docked at the top of the terminal pane, below
+ *  the page header, and visible on mobile only (`md:hidden`).
  *
- *  It is `position: fixed` and portaled to <body>, then lifted to sit right on
- *  top of the soft keyboard by tracking the VisualViewport: a soft keyboard
- *  overlays the layout viewport (it doesn't push it up), so an in-flow bar would
- *  hide behind it. `window.innerHeight - visualViewport.height - offsetTop` is
- *  the height the keyboard covers; we translate the bar up by that much. When no
- *  keyboard is shown the offset is 0 and the bar rests at the screen bottom.
- *  Mobile only (`md:hidden`); sends raw input through `onKey`. */
+ *  Why the top and not floating above the keyboard: a soft keyboard overlays the
+ *  layout viewport without resizing it, and iOS Safari scroll-shifts the whole
+ *  webview when the hidden input is focused, so any `position: fixed` bar jitters
+ *  and drifts across the screen. A bar pinned above the terminal never fights the
+ *  keyboard. Each button keeps the terminal focused (preventDefault on the press)
+ *  so tapping a key doesn't dismiss the keyboard. */
 function MobileKeyBar({
   onKey,
   ctrlArmed,
@@ -131,44 +125,23 @@ function MobileKeyBar({
   onToggleCtrl: () => void
 }) {
   const { t } = useTranslation()
-  const barRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const vv = window.visualViewport
-    if (!vv) return
-    const update = () => {
-      const el = barRef.current
-      if (!el) return
-      const covered = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
-      el.style.transform = `translateY(-${covered}px)`
-    }
-    update()
-    vv.addEventListener('resize', update)
-    vv.addEventListener('scroll', update)
-    return () => {
-      vv.removeEventListener('resize', update)
-      vv.removeEventListener('scroll', update)
-    }
-  }, [])
-
+  const keepFocus = (e: React.MouseEvent) => e.preventDefault()
   const arrows = [
     { icon: ArrowUp, data: '\x1b[A', label: t('terminal.keys.up') },
     { icon: ArrowDown, data: '\x1b[B', label: t('terminal.keys.down') },
     { icon: ArrowLeft, data: '\x1b[D', label: t('terminal.keys.left') },
     { icon: ArrowRight, data: '\x1b[C', label: t('terminal.keys.right') },
   ]
-  return createPortal(
+  return (
     <div
-      ref={barRef}
-      className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-1 overflow-x-auto border-t border-border bg-background/95 px-2 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden"
-      style={{ paddingBottom: 'max(0.375rem, env(safe-area-inset-bottom))' }}
+      className="mb-2 flex shrink-0 items-center gap-1 overflow-x-auto md:hidden"
       role="toolbar"
       aria-label={t('terminal.keys.label')}
     >
-      <Button variant="outline" size="sm" className="h-8 shrink-0 px-2.5" onMouseDown={(e) => e.preventDefault()} onClick={() => onKey('\x1b')}>
+      <Button variant="outline" size="sm" className="h-8 shrink-0 px-2.5" onMouseDown={keepFocus} onClick={() => onKey('\x1b')}>
         Esc
       </Button>
-      <Button variant="outline" size="sm" className="h-8 shrink-0 px-2.5" onMouseDown={(e) => e.preventDefault()} onClick={() => onKey('\t')}>
+      <Button variant="outline" size="sm" className="h-8 shrink-0 px-2.5" onMouseDown={keepFocus} onClick={() => onKey('\t')}>
         Tab
       </Button>
       <Button
@@ -177,7 +150,7 @@ function MobileKeyBar({
         className="h-8 shrink-0 px-2.5"
         title={t('terminal.keys.ctrlHint')}
         aria-pressed={ctrlArmed}
-        onMouseDown={(e) => e.preventDefault()}
+        onMouseDown={keepFocus}
         onClick={onToggleCtrl}
       >
         {t('terminal.keys.ctrl')}
@@ -189,14 +162,13 @@ function MobileKeyBar({
           size="icon-sm"
           className="size-8 shrink-0"
           aria-label={a.label}
-          onMouseDown={(e) => e.preventDefault()}
+          onMouseDown={keepFocus}
           onClick={() => onKey(a.data)}
         >
           <a.icon className="size-4" />
         </Button>
       ))}
-    </div>,
-    document.body,
+    </div>
   )
 }
 
@@ -936,20 +908,17 @@ export function TerminalPage() {
             </SheetContent>
           </Sheet>
           <main className="flex min-h-0 min-w-0 flex-1 flex-col p-2 sm:p-4">
+            <MobileKeyBar
+              onKey={sendInput}
+              ctrlArmed={ctrlArmed}
+              onToggleCtrl={() => setCtrlArmedBoth(!ctrlArmedRef.current)}
+            />
             <div
               className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border p-2"
               style={{ backgroundColor: TERMINAL_THEME.background }}
             >
               <div ref={containerRef} className="h-full w-full" />
             </div>
-            {/* Reserve the fixed key bar's height so it never sits over the last
-                rows when the keyboard is closed (the bar itself is portaled). */}
-            <div className={cn('shrink-0 md:hidden', MOBILE_KEY_BAR_HEIGHT)} aria-hidden />
-            <MobileKeyBar
-              onKey={sendInput}
-              ctrlArmed={ctrlArmed}
-              onToggleCtrl={() => setCtrlArmedBoth(!ctrlArmedRef.current)}
-            />
           </main>
         </div>
       )}

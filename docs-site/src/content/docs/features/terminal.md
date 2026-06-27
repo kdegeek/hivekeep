@@ -36,8 +36,8 @@ Several tabs or devices can view the **same session at once**: output mirrors to
 
 The terminal is built to be usable from a phone, not just a desktop:
 
-- **A key bar** with the keys a soft keyboard lacks: `Esc`, `Tab`, the four arrows, and a `Ctrl` toggle. Tap `Ctrl`, then a letter, to send a control sequence (tap `Ctrl` then `C` to interrupt, `Ctrl` then `R` to search history, and so on). The bar floats just above the on-screen keyboard while you type and rests at the bottom of the screen when the keyboard is closed, so it stays reachable without dismissing the keyboard.
-- **One-finger drag scrolls** the output back through the buffer.
+- **A key bar** above the terminal with the keys a soft keyboard lacks: `Esc`, `Tab`, the four arrows, and a `Ctrl` toggle. Tap `Ctrl`, then a letter, to send a control sequence (tap `Ctrl` then `C` to interrupt, `Ctrl` then `R` to search history, and so on). It stays put while you type; tapping a key does not dismiss the keyboard.
+- **One-finger drag scrolls** the shell output back through the buffer. (Full-screen programs that take over the screen, like an editor or `claude code`, manage their own scrolling, just as in a desktop terminal.)
 - **Auto-reconnect**: locking the phone or switching apps drops the connection, but the session keeps running on the server and reconnects on its own the moment you come back, so you land straight back at the prompt. The `Reconnect` button stays as a manual fallback.
 
 On hosts with tmux, sessions keep a large scrollback (50,000 lines). Selecting text with the mouse copies it natively (so copying long blocks works reliably), and `Ctrl+B [` enters tmux's scroll/copy mode to page back through that history. tmux runs on a dedicated socket, isolated from any personal tmux you run on the host.
