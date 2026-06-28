@@ -57,7 +57,8 @@ function normalizeAbsoluteHome(home: string | undefined): string | null {
 
 function getRealHome(): string {
   // REAL_HOME is set by some snap environments
-  if (process.env.REAL_HOME) return process.env.REAL_HOME
+  const normalizedRealHome = normalizeAbsoluteHome(process.env.REAL_HOME)
+  if (normalizedRealHome) return normalizedRealHome
   // Fall back to HOME, but strip snap paths first.
   const envHome = process.env.HOME ?? ''
   const snapMatch = envHome.match(/^(\/home\/[^/]+)\/snap\//)
@@ -66,7 +67,7 @@ function getRealHome(): string {
   if (normalizedHome) return normalizedHome
   // Last resort: construct from USER
   if (process.env.USER) return `/home/${process.env.USER}`
-  return envHome
+  throw new Error('Unable to resolve an absolute home directory')
 }
 
 const REAL_HOME = getRealHome()
