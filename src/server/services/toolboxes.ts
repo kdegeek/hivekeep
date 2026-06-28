@@ -81,6 +81,10 @@ export const BUILTIN_TOOLBOXES: readonly BuiltinToolboxDef[] = [
       'get_project_knowledge',
       'update_project_knowledge',
       'pin_project_knowledge',
+      // Local code review agents.
+      'list_local_reviewers',
+      'check_code_review_auth',
+      'run_local_code_review',
       // Delegation — offload heavy read-only exploration to a cheap scout model.
       'scout',
     ],
