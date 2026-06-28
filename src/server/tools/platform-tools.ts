@@ -2,12 +2,71 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { tool } from '@/server/tools/tool-helper'
 import { z } from 'zod'
+import { eq, and, desc } from 'drizzle-orm'
 import { config } from '@/server/config'
 import { logStore } from '@/server/services/log-store'
 import { createLogger } from '@/server/logger'
 import type { ToolRegistration } from '@/server/tools/types'
 
 const log = createLogger('tools:platform')
+
+const RESTART_CONFIRMATION_TTL_MS = 10 * 60 * 1000
+
+function parsePromptResponse(raw: string | null): unknown {
+  if (!raw) return null
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return raw
+  }
+}
+
+function responseLooksAffirmative(response: unknown): boolean {
+  if (typeof response === 'boolean') return response
+  if (typeof response !== 'string') return false
+  return /^(yes|y|confirm|confirmed|approve|approved|restart|ok|true)$/i.test(response.trim())
+}
+
+function textMentionsRestart(...parts: Array<string | null | undefined>): boolean {
+  const text = parts.filter(Boolean).join(' ').toLowerCase()
+  return /\b(restart|reboot)\b/.test(text)
+}
+
+async function hasRecentRestartConfirmation(ctx: { agentId: string; taskId?: string }, promptId?: string): Promise<boolean> {
+  const { db } = await import('@/server/db/index')
+  const { humanPrompts } = await import('@/server/db/schema')
+  const cutoff = new Date(Date.now() - RESTART_CONFIRMATION_TTL_MS)
+
+  const rows = promptId
+    ? await db
+        .select()
+        .from(humanPrompts)
+        .where(and(
+          eq(humanPrompts.id, promptId),
+          eq(humanPrompts.agentId, ctx.agentId),
+          eq(humanPrompts.status, 'answered'),
+          eq(humanPrompts.promptType, 'confirm'),
+        ))
+        .all()
+    : await db
+        .select()
+        .from(humanPrompts)
+        .where(and(
+          eq(humanPrompts.agentId, ctx.agentId),
+          eq(humanPrompts.status, 'answered'),
+          eq(humanPrompts.promptType, 'confirm'),
+        ))
+        .orderBy(desc(humanPrompts.respondedAt))
+        .all()
+
+  return rows.some((prompt) => {
+    if ((prompt.taskId ?? undefined) !== (ctx.taskId ?? undefined)) return false
+    const respondedAt = prompt.respondedAt ? new Date(prompt.respondedAt as unknown as number | Date) : null
+    if (!respondedAt || respondedAt.getTime() < cutoff.getTime()) return false
+    if (!responseLooksAffirmative(parsePromptResponse(prompt.response))) return false
+    return textMentionsRestart(prompt.question, prompt.description)
+  })
+}
 
 /** Keys that are safe to expose via get_platform_config. Sensitive keys are redacted. */
 const SENSITIVE_KEYS = new Set([
@@ -514,16 +573,30 @@ export const restartPlatformTool: ToolRegistration = {
   create: (ctx) =>
     tool({
       description:
-        'Trigger a graceful restart of Hivekeep. Always use prompt_human() for user confirmation first.',
+        'Trigger a graceful restart of Hivekeep. Requires a recent answered prompt_human(confirm) that explicitly mentions restarting Hivekeep/the platform; an LLM-supplied boolean alone is not sufficient.',
       inputSchema: z.object({
         reason: z.string(),
         confirmed: z.boolean().describe('Must be true after explicit user confirmation via prompt_human()'),
+        prompt_id: z.string().optional().describe('Optional prompt_human confirmation promptId. If omitted, the most recent answered restart confirmation for this Agent is checked.'),
       }),
-      execute: async ({ reason, confirmed }) => {
+      execute: async ({ reason, confirmed, prompt_id }) => {
         if (!confirmed) {
           return {
             success: false,
-            error: 'Restart not confirmed. Use prompt_human() to get explicit user confirmation before restarting.',
+            error: 'Restart not confirmed. Use prompt_human(confirm) to get explicit user confirmation before restarting.',
+          }
+        }
+
+        let confirmedByPrompt = false
+        try {
+          confirmedByPrompt = await hasRecentRestartConfirmation(ctx, prompt_id)
+        } catch (err) {
+          log.warn({ agentId: ctx.agentId, err }, 'Failed to verify restart confirmation; denying restart')
+        }
+        if (!confirmedByPrompt) {
+          return {
+            success: false,
+            error: 'Restart requires a recent answered prompt_human(confirm) that explicitly mentions restarting Hivekeep/the platform. The LLM-supplied confirmed=true argument is not sufficient.',
           }
         }
 

@@ -17,7 +17,7 @@
  */
 
 import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { isAbsolute, join, normalize } from 'path'
 import {
   getCodexOAuthCredentials,
   CODEX_BASE_URL,
@@ -77,17 +77,41 @@ const CONFIG_SCHEMA: readonly ConfigField[] = [
 
 // ─── Model discovery ─────────────────────────────────────────────────────────
 
+function normalizeAbsoluteHome(home: string | undefined): string | null {
+  if (!home) return null
+  const normalized = normalize(home)
+  return isAbsolute(normalized) ? normalized : null
+}
+
 function getRealHome(): string {
   if (process.env.REAL_HOME) return process.env.REAL_HOME
-  const home = process.env.HOME ?? ''
-  const snapMatch = home.match(/^(\/home\/[^/]+)\/snap\//)
+  const envHome = process.env.HOME ?? ''
+  const snapMatch = envHome.match(/^(\/home\/[^/]+)\/snap\//)
   if (snapMatch) return snapMatch[1]!
+  const normalizedHome = normalizeAbsoluteHome(envHome)
+  if (normalizedHome) return normalizedHome
   if (process.env.USER) return `/home/${process.env.USER}`
-  return home
+  return envHome
 }
 
 const REAL_HOME = getRealHome()
-const MODELS_CACHE_PATH = join(REAL_HOME, '.codex', 'models_cache.json')
+
+// Try the real env HOME first and the adjusted snap-safe REAL_HOME as a
+// fallback, so macOS and nonstandard Linux homes never miss a valid cache.
+function getModelsCacheCandidates(): string[] {
+  const cands: string[] = []
+  const envHome = normalizeAbsoluteHome(process.env.HOME)
+  if (envHome) {
+    const p = join(envHome, '.codex', 'models_cache.json')
+    if (!cands.includes(p)) cands.push(p)
+  }
+  {
+    const p = join(REAL_HOME, '.codex', 'models_cache.json')
+    if (!cands.includes(p)) cands.push(p)
+  }
+  return cands
+}
+const MODELS_CACHE_CANDIDATES = getModelsCacheCandidates()
 
 interface CodexModelCacheEntry {
   slug: string
@@ -159,26 +183,32 @@ async function fetchCodexModelsFromApi(config: ProviderConfig): Promise<CodexMod
  * Returns null when the cache is missing or unreadable (so the caller can
  * decide whether to error out or fall back).
  */
-function readCodexModelsFromCache(): CodexModelCacheEntry[] | null {
-  try {
-    if (!existsSync(MODELS_CACHE_PATH)) return null
-    const raw = readFileSync(MODELS_CACHE_PATH, 'utf8')
-    const parsed = JSON.parse(raw) as CodexModelsCacheFile
-    const selected = selectCodexEntries(parsed.models)
-    return selected.length > 0 ? selected : null
-  } catch {
-    return null
+export function readCodexModelsFromCache(): CodexModelCacheEntry[] | null {
+  for (const p of MODELS_CACHE_CANDIDATES) {
+    try {
+      if (!existsSync(p)) continue
+      const raw = readFileSync(p, 'utf8')
+      const parsed = JSON.parse(raw) as CodexModelsCacheFile
+      const selected = selectCodexEntries(parsed.models)
+      if (selected.length > 0) return selected
+    } catch {
+      // try the next candidate path
+    }
   }
+  return null
 }
 
 /**
- * Last-resort catalog for when both the live API and the CLI cache are
- * unavailable (e.g. a transient network failure during onboarding). These
- * slugs go stale (the API is the real source), so this only exists so the
- * provider degrades to something rather than listing zero models.
+ * Static fallback catalog used whenever live catalog discovery and the CLI
+ * cache are unavailable. Keep `gpt-5.5` first: it is the live-confirmed gateway
+ * probe/default candidate. Do not add visible picker models unless they have
+ * been verified against the Codex backend API.
  */
 export const STATIC_CODEX_MODELS: CodexModelCacheEntry[] = [
-  { slug: 'gpt-5.5', display_name: 'GPT-5.5', context_window: 272000, supported_in_api: true, visibility: 'list' },
+  { slug: 'gpt-5.5', display_name: 'GPT-5.5', context_window: 400000, max_output_tokens: 128000, supported_in_api: true, visibility: 'list' },
+  { slug: 'gpt-5.4', display_name: 'GPT-5.4', context_window: 400000, max_output_tokens: 128000, supported_in_api: true, visibility: 'list' },
+  { slug: 'gpt-5.3-codex', display_name: 'GPT-5.3 Codex', context_window: 400000, max_output_tokens: 128000, supported_in_api: true, visibility: 'list' },
+  { slug: 'gpt-5.3-codex-spark', display_name: 'GPT-5.3 Codex Spark', context_window: 400000, max_output_tokens: 128000, supported_in_api: true, visibility: 'list' },
 ]
 
 /**
@@ -186,8 +216,16 @@ export const STATIC_CODEX_MODELS: CodexModelCacheEntry[] = [
  * floor. The API path works in every mode (in-app sign-in and CLI), which is
  * why a stale hardcoded list is no longer the primary source.
  */
-async function resolveCodexModels(config: ProviderConfig): Promise<CodexModelCacheEntry[]> {
+export async function resolveCodexModels(config: ProviderConfig = {}): Promise<CodexModelCacheEntry[]> {
   return (await fetchCodexModelsFromApi(config)) ?? readCodexModelsFromCache() ?? STATIC_CODEX_MODELS
+}
+
+/**
+ * Resolve local-only Codex catalog: CLI cache → static floor. Useful for tests
+ * and display paths that must not make network/auth calls.
+ */
+export function resolveLocalCodexModels(): CodexModelCacheEntry[] {
+  return readCodexModelsFromCache() ?? STATIC_CODEX_MODELS
 }
 
 /**
@@ -211,9 +249,6 @@ export function mapCodexModel(entry: CodexModelCacheEntry): LLMModel {
   if (entry.max_output_tokens != null) model.maxOutput = entry.max_output_tokens
   return model
 }
-
-// ─── Effort downgrade ────────────────────────────────────────────────────────
-
 
 // ─── Error mapping ───────────────────────────────────────────────────────────
 

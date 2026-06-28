@@ -21,14 +21,14 @@ export function MultiEditRenderer({ args, result, status }: ToolResultRendererPr
   const [showRaw, setShowRaw] = useState(false)
 
   const res = result as Record<string, unknown> | null | undefined
-  const filePath = typeof res?.path === 'string' ? res.path : typeof args.path === 'string' ? args.path : null
+  const filePath = typeof res?.path === 'string' ? res.path : typeof args?.path === 'string' ? args.path : null
   const success = res?.success === true
   const language = typeof res?.language === 'string' ? res.language : null
   const editsApplied = typeof res?.editsApplied === 'number' ? res.editsApplied : null
   const error = typeof res?.error === 'string' ? res.error : null
   const failedEditIndex = typeof res?.failedEditIndex === 'number' ? res.failedEditIndex : null
 
-  const edits = Array.isArray(args.edits) ? (args.edits as EditPair[]) : null
+  const edits = Array.isArray(args?.edits) ? (args.edits as EditPair[]) : null
 
   if (!success) {
     return (

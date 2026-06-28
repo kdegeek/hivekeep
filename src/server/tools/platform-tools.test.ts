@@ -38,6 +38,73 @@ mock.module('@/server/logger', () => ({
 // Note: we do NOT mock @/server/services/log-store to avoid polluting other test files.
 // Instead, we import the real logStore and rely on it being functional for getPlatformLogsTool tests.
 
+let mockHumanPromptRows: Array<Record<string, unknown>> = []
+
+function collectEqFilters(predicate: unknown): Record<string, unknown> {
+  const filters: Record<string, unknown> = {}
+
+  function visit(node: unknown) {
+    if (!node || typeof node !== 'object') return
+    const chunks = (node as { queryChunks?: unknown[] }).queryChunks
+    if (Array.isArray(chunks)) {
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i]
+        if (!chunk || typeof chunk !== 'object') {
+          visit(chunk)
+          continue
+        }
+        const columnName = (chunk as { name?: unknown }).name
+        if (typeof columnName === 'string') {
+          const param = chunks.slice(i + 1, i + 4).find((candidate) => {
+            return !!candidate && typeof candidate === 'object' && 'value' in candidate && !Array.isArray((candidate as { value?: unknown }).value)
+          }) as { value?: unknown } | undefined
+          if (param) filters[columnName] = param.value
+        }
+        visit(chunk)
+      }
+    }
+  }
+
+  visit(predicate)
+  return filters
+}
+
+function applyHumanPromptFilters(rows: Array<Record<string, unknown>>, predicate: unknown) {
+  const filters = collectEqFilters(predicate)
+  const columnToRowKey: Record<string, string> = {
+    id: 'id',
+    agent_id: 'agentId',
+    status: 'status',
+    prompt_type: 'promptType',
+  }
+
+  return rows.filter((row) => {
+    for (const [column, expected] of Object.entries(filters)) {
+      const rowKey = columnToRowKey[column]
+      if (rowKey && row[rowKey] !== expected) return false
+    }
+    return true
+  })
+}
+
+const mockDb = {
+  select: () => ({
+    from: () => ({
+      where: (predicate: unknown) => {
+        const filteredRows = () => applyHumanPromptFilters(mockHumanPromptRows, predicate)
+        return {
+          orderBy: () => ({
+            all: async () => filteredRows(),
+          }),
+          all: async () => filteredRows(),
+        }
+      },
+    }),
+  }),
+}
+
+mock.module('@/server/db/index', () => ({ db: mockDb, sqlite: {} }))
+
 // Import after mocks
 const {
   getPlatformLogsTool,
@@ -60,6 +127,21 @@ async function execute(registration: ToolRegistration, params: Record<string, un
   return t.execute(params, { messages: [], toolCallId: 'test' })
 }
 
+function seedRestartConfirmation(overrides: Record<string, unknown> = {}) {
+  mockHumanPromptRows.push({
+    id: 'prompt-restart',
+    agentId: CTX.agentId,
+    taskId: null,
+    promptType: 'confirm',
+    question: 'Restart Hivekeep now?',
+    description: 'Confirm platform restart',
+    response: JSON.stringify('yes'),
+    status: 'answered',
+    respondedAt: new Date(),
+    ...overrides,
+  })
+}
+
 // ─── Setup / Teardown ────────────────────────────────────────────────────────
 
 beforeEach(() => {
@@ -69,6 +151,7 @@ beforeEach(() => {
   mockConfig.environment.envFilePath = TEST_ENV_FILE
   mockConfig.environment.serviceFilePath = null
   mockConfig.isDocker = false
+  mockHumanPromptRows = []
 })
 
 afterEach(() => {
@@ -425,8 +508,27 @@ describe('restartPlatformTool', () => {
     expect(result.error).toContain('not confirmed')
   })
 
-  it('rejects restart for manual installations', async () => {
+  it('rejects confirmed=true without a platform human confirmation', async () => {
     mockConfig.environment.installationType = 'manual'
+    const result = await execute(restartPlatformTool as ToolRegistration, {
+      reason: 'testing',
+      confirmed: true,
+    })
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('prompt_human(confirm)')
+    expect(result.error).toContain('confirmed=true')
+  })
+
+  it('rejects manual installations after a valid restart confirmation', async () => {
+    mockConfig.environment.installationType = 'manual'
+    for (let i = 0; i < 6; i++) {
+      seedRestartConfirmation({
+        id: `prompt-${i}`,
+        question: i === 5 ? 'Restart Hivekeep now?' : 'Confirm unrelated action?',
+        description: i === 5 ? 'Confirm platform restart' : 'Not about restarting',
+      })
+    }
+
     const result = await execute(restartPlatformTool as ToolRegistration, {
       reason: 'testing',
       confirmed: true,

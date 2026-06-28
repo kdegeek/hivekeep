@@ -268,13 +268,15 @@ messageRoutes.get('/', async (c) => {
   // live snapshot so a client mounting mid-stream can seed its streaming
   // bubble immediately instead of staring at a typing indicator until
   // `chat:done` fires. Same pattern as `getActiveTaskSnapshot()` for tasks.
-  // Note: unlike sub-task streams, the main-thread row is only inserted at
-  // the END of the turn, so the streaming messageId is NEVER in `messageList`
-  // and never needs to be overlay-merged with a persisted row.
+  // The main-thread assistant row is now pre-inserted for crash recovery, so
+  // suppress the separate streaming overlay when that row is already included
+  // in this page; the persisted row carries checkpointed tool calls and the
+  // SSE stream continues to update it client-side.
   // Skipped on paginated (?before=) queries — they fetch older history and
   // the in-flight bubble (if any) belongs to the initial-fetch caller.
   const streamSnapshot = !before ? getActiveAgentStreamSnapshot(agentId) : undefined
-  const streamingMessage = streamSnapshot
+  const streamMessageAlreadyListed = !!streamSnapshot && messageList.some((m) => m.id === streamSnapshot.messageId)
+  const streamingMessage = streamSnapshot && !streamMessageAlreadyListed
     ? {
         messageId: streamSnapshot.messageId,
         content: streamSnapshot.content,
@@ -297,6 +299,12 @@ messageRoutes.get('/', async (c) => {
       try { meta = m.metadata ? JSON.parse(m.metadata as string) : null } catch { /* corrupted metadata */ }
       try { toolCalls = m.toolCalls ? JSON.parse(m.toolCalls as string) : null } catch { /* corrupted toolCalls */ }
       try { reasoning = m.reasoning ? JSON.parse(m.reasoning as string) : null } catch { /* corrupted reasoning */ }
+
+      const liveSnapshot = streamSnapshot?.messageId === m.id ? streamSnapshot : null
+      if (liveSnapshot) {
+        if (liveSnapshot.toolCalls.length > 0) toolCalls = liveSnapshot.toolCalls
+        if (liveSnapshot.reasoning.length > 0) reasoning = liveSnapshot.reasoning
+      }
 
       // Channel context line: inbound was persisted at top-level
       // (channelContextLine); outbound under channelDelivery.contextLine.
@@ -352,7 +360,7 @@ messageRoutes.get('/', async (c) => {
       return {
         id: m.id,
         role: m.role,
-        content: m.content,
+        content: liveSnapshot?.content ?? m.content,
         sourceType: m.sourceType,
         sourceId: m.sourceId,
         sourceName: agentInfo?.name ?? null,

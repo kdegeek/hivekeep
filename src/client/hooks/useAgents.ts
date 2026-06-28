@@ -94,19 +94,27 @@ export function useAgents() {
     try {
       const data = await api.get<{ agents: (AgentSummary & { isProcessing?: boolean; queueSize?: number; processingStartedAt?: number })[] }>('/agents')
       setAgents(data.agents)
-      // Hydrate queue state from initial fetch so we don't miss processing state
+      // Hydrate queue state from initial fetch/resync. Write an entry for every
+      // Agent, including idle ones, so a missed final queue:update cannot leave
+      // a stale isProcessing=true indicator stuck until a full page reload.
       setAgentQueueState((prev) => {
         const next = new Map(prev)
+        const seen = new Set<string>()
         for (const agent of data.agents) {
-          if (agent.isProcessing || (agent.queueSize && agent.queueSize > 0)) {
-            const existing = next.get(agent.id)
-            next.set(agent.id, {
-              ...existing,
-              isProcessing: agent.isProcessing ?? false,
-              queueSize: agent.queueSize ?? 0,
-              processingStartedAt: agent.processingStartedAt ?? existing?.processingStartedAt,
-            })
-          }
+          seen.add(agent.id)
+          const existing = next.get(agent.id)
+          const isProcessing = agent.isProcessing ?? false
+          next.set(agent.id, {
+            ...existing,
+            isProcessing,
+            queueSize: agent.queueSize ?? 0,
+            processingStartedAt: isProcessing
+              ? agent.processingStartedAt ?? existing?.processingStartedAt
+              : undefined,
+          })
+        }
+        for (const agentId of next.keys()) {
+          if (!seen.has(agentId)) next.delete(agentId)
         }
         return next
       })
@@ -243,6 +251,38 @@ export function useAgents() {
           summaryTokens: (data.summaryTokens as number | undefined) ?? existing?.summaryTokens,
           summaryBudgetTokens: (data.summaryBudgetTokens as number | undefined) ?? existing?.summaryBudgetTokens,
           keepPercent: (data.keepPercent as number | undefined) ?? existing?.keepPercent,
+        })
+        return next
+      })
+    },
+    'chat:done': (data) => {
+      const agentId = data.agentId as string
+      if (data.taskId || data.sessionId) return
+      // chat:done is the UI-level completion signal. If the trailing queue:update
+      // is missed/delayed, clear the spinner immediately while preserving the
+      // latest queue/context metadata until the next queue:update or refetch.
+      setAgentQueueState((prev) => {
+        const existing = prev.get(agentId)
+        if (!existing?.isProcessing) return prev
+        const next = new Map(prev)
+        next.set(agentId, {
+          ...existing,
+          isProcessing: false,
+          processingStartedAt: undefined,
+        })
+        return next
+      })
+    },
+    'agent:error': (data) => {
+      const agentId = data.agentId as string
+      setAgentQueueState((prev) => {
+        const existing = prev.get(agentId)
+        if (!existing?.isProcessing) return prev
+        const next = new Map(prev)
+        next.set(agentId, {
+          ...existing,
+          isProcessing: false,
+          processingStartedAt: undefined,
         })
         return next
       })

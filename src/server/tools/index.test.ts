@@ -151,6 +151,18 @@ describe('ToolRegistry', () => {
     expect(registry.list()[0]!.defaultDisabled).toBe(false)
   })
 
+  it('singleton exposes defaultDisabled metadata for runtime grant filtering', async () => {
+    const { toolRegistry } = await import('@/server/tools/index')
+    const name = '__default_disabled_runtime_test__'
+    toolRegistry.register(name, makeMockRegistration(['main'], { defaultDisabled: true }), 'system')
+    try {
+      expect(toolRegistry.isDefaultDisabled(name)).toBe(true)
+      expect(toolRegistry.isDefaultDisabled('__missing_tool__')).toBe(false)
+    } finally {
+      toolRegistry.unregister(name)
+    }
+  })
+
   // ─── resolve: availability filtering ─────────────────────────────────
 
   it('resolve returns only main-available tools for main context', () => {

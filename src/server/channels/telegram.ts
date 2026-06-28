@@ -67,7 +67,8 @@ async function telegramApi(token: string, method: string, body?: Record<string, 
 
 /** Returns true when no public HTTPS URL is configured (local/dev setup) */
 export function shouldUsePolling(): boolean {
-  return !process.env.PUBLIC_URL || !config.publicUrl?.startsWith('https://')
+  const publicUrl = process.env.PUBLIC_URL
+  return !publicUrl || !publicUrl.startsWith('https://')
 }
 
 interface TelegramPollingState {

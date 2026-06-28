@@ -11,7 +11,7 @@
  * against the user's ChatGPT subscription (Plus/Pro).
  */
 import { existsSync, readFileSync, writeFileSync } from 'fs'
-import { join } from 'path'
+import { isAbsolute, join, normalize } from 'path'
 import { createLogger } from '@/server/logger'
 import type { ProviderConfig } from '@/server/llm/core/types'
 import { decodeJwtClaims, type PkceClient, type PkceTokenResponse } from '@/server/llm/llm/_oauth-pkce'
@@ -59,22 +59,40 @@ export function codexAccountIdFromTokens(tokens: PkceTokenResponse): Record<stri
 /**
  * Resolve the real user home directory.
  * Bun installed via snap sets HOME to a sandboxed path (e.g. ~/snap/bun-js/87/).
- * We prefer the REAL_HOME or the home from /etc/passwd via the USER env var.
+ * We prefer REAL_HOME, then any normalized absolute env HOME, and only fall
+ * back to /home/$USER when nothing else is available.
  */
+function normalizeAbsoluteHome(home: string | undefined): string | null {
+  if (!home) return null
+  const normalized = normalize(home)
+  return isAbsolute(normalized) ? normalized : null
+}
+
 function getRealHome(): string {
   if (process.env.REAL_HOME) return process.env.REAL_HOME
-  const home = process.env.HOME ?? ''
-  const snapMatch = home.match(/^(\/home\/[^/]+)\/snap\//)
+  const envHome = process.env.HOME ?? ''
+  const snapMatch = envHome.match(/^(\/home\/[^/]+)\/snap\//)
   if (snapMatch) return snapMatch[1]!
+  const normalizedHome = normalizeAbsoluteHome(envHome)
+  if (normalizedHome) return normalizedHome
   if (process.env.USER) return `/home/${process.env.USER}`
-  return home
+  return envHome
 }
 
 const REAL_HOME = getRealHome()
 
-const CANDIDATE_PATHS = [
-  join(REAL_HOME, '.codex', 'auth.json'),
-]
+// Always consider the actual $HOME first so macOS, nonstandard Linux homes
+// (e.g. /var/home/<user>), and snap-adjusted REAL_HOME are all tried.
+const CANDIDATE_PATHS: string[] = []
+const envHomeForCandidates = normalizeAbsoluteHome(process.env.HOME)
+if (envHomeForCandidates) {
+  const p = join(envHomeForCandidates, '.codex', 'auth.json')
+  if (!CANDIDATE_PATHS.includes(p)) CANDIDATE_PATHS.push(p)
+}
+{
+  const p = join(REAL_HOME, '.codex', 'auth.json')
+  if (!CANDIDATE_PATHS.includes(p)) CANDIDATE_PATHS.push(p)
+}
 
 
 // ---------------------------------------------------------------------------

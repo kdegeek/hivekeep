@@ -169,4 +169,21 @@ describe('resolveToolboxNames — "*" wildcard', () => {
     expect(resolved).toEqual([NATIVE_TOOL])
     expect(resolved).not.toContain('custom_enabled_one')
   })
+
+  itReal('filters default-disabled native tools out of toolbox grants while preserving explicit names for metadata', async () => {
+    const { filterToolboxGrantedToolNames } = await import('@/server/services/toolset-resolver')
+    const DEFAULT_DISABLED_TOOL = '__toolbox_default_disabled_test__'
+    toolRegistry.register(DEFAULT_DISABLED_TOOL, { ...fakeTool(), defaultDisabled: true }, 'system')
+    try {
+      const box = createToolbox({ name: 'default-disabled-test', toolNames: [NATIVE_TOOL, DEFAULT_DISABLED_TOOL] })
+      const resolved = resolveToolboxNames([box.id])
+
+      expect(resolved).toContain(NATIVE_TOOL)
+      expect(resolved).toContain(DEFAULT_DISABLED_TOOL)
+      expect(filterToolboxGrantedToolNames(resolved)).toContain(NATIVE_TOOL)
+      expect(filterToolboxGrantedToolNames(resolved)).not.toContain(DEFAULT_DISABLED_TOOL)
+    } finally {
+      toolRegistry.unregister(DEFAULT_DISABLED_TOOL)
+    }
+  })
 })
