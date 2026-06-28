@@ -75,7 +75,7 @@ export function ListDirectoryRenderer({ args, result, status }: ToolResultRender
 
   const res = result as Record<string, unknown> | null | undefined
   const success = res?.success === true
-  const dirPath = typeof res?.path === 'string' ? res.path : typeof args.path === 'string' ? args.path : '.'
+  const dirPath = typeof res?.path === 'string' ? res.path : typeof args?.path === 'string' ? args.path : '.'
   const entries = Array.isArray(res?.entries) ? (res.entries as DirEntry[]) : null
   const error = typeof res?.error === 'string' ? res.error : null
 

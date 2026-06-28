@@ -10,11 +10,11 @@ export function FileEditRenderer({ args, result, status }: ToolResultRendererPro
   const [showRaw, setShowRaw] = useState(false)
 
   const res = result as Record<string, unknown> | null | undefined
-  const filePath = typeof res?.path === 'string' ? res.path : typeof args.path === 'string' ? args.path : null
+  const filePath = typeof res?.path === 'string' ? res.path : typeof args?.path === 'string' ? args.path : null
   const success = res?.success === true
   const applied = res?.applied === true
-  const oldText = typeof res?.oldText === 'string' ? res.oldText : typeof args.oldText === 'string' ? args.oldText : null
-  const newText = typeof res?.newText === 'string' ? res.newText : typeof args.newText === 'string' ? args.newText : null
+  const oldText = typeof res?.oldText === 'string' ? res.oldText : typeof args?.oldText === 'string' ? args.oldText : null
+  const newText = typeof res?.newText === 'string' ? res.newText : typeof args?.newText === 'string' ? args.newText : null
   const language = typeof res?.language === 'string' ? res.language : null
   const editLine = typeof res?.editLine === 'number' ? res.editLine : null
   const error = typeof res?.error === 'string' ? res.error : null
