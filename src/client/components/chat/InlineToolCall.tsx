@@ -32,6 +32,10 @@ interface InlineToolCallProps {
   toolCall: ToolCallViewItem
 }
 
+export function normalizeToolCallArgs(args: unknown): Record<string, unknown> {
+  return (args ?? {}) as Record<string, unknown>
+}
+
 /** Compact collapsible inline tool call shown within the Agent's message flow. */
 export const InlineToolCall = memo(function InlineToolCall({ toolCall }: InlineToolCallProps) {
   const { t } = useTranslation()
@@ -54,7 +58,7 @@ export const InlineToolCall = memo(function InlineToolCall({ toolCall }: InlineT
     ? toolCall.name.slice('custom_'.length)
     : null
   const previewFn = getPreviewRenderer(toolCall.name)
-  const args = (toolCall.args ?? {}) as Record<string, unknown>
+  const args = normalizeToolCallArgs(toolCall.args)
   const preview = previewFn?.({ toolName: toolCall.name, args, status: toolCall.status })
 
   return (
@@ -92,7 +96,7 @@ export const InlineToolCall = memo(function InlineToolCall({ toolCall }: InlineT
               <CustomToolRenderer
                 slug={customSlug}
                 result={toolCall.result}
-                args={toolCall.args}
+                args={args}
               />
             ) : (
               <>
