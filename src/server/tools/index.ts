@@ -116,6 +116,10 @@ class ToolRegistry {
    *  placeholder passes through as inert text (correct for tools whose
    *  output re-enters LLM context, e.g. memorize). Custom/MCP tools are
    *  handled by the executor — they always expand. */
+  isDefaultDisabled(name: string): boolean {
+    return this.tools.get(name)?.registration.defaultDisabled === true
+  }
+
   expandsSecrets(name: string): boolean {
     return this.tools.get(name)?.registration.expandsSecrets === true
   }

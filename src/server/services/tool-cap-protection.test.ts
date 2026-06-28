@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test'
 import { tool } from '@/server/tools/tool-helper'
-import { __testCapTools } from '@/server/services/agent-engine'
+import { __testCapTools, QUICK_SESSION_EXCLUDED_TOOLS } from '@/server/services/agent-engine'
 
 function fakeTools(names: string[]) {
   return Object.fromEntries(
@@ -16,7 +16,7 @@ function fakeTools(names: string[]) {
 }
 
 describe('agent-engine tool cap protection', () => {
-  it('keeps restart_platform when a broad toolset exceeds the provider cap', () => {
+  it('keeps restart_platform when explicitly granted and a broad toolset exceeds the provider cap', () => {
     const names = [
       'read_file',
       'write_file',
@@ -35,5 +35,9 @@ describe('agent-engine tool cap protection', () => {
     expect(capped.restart_platform).toBeDefined()
     expect(capped.read_file).toBeDefined()
     expect(capped.write_file).toBeDefined()
+  })
+
+  it('excludes restart_platform from quick sessions before provider cap handling', () => {
+    expect(QUICK_SESSION_EXCLUDED_TOOLS.has('restart_platform')).toBe(true)
   })
 })

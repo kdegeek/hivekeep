@@ -425,14 +425,15 @@ describe('restartPlatformTool', () => {
     expect(result.error).toContain('not confirmed')
   })
 
-  it('rejects restart for manual installations', async () => {
+  it('rejects confirmed=true without a platform human confirmation', async () => {
     mockConfig.environment.installationType = 'manual'
     const result = await execute(restartPlatformTool as ToolRegistration, {
       reason: 'testing',
       confirmed: true,
     })
     expect(result.success).toBe(false)
-    expect(result.error).toContain('manually')
+    expect(result.error).toContain('prompt_human(confirm)')
+    expect(result.error).toContain('confirmed=true')
   })
 
   // Note: we don't test the actual restart (process.exit) to avoid killing the test runner

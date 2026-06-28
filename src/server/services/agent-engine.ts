@@ -2177,7 +2177,7 @@ export const QUICK_SESSION_EXCLUDED_TOOLS = new Set([
   // Channels (proactive messaging not available in quick sessions)
   'send_channel_message', 'list_channel_conversations',
   // Platform
-  'get_platform_logs',
+  'get_platform_logs', 'restart_platform',
   // Memory WRITE (read-only in quick sessions)
   'memorize', 'update_memory', 'forget',
 ])

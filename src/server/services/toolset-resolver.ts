@@ -12,8 +12,8 @@
  *            + the Agent's custom tools      (resolveCustomTools)
  *
  *   allowed  = CORE_TOOLS ∪ resolveToolboxNames(toolboxIds)
- *              where a null/empty toolbox selection resolves to the 'all'
- *              built-in (by NAME, at runtime — never a SQL backfill).
+ *              where defaultDisabled native tools are grantable only through
+ *              CORE_TOOLS or explicit per-Agent grants, never broad toolboxes.
  *
  *   toolset  = { name ∈ universe | name ∈ allowed }
  *
@@ -96,6 +96,10 @@ export function resolveAgentToolboxIds(
   return ids
 }
 
+export function filterToolboxGrantedToolNames(names: string[]): string[] {
+  return names.filter((name) => !toolRegistry.isDefaultDisabled(name) || CORE_TOOLS.includes(name))
+}
+
 export interface ResolveToolsetOptions {
   agentId: string
   /** Raw toolbox selection from the Agent or task row (JSON string, array, or
@@ -169,9 +173,15 @@ export async function resolveToolset(
   // requests). "*" → all native + all enabled custom. Extras are fetched here
   // (not threaded by callers) so every resolution path honours them; the
   // sub-Agent hard floor below still subtracts as usual.
+  //
+  // Native tools with registration.defaultDisabled are intentionally NOT granted
+  // by toolbox membership (including the broad "all" wildcard or built-in
+  // configurator toolbox). They require an explicit per-Agent grant so the UI's
+  // "disabled by default" metadata cannot silently fail open at runtime.
   const resolvedIds = resolveAgentToolboxIds(toolboxIds, { ticketId: ticketId ?? null })
-  const allowed = new Set<string>([...CORE_TOOLS, ...resolveToolboxNames(resolvedIds)])
-  for (const name of await getAgentExtraToolNames(agentId)) allowed.add(name)
+  const toolboxAllowed = filterToolboxGrantedToolNames(resolveToolboxNames(resolvedIds))
+  const extraToolNames = await getAgentExtraToolNames(agentId)
+  const allowed = new Set<string>([...CORE_TOOLS, ...toolboxAllowed, ...extraToolNames])
 
   // ── Filter universe → toolset ─────────────────────────────────────────────────
   const toolset: Record<string, Tool<any, any>> = {}
