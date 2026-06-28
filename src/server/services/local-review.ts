@@ -299,13 +299,25 @@ function parseMarkdownFindingTable(provider: ReviewProvider, text: string): Revi
   }).filter((f): f is ReviewFinding => Boolean(f))
 }
 
+const FINDING_ARRAY_KEYS = new Set(['findings', 'issues', 'comments', 'diagnostics'])
+
+function isFindingCandidate(obj: Record<string, unknown>): boolean {
+  const type = String(obj.type ?? obj.event ?? '').toLowerCase()
+  if (type.includes('finding') || type.includes('issue')) return true
+  return Boolean(obj.location || obj.file || obj.path || obj.fileName)
+}
+
+function isFindingArrayItem(obj: Record<string, unknown>): boolean {
+  return Boolean(obj.severity || obj.title || obj.message || obj.body || obj.description || obj.codegenInstructions)
+}
+
 export function parseReviewFindings(provider: ReviewProvider, raw: string): ReviewFinding[] {
   const events = parseJsonLines(raw)
   const candidates: Record<string, unknown>[] = []
   const stringFindings: ReviewFinding[] = []
   const seenStrings = new Set<string>()
-  const visit = (v: unknown) => {
-    if (Array.isArray(v)) return v.forEach(visit)
+  const visit = (v: unknown, fromFindingArray = false) => {
+    if (Array.isArray(v)) return v.forEach((item) => visit(item, fromFindingArray))
     if (typeof v === 'string') {
       if (seenStrings.has(v)) return
       seenStrings.add(v)
@@ -314,11 +326,12 @@ export function parseReviewFindings(provider: ReviewProvider, raw: string): Revi
     }
     if (!v || typeof v !== 'object') return
     const obj = v as Record<string, unknown>
-    const type = String(obj.type ?? obj.event ?? '').toLowerCase()
-    if (type.includes('finding') || type.includes('issue') || obj.severity || obj.location || obj.file || obj.path) candidates.push(obj)
-    for (const key of ['findings', 'issues', 'comments', 'diagnostics', 'results', 'text', 'output', 'summary', 'message', 'content']) visit(obj[key])
+    if ((fromFindingArray && isFindingArrayItem(obj)) || isFindingCandidate(obj)) candidates.push(obj)
+    for (const [key, value] of Object.entries(obj)) {
+      visit(value, FINDING_ARRAY_KEYS.has(key))
+    }
   }
-  events.forEach(visit)
+  events.forEach((event) => visit(event))
   return [
     ...candidates.map((c, i) => findingFromObject(provider, c, i)).filter((f): f is ReviewFinding => Boolean(f)),
     ...stringFindings,

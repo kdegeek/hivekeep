@@ -19,7 +19,14 @@ function readMode(): ReviewMode {
   process.exit(1)
 }
 
-const provider = (readArg('--provider') ?? process.env.HIVEKEEP_LOCAL_REVIEW_PROVIDER ?? 'all') as ReviewProvider | 'all'
+function readProvider(): ReviewProvider | 'all' {
+  const raw = readArg('--provider') ?? process.env.HIVEKEEP_LOCAL_REVIEW_PROVIDER ?? 'all'
+  if (raw === 'coderabbit' || raw === 'kilo' || raw === 'all') return raw
+  console.error(`Invalid review provider: ${raw}. Valid values: coderabbit, kilo, all`)
+  process.exit(1)
+}
+
+const provider = readProvider()
 const mode = readMode()
 const repoPath = readArg('--repo') ?? process.cwd()
 const base = readArg('--base') ?? process.env.HIVEKEEP_LOCAL_REVIEW_BASE
