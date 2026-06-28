@@ -22,6 +22,22 @@ describe('tool preview renderers', () => {
     }
   })
 
+  it('does not throw while non-file tool args are still pending', () => {
+    const pendingToolNames = [
+      'spawn_self',
+      'spawn_agent',
+      'task_todos',
+      'run_shell',
+      'add_mcp_server',
+    ]
+
+    for (const toolName of pendingToolNames) {
+      const renderer = getPreviewRenderer(toolName)
+      expect(renderer, toolName).toBeDefined()
+      expect(() => renderer?.({ toolName, args: undefined as unknown as Record<string, unknown>, status: 'pending' })).not.toThrow()
+    }
+  })
+
   it('keeps completed file previews when args exist', () => {
     expect(getPreviewRenderer('read_file')?.({ toolName: 'read_file', args: { path: 'src/app.ts' }, status: 'success' })).toBe('src/app.ts')
     expect(getPreviewRenderer('multi_edit')?.({
@@ -30,5 +46,16 @@ describe('tool preview renderers', () => {
       status: 'success',
     })).toBe('src/app.ts (2 edits)')
     expect(getPreviewRenderer('list_directory')?.({ toolName: 'list_directory', args: {}, status: 'pending' })).toBe('.')
+  })
+
+  it('keeps completed previews for title, todo, and command args', () => {
+    expect(getPreviewRenderer('spawn_self')?.({ toolName: 'spawn_self', args: { title: 'Investigate flaky renderer' }, status: 'success' })).toBe('Investigate flaky renderer')
+    expect(getPreviewRenderer('task_todos')?.({
+      toolName: 'task_todos',
+      args: { todos: [{ id: 'a', subject: 'Inspect', status: 'completed' }, { id: 'b', subject: 'Fix', status: 'pending' }] },
+      status: 'success',
+    })).toBe('1/2')
+    expect(getPreviewRenderer('run_shell')?.({ toolName: 'run_shell', args: { command: 'bun run typecheck' }, status: 'success' })).toBe('bun run typecheck')
+    expect(getPreviewRenderer('add_mcp_server')?.({ toolName: 'add_mcp_server', args: { name: 'filesystem', command: 'npx -y @modelcontextprotocol/server-filesystem' }, status: 'success' })).toBe('filesystem (npx -y @modelco…)')
   })
 })
