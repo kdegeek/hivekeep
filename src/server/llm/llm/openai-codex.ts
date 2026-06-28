@@ -66,15 +66,34 @@ const CONFIG_SCHEMA: readonly ConfigField[] = [
 
 function getRealHome(): string {
   if (process.env.REAL_HOME) return process.env.REAL_HOME
-  const home = process.env.HOME ?? ''
-  const snapMatch = home.match(/^(\/home\/[^/]+)\/snap\//)
+  const envHome = process.env.HOME ?? ''
+  const snapMatch = envHome.match(/^(\/home\/[^/]+)\/snap\//)
   if (snapMatch) return snapMatch[1]!
+  if (envHome.startsWith('/Users/') || envHome.startsWith('/home/') || envHome === '/root') {
+    return envHome
+  }
   if (process.env.USER) return `/home/${process.env.USER}`
-  return home
+  return envHome
 }
 
 const REAL_HOME = getRealHome()
-const MODELS_CACHE_PATH = join(REAL_HOME, '.codex', 'models_cache.json')
+
+// Try the real env HOME first (handles macOS /Users/...) and the adjusted
+// snap-safe REAL_HOME as a fallback, so we never miss a valid cache.
+function getModelsCacheCandidates(): string[] {
+  const cands: string[] = []
+  const envHome = process.env.HOME
+  if (envHome && (envHome.startsWith('/Users/') || envHome.startsWith('/home/') || envHome === '/root')) {
+    const p = join(envHome, '.codex', 'models_cache.json')
+    if (!cands.includes(p)) cands.push(p)
+  }
+  {
+    const p = join(REAL_HOME, '.codex', 'models_cache.json')
+    if (!cands.includes(p)) cands.push(p)
+  }
+  return cands
+}
+const MODELS_CACHE_CANDIDATES = getModelsCacheCandidates()
 
 interface CodexModelCacheEntry {
   slug: string
@@ -97,24 +116,47 @@ interface CodexModelsCacheFile {
  * decide whether to error out or fall back).
  */
 function readCodexModelsFromCache(): CodexModelCacheEntry[] | null {
-  try {
-    if (!existsSync(MODELS_CACHE_PATH)) return null
-    const raw = readFileSync(MODELS_CACHE_PATH, 'utf8')
-    const parsed = JSON.parse(raw) as CodexModelsCacheFile
-    if (!parsed.models || !Array.isArray(parsed.models)) return null
-    const filtered = parsed.models.filter(
-      (m) =>
-        typeof m.slug === 'string' &&
-        m.slug.length > 0 &&
-        m.supported_in_api === true &&
-        m.visibility === 'list' &&
-        m.upgrade == null,
-    )
-    filtered.sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
-    return filtered
-  } catch {
-    return null
+  for (const p of MODELS_CACHE_CANDIDATES) {
+    try {
+      if (!existsSync(p)) continue
+      const raw = readFileSync(p, 'utf8')
+      const parsed = JSON.parse(raw) as CodexModelsCacheFile
+      if (!parsed.models || !Array.isArray(parsed.models)) continue
+      const filtered = parsed.models.filter(
+        (m) =>
+          typeof m.slug === 'string' &&
+          m.slug.length > 0 &&
+          m.supported_in_api === true &&
+          m.visibility === 'list' &&
+          m.upgrade == null,
+      )
+      filtered.sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
+      if (filtered.length > 0) return filtered
+    } catch {
+      // try the next candidate path
+    }
   }
+  return null
+}
+
+/**
+ * Static fallback catalog used whenever the CLI cache (`~/.codex/models_cache.json`)
+ * is absent. Codex OAuth does not expose a reliable model-list API, so the CLI
+ * cache is preferred whenever it exists. Keep `gpt-5.5` first: it is the
+ * live-confirmed gateway probe and default candidate used when authenticating or
+ * choosing the first model. Do not add visible picker models (for example,
+ * `gpt-5.4-mini`) unless they have been verified against the Codex backend API.
+ */
+export const STATIC_CODEX_MODELS: CodexModelCacheEntry[] = [
+  { slug: 'gpt-5.5', display_name: 'GPT-5.5', context_window: 400000, max_output_tokens: 128000, supported_in_api: true, visibility: 'list' },
+  { slug: 'gpt-5.4', display_name: 'GPT-5.4', context_window: 400000, max_output_tokens: 128000, supported_in_api: true, visibility: 'list' },
+  { slug: 'gpt-5.3-codex', display_name: 'GPT-5.3 Codex', context_window: 400000, max_output_tokens: 128000, supported_in_api: true, visibility: 'list' },
+  { slug: 'gpt-5.3-codex-spark', display_name: 'GPT-5.3 Codex Spark', context_window: 400000, max_output_tokens: 128000, supported_in_api: true, visibility: 'list' },
+]
+
+/** Catalog entries from the CLI cache when present, else the static fallback. */
+function resolveCodexModels(): CodexModelCacheEntry[] {
+  return readCodexModelsFromCache() ?? STATIC_CODEX_MODELS
 }
 
 /**
@@ -122,7 +164,7 @@ function readCodexModelsFromCache(): CodexModelCacheEntry[] | null {
  * accepts `reasoning_effort` — the cache does not expose the supported
  * levels explicitly, so we assume the standard OpenAI set (no `max`).
  */
-function mapCodexModel(entry: CodexModelCacheEntry): LLMModel {
+export function mapCodexModel(entry: CodexModelCacheEntry): LLMModel {
   const model: LLMModel = {
     id: entry.slug,
     name: entry.display_name && entry.display_name.length > 0 ? entry.display_name : entry.slug,
@@ -447,13 +489,9 @@ export const openaiCodexProvider: LLMProvider = {
     try {
       const overridePath = config['authFilePath'] || undefined
       const { accessToken, accountId } = await getCodexOAuthCredentials(overridePath)
-      const entries = readCodexModelsFromCache()
-      const testModel = entries?.[0]?.slug
+      const testModel = resolveCodexModels()[0]?.slug
       if (!testModel) {
-        return {
-          valid: false,
-          error: 'Codex model catalog cache is missing — run `codex login` once to seed it.',
-        }
+        return { valid: false, error: 'No Codex models available to test against.' }
       }
       // Lightweight ping with a short instruction; consumed and discarded.
       const response = await fetch(`${CODEX_BASE_URL}/responses`, {
@@ -492,13 +530,9 @@ export const openaiCodexProvider: LLMProvider = {
   },
 
   async listModels(_config: ProviderConfig): Promise<LLMModel[]> {
-    const entries = readCodexModelsFromCache()
-    if (!entries) {
-      throw new ProviderServerError(
-        'Codex model catalog cache missing at ~/.codex/models_cache.json. Run `codex login` once to seed it.',
-      )
-    }
-    return entries.map(mapCodexModel)
+    // CLI cache when present, else the static fallback so setups can list models
+    // before the Codex CLI has seeded ~/.codex/models_cache.json.
+    return resolveCodexModels().map(mapCodexModel)
   },
 
   chat(model, request, config) {

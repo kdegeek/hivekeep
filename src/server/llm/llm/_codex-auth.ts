@@ -27,22 +27,36 @@ const BUFFER_MS = 5 * 60 * 1000 // refresh 5 min before expiry
 /**
  * Resolve the real user home directory.
  * Bun installed via snap sets HOME to a sandboxed path (e.g. ~/snap/bun-js/87/).
- * We prefer the REAL_HOME or the home from /etc/passwd via the USER env var.
+ * We prefer REAL_HOME, then a valid-looking env HOME (macOS /Users/ or Linux
+ * /home/), and only fall back to /home/$USER when nothing else is available.
  */
 function getRealHome(): string {
   if (process.env.REAL_HOME) return process.env.REAL_HOME
-  const home = process.env.HOME ?? ''
-  const snapMatch = home.match(/^(\/home\/[^/]+)\/snap\//)
+  const envHome = process.env.HOME ?? ''
+  const snapMatch = envHome.match(/^(\/home\/[^/]+)\/snap\//)
   if (snapMatch) return snapMatch[1]!
+  if (envHome.startsWith('/Users/') || envHome.startsWith('/home/') || envHome === '/root') {
+    return envHome
+  }
   if (process.env.USER) return `/home/${process.env.USER}`
-  return home
+  return envHome
 }
 
 const REAL_HOME = getRealHome()
 
-const CANDIDATE_PATHS = [
-  join(REAL_HOME, '.codex', 'auth.json'),
-]
+// Always consider the actual $HOME (if it points somewhere useful) first so
+// macOS (/Users/<user>), non-snap Linux (/home/...), and snap-adjusted
+// REAL_HOME are all tried before giving up.
+const CANDIDATE_PATHS: string[] = []
+const envHomeForCandidates = process.env.HOME
+if (envHomeForCandidates && (envHomeForCandidates.startsWith('/Users/') || envHomeForCandidates.startsWith('/home/') || envHomeForCandidates === '/root')) {
+  const p = join(envHomeForCandidates, '.codex', 'auth.json')
+  if (!CANDIDATE_PATHS.includes(p)) CANDIDATE_PATHS.push(p)
+}
+{
+  const p = join(REAL_HOME, '.codex', 'auth.json')
+  if (!CANDIDATE_PATHS.includes(p)) CANDIDATE_PATHS.push(p)
+}
 
 
 // ---------------------------------------------------------------------------
