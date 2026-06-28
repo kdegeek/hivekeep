@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import { describe, it, expect, beforeEach, afterEach, beforeAll } from 'bun:test'
 
 /**
  * Tests for src/server/config.ts
@@ -32,11 +32,19 @@ async function loadConfigWithEnv(env: Record<string, string | undefined>): Promi
   `
   // Serialize env for the in-process override (undefined → null for JSON)
   const serialized = JSON.stringify(env, (_, v) => v === undefined ? null : v)
+  // Hermetic base env: do NOT inherit the developer's ambient environment. A
+  // machine running Hivekeep exports config vars (HIVEKEEP_DATA_DIR, DB_PATH,
+  // TASKS_MAX_CONCURRENT, …) that would leak in and break default-value and
+  // override assertions. Start from a minimal env (just what the runtime needs)
+  // and layer only the test's explicit overrides on top.
+  const overrideEnv = Object.fromEntries(
+    Object.entries(env).filter(([, v]) => v !== undefined),
+  ) as Record<string, string>
   const proc = Bun.spawn([process.execPath, '-e', script, serialized], {
     cwd: process.cwd(),
     stdout: 'pipe',
     stderr: 'pipe',
-    env: { ...process.env, ...(Object.fromEntries(Object.entries(env).filter(([, v]) => v !== undefined)) as Record<string, string>) },
+    env: { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '', ...overrideEnv },
   })
   const stdout = await new Response(proc.stdout).text()
   const stderr = await new Response(proc.stderr).text()
@@ -46,12 +54,12 @@ async function loadConfigWithEnv(env: Record<string, string | undefined>): Promi
 }
 
 describe('config', () => {
-  // For non-env-dependent tests, just import once
+  // Load config once, hermetically (clean env), so structure and default-value
+  // assertions reflect true defaults rather than the developer's ambient env.
+  // Env-override behaviour is covered by the subprocess tests below.
   let config: any
-  beforeEach(async () => {
-    // Dynamic import — uses current process env (won't change between tests without subprocess)
-    const mod = await import('./config.ts')
-    config = mod.config
+  beforeAll(async () => {
+    config = await loadConfigWithEnv({})
   })
 
   describe('structure', () => {
