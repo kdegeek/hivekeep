@@ -83,6 +83,11 @@ const PROTECTED_CORE_TOOLS = new Set<string>([
   'grep',
   'list_providers',
   'list_models',
+  // High-impact platform controls can sit late in the registry/toolbox order
+  // (e.g. Queenie's configurator + all toolbox set on OpenAI-compatible caps).
+  // If the cap pass drops restart_platform, the UI/catalog still show it as
+  // granted while the LLM never receives a callable schema.
+  'restart_platform',
 ])
 
 /**
@@ -191,6 +196,8 @@ function capTools(
  * without executing them. This allows our custom loop to execute tools
  * sequentially between LLM steps, preventing hallucinated tool results.
  */
+export const __testCapTools = capTools
+
 function stripToolExecute(tools: Record<string, Tool>): Record<string, Tool> {
   const schemas: Record<string, Tool> = {}
   for (const [name, t] of Object.entries(tools)) {
