@@ -206,6 +206,21 @@ export function parseJsonLines(raw: string): unknown[] {
     if (!trimmed || (!trimmed.startsWith('{') && !trimmed.startsWith('['))) continue
     try { events.push(JSON.parse(trimmed)) } catch { /* ignore non-json log lines */ }
   }
+  if (events.length > 0) return events
+
+  if (trimmedRaw) {
+    for (let i = 0; i < trimmedRaw.length; i++) {
+      const ch = trimmedRaw[i]
+      if (ch !== '{' && ch !== '[') continue
+      try {
+        const parsed = JSON.parse(trimmedRaw.slice(i))
+        return Array.isArray(parsed) ? parsed : [parsed]
+      } catch {
+        // Try the next `{` or `[` (e.g. skip log prefixes like `[INFO]`).
+      }
+    }
+  }
+
   return events
 }
 
@@ -336,10 +351,18 @@ function persistArtifact(path: string, payload: unknown): string {
   return path
 }
 
+function resolveReviewProviders(provider?: ReviewProvider | 'all'): ReviewProvider[] {
+  if (!provider || provider === 'all') return ['coderabbit', 'kilo']
+  if (!LOCAL_REVIEW_PROVIDERS.some((p) => p.id === provider)) {
+    throw new Error(`Unknown local review provider: ${provider}. Valid values: coderabbit, kilo, all`)
+  }
+  return [provider]
+}
+
 export async function runLocalCodeReview(input: ReviewInput): Promise<ReviewRunSummary> {
   const repoPath = resolve(input.repoPath)
   const mode = input.mode ?? config.codeReview.defaultMode
-  const providers: ReviewProvider[] = input.provider && input.provider !== 'all' ? [input.provider] : ['coderabbit', 'kilo']
+  const providers = resolveReviewProviders(input.provider)
   const id = `review-${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`
   const results: ReviewResult[] = []
   for (const provider of providers) {
