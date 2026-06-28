@@ -46,27 +46,38 @@ const BUFFER_MS = 5 * 60 * 1000 // refresh 5 min before expiry
 /**
  * Resolve the real user home directory.
  * Bun installed via snap sets HOME to a sandboxed path (e.g. ~/snap/bun-js/87/).
- * We prefer the REAL_HOME or the home from /etc/passwd via the USER env var.
+ * We prefer REAL_HOME, then a valid-looking env HOME (macOS /Users/ or Linux
+ * /home/), and only fall back to /home/$USER when nothing else is available.
  */
 function getRealHome(): string {
   // REAL_HOME is set by some snap environments
   if (process.env.REAL_HOME) return process.env.REAL_HOME
-  // Fall back to HOME, but strip snap paths
-  const home = process.env.HOME ?? ''
-  const snapMatch = home.match(/^(\/home\/[^/]+)\/snap\//)
+  // Fall back to HOME, but strip snap paths and trust macOS /Users/... homes
+  const envHome = process.env.HOME ?? ''
+  const snapMatch = envHome.match(/^(\/home\/[^/]+)\/snap\//)
   if (snapMatch) return snapMatch[1]!
+  if (envHome.startsWith('/Users/') || envHome.startsWith('/home/') || envHome === '/root') {
+    return envHome
+  }
   // Last resort: construct from USER
   if (process.env.USER) return `/home/${process.env.USER}`
-  return home
+  return envHome
 }
 
 const REAL_HOME = getRealHome()
 
-const CANDIDATE_PATHS = [
-  join(REAL_HOME, '.claude', '.credentials.json'),
-  join(REAL_HOME, '.claude.json'),
-  join(REAL_HOME, '.claude', 'credentials.json'),
-]
+// Consider both env HOME and snap-adjusted REAL_HOME so macOS /Users/... and
+// snap-sandboxed Linux both find their CLI credentials.
+const CANDIDATE_PATHS: string[] = []
+const envHomeForCandidates = process.env.HOME
+if (envHomeForCandidates && (envHomeForCandidates.startsWith('/Users/') || envHomeForCandidates.startsWith('/home/') || envHomeForCandidates === '/root')) {
+  CANDIDATE_PATHS.push(join(envHomeForCandidates, '.claude', '.credentials.json'))
+  CANDIDATE_PATHS.push(join(envHomeForCandidates, '.claude.json'))
+  CANDIDATE_PATHS.push(join(envHomeForCandidates, '.claude', 'credentials.json'))
+}
+CANDIDATE_PATHS.push(join(REAL_HOME, '.claude', '.credentials.json'))
+CANDIDATE_PATHS.push(join(REAL_HOME, '.claude.json'))
+CANDIDATE_PATHS.push(join(REAL_HOME, '.claude', 'credentials.json'))
 
 // ---------------------------------------------------------------------------
 // Types
