@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'bun:test'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { getPreviewRenderer } from './tool-registry'
+import { FileEditRenderer } from '@/client/components/chat/renderers/FileEditRenderer'
+import { FileReadRenderer } from '@/client/components/chat/renderers/FileReadRenderer'
+import { FileWriteRenderer } from '@/client/components/chat/renderers/FileWriteRenderer'
 import './tool-preview-renderers'
 
 describe('tool preview renderers', () => {
@@ -19,6 +24,20 @@ describe('tool preview renderers', () => {
       const renderer = getPreviewRenderer(toolName)
       expect(renderer, toolName).toBeDefined()
       expect(() => renderer?.({ toolName, args: undefined as unknown as Record<string, unknown>, status: 'pending' })).not.toThrow()
+    }
+  })
+
+  it('keeps pending built-in file renderers out of failure state', () => {
+    const pendingProps = { args: { path: 'src/app.ts', content: 'hello', oldText: 'a', newText: 'b' }, result: undefined, status: 'pending' as const }
+
+    for (const [toolName, Renderer] of [
+      ['read_file', FileReadRenderer],
+      ['write_file', FileWriteRenderer],
+      ['edit_file', FileEditRenderer],
+    ] as const) {
+      const html = renderToStaticMarkup(createElement(Renderer, { toolName, ...pendingProps }))
+      expect(html.toLowerCase()).not.toContain('failed')
+      expect(html.toLowerCase()).not.toContain('error')
     }
   })
 

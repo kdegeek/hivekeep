@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test'
+import { mkdirSync, rmSync, writeFileSync } from 'fs'
 import { STATIC_CODEX_MODELS, mapCodexModel } from './openai-codex'
 
 describe('STATIC_CODEX_MODELS (fallback catalog)', () => {
@@ -18,5 +19,36 @@ describe('STATIC_CODEX_MODELS (fallback catalog)', () => {
     expect(m.contextWindow).toBeGreaterThan(0)
     expect(m.thinking?.efforts).toEqual(['low', 'medium', 'high'])
     expect(m.supportsImageInput).toBe(true)
+  })
+
+  it('uses a nonstandard absolute HOME cache before falling back', async () => {
+    const home = '/tmp/hivekeep-codex-var-home'
+    const oldHome = process.env.HOME
+    const oldRealHome = process.env.REAL_HOME
+    try {
+      rmSync(home, { recursive: true, force: true })
+      mkdirSync(`${home}/.codex`, { recursive: true })
+      writeFileSync(`${home}/.codex/models_cache.json`, JSON.stringify({
+        models: [{
+          slug: 'gpt-test-cache',
+          display_name: 'GPT Test Cache',
+          supported_in_api: true,
+          visibility: 'list',
+          priority: 1,
+        }],
+      }))
+      process.env.HOME = home
+      delete process.env.REAL_HOME
+
+      const mod = await import(`./openai-codex?nonstandard-home=${Date.now()}`)
+      const models = mod.resolveCodexModels()
+      expect(models[0].slug).toBe('gpt-test-cache')
+    } finally {
+      if (oldHome === undefined) delete process.env.HOME
+      else process.env.HOME = oldHome
+      if (oldRealHome === undefined) delete process.env.REAL_HOME
+      else process.env.REAL_HOME = oldRealHome
+      rmSync(home, { recursive: true, force: true })
+    }
   })
 })

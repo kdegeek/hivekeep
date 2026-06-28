@@ -28,7 +28,7 @@
  */
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { createHash, randomBytes, randomUUID } from 'crypto'
-import { join } from 'path'
+import { isAbsolute, join, normalize } from 'path'
 import { createLogger } from '@/server/logger'
 
 const log = createLogger('provider:anthropic-oauth')
@@ -46,19 +46,24 @@ const BUFFER_MS = 5 * 60 * 1000 // refresh 5 min before expiry
 /**
  * Resolve the real user home directory.
  * Bun installed via snap sets HOME to a sandboxed path (e.g. ~/snap/bun-js/87/).
- * We prefer REAL_HOME, then a valid-looking env HOME (macOS /Users/ or Linux
- * /home/), and only fall back to /home/$USER when nothing else is available.
+ * We prefer REAL_HOME, then any normalized absolute env HOME, and only fall
+ * back to /home/$USER when nothing else is available.
  */
+function normalizeAbsoluteHome(home: string | undefined): string | null {
+  if (!home) return null
+  const normalized = normalize(home)
+  return isAbsolute(normalized) ? normalized : null
+}
+
 function getRealHome(): string {
   // REAL_HOME is set by some snap environments
   if (process.env.REAL_HOME) return process.env.REAL_HOME
-  // Fall back to HOME, but strip snap paths and trust macOS /Users/... homes
+  // Fall back to HOME, but strip snap paths first.
   const envHome = process.env.HOME ?? ''
   const snapMatch = envHome.match(/^(\/home\/[^/]+)\/snap\//)
   if (snapMatch) return snapMatch[1]!
-  if (envHome.startsWith('/Users/') || envHome.startsWith('/home/') || envHome === '/root') {
-    return envHome
-  }
+  const normalizedHome = normalizeAbsoluteHome(envHome)
+  if (normalizedHome) return normalizedHome
   // Last resort: construct from USER
   if (process.env.USER) return `/home/${process.env.USER}`
   return envHome
@@ -66,18 +71,21 @@ function getRealHome(): string {
 
 const REAL_HOME = getRealHome()
 
-// Consider both env HOME and snap-adjusted REAL_HOME so macOS /Users/... and
-// snap-sandboxed Linux both find their CLI credentials.
+// Consider both env HOME and snap-adjusted REAL_HOME so macOS, nonstandard
+// Linux homes (e.g. /var/home/<user>), and snap-sandboxed Linux all work.
 const CANDIDATE_PATHS: string[] = []
-const envHomeForCandidates = process.env.HOME
-if (envHomeForCandidates && (envHomeForCandidates.startsWith('/Users/') || envHomeForCandidates.startsWith('/home/') || envHomeForCandidates === '/root')) {
-  CANDIDATE_PATHS.push(join(envHomeForCandidates, '.claude', '.credentials.json'))
-  CANDIDATE_PATHS.push(join(envHomeForCandidates, '.claude.json'))
-  CANDIDATE_PATHS.push(join(envHomeForCandidates, '.claude', 'credentials.json'))
+function addCandidate(path: string) {
+  if (!CANDIDATE_PATHS.includes(path)) CANDIDATE_PATHS.push(path)
 }
-CANDIDATE_PATHS.push(join(REAL_HOME, '.claude', '.credentials.json'))
-CANDIDATE_PATHS.push(join(REAL_HOME, '.claude.json'))
-CANDIDATE_PATHS.push(join(REAL_HOME, '.claude', 'credentials.json'))
+const envHomeForCandidates = normalizeAbsoluteHome(process.env.HOME)
+if (envHomeForCandidates) {
+  addCandidate(join(envHomeForCandidates, '.claude', '.credentials.json'))
+  addCandidate(join(envHomeForCandidates, '.claude.json'))
+  addCandidate(join(envHomeForCandidates, '.claude', 'credentials.json'))
+}
+addCandidate(join(REAL_HOME, '.claude', '.credentials.json'))
+addCandidate(join(REAL_HOME, '.claude.json'))
+addCandidate(join(REAL_HOME, '.claude', 'credentials.json'))
 
 // ---------------------------------------------------------------------------
 // Types

@@ -11,7 +11,7 @@
  * against the user's ChatGPT subscription (Plus/Pro).
  */
 import { existsSync, readFileSync, writeFileSync } from 'fs'
-import { join } from 'path'
+import { isAbsolute, join, normalize } from 'path'
 import { createLogger } from '@/server/logger'
 
 const log = createLogger('provider:openai-codex')
@@ -27,29 +27,33 @@ const BUFFER_MS = 5 * 60 * 1000 // refresh 5 min before expiry
 /**
  * Resolve the real user home directory.
  * Bun installed via snap sets HOME to a sandboxed path (e.g. ~/snap/bun-js/87/).
- * We prefer REAL_HOME, then a valid-looking env HOME (macOS /Users/ or Linux
- * /home/), and only fall back to /home/$USER when nothing else is available.
+ * We prefer REAL_HOME, then any normalized absolute env HOME, and only fall
+ * back to /home/$USER when nothing else is available.
  */
+function normalizeAbsoluteHome(home: string | undefined): string | null {
+  if (!home) return null
+  const normalized = normalize(home)
+  return isAbsolute(normalized) ? normalized : null
+}
+
 function getRealHome(): string {
   if (process.env.REAL_HOME) return process.env.REAL_HOME
   const envHome = process.env.HOME ?? ''
   const snapMatch = envHome.match(/^(\/home\/[^/]+)\/snap\//)
   if (snapMatch) return snapMatch[1]!
-  if (envHome.startsWith('/Users/') || envHome.startsWith('/home/') || envHome === '/root') {
-    return envHome
-  }
+  const normalizedHome = normalizeAbsoluteHome(envHome)
+  if (normalizedHome) return normalizedHome
   if (process.env.USER) return `/home/${process.env.USER}`
   return envHome
 }
 
 const REAL_HOME = getRealHome()
 
-// Always consider the actual $HOME (if it points somewhere useful) first so
-// macOS (/Users/<user>), non-snap Linux (/home/...), and snap-adjusted
-// REAL_HOME are all tried before giving up.
+// Always consider the actual $HOME first so macOS, nonstandard Linux homes
+// (e.g. /var/home/<user>), and snap-adjusted REAL_HOME are all tried.
 const CANDIDATE_PATHS: string[] = []
-const envHomeForCandidates = process.env.HOME
-if (envHomeForCandidates && (envHomeForCandidates.startsWith('/Users/') || envHomeForCandidates.startsWith('/home/') || envHomeForCandidates === '/root')) {
+const envHomeForCandidates = normalizeAbsoluteHome(process.env.HOME)
+if (envHomeForCandidates) {
   const p = join(envHomeForCandidates, '.codex', 'auth.json')
   if (!CANDIDATE_PATHS.includes(p)) CANDIDATE_PATHS.push(p)
 }

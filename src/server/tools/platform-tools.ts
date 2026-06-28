@@ -17,11 +17,12 @@ function parsePromptResponse(raw: string | null): unknown {
   try {
     return JSON.parse(raw)
   } catch {
-    return null
+    return raw
   }
 }
 
 function responseLooksAffirmative(response: unknown): boolean {
+  if (typeof response === 'boolean') return response
   if (typeof response !== 'string') return false
   return /^(yes|y|confirm|confirmed|approve|approved|restart|ok|true)$/i.test(response.trim())
 }
@@ -56,7 +57,6 @@ async function hasRecentRestartConfirmation(ctx: { agentId: string; taskId?: str
           eq(humanPrompts.promptType, 'confirm'),
         ))
         .orderBy(desc(humanPrompts.respondedAt))
-        .limit(5)
         .all()
 
   return rows.some((prompt) => {

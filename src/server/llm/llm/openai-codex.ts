@@ -17,7 +17,7 @@
  */
 
 import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { isAbsolute, join, normalize } from 'path'
 import {
   getCodexOAuthCredentials,
   CODEX_BASE_URL,
@@ -64,26 +64,31 @@ const CONFIG_SCHEMA: readonly ConfigField[] = [
 
 // ─── Model discovery ─────────────────────────────────────────────────────────
 
+function normalizeAbsoluteHome(home: string | undefined): string | null {
+  if (!home) return null
+  const normalized = normalize(home)
+  return isAbsolute(normalized) ? normalized : null
+}
+
 function getRealHome(): string {
   if (process.env.REAL_HOME) return process.env.REAL_HOME
   const envHome = process.env.HOME ?? ''
   const snapMatch = envHome.match(/^(\/home\/[^/]+)\/snap\//)
   if (snapMatch) return snapMatch[1]!
-  if (envHome.startsWith('/Users/') || envHome.startsWith('/home/') || envHome === '/root') {
-    return envHome
-  }
+  const normalizedHome = normalizeAbsoluteHome(envHome)
+  if (normalizedHome) return normalizedHome
   if (process.env.USER) return `/home/${process.env.USER}`
   return envHome
 }
 
 const REAL_HOME = getRealHome()
 
-// Try the real env HOME first (handles macOS /Users/...) and the adjusted
-// snap-safe REAL_HOME as a fallback, so we never miss a valid cache.
+// Try the real env HOME first and the adjusted snap-safe REAL_HOME as a
+// fallback, so macOS and nonstandard Linux homes never miss a valid cache.
 function getModelsCacheCandidates(): string[] {
   const cands: string[] = []
-  const envHome = process.env.HOME
-  if (envHome && (envHome.startsWith('/Users/') || envHome.startsWith('/home/') || envHome === '/root')) {
+  const envHome = normalizeAbsoluteHome(process.env.HOME)
+  if (envHome) {
     const p = join(envHome, '.codex', 'models_cache.json')
     if (!cands.includes(p)) cands.push(p)
   }
@@ -115,7 +120,7 @@ interface CodexModelsCacheFile {
  * Returns null when the cache is missing or unreadable (so the caller can
  * decide whether to error out or fall back).
  */
-function readCodexModelsFromCache(): CodexModelCacheEntry[] | null {
+export function readCodexModelsFromCache(): CodexModelCacheEntry[] | null {
   for (const p of MODELS_CACHE_CANDIDATES) {
     try {
       if (!existsSync(p)) continue
@@ -155,7 +160,7 @@ export const STATIC_CODEX_MODELS: CodexModelCacheEntry[] = [
 ]
 
 /** Catalog entries from the CLI cache when present, else the static fallback. */
-function resolveCodexModels(): CodexModelCacheEntry[] {
+export function resolveCodexModels(): CodexModelCacheEntry[] {
   return readCodexModelsFromCache() ?? STATIC_CODEX_MODELS
 }
 

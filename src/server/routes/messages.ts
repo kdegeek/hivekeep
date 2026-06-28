@@ -300,6 +300,12 @@ messageRoutes.get('/', async (c) => {
       try { toolCalls = m.toolCalls ? JSON.parse(m.toolCalls as string) : null } catch { /* corrupted toolCalls */ }
       try { reasoning = m.reasoning ? JSON.parse(m.reasoning as string) : null } catch { /* corrupted reasoning */ }
 
+      const liveSnapshot = streamSnapshot?.messageId === m.id ? streamSnapshot : null
+      if (liveSnapshot) {
+        if (liveSnapshot.toolCalls.length > 0) toolCalls = liveSnapshot.toolCalls
+        if (liveSnapshot.reasoning.length > 0) reasoning = liveSnapshot.reasoning
+      }
+
       // Channel context line: inbound was persisted at top-level
       // (channelContextLine); outbound under channelDelivery.contextLine.
       const channelDelivery = meta?.channelDelivery as { contextLine?: string } | undefined
@@ -354,7 +360,7 @@ messageRoutes.get('/', async (c) => {
       return {
         id: m.id,
         role: m.role,
-        content: m.content,
+        content: liveSnapshot?.content ?? m.content,
         sourceType: m.sourceType,
         sourceId: m.sourceId,
         sourceName: agentInfo?.name ?? null,

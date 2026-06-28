@@ -267,27 +267,16 @@ describe('shouldUsePolling', () => {
     expect(shouldUsePolling()).toBe(true)
   })
 
-  it('gates on the configured URL scheme when PUBLIC_URL is set', async () => {
+  it('returns true when PUBLIC_URL is http', async () => {
     process.env.PUBLIC_URL = 'http://myserver.com:3000'
     const { shouldUsePolling } = await import('@/server/channels/telegram')
-    const { config } = await import('@/server/config')
-    // With PUBLIC_URL set, the first check is false, so the result is gated on
-    // whether the *configured* public URL (resolved at load time) is https.
-    // Assert against that rather than a fixed boolean: config.publicUrl reflects
-    // whatever PUBLIC_URL the config module was loaded with (undefined in a clean
-    // env → polling; an https URL on a real host → webhook), so a hard-coded
-    // expectation would be flaky depending on the ambient environment.
-    expect(shouldUsePolling()).toBe(!config.publicUrl?.startsWith('https://'))
+    expect(shouldUsePolling()).toBe(true)
   })
 
   it('returns false when PUBLIC_URL is https', async () => {
     process.env.PUBLIC_URL = 'https://myserver.com'
     const { shouldUsePolling } = await import('@/server/channels/telegram')
-    // PUBLIC_URL is set so first condition is false; config.publicUrl is undefined
-    // in test context, so ?.startsWith returns undefined (falsy) → !undefined = true.
-    // In production config.publicUrl would reflect the env var.
-    // Here we just verify it doesn't throw and returns a boolean.
-    expect(typeof shouldUsePolling()).toBe('boolean')
+    expect(shouldUsePolling()).toBe(false)
   })
 })
 
