@@ -359,9 +359,15 @@ function resolveReviewProviders(provider?: ReviewProvider | 'all'): ReviewProvid
   return [provider]
 }
 
+function resolveReviewMode(mode?: string): ReviewMode {
+  const value = mode ?? config.codeReview.defaultMode
+  if (value === 'advisory' || value === 'blocking') return value
+  throw new Error(`Invalid review mode: ${value}. Valid values: advisory, blocking`)
+}
+
 export async function runLocalCodeReview(input: ReviewInput): Promise<ReviewRunSummary> {
   const repoPath = resolve(input.repoPath)
-  const mode = input.mode ?? config.codeReview.defaultMode
+  const mode = resolveReviewMode(input.mode)
   const providers = resolveReviewProviders(input.provider)
   const id = `review-${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`
   const results: ReviewResult[] = []
@@ -391,9 +397,13 @@ async function runOneProvider(provider: ReviewProvider, input: ReviewInput & { r
     const exec = provider === 'coderabbit' ? await runCodeRabbit(input) : await runKilo(input)
     const rawOutput = [exec.stdout, exec.stderr].filter(Boolean).join('\n')
     const findings = parseReviewFindings(provider, rawOutput)
-    const failed = exec.exitCode !== 0 && findings.length === 0
+    const failed = exec.timedOut || (exec.exitCode !== 0 && findings.length === 0)
     const statusValue: ReviewRunStatus = failed ? 'failed' : 'succeeded'
-    const error = failed ? (rawOutput || `${provider} exited ${exec.exitCode}`) : undefined
+    const error = failed
+      ? exec.timedOut
+        ? `${provider} review timed out`
+        : (rawOutput || `${provider} exited ${exec.exitCode}`)
+      : undefined
     const blocked = evaluateGate(findings, input.mode)
     return { ...base, status: statusValue, completedAt: new Date().toISOString(), findings, rawOutput, error, summary: summarize(provider, findings, statusValue, error), blocked }
   } catch (err) {

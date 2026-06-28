@@ -12,8 +12,15 @@ function has(name: string): boolean {
   return process.argv.includes(name)
 }
 
+function readMode(): ReviewMode {
+  const raw = readArg('--mode') ?? process.env.HIVEKEEP_LOCAL_REVIEW_MODE ?? 'advisory'
+  if (raw === 'advisory' || raw === 'blocking') return raw
+  console.error(`Invalid review mode: ${raw}. Valid values: advisory, blocking`)
+  process.exit(1)
+}
+
 const provider = (readArg('--provider') ?? process.env.HIVEKEEP_LOCAL_REVIEW_PROVIDER ?? 'all') as ReviewProvider | 'all'
-const mode = (readArg('--mode') ?? process.env.HIVEKEEP_LOCAL_REVIEW_MODE ?? 'advisory') as ReviewMode
+const mode = readMode()
 const repoPath = readArg('--repo') ?? process.cwd()
 const base = readArg('--base') ?? process.env.HIVEKEEP_LOCAL_REVIEW_BASE
 const baseCommit = readArg('--base-commit') ?? process.env.HIVEKEEP_LOCAL_REVIEW_BASE_COMMIT
