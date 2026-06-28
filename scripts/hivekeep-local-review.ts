@@ -3,7 +3,9 @@ import { runLocalCodeReview, type ReviewProvider, type ReviewMode } from '@/serv
 
 function readArg(name: string): string | undefined {
   const i = process.argv.indexOf(name)
-  return i >= 0 ? process.argv[i + 1] : undefined
+  if (i < 0) return undefined
+  const value = process.argv[i + 1]
+  return value && !value.startsWith('-') ? value : undefined
 }
 
 function has(name: string): boolean {

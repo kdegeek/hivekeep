@@ -107,12 +107,18 @@ export async function execReviewCli(
   cwd: string,
   timeoutMs = config.codeReview.defaultTimeoutMs,
 ): Promise<ExecResult> {
-  const proc = Bun.spawn([command, ...args], {
-    cwd,
-    env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' },
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
+  let proc: Bun.Subprocess<'ignore', 'pipe', 'pipe'>
+  try {
+    proc = Bun.spawn([command, ...args], {
+      cwd,
+      env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+  } catch (err) {
+    return { exitCode: 127, stdout: '', stderr: err instanceof Error ? err.message : String(err), timedOut: false }
+  }
+
   let timedOut = false
   const timer = setTimeout(() => {
     timedOut = true
@@ -167,22 +173,33 @@ export async function checkCodeRabbitAuth(repoPath = process.cwd()): Promise<Rev
 export async function checkKiloAuth(repoPath = process.cwd()): Promise<ReviewProviderStatus> {
   const found = await firstWorking(['kilo'], ['--version'], repoPath)
   if (!found) return { provider: 'kilo', displayName: 'Kilo Code', installed: false, authenticated: null, error: 'Kilo CLI not found (`kilo`).' }
-  const auth = await execReviewCli('kilo', ['auth', '--help'], repoPath, 15_000)
-  const debug = await execReviewCli('kilo', ['debug', '--help'], repoPath, 15_000)
-  const text = [auth.stdout, auth.stderr, debug.stdout, debug.stderr].filter(Boolean).join('\n').trim()
+  const auth = await execReviewCli('kilo', ['auth', 'list'], repoPath, 15_000)
+  const configCheck = await execReviewCli('kilo', ['config', 'check'], repoPath, 15_000)
+  const text = [auth.stdout, auth.stderr, configCheck.stdout, configCheck.stderr].filter(Boolean).join('\n').trim()
+  const authenticated = auth.exitCode === 0 && /\bcredential(s)?\b|\boauth\b|Kilo Gateway|OpenAI/i.test(text)
   return {
     provider: 'kilo',
     displayName: 'Kilo Code',
     installed: true,
-    authenticated: auth.exitCode === 0 ? null : false,
+    authenticated,
     version: found.result.stdout.trim() || found.result.stderr.trim(),
     authStatus: text || undefined,
     localReviewMode: 'prompt-fallback',
-    error: auth.exitCode === 0 ? undefined : text || 'Kilo auth command failed.',
+    error: authenticated ? undefined : text || 'Kilo auth list did not report configured credentials.',
   }
 }
 
 export function parseJsonLines(raw: string): unknown[] {
+  const trimmedRaw = raw.trim()
+  if (trimmedRaw) {
+    try {
+      const parsed = JSON.parse(trimmedRaw)
+      return Array.isArray(parsed) ? parsed : [parsed]
+    } catch {
+      // Fall through to JSONL/log parsing.
+    }
+  }
+
   const events: unknown[] = []
   for (const line of raw.split(/\r?\n/)) {
     const trimmed = line.trim()
@@ -208,7 +225,7 @@ function confidenceFrom(value: unknown): ReviewConfidence {
 }
 
 function findingFromObject(provider: ReviewProvider, obj: Record<string, unknown>, index: number): ReviewFinding | null {
-  const title = asString(obj.title) ?? asString(obj.message) ?? asString(obj.body) ?? asString(obj.description)
+  const title = asString(obj.title) ?? asString(obj.message) ?? asString(obj.body) ?? asString(obj.description) ?? asString(obj.codegenInstructions)
   if (!title) return null
   const loc = (obj.location && typeof obj.location === 'object') ? obj.location as Record<string, unknown> : {}
   return {
@@ -218,7 +235,7 @@ function findingFromObject(provider: ReviewProvider, obj: Record<string, unknown
     confidence: confidenceFrom(obj.confidence),
     title: title.slice(0, 240),
     message: (asString(obj.message) ?? asString(obj.body) ?? asString(obj.description) ?? title).slice(0, 4000),
-    file: asString(obj.file) ?? asString(obj.path) ?? asString(loc.path) ?? asString(loc.file),
+    file: asString(obj.file) ?? asString(obj.fileName) ?? asString(obj.path) ?? asString(loc.path) ?? asString(loc.file),
     line: typeof obj.line === 'number' ? obj.line : typeof loc.line === 'number' ? loc.line : undefined,
     endLine: typeof obj.endLine === 'number' ? obj.endLine : typeof loc.endLine === 'number' ? loc.endLine : undefined,
     ruleId: asString(obj.ruleId) ?? asString(obj.rule_id) ?? asString(obj.code),
@@ -226,19 +243,71 @@ function findingFromObject(provider: ReviewProvider, obj: Record<string, unknown
   }
 }
 
+function parseEmbeddedJson(provider: ReviewProvider, text: string): ReviewFinding[] {
+  const trimmed = text.trim()
+  if (!trimmed) return []
+  const firstJson = Math.min(...['{', '['].map((ch) => {
+    const i = trimmed.indexOf(ch)
+    return i < 0 ? Number.POSITIVE_INFINITY : i
+  }))
+  if (!Number.isFinite(firstJson)) return []
+  const jsonLike = trimmed.slice(firstJson)
+  try {
+    return parseReviewFindings(provider, jsonLike)
+  } catch {
+    return []
+  }
+}
+
+function parseMarkdownFindingTable(provider: ReviewProvider, text: string): ReviewFinding[] {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.startsWith('|') && line.endsWith('|'))
+  if (lines.length < 3) return []
+  const header = lines[0]!.split('|').map((cell) => cell.trim().toLowerCase()).filter(Boolean)
+  const separator = lines[1]!
+  if (!header.includes('severity') || !header.includes('title') || !/^[|\s:-]+$/.test(separator)) return []
+  const idx = (name: string) => header.indexOf(name)
+  return lines.slice(2).map((line, i) => {
+    const cells = line.split('|').map((cell) => cell.trim()).filter((_, cellIndex, arr) => cellIndex > 0 && cellIndex < arr.length - 1)
+    const get = (name: string) => {
+      const index = idx(name)
+      return index >= 0 ? cells[index] : undefined
+    }
+    return findingFromObject(provider, {
+      id: `${provider}-table-${i + 1}`,
+      severity: get('severity'),
+      title: get('title'),
+      message: get('message'),
+      file: get('file'),
+      line: Number(get('line')) || undefined,
+      confidence: get('confidence'),
+    }, i)
+  }).filter((f): f is ReviewFinding => Boolean(f))
+}
+
 export function parseReviewFindings(provider: ReviewProvider, raw: string): ReviewFinding[] {
   const events = parseJsonLines(raw)
   const candidates: Record<string, unknown>[] = []
+  const stringFindings: ReviewFinding[] = []
+  const seenStrings = new Set<string>()
   const visit = (v: unknown) => {
     if (Array.isArray(v)) return v.forEach(visit)
+    if (typeof v === 'string') {
+      if (seenStrings.has(v)) return
+      seenStrings.add(v)
+      stringFindings.push(...parseEmbeddedJson(provider, v), ...parseMarkdownFindingTable(provider, v))
+      return
+    }
     if (!v || typeof v !== 'object') return
     const obj = v as Record<string, unknown>
     const type = String(obj.type ?? obj.event ?? '').toLowerCase()
     if (type.includes('finding') || type.includes('issue') || obj.severity || obj.location || obj.file || obj.path) candidates.push(obj)
-    for (const key of ['findings', 'issues', 'comments', 'diagnostics', 'results']) visit(obj[key])
+    for (const key of ['findings', 'issues', 'comments', 'diagnostics', 'results', 'text', 'output', 'summary', 'message', 'content']) visit(obj[key])
   }
   events.forEach(visit)
-  return candidates.map((c, i) => findingFromObject(provider, c, i)).filter((f): f is ReviewFinding => Boolean(f))
+  return [
+    ...candidates.map((c, i) => findingFromObject(provider, c, i)).filter((f): f is ReviewFinding => Boolean(f)),
+    ...stringFindings,
+  ]
 }
 
 export function evaluateGate(findings: ReviewFinding[], mode: ReviewMode): boolean {
@@ -258,8 +327,11 @@ function ensureArtifactDir(): string {
   return dir
 }
 
-function persistArtifact(id: string, payload: unknown): string {
-  const path = join(ensureArtifactDir(), `${id}.json`)
+function artifactPathFor(id: string): string {
+  return join(ensureArtifactDir(), `${id}.json`)
+}
+
+function persistArtifact(path: string, payload: unknown): string {
   writeFileSync(path, `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 })
   return path
 }
@@ -276,9 +348,10 @@ export async function runLocalCodeReview(input: ReviewInput): Promise<ReviewRunS
   const findings = results.flatMap((r) => r.findings)
   const blocked = evaluateGate(findings, mode)
   const summary = results.map((r) => r.summary).join('\n') + (blocked ? '\nGate: BLOCKED by major/critical findings.' : '\nGate: passed/advisory.')
-  const run: ReviewRunSummary = { id, status: results.some((r) => r.status === 'failed') ? 'failed' : 'succeeded', mode, blocked, results, findings, artifactPath: '', summary }
-  run.artifactPath = persistArtifact(id, run)
-  for (const r of results) r.artifactPath = run.artifactPath
+  const artifactPath = artifactPathFor(id)
+  for (const r of results) r.artifactPath = artifactPath
+  const run: ReviewRunSummary = { id, status: results.some((r) => r.status === 'failed') ? 'failed' : 'succeeded', mode, blocked, results, findings, artifactPath, summary }
+  persistArtifact(artifactPath, run)
   return run
 }
 
@@ -289,7 +362,8 @@ async function runOneProvider(provider: ReviewProvider, input: ReviewInput & { r
     const status = provider === 'coderabbit' ? await checkCodeRabbitAuth(input.repoPath) : await checkKiloAuth(input.repoPath)
     if (!status.installed || status.authenticated === false) {
       const error = status.error ?? `${provider} is not ready.`
-      return { ...base, status: 'skipped', completedAt: new Date().toISOString(), error, summary: summarize(provider, [], 'skipped', error), blocked: false }
+      const statusValue: ReviewRunStatus = input.mode === 'blocking' ? 'failed' : 'skipped'
+      return { ...base, status: statusValue, completedAt: new Date().toISOString(), error, summary: summarize(provider, [], statusValue, error), blocked: false }
     }
     const exec = provider === 'coderabbit' ? await runCodeRabbit(input) : await runKilo(input)
     const rawOutput = [exec.stdout, exec.stderr].filter(Boolean).join('\n')
@@ -301,7 +375,7 @@ async function runOneProvider(provider: ReviewProvider, input: ReviewInput & { r
     return { ...base, status: statusValue, completedAt: new Date().toISOString(), findings, rawOutput, error, summary: summarize(provider, findings, statusValue, error), blocked }
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err)
-    return { ...base, status: 'failed', completedAt: new Date().toISOString(), error, summary: summarize(provider, [], 'failed', error), blocked: input.mode === 'blocking' }
+    return { ...base, status: 'failed', completedAt: new Date().toISOString(), error, summary: summarize(provider, [], 'failed', error), blocked: false }
   }
 }
 
