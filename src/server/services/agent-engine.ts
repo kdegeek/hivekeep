@@ -947,8 +947,10 @@ export async function processNextMessage(agentId: string): Promise<boolean> {
   if (compactingAgents.has(agentId)) return false
   agentLocks.add(agentId)
 
-  // Hoisted so the finally block can guarantee cleanup
+  // Hoisted so the finally/catch blocks can guarantee cleanup.
   let queueItem: Awaited<ReturnType<typeof dequeueMessage>> = null
+  let assistantMessageIdForCleanup: string | null = null
+  let assistantMessageHasCheckpoint = false
 
   try {
     // Don't process if already processing (DB-level check, main slot only)
@@ -1576,6 +1578,23 @@ export async function processNextMessage(agentId: string): Promise<boolean> {
     }
     activeAgentStreams.set(agentId, agentStreamSnapshot)
 
+    // Pre-insert the assistant row before any tool execution. Main-thread turns
+    // used to persist only at the very end; if a tool (notably restart_platform)
+    // exited the process mid-turn, boot recovery saw only the user message and
+    // re-ran the same instruction. The row is updated at tool-batch boundaries
+    // and finalized below, matching the crash-safe task runner pattern.
+    await db.insert(messages).values({
+      id: assistantMessageId,
+      agentId,
+      role: 'assistant',
+      content: '',
+      sourceType: 'agent',
+      sourceId: agentId,
+      channelOriginId: queueItem.channelOriginId ?? null,
+      createdAt: new Date(),
+    })
+    assistantMessageIdForCleanup = assistantMessageId
+
     // Convert tools to hivekeep shape once (provider.chat() handles them natively).
     // markLastHivekeepToolCacheable adds the per-tool cache_control hint Anthropic
     // uses to cache the whole tools block as a single prefix.
@@ -1703,6 +1722,22 @@ export async function processNextMessage(agentId: string): Promise<boolean> {
         assistantMessageId,
       })
       toolCallsLog.push(...batch.toolCallsLog)
+
+      // Crash-safety checkpoint: persist committed tool actions/results before
+      // asking the model for the next step. If a tool schedules process exit
+      // (restart_platform), the resumed queue item will include the assistant
+      // tool-use/result context instead of replaying only the user's permission.
+      if (batch.toolCallsLog.length > 0) {
+        await db.update(messages)
+          .set({
+            content: fullContent,
+            toolCalls: JSON.stringify(toolCallsLog),
+            reasoning: reasoningSegments.length > 0 ? JSON.stringify(reasoningSegments) : null,
+          })
+          .where(eq(messages.id, assistantMessageId))
+        assistantMessageHasCheckpoint = true
+      }
+
       if (batch.wasAborted) { wasAborted = true; break }
 
       // Append assistant message (with tool calls) + tool results to history
@@ -1852,41 +1887,37 @@ export async function processNextMessage(agentId: string): Promise<boolean> {
       })
     }
 
-    // Save assistant message (partial if aborted) with tool call metadata.
-    // Do NOT persist when the row would carry no text AND no tool calls:
-    // Anthropic rejects empty text content blocks ("text content blocks
-    // must be non-empty") on the next turn, which permanently blocks the
-    // conversation until the empty row is removed. The chat:done SSE below
-    // still fires so the UI exits its typing state cleanly.
+    // Finalize the pre-inserted assistant message (partial if aborted) with
+    // tool call metadata. Delete it if it would carry no text AND no tool
+    // calls: Anthropic rejects empty text content blocks on the next turn.
     if (fullContent || toolCallsLog.length > 0) {
-      await db.insert(messages).values({
-        id: assistantMessageId,
-        agentId,
-        role: 'assistant',
-        content: fullContent || '',
-        sourceType: 'agent',
-        sourceId: agentId,
-        toolCalls: toolCallsLog.length > 0 ? JSON.stringify(toolCallsLog) : null,
-        channelOriginId: queueItem.channelOriginId ?? null,
-        reasoning: reasoningSegments.length > 0 ? JSON.stringify(reasoningSegments) : null,
-        metadata: (() => {
-          const meta: Record<string, unknown> = {}
-          if (relevantMemories.length > 0) meta.injectedMemories = relevantMemories
-          if (stepLimitReached) {
-            meta.stepLimitReached = true
-            meta.maxSteps = config.tools.maxSteps
-            meta.toolCallCount = toolCallsLog.length
-          }
-          if (emptyTurn) {
-            meta.emptyTurn = true
-            meta.finishReason = lastFinishReason
-          }
-          if (silentStopAfterTools) meta.silentStop = true
-          if (tokenUsage) meta.tokenUsage = tokenUsage
-          return Object.keys(meta).length > 0 ? JSON.stringify(meta) : null
-        })(),
-        createdAt: new Date(),
-      })
+      await db.update(messages)
+        .set({
+          content: fullContent || '',
+          toolCalls: toolCallsLog.length > 0 ? JSON.stringify(toolCallsLog) : null,
+          reasoning: reasoningSegments.length > 0 ? JSON.stringify(reasoningSegments) : null,
+          metadata: (() => {
+            const meta: Record<string, unknown> = {}
+            if (relevantMemories.length > 0) meta.injectedMemories = relevantMemories
+            if (stepLimitReached) {
+              meta.stepLimitReached = true
+              meta.maxSteps = config.tools.maxSteps
+              meta.toolCallCount = toolCallsLog.length
+            }
+            if (emptyTurn) {
+              meta.emptyTurn = true
+              meta.finishReason = lastFinishReason
+            }
+            if (silentStopAfterTools) meta.silentStop = true
+            if (tokenUsage) meta.tokenUsage = tokenUsage
+            return Object.keys(meta).length > 0 ? JSON.stringify(meta) : null
+          })(),
+        })
+        .where(eq(messages.id, assistantMessageId))
+      assistantMessageHasCheckpoint = true
+    } else {
+      await db.delete(messages).where(eq(messages.id, assistantMessageId))
+      assistantMessageIdForCleanup = null
     }
 
     // Emit chat:done SSE event (include source metadata so the client can
@@ -2024,6 +2055,13 @@ export async function processNextMessage(agentId: string): Promise<boolean> {
     const displayError = friendlyErrorMessage(errorMsg)
 
     log.error({ agentId, error: errorMsg }, 'Agent engine error')
+
+    // If the turn failed before any meaningful assistant/tool checkpoint, remove
+    // the pre-inserted empty row so it does not leave a blank bubble in history.
+    if (assistantMessageIdForCleanup && !assistantMessageHasCheckpoint) {
+      await db.delete(messages).where(eq(messages.id, assistantMessageIdForCleanup)).catch(() => {})
+      assistantMessageIdForCleanup = null
+    }
 
     // Recovery: if the main LLM call failed because the prompt exceeded the
     // model's context window (a state we should normally avoid via the 75%

@@ -268,13 +268,15 @@ messageRoutes.get('/', async (c) => {
   // live snapshot so a client mounting mid-stream can seed its streaming
   // bubble immediately instead of staring at a typing indicator until
   // `chat:done` fires. Same pattern as `getActiveTaskSnapshot()` for tasks.
-  // Note: unlike sub-task streams, the main-thread row is only inserted at
-  // the END of the turn, so the streaming messageId is NEVER in `messageList`
-  // and never needs to be overlay-merged with a persisted row.
+  // The main-thread assistant row is now pre-inserted for crash recovery, so
+  // suppress the separate streaming overlay when that row is already included
+  // in this page; the persisted row carries checkpointed tool calls and the
+  // SSE stream continues to update it client-side.
   // Skipped on paginated (?before=) queries — they fetch older history and
   // the in-flight bubble (if any) belongs to the initial-fetch caller.
   const streamSnapshot = !before ? getActiveAgentStreamSnapshot(agentId) : undefined
-  const streamingMessage = streamSnapshot
+  const streamMessageAlreadyListed = !!streamSnapshot && messageList.some((m) => m.id === streamSnapshot.messageId)
+  const streamingMessage = streamSnapshot && !streamMessageAlreadyListed
     ? {
         messageId: streamSnapshot.messageId,
         content: streamSnapshot.content,
