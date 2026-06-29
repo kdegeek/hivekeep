@@ -2,13 +2,17 @@ import { afterEach, describe, expect, it } from 'bun:test'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
+import { config } from '@/server/config'
 import { _LOCAL_REVIEW_INTERNALS_FOR_TEST, runLocalCodeReview } from './local-review'
 
 const { parseReviewFindings, evaluateGate, parseJsonLines, kiloSlashCommandArgs, kiloPromptFallbackArgs } = _LOCAL_REVIEW_INTERNALS_FOR_TEST
 const originalPath = process.env.PATH
+const originalArtifactDir = config.codeReview.artifactDir
+const mutableCodeReviewConfig = config.codeReview as { artifactDir: string }
 
 afterEach(() => {
   process.env.PATH = originalPath
+  mutableCodeReviewConfig.artifactDir = originalArtifactDir
 })
 
 function makeFakeBin(name: string, body: string): string {
@@ -173,6 +177,7 @@ exit 1
 `)
     try {
       mkdirSync(join(root, 'repo'), { recursive: true })
+      mutableCodeReviewConfig.artifactDir = join(root, 'artifacts')
       const result = await runLocalCodeReview({ repoPath: join(root, 'repo'), provider: 'coderabbit', mode: 'advisory', timeoutMs: 1000 })
       expect(result.artifactPath.endsWith(`${result.id}.json`)).toBe(true)
       const saved = JSON.parse(readFileSync(result.artifactPath, 'utf8'))
@@ -190,6 +195,7 @@ exit 1
     process.env.PATH = root
     mkdirSync(join(root, 'repo'), { recursive: true })
     try {
+      mutableCodeReviewConfig.artifactDir = join(root, 'artifacts')
       const advisory = await runLocalCodeReview({ repoPath: join(root, 'repo'), provider: 'coderabbit', mode: 'advisory', timeoutMs: 1000 })
       expect(advisory.blocked).toBe(false)
       expect(advisory.status).toBe('skipped')
