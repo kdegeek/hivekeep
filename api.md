@@ -17,6 +17,40 @@ All routes return JSON. Errors follow the standard format:
 
 Authentication: HTTP-only cookie managed by Better Auth, verified by middleware on all `/api/*` routes (except `/api/auth/*`).
 
+Mobile clients use the same REST contracts as the web client. In a mobile build
+(`VITE_HIVEKEEP_MOBILE=true`) or native Capacitor runtime, the client stores a
+server base URL in localStorage key `hivekeep:serverUrl` and resolves every API
+path to `<server>/api/<path>`.
+
+---
+
+## Health and mobile connection
+
+### `GET /api/health`
+
+Unauthenticated health probe used by Docker/orchestrators and by the Android
+connection screen before saving a self-hosted server URL.
+
+```typescript
+// Response 200
+{
+  status: "ok"
+  version: string
+  uptime: number      // seconds since server start
+  timestamp: number   // epoch milliseconds
+}
+```
+
+Mobile connection behavior:
+
+- the Android app accepts only `http://` or `https://` server URLs;
+- URLs with embedded credentials are rejected; query strings, fragments, and
+  trailing slashes are stripped before the URL is saved;
+- subsequent mobile REST calls use credentialed fetches against the saved server
+  (`credentials: "include"`), so the Better Auth session cookie is scoped to the
+  self-hosted server;
+- `buildApiUrl('/sse')` resolves to `<server>/api/sse` for the global SSE stream.
+
 ---
 
 ## Auth
@@ -2017,6 +2051,98 @@ Grants permissions (additive: never an implicit revocation). Only permissions pr
 // Response 200
 { requested: string[], granted: string[], invalid: string[] }
 ```
+
+## Notifications
+
+### `GET /api/notifications`
+
+Lists the current user's in-app notifications. The Android app uses this same
+endpoint for native local-notification polling.
+
+Query parameters:
+
+```typescript
+{
+  unreadOnly?: "true" // when true, return only unread notifications
+  limit?: string      // integer 1..100, default 20
+  offset?: string     // integer >= 0, default 0
+}
+```
+
+```typescript
+// Response 200
+{
+  notifications: NotificationSummary[]
+  unreadCount: number
+}
+
+type NotificationSummary = {
+  id: string
+  type:
+    | "prompt:pending"
+    | "channel:user-pending"
+    | "cron:pending-approval"
+    | "mcp:pending-approval"
+    | "email:pending-send-approval"
+    | "agent:error"
+    | "agent:alert"
+    | "mention"
+    | "miniapp:notify"
+  title: string
+  body: string | null
+  agentId: string | null
+  agentName: string | null
+  agentSlug: string | null
+  agentAvatarUrl: string | null
+  relatedId: string | null
+  relatedType: "prompt" | "channel" | "cron" | "mcp" | "email" | "agent" | "message" | "miniapp" | null
+  isRead: boolean
+  createdAt: number
+}
+```
+
+Android native notification polling calls:
+
+```text
+GET /api/notifications?unreadOnly=true&limit=10
+```
+
+The mobile client polls on startup, every 60 seconds while active, and on app
+resume. It deduplicates already scheduled local notifications on-device; the
+server contract remains the normal paginated notification list.
+
+### `GET /api/notifications/unread-count`
+
+```typescript
+// Response 200
+{ unreadCount: number }
+```
+
+### Notification mutations
+
+- `PATCH /api/notifications/:id/read` -> `{ success: true }`
+- `POST /api/notifications/mark-all-read` -> `{ success: true }`
+- `DELETE /api/notifications/:id` -> `{ success: true }`
+
+### Notification preferences and external delivery
+
+- `GET /api/notifications/preferences` -> `{ preferences: ... }`
+- `PUT /api/notifications/preferences` with
+  `{ updates: { type: NotificationType; enabled: boolean }[] }` ->
+  `{ preferences: ... }`
+- `GET /api/notifications/channels/available` -> `{ channels: ... }`
+- `GET /api/notifications/channels/contacts?platform=<platform>` ->
+  `{ contacts: ... }`
+- `GET /api/notifications/channels` -> `{ channels: ... }`
+- `POST /api/notifications/channels` with
+  `{ channelId, platformChatId, label?, typeFilter? }` -> `{ channel: ... }`
+  (201)
+- `PATCH /api/notifications/channels/:id` with
+  `{ label?, isActive?, typeFilter?, platformChatId? }` -> `{ success: true }`
+- `DELETE /api/notifications/channels/:id` -> `{ success: true }`
+- `POST /api/notifications/channels/:id/test` -> `{ success: true }`
+
+---
 
 ## Feedback
 
