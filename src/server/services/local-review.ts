@@ -449,8 +449,18 @@ function kiloSlashCommand(input: ReviewInput): '/local-review' | '/local-review-
   return input.head === 'working tree' && !input.base && !input.baseCommit ? '/local-review-uncommitted' : '/local-review'
 }
 
+function kiloSlashCommandBaseArg(input: ReviewInput): string | undefined {
+  return input.base ?? input.baseCommit
+}
+
+function kiloSlashCommandToken(input: ReviewInput): string {
+  const command = kiloSlashCommand(input)
+  const baseArg = kiloSlashCommandBaseArg(input)
+  return baseArg && command === '/local-review' ? `${command} ${baseArg}` : command
+}
+
 function kiloSlashCommandArgs(input: ReviewInput & { repoPath: string }): string[] {
-  return ['run', '--format', 'json', '--auto', '--dir', input.repoPath, kiloSlashCommand(input)]
+  return ['run', '--format', 'json', '--auto', '--dir', input.repoPath, kiloSlashCommandToken(input)]
 }
 
 function kiloPromptFallbackArgs(input: ReviewInput & { repoPath: string }): string[] {

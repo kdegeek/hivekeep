@@ -69,7 +69,8 @@ describe('local-review parsing', () => {
 
 describe('Kilo local-review adapter', () => {
   it('builds the documented slash-command invocation before prompt fallback', () => {
-    expect(kiloSlashCommandArgs({ repoPath: '/repo', base: 'origin/main' })).toEqual(['run', '--format', 'json', '--auto', '--dir', '/repo', '/local-review'])
+    expect(kiloSlashCommandArgs({ repoPath: '/repo', base: 'origin/main' })).toEqual(['run', '--format', 'json', '--auto', '--dir', '/repo', '/local-review origin/main'])
+    expect(kiloSlashCommandArgs({ repoPath: '/repo', baseCommit: 'abc123' })).toEqual(['run', '--format', 'json', '--auto', '--dir', '/repo', '/local-review abc123'])
     expect(kiloSlashCommandArgs({ repoPath: '/repo', head: 'working tree' })).toEqual(['run', '--format', 'json', '--auto', '--dir', '/repo', '/local-review-uncommitted'])
     expect(kiloPromptFallbackArgs({ repoPath: '/repo', base: 'origin/main' }).at(-1)).toContain('dedicated local code reviewer')
   })
@@ -79,7 +80,7 @@ describe('Kilo local-review adapter', () => {
 if [[ "$1" == "--version" ]]; then echo "7.3.44"; exit 0; fi
 if [[ "$1" == "auth" ]]; then echo 'Kilo Gateway credential active'; exit 0; fi
 if [[ "$1" == "config" ]]; then echo 'ok'; exit 0; fi
-if [[ "$1" == "run" && "$7" == "/local-review" ]]; then echo '{"findings":[{"severity":"minor","title":"Kilo nit","file":"src/kilo.ts"}]}'; exit 0; fi
+if [[ "$1" == "run" && "$7" == /local-review* ]]; then echo '{"findings":[{"severity":"minor","title":"Kilo nit","file":"src/kilo.ts"}]}'; exit 0; fi
 echo "unexpected args: $*" >&2
 exit 1
 `)
@@ -98,7 +99,7 @@ exit 1
 if [[ "$1" == "--version" ]]; then echo "7.3.44"; exit 0; fi
 if [[ "$1" == "auth" ]]; then echo 'Kilo Gateway credential active'; exit 0; fi
 if [[ "$1" == "config" ]]; then echo 'ok'; exit 0; fi
-if [[ "$1" == "run" && "$7" == "/local-review" ]]; then echo 'slash failed' >&2; exit 1; fi
+if [[ "$1" == "run" && "$7" == /local-review* ]]; then echo 'slash failed' >&2; exit 1; fi
 if [[ "$1" == "run" ]]; then echo '{"findings":[{"severity":"major","title":"Fallback finding","file":"src/fallback.ts"}]}'; exit 0; fi
 exit 1
 `)
@@ -118,7 +119,7 @@ exit 1
 if [[ "$1" == "--version" ]]; then echo "7.3.44"; exit 0; fi
 if [[ "$1" == "auth" ]]; then echo 'Kilo Gateway credential active'; exit 0; fi
 if [[ "$1" == "config" ]]; then echo 'ok'; exit 0; fi
-if [[ "$1" == "run" && "$7" == "/local-review" ]]; then sleep 1; echo '{"findings":[{"severity":"major","title":"late","file":"src/late.ts"}]}'; exit 0; fi
+if [[ "$1" == "run" && "$7" == /local-review* ]]; then sleep 1; echo '{"findings":[{"severity":"major","title":"late","file":"src/late.ts"}]}'; exit 0; fi
 if [[ "$1" == "run" ]]; then echo '{"findings":[{"severity":"critical","title":"should not run","file":"src/fallback.ts"}]}'; exit 0; fi
 exit 1
 `)
