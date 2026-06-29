@@ -35,6 +35,7 @@ export interface ReviewInput {
   taskId?: string
   agentId?: string
   timeoutMs?: number
+  env?: Record<string, string | undefined>
 }
 
 export interface ReviewProviderStatus {
@@ -122,12 +123,13 @@ export async function execReviewCli(
   args: string[],
   cwd: string,
   timeoutMs = config.codeReview.defaultTimeoutMs,
+  env?: Record<string, string | undefined>,
 ): Promise<ExecResult> {
   let proc: Bun.Subprocess<'ignore', 'pipe', 'pipe'>
   try {
     proc = Bun.spawn([command, ...args], {
       cwd,
-      env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' },
+      env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0', ...env },
       stdout: 'pipe',
       stderr: 'pipe',
     })
@@ -154,23 +156,23 @@ export async function execReviewCli(
   }
 }
 
-async function firstWorking(names: string[], args: string[], cwd: string): Promise<{ name: string; result: ExecResult } | null> {
+async function firstWorking(names: string[], args: string[], cwd: string, env?: Record<string, string | undefined>): Promise<{ name: string; result: ExecResult } | null> {
   for (const name of names) {
-    const result = await execReviewCli(name, args, cwd, 10_000)
+    const result = await execReviewCli(name, args, cwd, 10_000, env)
     if (result.exitCode !== 127 && !/command not found/i.test(result.stderr)) return { name, result }
   }
   return null
 }
 
-export async function listLocalReviewers(repoPath = process.cwd()): Promise<ReviewProviderStatus[]> {
-  return [await checkCodeRabbitAuth(repoPath), await checkKiloAuth(repoPath)]
+export async function listLocalReviewers(repoPath = process.cwd(), env?: Record<string, string | undefined>): Promise<ReviewProviderStatus[]> {
+  return [await checkCodeRabbitAuth(repoPath, env), await checkKiloAuth(repoPath, env)]
 }
 
-export async function checkCodeRabbitAuth(repoPath = process.cwd()): Promise<ReviewProviderStatus> {
-  const found = await firstWorking(['cr', 'coderabbit'], ['--version'], repoPath)
+export async function checkCodeRabbitAuth(repoPath = process.cwd(), env?: Record<string, string | undefined>): Promise<ReviewProviderStatus> {
+  const found = await firstWorking(['cr', 'coderabbit'], ['--version'], repoPath, env)
   if (!found) return { provider: 'coderabbit', displayName: 'CodeRabbit', installed: false, authenticated: null, error: 'CodeRabbit CLI not found (`cr` or `coderabbit`).' }
-  const auth = await execReviewCli(found.name, ['auth', 'status', '--agent'], repoPath, 15_000)
-  const doctor = await execReviewCli(found.name, ['doctor'], repoPath, 30_000)
+  const auth = await execReviewCli(found.name, ['auth', 'status', '--agent'], repoPath, 15_000, env)
+  const doctor = await execReviewCli(found.name, ['doctor'], repoPath, 30_000, env)
   const authText = redactSensitiveOutput([auth.stdout, auth.stderr].filter(Boolean).join('\n').trim())
   const doctorText = redactSensitiveOutput([doctor.stdout, doctor.stderr].filter(Boolean).join('\n').trim())
   return {
@@ -186,14 +188,16 @@ export async function checkCodeRabbitAuth(repoPath = process.cwd()): Promise<Rev
   }
 }
 
-export async function checkKiloAuth(repoPath = process.cwd()): Promise<ReviewProviderStatus> {
-  const found = await firstWorking(['kilo'], ['--version'], repoPath)
+export async function checkKiloAuth(repoPath = process.cwd(), env?: Record<string, string | undefined>): Promise<ReviewProviderStatus> {
+  const found = await firstWorking(['kilo'], ['--version'], repoPath, env)
   if (!found) return { provider: 'kilo', displayName: 'Kilo Code', installed: false, authenticated: null, error: 'Kilo CLI not found (`kilo`).' }
-  const auth = await execReviewCli('kilo', ['auth', 'list'], repoPath, 15_000)
-  const configCheck = await execReviewCli('kilo', ['config', 'check'], repoPath, 15_000)
-  const text = redactSensitiveOutput([auth.stdout, auth.stderr, configCheck.stdout, configCheck.stderr].filter(Boolean).join('\n').trim())
-  const negativeAuth = /\b(no|not|missing|absent|invalid|expired|unauthorized|unauthenticated)\b.{0,40}\b(credential|credentials|auth|login|provider|account|token|key)s?\b|\bnot logged in\b|\bnot configured\b/i.test(text)
-  const positiveAuth = /\b(Kilo Gateway|OpenAI|oauth)\b|\bcredential(s)?\b.{0,40}\b(active|configured|found|available|connected|present)\b/i.test(text)
+  const auth = await execReviewCli('kilo', ['auth', 'list'], repoPath, 15_000, env)
+  const configCheck = await execReviewCli('kilo', ['config', 'check'], repoPath, 15_000, env)
+  const authText = redactSensitiveOutput([auth.stdout, auth.stderr].filter(Boolean).join('\n').trim())
+  const configText = redactSensitiveOutput([configCheck.stdout, configCheck.stderr].filter(Boolean).join('\n').trim())
+  const text = [authText, configText].filter(Boolean).join('\n')
+  const negativeAuth = /\b(no|not|missing|absent|invalid|expired|unauthorized|unauthenticated)\b.{0,40}\b(credential|credentials|auth|login|provider|account|token|key)s?\b|\bnot logged in\b/i.test(authText)
+  const positiveAuth = /\b(Kilo Gateway|OpenAI|oauth)\b|\bcredential(s)?\b.{0,40}\b(active|configured|found|available|connected|present)\b/i.test(authText)
   const authenticated = auth.exitCode === 0 && positiveAuth && !negativeAuth
   return {
     provider: 'kilo',
@@ -426,7 +430,7 @@ async function runOneProvider(provider: ReviewProvider, input: ReviewInput & { r
   const startedAt = new Date().toISOString()
   const base: ReviewResult = { id: `${runId}-${provider}`, provider, status: 'running', startedAt, repoPath: input.repoPath, base: input.base, baseCommit: input.baseCommit, head: input.head, mode: input.mode, light: input.light, findings: [], summary: '', blocked: false }
   try {
-    const status = provider === 'coderabbit' ? await checkCodeRabbitAuth(input.repoPath) : await checkKiloAuth(input.repoPath)
+    const status = provider === 'coderabbit' ? await checkCodeRabbitAuth(input.repoPath, input.env) : await checkKiloAuth(input.repoPath, input.env)
     if (!status.installed || status.authenticated === false) {
       const error = status.error ?? `${provider} is not ready.`
       const statusValue: ReviewRunStatus = input.mode === 'blocking' ? 'failed' : 'skipped'
@@ -451,13 +455,13 @@ async function runOneProvider(provider: ReviewProvider, input: ReviewInput & { r
 }
 
 async function runCodeRabbit(input: ReviewInput & { repoPath: string; light: boolean }): Promise<ExecResult> {
-  const found = await firstWorking(['cr', 'coderabbit'], ['--version'], input.repoPath)
+  const found = await firstWorking(['cr', 'coderabbit'], ['--version'], input.repoPath, input.env)
   if (!found) return { exitCode: 127, stdout: '', stderr: 'CodeRabbit CLI not found.', timedOut: false }
   const args = ['review', '--agent', '--dir', input.repoPath]
   if (input.light) args.push('--light')
   if (input.base) args.push('--base', input.base)
   if (input.baseCommit) args.push('--base-commit', input.baseCommit)
-  const result = await execReviewCli(found.name, args, input.repoPath, input.timeoutMs)
+  const result = await execReviewCli(found.name, args, input.repoPath, input.timeoutMs, input.env)
   return { ...result, localReviewMode: 'native' }
 }
 
@@ -488,11 +492,11 @@ function kiloPromptFallbackArgs(input: ReviewInput & { repoPath: string }): stri
 }
 
 async function runKilo(input: ReviewInput & { repoPath: string }): Promise<ExecResult> {
-  const slash = await execReviewCli('kilo', kiloSlashCommandArgs(input), input.repoPath, input.timeoutMs)
+  const slash = await execReviewCli('kilo', kiloSlashCommandArgs(input), input.repoPath, input.timeoutMs, input.env)
   const slashRaw = [slash.stdout, slash.stderr].filter(Boolean).join('\n')
   if (slash.exitCode === 0 || slash.timedOut || parseReviewFindings('kilo', slashRaw).length > 0) return { ...slash, localReviewMode: 'slash-command' }
 
-  const fallback = await execReviewCli('kilo', kiloPromptFallbackArgs(input), input.repoPath, input.timeoutMs)
+  const fallback = await execReviewCli('kilo', kiloPromptFallbackArgs(input), input.repoPath, input.timeoutMs, input.env)
   return {
     ...fallback,
     stdout: fallback.stdout,

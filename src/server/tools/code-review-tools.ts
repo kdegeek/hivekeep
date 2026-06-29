@@ -2,7 +2,8 @@ import { z } from 'zod'
 import { tool } from '@/server/tools/tool-helper'
 import type { ToolRegistration } from '@/server/tools/types'
 import { isAbsolute, relative, resolve } from 'node:path'
-import { resolveToolWorkspace } from '@/server/tools/workspace'
+import { resolveToolEnv, resolveToolWorkspace } from '@/server/tools/workspace'
+import { checkCodeRabbitAuth, checkKiloAuth, listLocalReviewers, runLocalCodeReview } from '@/server/services/local-review'
 
 function resolveRepoPath(ctx: Parameters<typeof resolveToolWorkspace>[0], repoPath?: string): string {
   const workspace = resolveToolWorkspace(ctx)
@@ -12,7 +13,10 @@ function resolveRepoPath(ctx: Parameters<typeof resolveToolWorkspace>[0], repoPa
   if (rel === '' || (!rel.startsWith('..') && rel !== '..' && !isAbsolute(rel))) return resolved
   throw new Error('repo_path must stay inside the current tool workspace/worktree')
 }
-import { checkCodeRabbitAuth, checkKiloAuth, listLocalReviewers, runLocalCodeReview } from '@/server/services/local-review'
+
+function reviewCliEnv(ctx: Parameters<typeof resolveToolEnv>[0]): Record<string, string | undefined> {
+  return resolveToolEnv(ctx, { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' })
+}
 
 const providerSchema = z.enum(['coderabbit', 'kilo', 'all']).default('all')
 
@@ -23,7 +27,7 @@ export const listLocalReviewersTool: ToolRegistration = {
   create: (ctx) => tool({
     description: 'List first-class local code review providers/agents available to Hivekeep (CodeRabbit and Kilo Code), including CLI install/auth status. Does not run a review.',
     inputSchema: z.object({ repo_path: z.string().optional().describe('Repository path. Defaults to the current tool workspace/worktree.') }),
-    execute: async ({ repo_path }) => listLocalReviewers(resolveRepoPath(ctx, repo_path)),
+    execute: async ({ repo_path }) => listLocalReviewers(resolveRepoPath(ctx, repo_path), reviewCliEnv(ctx)),
   }),
 }
 
@@ -39,9 +43,10 @@ export const checkCodeReviewAuthTool: ToolRegistration = {
     }),
     execute: async ({ provider, repo_path }) => {
       const repoPath = resolveRepoPath(ctx, repo_path)
-      if (provider === 'coderabbit') return { reviewers: [await checkCodeRabbitAuth(repoPath)] }
-      if (provider === 'kilo') return { reviewers: [await checkKiloAuth(repoPath)] }
-      return { reviewers: await listLocalReviewers(repoPath) }
+      const env = reviewCliEnv(ctx)
+      if (provider === 'coderabbit') return { reviewers: [await checkCodeRabbitAuth(repoPath, env)] }
+      if (provider === 'kilo') return { reviewers: [await checkKiloAuth(repoPath, env)] }
+      return { reviewers: await listLocalReviewers(repoPath, env) }
     },
   }),
 }
@@ -70,6 +75,7 @@ export const runLocalCodeReviewTool: ToolRegistration = {
       light,
       timeoutMs: timeout_ms,
       agentId: ctx.agentId,
+      env: reviewCliEnv(ctx),
     }),
   }),
 }
