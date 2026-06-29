@@ -618,33 +618,39 @@ export async function buildMiniAppIconPrompt(app: {
   const desc = app.description?.slice(0, 300) ?? ''
   const emoji = app.icon ?? ''
 
-  const iconResult = await runOneShot(resolved, {
-    system: [{ type: 'text', text: MINI_APP_ICON_STYLE_SYSTEM }],
-    messages: [{
-      role: 'user',
-      content: [{
-        type: 'text',
-        text: `App name: ${app.name}\nDescription: ${desc}\nEmoji hint: ${emoji}`,
+  try {
+    const iconResult = await runOneShot(resolved, {
+      system: [{ type: 'text', text: MINI_APP_ICON_STYLE_SYSTEM }],
+      messages: [{
+        role: 'user',
+        content: [{
+          type: 'text',
+          text: `App name: ${app.name}\nDescription: ${desc}\nEmoji hint: ${emoji}`,
+        }],
       }],
-    }],
-    maxOutputTokens: 200,
-  })
+      maxOutputTokens: 200,
+    })
 
-  recordUsage({
-    callSite: 'icon-prompt',
-    callType: 'generate-text',
-    providerType: resolved.providerRow.type,
-    providerId: resolved.providerRow.id,
-    modelId: resolved.model.id,
-    usage: {
-      inputTokens: iconResult.usage.inputTokens,
-      outputTokens: iconResult.usage.outputTokens,
-      inputTokenDetails: { cacheReadTokens: iconResult.usage.cacheReadTokens, cacheWriteTokens: iconResult.usage.cacheWriteTokens },
-      outputTokenDetails: { reasoningTokens: iconResult.usage.reasoningTokens },
-    },
-  })
+    recordUsage({
+      callSite: 'icon-prompt',
+      callType: 'generate-text',
+      providerType: resolved.providerRow.type,
+      providerId: resolved.providerRow.id,
+      modelId: resolved.model.id,
+      usage: {
+        inputTokens: iconResult.usage.inputTokens,
+        outputTokens: iconResult.usage.outputTokens,
+        inputTokenDetails: { cacheReadTokens: iconResult.usage.cacheReadTokens, cacheWriteTokens: iconResult.usage.cacheWriteTokens },
+        outputTokenDetails: { reasoningTokens: iconResult.usage.reasoningTokens },
+      },
+    })
 
-  return iconResult.text.trim()
+    const generated = iconResult.text.trim()
+    return generated || staticFallback
+  } catch (err) {
+    log.warn({ err, appName: app.name }, 'Mini-app icon prompt generation failed; using static fallback')
+    return staticFallback
+  }
 }
 
 /**
