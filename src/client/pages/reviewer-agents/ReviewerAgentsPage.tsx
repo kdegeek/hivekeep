@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
   AlertTriangle,
@@ -139,33 +140,152 @@ interface RunsResponse { runs: ReviewRunSummary[] }
 interface RunResponse { run: ReviewRunSummary }
 interface ChecklistResponse { checklist: ReviewerChecklist }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object'
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === 'string'
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
+
+function isRemediationTarget(value: unknown): boolean {
+  return isRecord(value) && typeof value.agentSlug === 'string' && typeof value.label === 'string' && typeof value.reason === 'string'
+}
+
+function isReviewProviderStatus(value: unknown): value is ReviewProviderStatus {
+  return isRecord(value)
+    && (value.provider === 'coderabbit' || value.provider === 'kilo')
+    && typeof value.displayName === 'string'
+    && typeof value.installed === 'boolean'
+    && (typeof value.authenticated === 'boolean' || value.authenticated === null)
+    && isOptionalString(value.version)
+    && isOptionalString(value.authStatus)
+    && isOptionalString(value.doctor)
+    && isOptionalString(value.localReviewMode)
+    && isOptionalString(value.error)
+}
+
+function isReviewFinding(value: unknown): value is ReviewFinding {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && (value.provider === 'coderabbit' || value.provider === 'kilo')
+    && (value.severity === 'info' || value.severity === 'minor' || value.severity === 'major' || value.severity === 'critical')
+    && (value.confidence === 'low' || value.confidence === 'medium' || value.confidence === 'high')
+    && typeof value.title === 'string'
+    && typeof value.message === 'string'
+    && isOptionalString(value.file)
+    && (value.line === undefined || typeof value.line === 'number')
+    && (value.endLine === undefined || typeof value.endLine === 'number')
+    && isOptionalString(value.ruleId)
+    && (value.state === undefined || value.state === 'open' || value.state === 'fixed' || value.state === 'ignored' || value.state === 'needs-decision')
+    && isOptionalString(value.stateNote)
+}
+
+function isReviewResult(value: unknown): value is ReviewResult {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && (value.provider === 'coderabbit' || value.provider === 'kilo')
+    && (value.status === 'queued' || value.status === 'running' || value.status === 'succeeded' || value.status === 'failed' || value.status === 'skipped')
+    && typeof value.startedAt === 'string'
+    && isOptionalString(value.completedAt)
+    && typeof value.repoPath === 'string'
+    && isOptionalString(value.base)
+    && isOptionalString(value.baseCommit)
+    && isOptionalString(value.head)
+    && (value.mode === 'advisory' || value.mode === 'blocking')
+    && typeof value.light === 'boolean'
+    && Array.isArray(value.findings) && value.findings.every(isReviewFinding)
+    && typeof value.summary === 'string'
+    && isOptionalString(value.rawOutput)
+    && isOptionalString(value.error)
+    && isOptionalString(value.artifactPath)
+    && isOptionalString(value.localReviewMode)
+    && typeof value.blocked === 'boolean'
+}
+
+function isReviewRunSummary(value: unknown): value is ReviewRunSummary {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && (value.status === 'queued' || value.status === 'running' || value.status === 'succeeded' || value.status === 'failed' || value.status === 'skipped')
+    && (value.mode === 'advisory' || value.mode === 'blocking')
+    && typeof value.blocked === 'boolean'
+    && Array.isArray(value.results) && value.results.every(isReviewResult)
+    && Array.isArray(value.findings) && value.findings.every(isReviewFinding)
+    && typeof value.artifactPath === 'string'
+    && typeof value.summary === 'string'
+}
+
+function isReviewerChecklistItem(value: unknown): value is ReviewerChecklistItem {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.label === 'string'
+    && isOptionalString(value.description)
+    && typeof value.required === 'boolean'
+    && (value.defaultState === 'unchecked' || value.defaultState === 'checked' || value.defaultState === 'needs-decision')
+}
+
+function isReviewerChecklist(value: unknown): value is ReviewerChecklist {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && (value.reviewerAgentId === 'coderabbit-reviewer' || value.reviewerAgentId === 'kilo-code-reviewer')
+    && typeof value.title === 'string'
+    && typeof value.description === 'string'
+    && isStringArray(value.memoryTags)
+    && isStringArray(value.instructionTags)
+    && Array.isArray(value.items) && value.items.every(isReviewerChecklistItem)
+    && typeof value.updatedAt === 'string'
+}
+
+function isReviewerAgent(value: unknown): value is ReviewerAgent {
+  return isRecord(value)
+    && (value.id === 'coderabbit-reviewer' || value.id === 'kilo-code-reviewer')
+    && typeof value.name === 'string'
+    && (value.provider === 'coderabbit' || value.provider === 'kilo')
+    && typeof value.providerName === 'string'
+    && typeof value.adapterMode === 'string'
+    && typeof value.description === 'string'
+    && (value.defaultReviewMode === 'advisory' || value.defaultReviewMode === 'blocking')
+    && typeof value.defaultGate === 'string'
+    && isStringArray(value.focusAreas)
+    && isStringArray(value.checklistIds)
+    && isStringArray(value.memoryTags)
+    && isStringArray(value.instructionTags)
+    && Array.isArray(value.remediationTargets) && value.remediationTargets.every(isRemediationTarget)
+    && isReviewProviderStatus(value.auth)
+    && Array.isArray(value.recentRuns) && value.recentRuns.every(isReviewRunSummary)
+    && (value.latestRun === undefined || isReviewRunSummary(value.latestRun))
+    && Array.isArray(value.checklists) && value.checklists.every(isReviewerChecklist)
 }
 
 function hasAgentsResponse(value: unknown): value is AgentsResponse {
-  return isObject(value) && Array.isArray(value.agents)
+  return isRecord(value) && Array.isArray(value.agents) && value.agents.every(isReviewerAgent)
 }
 
 function hasRunsResponse(value: unknown): value is RunsResponse {
-  return isObject(value) && Array.isArray(value.runs)
+  return isRecord(value) && Array.isArray(value.runs) && value.runs.every(isReviewRunSummary)
 }
 
 function hasRunResponse(value: unknown): value is RunResponse {
-  return isObject(value) && isObject(value.run)
+  return isRecord(value) && isReviewRunSummary(value.run)
 }
 
 function hasChecklistResponse(value: unknown): value is ChecklistResponse {
-  return isObject(value) && isObject(value.checklist)
+  return isRecord(value) && isReviewerChecklist(value.checklist)
 }
 
-function invalidResponseError(resource: string) {
-  return new Error(`Reviewer agents API returned an invalid ${resource} response. The server may be running a build that does not include the reviewer agents API routes.`)
+type Translate = (key: string, options?: Record<string, unknown>) => string
+
+function invalidResponseError(resource: string, t: Translate) {
+  return new Error(t('reviewerAgents.loadError.invalidResponse', { resource }))
 }
 
-function reviewerAgentsErrorMessage(err: unknown): string {
+function reviewerAgentsErrorMessage(err: unknown, t: Translate): string {
   if (err instanceof ApiRequestError && err.status === 404) {
-    return 'Reviewer agents API route was not found. Deploy a server build that includes /api/reviewer-agents.'
+    return t('reviewerAgents.loadError.notFound')
   }
   return getErrorMessage(err)
 }
@@ -212,6 +332,7 @@ function TagList({ tags }: { tags: string[] }) {
 }
 
 function ChecklistEditor({ checklist, onSaved }: { checklist: ReviewerChecklist; onSaved: (checklist: ReviewerChecklist) => void }) {
+  const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(checklist.title)
   const [description, setDescription] = useState(checklist.description)
@@ -226,7 +347,7 @@ function ChecklistEditor({ checklist, onSaved }: { checklist: ReviewerChecklist;
     setSaving(true)
     try {
       const response = await api.patch<ChecklistResponse>(`/reviewer-agents/checklists/${checklist.id}`, { title, description })
-      if (!hasChecklistResponse(response)) throw invalidResponseError('checklist')
+      if (!hasChecklistResponse(response)) throw invalidResponseError('checklist', t)
       onSaved(response.checklist)
       setEditing(false)
       toast.success('Checklist updated')
@@ -320,6 +441,7 @@ function ReviewerAgentCard({ agent, selected, onSelect, onRun }: { agent: Review
 }
 
 function RunDetail({ run, onStateChange }: { run?: ReviewRunSummary; onStateChange: (run: ReviewRunSummary) => void }) {
+  const { t } = useTranslation()
   const [expandedRaw, setExpandedRaw] = useState<string | null>(null)
   const [updating, setUpdating] = useState<string | null>(null)
   if (!run) return <Card><CardContent className="p-6 text-sm text-muted-foreground">Select a reviewer or run a review to see result details.</CardContent></Card>
@@ -329,7 +451,7 @@ function RunDetail({ run, onStateChange }: { run?: ReviewRunSummary; onStateChan
     setUpdating(finding.id)
     try {
       const response = await api.patch<RunResponse>(`/reviewer-agents/runs/${run.id}/findings/${finding.id}`, { state })
-      if (!hasRunResponse(response)) throw invalidResponseError('run')
+      if (!hasRunResponse(response)) throw invalidResponseError('run', t)
       onStateChange(response.run)
     } catch (err) {
       toastError(err)
@@ -415,6 +537,7 @@ export function ReviewerAgentsPage() {
 }
 
 function ReviewerAgentsAdminPage() {
+  const { t } = useTranslation()
   const [agents, setAgents] = useState<ReviewerAgent[]>([])
   const [runs, setRuns] = useState<ReviewRunSummary[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState<ReviewerAgentId>('coderabbit-reviewer')
@@ -437,19 +560,19 @@ function ReviewerAgentsAdminPage() {
         api.get<AgentsResponse>(`/reviewer-agents${repoPath ? `?repoPath=${encodeURIComponent(repoPath)}` : ''}`),
         api.get<RunsResponse>('/reviewer-agents/runs?limit=20'),
       ])
-      if (!hasAgentsResponse(agentResponse)) throw invalidResponseError('agents')
-      if (!hasRunsResponse(runResponse)) throw invalidResponseError('runs')
+      if (!hasAgentsResponse(agentResponse)) throw invalidResponseError('agents', t)
+      if (!hasRunsResponse(runResponse)) throw invalidResponseError('runs', t)
       setAgents(agentResponse.agents)
       setRuns(runResponse.runs)
       setSelectedRunId((current) => current ?? runResponse.runs[0]?.id ?? null)
     } catch (err) {
-      const message = reviewerAgentsErrorMessage(err)
+      const message = reviewerAgentsErrorMessage(err, t)
       setLoadError(message)
       toast.error(message)
     } finally {
       setLoading(false)
     }
-  }, [repoPath])
+  }, [repoPath, t])
 
   useEffect(() => { void load() }, [load])
 
@@ -457,12 +580,12 @@ function ReviewerAgentsAdminPage() {
     setRunning(agent.id)
     try {
       const response = await api.post<RunResponse>(`/reviewer-agents/${agent.id}/runs`, { repoPath: repoPath || '.', base: base || undefined, mode, light: true })
-      if (!hasRunResponse(response)) throw invalidResponseError('run')
+      if (!hasRunResponse(response)) throw invalidResponseError('run', t)
       setSelectedRunId(response.run.id)
       setRuns((prev) => [response.run, ...prev.filter((run) => run.id !== response.run.id)])
       toast.success(`${agent.name} completed: ${response.run.blocked ? 'blocked' : response.run.status}`)
       const agentResponse = await api.get<AgentsResponse>(`/reviewer-agents${repoPath ? `?repoPath=${encodeURIComponent(repoPath)}` : ''}`)
-      if (!hasAgentsResponse(agentResponse)) throw invalidResponseError('agents')
+      if (!hasAgentsResponse(agentResponse)) throw invalidResponseError('agents', t)
       setAgents(agentResponse.agents)
     } catch (err) {
       toastError(err)
@@ -507,12 +630,12 @@ function ReviewerAgentsAdminPage() {
         <main className="min-h-0 flex-1 overflow-y-auto p-4">
           <Card className="border-destructive/40 bg-destructive/5">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base text-destructive"><ShieldAlert className="size-4" />Reviewer agents unavailable</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-base text-destructive"><ShieldAlert className="size-4" />{t('reviewerAgents.loadError.title')}</CardTitle>
               <CardDescription>{loadError}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <p>Confirm the live server is running a branch/build that mounts <code className="rounded bg-muted px-1 py-0.5">/api/reviewer-agents</code>, then refresh this page.</p>
-              <Button variant="outline" onClick={load} disabled={loading}><RefreshCw className={cn('size-4', loading && 'animate-spin')} /> Retry</Button>
+              <p>{t('reviewerAgents.loadError.description')}</p>
+              <Button variant="outline" onClick={load} disabled={loading}><RefreshCw className={cn('size-4', loading && 'animate-spin')} /> {t('reviewerAgents.loadError.retry')}</Button>
             </CardContent>
           </Card>
         </main>
