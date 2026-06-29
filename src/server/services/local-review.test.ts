@@ -4,7 +4,7 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { _LOCAL_REVIEW_INTERNALS_FOR_TEST, runLocalCodeReview } from './local-review'
 
-const { parseReviewFindings, evaluateGate, parseJsonLines } = _LOCAL_REVIEW_INTERNALS_FOR_TEST
+const { parseReviewFindings, evaluateGate, parseJsonLines, kiloSlashCommandArgs, kiloPromptFallbackArgs } = _LOCAL_REVIEW_INTERNALS_FOR_TEST
 const originalPath = process.env.PATH
 
 afterEach(() => {
@@ -44,7 +44,7 @@ describe('local-review parsing', () => {
     expect(events).toHaveLength(1)
   })
 
-  it('parses Kilo prompt fallback findings from nested results', () => {
+  it('parses Kilo slash-command findings from nested results', () => {
     const findings = parseReviewFindings('kilo', JSON.stringify({ findings: [{ severity: 'high', title: 'Race', description: 'Shared state', location: { path: 'src/race.ts', line: 5 } }] }))
     expect(findings).toHaveLength(1)
     expect(findings[0]).toMatchObject({ provider: 'kilo', severity: 'major', file: 'src/race.ts', line: 5 })
@@ -64,6 +64,53 @@ describe('local-review parsing', () => {
     const findings = parseReviewFindings('kilo', raw)
     expect(findings).toHaveLength(1)
     expect(findings[0]).toMatchObject({ provider: 'kilo', severity: 'major', title: 'Missing guard', file: 'src/a.ts', line: 42, confidence: 'high' })
+  })
+})
+
+describe('Kilo local-review adapter', () => {
+  it('builds the documented slash-command invocation before prompt fallback', () => {
+    expect(kiloSlashCommandArgs({ repoPath: '/repo', base: 'origin/main' })).toEqual(['run', '--format', 'json', '--auto', '--dir', '/repo', '/local-review'])
+    expect(kiloSlashCommandArgs({ repoPath: '/repo', head: 'working tree' })).toEqual(['run', '--format', 'json', '--auto', '--dir', '/repo', '/local-review-uncommitted'])
+    expect(kiloPromptFallbackArgs({ repoPath: '/repo', base: 'origin/main' }).at(-1)).toContain('dedicated local code reviewer')
+  })
+
+  it('records slash-command adapter mode in Kilo results', async () => {
+    const root = makeFakeBin('kilo', `
+if [[ "$1" == "--version" ]]; then echo "7.3.44"; exit 0; fi
+if [[ "$1" == "auth" ]]; then echo 'Kilo Gateway credential active'; exit 0; fi
+if [[ "$1" == "config" ]]; then echo 'ok'; exit 0; fi
+if [[ "$1" == "run" && "$7" == "/local-review" ]]; then echo '{"findings":[{"severity":"minor","title":"Kilo nit","file":"src/kilo.ts"}]}'; exit 0; fi
+echo "unexpected args: $*" >&2
+exit 1
+`)
+    try {
+      mkdirSync(join(root, 'repo'), { recursive: true })
+      const result = await runLocalCodeReview({ repoPath: join(root, 'repo'), provider: 'kilo', base: 'origin/main', mode: 'advisory', timeoutMs: 1000 })
+      expect(result.results[0]).toMatchObject({ provider: 'kilo', status: 'succeeded', localReviewMode: 'slash-command' })
+      expect(result.findings[0]).toMatchObject({ provider: 'kilo', severity: 'minor', file: 'src/kilo.ts' })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to prompt mode only when Kilo slash command fails', async () => {
+    const root = makeFakeBin('kilo', `
+if [[ "$1" == "--version" ]]; then echo "7.3.44"; exit 0; fi
+if [[ "$1" == "auth" ]]; then echo 'Kilo Gateway credential active'; exit 0; fi
+if [[ "$1" == "config" ]]; then echo 'ok'; exit 0; fi
+if [[ "$1" == "run" && "$7" == "/local-review" ]]; then echo 'slash failed' >&2; exit 1; fi
+if [[ "$1" == "run" ]]; then echo '{"findings":[{"severity":"major","title":"Fallback finding","file":"src/fallback.ts"}]}'; exit 0; fi
+exit 1
+`)
+    try {
+      mkdirSync(join(root, 'repo'), { recursive: true })
+      const result = await runLocalCodeReview({ repoPath: join(root, 'repo'), provider: 'kilo', base: 'origin/main', mode: 'advisory', timeoutMs: 1000 })
+      expect(result.results[0]).toMatchObject({ provider: 'kilo', status: 'succeeded', localReviewMode: 'prompt-fallback' })
+      expect(result.results[0]?.rawOutput).toContain('slash-command local review failed')
+      expect(result.findings[0]).toMatchObject({ provider: 'kilo', severity: 'major', file: 'src/fallback.ts' })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
 

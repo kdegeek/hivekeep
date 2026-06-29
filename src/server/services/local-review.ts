@@ -8,6 +8,7 @@ export type ReviewRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 's
 export type ReviewSeverity = 'info' | 'minor' | 'major' | 'critical'
 export type ReviewConfidence = 'low' | 'medium' | 'high'
 export type ReviewMode = 'advisory' | 'blocking'
+export type LocalReviewAdapterMode = 'native' | 'slash-command' | 'prompt-fallback'
 
 export interface ReviewFinding {
   id: string
@@ -44,7 +45,7 @@ export interface ReviewProviderStatus {
   version?: string
   authStatus?: string
   doctor?: string
-  localReviewMode?: 'native' | 'prompt-fallback'
+  localReviewMode?: LocalReviewAdapterMode
   error?: string
 }
 
@@ -65,6 +66,7 @@ export interface ReviewResult {
   rawOutput?: string
   error?: string
   artifactPath?: string
+  localReviewMode?: LocalReviewAdapterMode
   blocked: boolean
 }
 
@@ -81,7 +83,7 @@ export interface ReviewRunSummary {
 
 export const LOCAL_REVIEW_PROVIDERS: Array<{ id: ReviewProvider; displayName: string; description: string }> = [
   { id: 'coderabbit', displayName: 'CodeRabbit', description: 'CodeRabbit CLI-backed local reviewer (`cr review --agent --light`).' },
-  { id: 'kilo', displayName: 'Kilo Code', description: 'Kilo CLI-backed local reviewer using `kilo run --format json --auto` prompt fallback.' },
+  { id: 'kilo', displayName: 'Kilo Code', description: "Kilo CLI-backed local reviewer using Kilo's `/local-review` slash command via `kilo run --format json --auto`." },
 ]
 
 interface ExecResult {
@@ -89,6 +91,7 @@ interface ExecResult {
   stdout: string
   stderr: string
   timedOut: boolean
+  localReviewMode?: LocalReviewAdapterMode
 }
 
 function asString(v: unknown): string | undefined {
@@ -184,7 +187,7 @@ export async function checkKiloAuth(repoPath = process.cwd()): Promise<ReviewPro
     authenticated,
     version: found.result.stdout.trim() || found.result.stderr.trim(),
     authStatus: text || undefined,
-    localReviewMode: 'prompt-fallback',
+    localReviewMode: 'slash-command',
     error: authenticated ? undefined : text || 'Kilo auth list did not report configured credentials.',
   }
 }
@@ -279,7 +282,7 @@ function parseMarkdownFindingTable(provider: ReviewProvider, text: string): Revi
   if (lines.length < 3) return []
   const header = lines[0]!.split('|').map((cell) => cell.trim().toLowerCase()).filter(Boolean)
   const separator = lines[1]!
-  if (!header.includes('severity') || !header.includes('title') || !/^[|\s:-]+$/.test(separator)) return []
+  if (!header.includes('severity') || (!header.includes('title') && !header.includes('issue')) || !/^[|\s:-]+$/.test(separator)) return []
   const idx = (name: string) => header.indexOf(name)
   return lines.slice(2).map((line, i) => {
     const cells = line.split('|').map((cell) => cell.trim()).filter((_, cellIndex, arr) => cellIndex > 0 && cellIndex < arr.length - 1)
@@ -287,13 +290,15 @@ function parseMarkdownFindingTable(provider: ReviewProvider, text: string): Revi
       const index = idx(name)
       return index >= 0 ? cells[index] : undefined
     }
+    const fileLine = get('file:line') ?? get('file')
+    const parsedLocation = fileLine?.match(/^(.*):(\d+)$/)
     return findingFromObject(provider, {
       id: `${provider}-table-${i + 1}`,
       severity: get('severity'),
-      title: get('title'),
-      message: get('message'),
-      file: get('file'),
-      line: Number(get('line')) || undefined,
+      title: get('title') ?? get('issue'),
+      message: get('message') ?? get('issue'),
+      file: parsedLocation?.[1] ?? fileLine,
+      line: Number(get('line') ?? parsedLocation?.[2]) || undefined,
       confidence: get('confidence'),
     }, i)
   }).filter((f): f is ReviewFinding => Boolean(f))
@@ -418,7 +423,7 @@ async function runOneProvider(provider: ReviewProvider, input: ReviewInput & { r
         : (rawOutput || `${provider} exited ${exec.exitCode}`)
       : undefined
     const blocked = evaluateGate(findings, input.mode)
-    return { ...base, status: statusValue, completedAt: new Date().toISOString(), findings, rawOutput, error, summary: summarize(provider, findings, statusValue, error), blocked }
+    return { ...base, status: statusValue, completedAt: new Date().toISOString(), findings, rawOutput, error, localReviewMode: exec.localReviewMode ?? status.localReviewMode, summary: summarize(provider, findings, statusValue, error), blocked }
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err)
     return { ...base, status: 'failed', completedAt: new Date().toISOString(), error, summary: summarize(provider, [], 'failed', error), blocked: false }
@@ -432,15 +437,38 @@ async function runCodeRabbit(input: ReviewInput & { repoPath: string; light: boo
   if (input.light) args.push('--light')
   if (input.base) args.push('--base', input.base)
   if (input.baseCommit) args.push('--base-commit', input.baseCommit)
-  return execReviewCli(found.name, args, input.repoPath, input.timeoutMs)
+  const result = await execReviewCli(found.name, args, input.repoPath, input.timeoutMs)
+  return { ...result, localReviewMode: 'native' }
 }
 
 function kiloReviewPrompt(input: ReviewInput): string {
   return `You are Kilo Code acting as a dedicated local code reviewer for Hivekeep. Review the repository changes before push/PR.\nRepo: ${input.repoPath}\nBase: ${input.base ?? input.baseCommit ?? 'merge-base/default'}\nHead: ${input.head ?? 'working tree'}\nReturn JSON lines or a JSON object with findings[]. Each finding should include severity (critical|major|minor|info), title, message, file, line, confidence. Focus on correctness, security, tests, and regressions. Do not modify files.`
 }
 
-async function runKilo(input: ReviewInput & { repoPath: string }): Promise<ExecResult> {
-  return execReviewCli('kilo', ['run', '--format', 'json', '--auto', '--dir', input.repoPath, kiloReviewPrompt(input)], input.repoPath, input.timeoutMs)
+function kiloSlashCommand(input: ReviewInput): '/local-review' | '/local-review-uncommitted' {
+  return input.head === 'working tree' && !input.base && !input.baseCommit ? '/local-review-uncommitted' : '/local-review'
 }
 
-export const _LOCAL_REVIEW_INTERNALS_FOR_TEST = { parseReviewFindings, parseJsonLines, evaluateGate, kiloReviewPrompt }
+function kiloSlashCommandArgs(input: ReviewInput & { repoPath: string }): string[] {
+  return ['run', '--format', 'json', '--auto', '--dir', input.repoPath, kiloSlashCommand(input)]
+}
+
+function kiloPromptFallbackArgs(input: ReviewInput & { repoPath: string }): string[] {
+  return ['run', '--format', 'json', '--auto', '--dir', input.repoPath, kiloReviewPrompt(input)]
+}
+
+async function runKilo(input: ReviewInput & { repoPath: string }): Promise<ExecResult> {
+  const slash = await execReviewCli('kilo', kiloSlashCommandArgs(input), input.repoPath, input.timeoutMs)
+  const slashRaw = [slash.stdout, slash.stderr].filter(Boolean).join('\n')
+  if (slash.exitCode === 0 || parseReviewFindings('kilo', slashRaw).length > 0) return { ...slash, localReviewMode: 'slash-command' }
+
+  const fallback = await execReviewCli('kilo', kiloPromptFallbackArgs(input), input.repoPath, input.timeoutMs)
+  return {
+    ...fallback,
+    stdout: fallback.stdout,
+    stderr: [`Kilo slash-command local review failed; used prompt fallback.`, slashRaw, fallback.stderr].filter(Boolean).join('\n'),
+    localReviewMode: 'prompt-fallback',
+  }
+}
+
+export const _LOCAL_REVIEW_INTERNALS_FOR_TEST = { parseReviewFindings, parseJsonLines, evaluateGate, kiloReviewPrompt, kiloSlashCommand, kiloSlashCommandArgs, kiloPromptFallbackArgs }

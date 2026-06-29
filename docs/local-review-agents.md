@@ -13,10 +13,11 @@ The goal is a hook-style workflow that can run before push or PR creation, persi
 2. Hivekeep resolves the repo/worktree path and records review metadata: provider, base/head, mode, timestamps, findings, and artifact path.
 3. Each reviewer runs as a dedicated provider adapter:
    - CodeRabbit: `cr review --agent --dir <repo> --light` plus `--base` / `--base-commit` when supplied.
-   - Kilo Code: prompt fallback through `kilo run --format json --auto --dir <repo> <review prompt>`.
-4. JSON-line or JSON-object output is parsed into `ReviewFinding[]`.
-5. The gate blocks automatic push/PR only in `blocking` mode when any `critical` or `major` findings exist. Advisory mode always reports but does not block.
-6. A durable JSON artifact is written under `config.codeReview.artifactDir` (default `data/code-reviews`).
+   - Kilo Code: Kilo's documented local-review slash commands through `kilo run --format json --auto --dir <repo> /local-review` (or `/local-review-uncommitted` for working-tree-only review).
+4. Kilo falls back to a structured prompt (`kilo run --format json --auto --dir <repo> <review prompt>`) only if the slash-command run fails without parseable findings.
+5. JSON-line or JSON-object output is parsed into `ReviewFinding[]`.
+6. The gate blocks automatic push/PR only in `blocking` mode when any `critical` or `major` findings exist. Advisory mode always reports but does not block.
+7. A durable JSON artifact is written under `config.codeReview.artifactDir` (default `data/code-reviews`).
 
 ## Tools
 
@@ -64,7 +65,39 @@ Reviews are run with `cr review --agent`; review data is sent wherever the CodeR
 
 ### Kilo Code
 
-Kilo 7.3.44 was verified locally. The CLI exposes `kilo run --format json --auto --dir <repo>` for non-interactive runs. No dedicated non-interactive `/local-review` command was confirmed in this pass, so Hivekeep uses a structured review prompt fallback and documents that limitation clearly.
+The Kilo CLI was verified locally during implementation. Its help exposes the scriptable runner contract:
+
+```bash
+kilo run --format json --auto --dir <repo> <message-or-slash-command>
+```
+
+The Kilo CLI docs at <https://kilo.ai/docs/code-with-ai/platforms/cli> document:
+
+- `kilo run [message..]` with `--format json` for raw JSON events.
+- `--auto` autonomous mode, including exit codes (`0` success, `124` timeout, `1` error).
+- `--dir` to choose the working directory.
+- built-in slash commands `/local-review` and `/local-review-uncommitted` under "Local Code Reviews".
+
+Hivekeep therefore treats this as Kilo's primary local-review contract and runs:
+
+```bash
+kilo run --format json --auto --dir <repo> /local-review
+```
+
+For explicitly working-tree-only review (`head: "working tree"` with no base/base commit), Hivekeep uses:
+
+```bash
+kilo run --format json --auto --dir <repo> /local-review-uncommitted
+```
+
+The provider status/result exposes `localReviewMode: "slash-command"` for this path. If the slash command exits non-zero and produces no parseable findings, Hivekeep retries once with the older structured prompt fallback and marks `localReviewMode: "prompt-fallback"` in the result so callers can distinguish native Kilo review from fallback review.
+
+Observed local behavior on this branch:
+
+- `/local-review` returned JSON events and spawned Kilo's built-in "Run local review" task. It produced findings against the branch diff without modifying files.
+- `/local-review-uncommitted` returned JSON events and reported no findings on a clean working tree.
+- Top-level commands such as `kilo review`, `kilo local-review`, `kilo reviews`, and `kilo code-review` are not separate commands in 7.3.44; they print top-level help. The stable entrypoint is the slash command through `kilo run`.
+- `kilo run --command local-review` did not complete in a short safety test, so Hivekeep does not use it.
 
 Review data is sent to the model/provider configured in Kilo. Use `kilo auth`, `kilo models`, `kilo profile`, and `kilo debug` locally to verify account/provider state.
 
@@ -88,5 +121,5 @@ The review result is structured so Hiro/Kaito or ticket-bound sub-Agents can con
 
 - Rich React renderer for review artifacts/findings.
 - DB migration and review-run history UI.
-- Native Kilo local-review command support if/when a stable non-interactive command is available.
+- Richer extraction for Kilo's nested task output if Kilo publishes a tighter machine-readable finding schema than JSON events containing review text.
 - Automatic PR wrapper integration after the local runner has settled.
