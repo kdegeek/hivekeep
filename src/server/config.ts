@@ -541,6 +541,16 @@ export const config = {
     worktreeSweepIntervalMin: Number(process.env.HIVEKEEP_WORKTREE_SWEEP_INTERVAL_MIN ?? 5),
   },
 
+  codeReview: {
+    /** Durable local-review JSON artifacts. Defaults outside Agent workspaces. */
+    artifactDir: process.env.HIVEKEEP_CODE_REVIEW_DIR ?? `${dataDir}/code-reviews`,
+    /** Advisory by default: report findings without making network CLIs a hard local gate. */
+    defaultMode: (process.env.HIVEKEEP_CODE_REVIEW_MODE === 'blocking' ? 'blocking' : 'advisory') as 'advisory' | 'blocking',
+    defaultTimeoutMs: Number(process.env.HIVEKEEP_CODE_REVIEW_TIMEOUT_MS ?? 300_000),
+    maxTimeoutMs: Number(process.env.HIVEKEEP_CODE_REVIEW_MAX_TIMEOUT_MS ?? 900_000),
+    maxOutputBytes: Number(process.env.HIVEKEEP_CODE_REVIEW_MAX_OUTPUT_BYTES ?? 256 * 1024),
+  },
+
   upload: {
     dir: process.env.UPLOAD_DIR ?? `${dataDir}/uploads`,
     maxFileSizeMb: Number(process.env.UPLOAD_MAX_FILE_SIZE ?? 50),

@@ -73,6 +73,13 @@ export const fullMockConfig = {
   crons: { maxActive: 50, maxConcurrentExecutions: 5 },
   tools: { maxSteps: 0 },
   shell: { defaultTimeoutMs: 30_000, maxTimeoutMs: 600_000 },
+  codeReview: {
+    artifactDir: '/tmp/hivekeep-test/code-reviews',
+    defaultMode: 'advisory' as const,
+    defaultTimeoutMs: 300_000,
+    maxTimeoutMs: 900_000,
+    maxOutputBytes: 256 * 1024,
+  },
   humanPrompts: { maxPendingPerAgent: 5 },
   interAgent: { maxChainDepth: 5, rateLimitPerMinute: 20 },
   mcp: { requireApproval: true },

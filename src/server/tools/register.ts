@@ -211,6 +211,11 @@ import {
 import { requestProviderSetupTool, requestChannelSetupTool, promptSecretTool } from '@/server/tools/secure-input-tools'
 import { runShellTool } from '@/server/tools/shell-tools'
 import {
+  checkCodeReviewAuthTool,
+  listLocalReviewersTool,
+  runLocalCodeReviewTool,
+} from '@/server/tools/code-review-tools'
+import {
   addMcpServerTool,
   updateMcpServerTool,
   removeMcpServerTool,
@@ -583,6 +588,11 @@ export function registerAllTools(): void {
 
   // Shell execution (main + sub-agent)
   toolRegistry.register('run_shell', runShellTool, 'shell')
+
+  // Local code review agents (main + sub-agent): CodeRabbit and Kilo Code.
+  toolRegistry.register('list_local_reviewers', listLocalReviewersTool, 'shell')
+  toolRegistry.register('check_code_review_auth', checkCodeReviewAuthTool, 'shell')
+  toolRegistry.register('run_local_code_review', runLocalCodeReviewTool, 'shell')
 
   // File storage tools (main only)
   toolRegistry.register('store_file', storeFileTool, 'file-storage')

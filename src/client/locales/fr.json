@@ -2862,7 +2862,10 @@
       "update_project_knowledge": "Modifier une connaissance projet",
       "delete_project_knowledge": "Supprimer une connaissance projet",
       "pin_project_knowledge": "Épingler une connaissance projet",
-      "get_mini_app_backend_status": "Statut du backend de Mini-App"
+      "get_mini_app_backend_status": "Statut du backend de Mini-App",
+      "list_local_reviewers": "Lister les reviewers locaux",
+      "check_code_review_auth": "Vérifier l’authentification de revue de code",
+      "run_local_code_review": "Lancer une revue de code locale"
     },
     "renderers": {
       "rawJson": "JSON brut",

@@ -64,6 +64,7 @@ import { logRoutes } from '@/server/routes/logs'
 import { terminalRoutes } from '@/server/routes/terminal'
 import { usageRoutes } from '@/server/routes/usage'
 import { versionCheckRoutes } from '@/server/routes/version-check'
+import { reviewerAgentRoutes } from '@/server/routes/reviewer-agents'
 
 export type AppVariables = {
   session: { id: string; userId: string; token: string }
@@ -206,6 +207,7 @@ app.route('/api/settings', settingsRoutes)
 app.route('/api/feedback', feedbackRoutes)
 app.route('/api/contacts', contactRoutes)
 app.route('/api/tasks', taskRoutes)
+app.route('/api/reviewer-agents', reviewerAgentRoutes)
 app.route('/api/crons', cronRoutes)
 app.route('/api/projects', projectRoutes)
 app.route('/api/tags', tagRoutes)

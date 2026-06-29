@@ -2862,7 +2862,10 @@
       "update_project_knowledge": "Update Project Knowledge",
       "delete_project_knowledge": "Delete Project Knowledge",
       "pin_project_knowledge": "Pin Project Knowledge",
-      "get_mini_app_backend_status": "Mini-App Backend Status"
+      "get_mini_app_backend_status": "Mini-App Backend Status",
+      "list_local_reviewers": "List Local Reviewers",
+      "check_code_review_auth": "Check Code Review Auth",
+      "run_local_code_review": "Run Local Code Review"
     },
     "renderers": {
       "rawJson": "Raw JSON",
@@ -3273,6 +3276,7 @@
     "tasks": "Tasks",
     "crons": "Scheduled Tasks",
     "apps": "Mini-Apps",
+    "reviewerAgents": "Reviewer Agents",
     "models": "Models",
     "files": "Files",
     "terminal": "Terminal",

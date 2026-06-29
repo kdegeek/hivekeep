@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useState, useEffect, useCallback, Suspense, type ReactNode } from 'react'
 import { lazyWithRetry as lazy } from '@/client/lib/lazy-with-retry'
 import { useAuth } from '@/client/hooks/useAuth'
 import { useTranslation } from 'react-i18next'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { api } from '@/client/lib/api'
 import { SidePanelProvider } from '@/client/contexts/SidePanelContext'
@@ -24,6 +24,7 @@ const TasksPage = lazy(() => import('@/client/pages/tasks/TasksPage').then(m => 
 const CronsPage = lazy(() => import('@/client/pages/crons/CronsPage').then(m => ({ default: m.CronsPage })))
 const FilesPage = lazy(() => import('@/client/pages/files/FilesPage').then(m => ({ default: m.FilesPage })))
 const MiniAppsPage = lazy(() => import('@/client/pages/mini-apps/MiniAppsPage').then(m => ({ default: m.MiniAppsPage })))
+const ReviewerAgentsPage = lazy(() => import('@/client/pages/reviewer-agents/ReviewerAgentsPage').then(m => ({ default: m.ReviewerAgentsPage })))
 const ModelRegistryPage = lazy(() => import('@/client/pages/models/ModelRegistryPage').then(m => ({ default: m.ModelRegistryPage })))
 const TerminalPage = lazy(() => import('@/client/pages/terminal/TerminalPage').then(m => ({ default: m.TerminalPage })))
 const LoginPage = lazy(() => import('@/client/pages/login/LoginPage').then(m => ({ default: m.LoginPage })))
@@ -169,6 +170,12 @@ function AppRoot() {
 // here on the global routed-content div. Applying it globally would also turn
 // this div into the containing block for @dnd-kit's DragOverlay (also
 // position: fixed), offsetting the drag ghost on the Projects kanban.
+function RequireAdmin({ children }: { children: ReactNode }) {
+  const { user } = useAuth()
+  if (user?.role !== 'admin') return <Navigate to="/" replace />
+  return children
+}
+
 function AuthenticatedShell() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialSection, setSettingsInitialSection] = useState<string | undefined>()
@@ -233,6 +240,7 @@ function AuthenticatedShell() {
                 <Route path="/files/:agentId" element={<FilesPage />} />
                 <Route path="/files/:sourceType/:sourceId" element={<FilesPage />} />
                 <Route path="/mini-apps" element={<MiniAppsPage />} />
+                <Route path="/reviewer-agents" element={<RequireAdmin><ReviewerAgentsPage /></RequireAdmin>} />
                 <Route path="/models" element={<ModelRegistryPage />} />
                 <Route path="/terminal" element={<TerminalPage />} />
                 <Route
