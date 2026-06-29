@@ -3278,6 +3278,15 @@
     "terminal": "Terminal",
     "feedback": "Feedback"
   },
+  "reviewerAgents": {
+    "loadError": {
+      "title": "Reviewer agents unavailable",
+      "description": "Confirm the live server is running a branch/build that mounts /api/reviewer-agents, then refresh this page.",
+      "retry": "Retry",
+      "invalidResponse": "Reviewer agents API returned an invalid {{resource}} response. The server may be running a build that does not include the reviewer agents API routes.",
+      "notFound": "Reviewer agents API route was not found. Deploy a server build that includes /api/reviewer-agents."
+    }
+  },
   "terminal": {
     "title": "Terminal",
     "newSession": "Neue Sitzung",
