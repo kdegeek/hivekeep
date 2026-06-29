@@ -1,4 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react'
+import { buildApiUrl } from '@/client/lib/api'
 
 type SSEEventHandler = (data: Record<string, unknown>) => void
 type HandlersMap = Record<string, SSEEventHandler>
@@ -131,7 +132,7 @@ function connect() {
   }
   if (state.eventSource) return
 
-  const es = new EventSource('/api/sse', { withCredentials: true })
+  const es = new EventSource(buildApiUrl('/sse'), { withCredentials: true })
   state.eventSource = es
 
   es.addEventListener('message', (event) => {

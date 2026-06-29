@@ -1,6 +1,69 @@
 import { toast } from 'sonner'
 
-const BASE_URL = '/api'
+const API_PATH_PREFIX = '/api'
+export const MOBILE_SERVER_URL_STORAGE_KEY = 'hivekeep:serverUrl'
+
+export function isCapacitorRuntime(): boolean {
+  return typeof window !== 'undefined' && window.location.protocol === 'capacitor:'
+}
+
+export function isMobileApiRuntime(): boolean {
+  return import.meta.env?.VITE_HIVEKEEP_MOBILE === 'true' || isCapacitorRuntime()
+}
+
+function getStoredServerUrl(): string | null {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    return localStorage.getItem(MOBILE_SERVER_URL_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function normalizeHivekeepServerUrl(serverUrl: string): string {
+  const trimmed = serverUrl.trim()
+  if (!trimmed) throw new Error('Hivekeep server URL is required')
+  const url = new URL(trimmed)
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error('Hivekeep server URL must start with http:// or https://')
+  }
+  if (url.username || url.password) {
+    throw new Error('Hivekeep server URL must not include credentials')
+  }
+  url.hash = ''
+  url.search = ''
+  url.pathname = url.pathname.replace(/\/+$/, '')
+  return url.toString().replace(/\/+$/, '')
+}
+
+export function getHivekeepServerUrl(): string | null {
+  const stored = getStoredServerUrl()
+  if (!stored) return null
+  return normalizeHivekeepServerUrl(stored)
+}
+
+export function setHivekeepServerUrl(serverUrl: string): string {
+  if (typeof localStorage === 'undefined') throw new Error('Server URL storage is unavailable')
+  const normalized = normalizeHivekeepServerUrl(serverUrl)
+  localStorage.setItem(MOBILE_SERVER_URL_STORAGE_KEY, normalized)
+  return normalized
+}
+
+export function clearHivekeepServerUrl(): void {
+  if (typeof localStorage === 'undefined') return
+  localStorage.removeItem(MOBILE_SERVER_URL_STORAGE_KEY)
+}
+
+export function buildApiUrl(path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  const serverUrl = isMobileApiRuntime() ? getHivekeepServerUrl() : null
+  if (!serverUrl && isCapacitorRuntime()) {
+    throw new Error('Hivekeep server URL is not configured')
+  }
+  return serverUrl
+    ? `${serverUrl}${API_PATH_PREFIX}${normalizedPath}`
+    : `${API_PATH_PREFIX}${normalizedPath}`
+}
 
 // ─── Custom error class ───────────────────────────────────────────────────────
 
@@ -53,7 +116,7 @@ export function toastError(err: unknown): void {
 // ─── Core fetch wrapper ───────────────────────────────────────────────────────
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetch(buildApiUrl(path), {
     ...options,
     credentials: 'include',
     headers: {
