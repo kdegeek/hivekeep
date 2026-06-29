@@ -5,7 +5,7 @@ import { tmpdir } from 'os'
 import { config } from '@/server/config'
 import { _LOCAL_REVIEW_INTERNALS_FOR_TEST, checkCodeRabbitAuth, runLocalCodeReview } from './local-review'
 
-const { parseReviewFindings, evaluateGate, parseJsonLines, kiloSlashCommandArgs, kiloPromptFallbackArgs, execReviewCli, getReviewRun, updateReviewFindingState, trimIncompleteUtf8End, trimIncompleteUtf8Start, validateReviewRepoPath, isPathInsideOrEqual } = _LOCAL_REVIEW_INTERNALS_FOR_TEST
+const { parseReviewFindings, evaluateGate, parseJsonLines, kiloSlashCommandArgs, kiloPromptFallbackArgs, execReviewCli, getReviewRun, updateReviewFindingState, trimIncompleteUtf8End, trimIncompleteUtf8Start, validateReviewRepoPath, validateReviewRepoPathWithAllowedRoots, isPathInsideOrEqual } = _LOCAL_REVIEW_INTERNALS_FOR_TEST
 const originalPath = process.env.PATH
 const originalArtifactDir = config.codeReview.artifactDir
 const originalAllowedRepoRoots = [...config.codeReview.allowedRepoRoots]
@@ -63,6 +63,20 @@ describe('local-review repo validation', () => {
       initGitRepo(repo)
       mutableCodeReviewConfig.allowedRepoRoots = [join(root, 'allowed')]
       expect(validateReviewRepoPath(repo, workspace)).toBe(realpathSync(repo))
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('uses supplied effective allowed roots for settings overrides', () => {
+    const root = mkdtempSync(join(tmpdir(), 'hivekeep-local-review-effective-root-'))
+    try {
+      const workspace = join(root, 'workspace')
+      const repo = join(root, 'settings-allowed', 'repo')
+      mkdirSync(workspace, { recursive: true })
+      initGitRepo(repo)
+      mutableCodeReviewConfig.allowedRepoRoots = []
+      expect(validateReviewRepoPathWithAllowedRoots(repo, workspace, [join(root, 'settings-allowed')])).toBe(realpathSync(repo))
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

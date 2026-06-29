@@ -43,6 +43,7 @@ import { CustomDomainsSettings } from '@/client/pages/settings/CustomDomainsSett
 import { LogsSettings } from '@/client/pages/settings/LogsSettings'
 import { TokenUsageSettings } from '@/client/pages/settings/TokenUsageSettings'
 import { UpdatesSettings } from '@/client/pages/settings/UpdatesSettings'
+import { CodeReviewSettings } from '@/client/pages/settings/CodeReviewSettings'
 import {
   Bell,
   Brain,
@@ -131,6 +132,7 @@ const sectionGroups: SectionGroup[] = [
     groupKey: 'settings.groups.system',
     items: [
       { id: 'logs', icon: ScrollText, labelKey: 'settings.logs.title' },
+      { id: 'codeReview', icon: Code2, labelKey: 'settings.codeReview.title' },
       { id: 'tokenUsage', icon: Coins, labelKey: 'settings.tokenUsage.title' },
       { id: 'updates', icon: ArrowUpCircle, labelKey: 'settings.updates.title' },
     ],
@@ -181,6 +183,7 @@ const sectionComponents: Record<string, React.FC> = {
   customDomains: CustomDomainsSettings,
   notifications: NotificationPreferences,
   logs: LogsSettings,
+  codeReview: CodeReviewSettings,
   tokenUsage: TokenUsageSettings,
   updates: UpdatesSettings,
 }

@@ -2439,6 +2439,9 @@
       "noLogs": "Записей в журнале нет",
       "entries": "{{count}} записей"
     },
+    "codeReview": {
+      "title": "Code Review"
+    },
     "tokenUsage": {
       "title": "Расход токенов",
       "description": "Мониторинг потребления токенов LLM по провайдерам, моделям и агентам",

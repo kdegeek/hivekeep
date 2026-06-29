@@ -2415,6 +2415,9 @@
       "noLogs": "Nessuna voce di log",
       "entries": "{{count}} voci"
     },
+    "codeReview": {
+      "title": "Code Review"
+    },
     "tokenUsage": {
       "title": "Consumo di token",
       "description": "Monitora il consumo di token LLM per provider, modello e agente",

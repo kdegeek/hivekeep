@@ -1,7 +1,9 @@
 import { THINKING_EFFORTS } from '@/shared/constants'
 import type { AgentThinkingEffort } from '@/shared/types'
 import { Hono } from 'hono'
+import { isAbsolute } from 'node:path'
 import { eq } from 'drizzle-orm'
+import { config } from '@/server/config'
 import { db } from '@/server/db/index'
 import { userProfiles, agents } from '@/server/db/schema'
 import {
@@ -53,6 +55,9 @@ import {
   setMaxConcurrentTasks,
   getMaxQueuedTasks,
   setMaxQueuedTasks,
+  getCodeReviewAllowedRepoRoots,
+  getCodeReviewAllowedRepoRootsOverride,
+  setCodeReviewAllowedRepoRoots,
 } from '@/server/services/app-settings'
 import {
   generateNeutralAvatarBase,
@@ -80,6 +85,25 @@ const settingsRoutes = new Hono<{ Variables: AppVariables }>()
  */
 function broadcastDefaultsUpdated() {
   sseManager.broadcast({ type: 'settings:defaults-updated', data: {} })
+}
+
+function normalizeCodeReviewAllowedRoots(value: unknown): { roots: string[]; warnings: string[] } | { error: string } {
+  if (!Array.isArray(value)) return { error: 'allowedRepoRoots must be an array of absolute paths' }
+  const roots: string[] = []
+  const seen = new Set<string>()
+  const warnings: string[] = []
+
+  for (const item of value) {
+    if (typeof item !== 'string') return { error: 'allowedRepoRoots must contain only strings' }
+    const trimmed = item.trim()
+    if (!trimmed) continue
+    if (!isAbsolute(trimmed)) return { error: `Allowed repository root must be an absolute path: ${trimmed}` }
+    if (seen.has(trimmed)) continue
+    seen.add(trimmed)
+    roots.push(trimmed)
+  }
+
+  return { roots, warnings }
 }
 
 // Admin guard
@@ -709,6 +733,56 @@ settingsRoutes.put('/task-limits', async (c) => {
   ])
   log.info({ maxConcurrent: nextConcurrent, maxQueue: nextQueue }, 'Task limits updated')
   return c.json({ maxConcurrent: nextConcurrent, maxQueue: nextQueue })
+})
+
+// ─── Code review repository containment ─────────────────────────────────────
+//
+// Non-boot-critical operational config: DB override wins live; env remains the
+// deployment seed/fallback for headless installs.
+
+// GET /api/settings/code-review/allowed-repo-roots
+settingsRoutes.get('/code-review/allowed-repo-roots', async (c) => {
+  const [allowedRepoRoots, override] = await Promise.all([
+    getCodeReviewAllowedRepoRoots(),
+    getCodeReviewAllowedRepoRootsOverride(),
+  ])
+  return c.json({
+    allowedRepoRoots,
+    source: override === null ? 'env' : 'settings',
+    envFallback: config.codeReview.allowedRepoRoots,
+    restartRequired: false,
+  })
+})
+
+// PUT /api/settings/code-review/allowed-repo-roots
+settingsRoutes.put('/code-review/allowed-repo-roots', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const normalized = normalizeCodeReviewAllowedRoots((body as { allowedRepoRoots?: unknown }).allowedRepoRoots)
+  if ('error' in normalized) {
+    return c.json({ error: { code: 'INVALID_BODY', message: normalized.error } }, 400)
+  }
+
+  await setCodeReviewAllowedRepoRoots(normalized.roots)
+  log.info({ count: normalized.roots.length }, 'Code-review allowed repository roots updated')
+  return c.json({
+    allowedRepoRoots: normalized.roots,
+    source: 'settings',
+    envFallback: config.codeReview.allowedRepoRoots,
+    restartRequired: false,
+    warnings: normalized.warnings,
+  })
+})
+
+// DELETE /api/settings/code-review/allowed-repo-roots
+settingsRoutes.delete('/code-review/allowed-repo-roots', async (c) => {
+  await setCodeReviewAllowedRepoRoots(null)
+  log.info('Code-review allowed repository roots reset to env fallback')
+  return c.json({
+    allowedRepoRoots: config.codeReview.allowedRepoRoots,
+    source: 'env',
+    envFallback: config.codeReview.allowedRepoRoots,
+    restartRequired: false,
+  })
 })
 
 // ─── Setup checklist (dismissed items) ──────────────────────────────────────

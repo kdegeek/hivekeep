@@ -2415,6 +2415,9 @@
       "noLogs": "Sin entradas de registro",
       "entries": "{{count}} entradas"
     },
+    "codeReview": {
+      "title": "Code Review"
+    },
     "tokenUsage": {
       "title": "Uso de tokens",
       "description": "Supervisa el consumo de tokens LLM por proveedor, modelo y agente",

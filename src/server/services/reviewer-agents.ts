@@ -7,7 +7,7 @@ import {
   listReviewRuns,
   runLocalCodeReview,
   updateReviewFindingState,
-  validateReviewRepoPath,
+  validateReviewRepoPathEffective,
   type LocalReviewAdapterMode,
   type ReviewFindingState,
   type ReviewMode,
@@ -208,7 +208,7 @@ export function updateReviewerChecklist(id: string, patch: Partial<Pick<Reviewer
 }
 
 export async function listReviewerAgents(repoPath = process.cwd(), env?: Record<string, string | undefined>, workspaceRoot = process.cwd()): Promise<ReviewerAgent[]> {
-  const resolvedRepoPath = validateReviewRepoPath(resolve(repoPath), resolve(workspaceRoot))
+  const resolvedRepoPath = await validateReviewRepoPathEffective(resolve(repoPath), resolve(workspaceRoot))
   const runs = listReviewRuns(20)
   const checklists = listReviewerChecklists()
   return Promise.all(REVIEWER_DEFINITIONS.map(async (definition) => {

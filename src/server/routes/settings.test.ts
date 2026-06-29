@@ -17,6 +17,9 @@ const mockSetEmbeddingModel = mock(() => Promise.resolve())
 const mockGetDismissedSetupItems = mock(() => Promise.resolve([] as string[]))
 const mockDismissSetupItem = mock((_id: string) => Promise.resolve())
 const mockRestoreSetupItem = mock((_id: string) => Promise.resolve())
+const mockGetCodeReviewAllowedRepoRoots = mock(() => Promise.resolve([] as string[]))
+const mockGetCodeReviewAllowedRepoRootsOverride = mock(() => Promise.resolve(null as string[] | null))
+const mockSetCodeReviewAllowedRepoRoots = mock((_value: string[] | null) => Promise.resolve())
 
 const mockSseBroadcast = mock(() => {})
 
@@ -56,6 +59,9 @@ mock.module('@/server/services/app-settings', () => ({
   getDismissedSetupItems: mockGetDismissedSetupItems,
   dismissSetupItem: mockDismissSetupItem,
   restoreSetupItem: mockRestoreSetupItem,
+  getCodeReviewAllowedRepoRoots: mockGetCodeReviewAllowedRepoRoots,
+  getCodeReviewAllowedRepoRootsOverride: mockGetCodeReviewAllowedRepoRootsOverride,
+  setCodeReviewAllowedRepoRoots: mockSetCodeReviewAllowedRepoRoots,
 }))
 
 mock.module('@/server/sse/index', () => ({
@@ -125,6 +131,9 @@ describe('settings routes', () => {
     mockGetEmbeddingModel.mockReset()
     mockSetEmbeddingModel.mockReset()
     mockSseBroadcast.mockReset()
+    mockGetCodeReviewAllowedRepoRoots.mockReset()
+    mockGetCodeReviewAllowedRepoRootsOverride.mockReset()
+    mockSetCodeReviewAllowedRepoRoots.mockReset()
 
     mockGetGlobalPrompt.mockImplementation(() => Promise.resolve(null))
     mockSetGlobalPrompt.mockImplementation(() => Promise.resolve())
@@ -139,6 +148,9 @@ describe('settings routes', () => {
     mockGetDismissedSetupItems.mockImplementation(() => Promise.resolve([]))
     mockDismissSetupItem.mockImplementation(() => Promise.resolve())
     mockRestoreSetupItem.mockImplementation(() => Promise.resolve())
+    mockGetCodeReviewAllowedRepoRoots.mockImplementation(() => Promise.resolve([]))
+    mockGetCodeReviewAllowedRepoRootsOverride.mockImplementation(() => Promise.resolve(null))
+    mockSetCodeReviewAllowedRepoRoots.mockImplementation(() => Promise.resolve())
   })
 
   // ─── Admin Guard ────────────────────────────────────────────────────────
@@ -345,6 +357,44 @@ describe('settings routes', () => {
   // *globally* under app_settings.dismissed_setup_items — Hivekeep is a
   // small-group product with shared configuration, not multi-tenant
   // per-user, so a dismissal applies to every admin.
+
+  describe('code review allowed repo roots', () => {
+    itMocked('returns effective roots with env source when no settings override exists', async () => {
+      const app = createApp()
+      mockGetCodeReviewAllowedRepoRoots.mockImplementation(() => Promise.resolve(['/env/root']))
+      mockGetCodeReviewAllowedRepoRootsOverride.mockImplementation(() => Promise.resolve(null))
+
+      const res = await app.request('/api/settings/code-review/allowed-repo-roots')
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body).toMatchObject({ allowedRepoRoots: ['/env/root'], source: 'env', restartRequired: false })
+    })
+
+    itMocked('normalizes and saves absolute roots as a live settings override', async () => {
+      const app = createApp()
+      const res = await app.request('/api/settings/code-review/allowed-repo-roots', json({
+        allowedRepoRoots: [' /Users/kdegeek/hivekeep ', '', '/Users/kdegeek/hivekeep', '/srv/repos'],
+      }))
+      expect(res.status).toBe(200)
+      expect(mockSetCodeReviewAllowedRepoRoots).toHaveBeenCalledWith(['/Users/kdegeek/hivekeep', '/srv/repos'])
+      const body = await res.json()
+      expect(body).toMatchObject({ allowedRepoRoots: ['/Users/kdegeek/hivekeep', '/srv/repos'], source: 'settings', restartRequired: false })
+    })
+
+    itMocked('rejects relative roots', async () => {
+      const app = createApp()
+      const res = await app.request('/api/settings/code-review/allowed-repo-roots', json({ allowedRepoRoots: ['relative/repo'] }))
+      expect(res.status).toBe(400)
+      expect(mockSetCodeReviewAllowedRepoRoots).not.toHaveBeenCalled()
+    })
+
+    itMocked('resets to env fallback', async () => {
+      const app = createApp()
+      const res = await app.request('/api/settings/code-review/allowed-repo-roots', { method: 'DELETE' })
+      expect(res.status).toBe(200)
+      expect(mockSetCodeReviewAllowedRepoRoots).toHaveBeenCalledWith(null)
+    })
+  })
 
   describe('GET /dismissed-setup-items', () => {
     itMocked('returns the current list', async () => {

@@ -2415,6 +2415,9 @@
       "noLogs": "没有日志条目",
       "entries": "{{count}} 条"
     },
+    "codeReview": {
+      "title": "Code Review"
+    },
     "tokenUsage": {
       "title": "Token 用量",
       "description": "监控各提供商、模型和智能体的 LLM token 消耗",

@@ -51,14 +51,16 @@ Local review tools keep workspace containment as the default. A `repo_path`/`rep
 - the current tool workspace/worktree; or
 - one of the explicitly configured roots in `config.codeReview.allowedRepoRoots`.
 
-Set additional roots with `HIVEKEEP_CODE_REVIEW_ALLOWED_ROOTS`. The value accepts host path separators and commas, for example:
+Set additional roots from **Settings → Code Review**. The Settings value is stored as a live app-setting override, so changes apply immediately without restarting Hivekeep. Use this for normal self-hosted operation.
+
+For deployment/bootstrap fallback, set `HIVEKEEP_CODE_REVIEW_ALLOWED_ROOTS`. The env value is used when no Settings override exists and accepts host path separators and commas, for example:
 
 ```bash
 HIVEKEEP_CODE_REVIEW_ALLOWED_ROOTS=/srv/repos:/opt/hivekeep/review-roots
 HIVEKEEP_CODE_REVIEW_ALLOWED_ROOTS=/srv/repos,/opt/hivekeep/review-roots
 ```
 
-Each configured root is also resolved to a real path before checking containment. Paths outside both the current workspace and configured roots are rejected before any reviewer CLI runs. The target must also be a Git repository root or contain a Git worktree: Hivekeep verifies this with `git -C <repo> rev-parse --show-toplevel` and rejects non-Git directories with a clear validation error.
+Each effective root is also resolved to a real path before checking containment. Paths outside both the current workspace and configured roots are rejected before any reviewer CLI runs. The target must also be a Git repository root or contain a Git worktree: Hivekeep verifies this with `git -C <repo> rev-parse --show-toplevel` and rejects non-Git directories with a clear validation error.
 
 ## Tools
 

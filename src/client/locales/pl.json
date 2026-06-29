@@ -2433,6 +2433,9 @@
       "noLogs": "Brak wpisów w logu",
       "entries": "Wpisy: {{count}}"
     },
+    "codeReview": {
+      "title": "Code Review"
+    },
     "tokenUsage": {
       "title": "Zużycie tokenów",
       "description": "Monitoruj zużycie tokenów LLM według dostawców, modeli i Agentów",

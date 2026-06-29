@@ -2415,6 +2415,9 @@
       "noLogs": "ログエントリはありません",
       "entries": "{{count}}件のエントリ"
     },
+    "codeReview": {
+      "title": "Code Review"
+    },
     "tokenUsage": {
       "title": "トークン使用量",
       "description": "プロバイダー、モデル、エージェントごとのLLMトークン消費を監視",
