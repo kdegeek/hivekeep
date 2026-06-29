@@ -1,5 +1,17 @@
 apply plugin: 'com.android.application'
 
+def hivekeepVersionName = (project.findProperty('hivekeepVersionName') ?: '1.9.0').toString()
+def hivekeepVersionCode = (project.findProperty('hivekeepVersionCode') ?: '10900').toString().toInteger()
+def releaseSigningValue = { name ->
+    def value = project.findProperty(name) ?: System.getenv(name)
+    return value == null ? null : value.toString()
+}
+def releaseStoreFilePath = releaseSigningValue('HIVEKEEP_ANDROID_KEYSTORE')
+def releaseKeyAlias = releaseSigningValue('HIVEKEEP_ANDROID_KEY_ALIAS')
+def releaseStorePassword = releaseSigningValue('HIVEKEEP_ANDROID_KEYSTORE_PASSWORD')
+def releaseKeyPassword = releaseSigningValue('HIVEKEEP_ANDROID_KEY_PASSWORD') ?: releaseStorePassword
+def hasReleaseSigning = releaseStoreFilePath && releaseKeyAlias && releaseStorePassword
+
 android {
     namespace = "app.hivekeep.mobile"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +19,8 @@ android {
         applicationId "app.hivekeep.mobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode hivekeepVersionCode
+        versionName hivekeepVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,9 +28,22 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile = new File(releaseStoreFilePath).isAbsolute() ? file(releaseStoreFilePath) : rootProject.file(releaseStoreFilePath)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
