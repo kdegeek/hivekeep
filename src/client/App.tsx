@@ -230,7 +230,7 @@ function AuthenticatedShell() {
             <Routes>
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/notifications" element={<MobileNotificationsPage onOpenSettings={openSettings} />} />
-              <Route path="/settings" element={<MobileSettingsPage />} />
+              <Route path="/settings/*" element={<MobileSettingsPage onOpenAccount={handleOpenAccount} />} />
               <Route
                 path="*"
                 element={
