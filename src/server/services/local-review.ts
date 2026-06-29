@@ -107,11 +107,56 @@ interface ExecResult {
   localReviewMode?: LocalReviewAdapterMode
 }
 
+const REVIEW_CLI_PATH_FALLBACKS = [
+  '/opt/homebrew/bin',
+  '/opt/homebrew/sbin',
+  '/usr/local/bin',
+  '/usr/local/sbin',
+  '/usr/bin',
+  '/bin',
+  '/usr/sbin',
+  '/sbin',
+]
+
+function splitPathList(value?: string): string[] {
+  return (value ?? '').split(':').map((part) => part.trim()).filter(Boolean)
+}
+
+function mergePathList(...values: Array<string | undefined>): string {
+  const seen = new Set<string>()
+  const parts: string[] = []
+  for (const value of values) {
+    for (const part of splitPathList(value)) {
+      if (seen.has(part)) continue
+      seen.add(part)
+      parts.push(part)
+    }
+  }
+  return parts.join(':')
+}
+
+function homeReviewCliPaths(extraEnv?: Record<string, string | undefined>): string {
+  const home = extraEnv?.HOME ?? process.env.HOME
+  return home ? [`${home}/.bun/bin`, `${home}/.local/bin`].join(':') : ''
+}
+
+function reviewCliPath(extraEnv?: Record<string, string | undefined>): string {
+  return mergePathList(
+    extraEnv?.PATH,
+    process.env.PATH,
+    extraEnv?.HIVEKEEP_REVIEW_CLI_PATH,
+    process.env.HIVEKEEP_REVIEW_CLI_PATH,
+    homeReviewCliPaths(extraEnv),
+    REVIEW_CLI_PATH_FALLBACKS.join(':'),
+  )
+}
+
 function mergeExecEnv(extraEnv?: Record<string, string | undefined>): Record<string, string> {
   const merged: Record<string, string> = {}
   for (const [key, value] of Object.entries({ ...process.env, ...extraEnv, NO_COLOR: '1', FORCE_COLOR: '0' })) {
     if (typeof value === 'string') merged[key] = value
   }
+  merged.PATH = reviewCliPath(extraEnv)
   return merged
 }
 

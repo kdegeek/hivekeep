@@ -3,25 +3,34 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { config } from '@/server/config'
-import { _LOCAL_REVIEW_INTERNALS_FOR_TEST, runLocalCodeReview } from './local-review'
+import { _LOCAL_REVIEW_INTERNALS_FOR_TEST, checkCodeRabbitAuth, runLocalCodeReview } from './local-review'
 
 const { parseReviewFindings, evaluateGate, parseJsonLines, kiloSlashCommandArgs, kiloPromptFallbackArgs, execReviewCli, getReviewRun, updateReviewFindingState, trimIncompleteUtf8End, trimIncompleteUtf8Start } = _LOCAL_REVIEW_INTERNALS_FOR_TEST
 const originalPath = process.env.PATH
 const originalArtifactDir = config.codeReview.artifactDir
+const originalReviewCliPath = process.env.HIVEKEEP_REVIEW_CLI_PATH
 const mutableCodeReviewConfig = config.codeReview as { artifactDir: string }
 
 afterEach(() => {
   process.env.PATH = originalPath
+  if (originalReviewCliPath === undefined) delete process.env.HIVEKEEP_REVIEW_CLI_PATH
+  else process.env.HIVEKEEP_REVIEW_CLI_PATH = originalReviewCliPath
   mutableCodeReviewConfig.artifactDir = originalArtifactDir
 })
 
 function makeFakeBin(name: string, body: string): string {
   const root = mkdtempSync(join(tmpdir(), 'hivekeep-local-review-test-'))
+  writeFakeBin(root, name, body)
+  process.env.PATH = `${root}:${originalPath ?? ''}`
+  return root
+}
+
+function writeFakeBin(root: string, name: string, body: string): string {
+  mkdirSync(root, { recursive: true })
   const bin = join(root, name)
   writeFileSync(bin, `#!/usr/bin/env bash\n${body}\n`)
   chmodSync(bin, 0o755)
-  process.env.PATH = `${root}:${originalPath ?? ''}`
-  return root
+  return bin
 }
 
 describe('local-review parsing', () => {
@@ -196,6 +205,29 @@ describe('local-review gating', () => {
   })
 })
 
+describe('local-review CLI readiness', () => {
+  it('finds reviewer CLIs on fallback PATH entries when launchd provides a minimal PATH', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hivekeep-local-review-fallback-path-'))
+    try {
+      const fallbackBin = join(root, 'fallback-bin')
+      writeFakeBin(fallbackBin, 'cr', `
+if [[ "$1" == "--version" ]]; then echo "0.6.4"; exit 0; fi
+if [[ "$1" == "auth" ]]; then echo '{"authenticated":true}'; exit 0; fi
+if [[ "$1" == "doctor" ]]; then echo 'doctor ok'; exit 0; fi
+exit 1
+`)
+      process.env.PATH = '/usr/bin:/bin'
+      process.env.HIVEKEEP_REVIEW_CLI_PATH = fallbackBin
+      const status = await checkCodeRabbitAuth(root, { PATH: '/usr/bin:/bin' })
+      expect(status).toMatchObject({ provider: 'coderabbit', installed: true, authenticated: true, version: '0.6.4', localReviewMode: 'native' })
+      expect(status.error).toBeUndefined()
+    } finally {
+      delete process.env.HIVEKEEP_REVIEW_CLI_PATH
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('local-review artifacts', () => {
   it('persists finalized artifact paths and provider metadata', async () => {
     const root = makeFakeBin('cr', `
@@ -234,6 +266,8 @@ exit 1
   it('reports all-skipped advisory runs as skipped and fails closed on blocking readiness errors', async () => {
     const root = mkdtempSync(join(tmpdir(), 'hivekeep-local-review-empty-path-'))
     process.env.PATH = root
+    writeFakeBin(root, 'cr', 'exit 127')
+    writeFakeBin(root, 'coderabbit', 'exit 127')
     mkdirSync(join(root, 'repo'), { recursive: true })
     try {
       mutableCodeReviewConfig.artifactDir = join(root, 'artifacts')
