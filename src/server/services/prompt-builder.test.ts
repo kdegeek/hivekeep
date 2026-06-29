@@ -146,10 +146,13 @@ describe('buildSystemPrompt', () => {
     expect(result).toContain('You MUST respond in English (en)')
   })
 
-  it('includes date context', () => {
+  it('includes date and server restart freshness context', () => {
     const result = buildSystemPrompt(makeParams())
     expect(result).toContain('Current date:')
     expect(result).toContain('Platform: Hivekeep')
+    expect(result).toContain('Server process started:')
+    expect(result).toContain('Server process uptime:')
+    expect(result).toContain('resets when Hivekeep restarts')
   })
 
   // --- Initiative ---

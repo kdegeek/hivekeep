@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { config } from '@/server/config'
+import { formatDuration, getServerRuntimeContext } from '@/server/services/server-runtime'
 import { generateWorkspaceTree } from '@/server/services/workspace-tree'
 import type { SystemContext } from '@/server/services/system-context'
 import type { AgentKind } from '@/shared/types'
@@ -395,9 +396,9 @@ function buildContextBlock(): string {
 
   // Lightweight system info
   const os = require('os')
-  const uptimeSec = os.uptime()
-  const days = Math.floor(uptimeSec / 86400)
-  const hours = Math.floor((uptimeSec % 86400) / 3600)
+  const hostUptimeSec = os.uptime()
+  const days = Math.floor(hostUptimeSec / 86400)
+  const hours = Math.floor((hostUptimeSec % 86400) / 3600)
   const uptimeStr = days > 0 ? `${days}d ${hours}h` : `${hours}h`
   const totalMem = os.totalmem()
   const freeMem = os.freemem()
@@ -419,6 +420,17 @@ function buildContextBlock(): string {
   const envFileLine = env?.envFilePath
     ? `\nConfig file: ${env.envFilePath}`
     : ''
+  const runtime = getServerRuntimeContext(now.getTime())
+  const serverStarted = runtime.startedAt.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZone: tz,
+    timeZoneName: 'short',
+  })
 
   return (
     `## Context\n\n` +
@@ -427,6 +439,8 @@ function buildContextBlock(): string {
     `ISO timestamp: ${iso}\n` +
     `Timezone: ${tz} — interpret schedules and wall-clock times in this zone unless the user asks otherwise\n` +
     `Platform: Hivekeep v${config.version}\n` +
+    `Server process started: ${serverStarted} (${runtime.startedAtIso})\n` +
+    `Server process uptime: ${formatDuration(runtime.uptimeMs)} — resets when Hivekeep restarts; use this to judge whether server-side changes or credentials are fresh\n` +
     `Installation: ${installLine}${envFileLine}\n` +
     `Data directory: ${config.dataDir}\n` +
     `Public URL: ${config.publicUrl}\n` +
