@@ -25,7 +25,7 @@ import { Badge } from '@/client/components/ui/badge'
 import { Input } from '@/client/components/ui/input'
 import { Textarea } from '@/client/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/client/components/ui/select'
-import { api, toastError } from '@/client/lib/api'
+import { ApiRequestError, api, getErrorMessage, toastError } from '@/client/lib/api'
 import { useAuth } from '@/client/hooks/useAuth'
 import { cn } from '@/client/lib/utils'
 
@@ -139,6 +139,37 @@ interface RunsResponse { runs: ReviewRunSummary[] }
 interface RunResponse { run: ReviewRunSummary }
 interface ChecklistResponse { checklist: ReviewerChecklist }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object'
+}
+
+function hasAgentsResponse(value: unknown): value is AgentsResponse {
+  return isObject(value) && Array.isArray(value.agents)
+}
+
+function hasRunsResponse(value: unknown): value is RunsResponse {
+  return isObject(value) && Array.isArray(value.runs)
+}
+
+function hasRunResponse(value: unknown): value is RunResponse {
+  return isObject(value) && isObject(value.run)
+}
+
+function hasChecklistResponse(value: unknown): value is ChecklistResponse {
+  return isObject(value) && isObject(value.checklist)
+}
+
+function invalidResponseError(resource: string) {
+  return new Error(`Reviewer agents API returned an invalid ${resource} response. The server may be running a build that does not include the reviewer agents API routes.`)
+}
+
+function reviewerAgentsErrorMessage(err: unknown): string {
+  if (err instanceof ApiRequestError && err.status === 404) {
+    return 'Reviewer agents API route was not found. Deploy a server build that includes /api/reviewer-agents.'
+  }
+  return getErrorMessage(err)
+}
+
 const severityTone: Record<ReviewSeverity, string> = {
   critical: 'bg-destructive text-white',
   major: 'bg-amber-500 text-white',
@@ -195,6 +226,7 @@ function ChecklistEditor({ checklist, onSaved }: { checklist: ReviewerChecklist;
     setSaving(true)
     try {
       const response = await api.patch<ChecklistResponse>(`/reviewer-agents/checklists/${checklist.id}`, { title, description })
+      if (!hasChecklistResponse(response)) throw invalidResponseError('checklist')
       onSaved(response.checklist)
       setEditing(false)
       toast.success('Checklist updated')
@@ -297,6 +329,7 @@ function RunDetail({ run, onStateChange }: { run?: ReviewRunSummary; onStateChan
     setUpdating(finding.id)
     try {
       const response = await api.patch<RunResponse>(`/reviewer-agents/runs/${run.id}/findings/${finding.id}`, { state })
+      if (!hasRunResponse(response)) throw invalidResponseError('run')
       onStateChange(response.run)
     } catch (err) {
       toastError(err)
@@ -390,6 +423,7 @@ function ReviewerAgentsAdminPage() {
   const [base, setBase] = useState('origin/main')
   const [mode, setMode] = useState<ReviewMode>('advisory')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [running, setRunning] = useState<ReviewerAgentId | null>(null)
 
   const selectedAgent = agents.find((agent) => agent.id === selectedAgentId)
@@ -398,15 +432,20 @@ function ReviewerAgentsAdminPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
+      setLoadError(null)
       const [agentResponse, runResponse] = await Promise.all([
         api.get<AgentsResponse>(`/reviewer-agents${repoPath ? `?repoPath=${encodeURIComponent(repoPath)}` : ''}`),
         api.get<RunsResponse>('/reviewer-agents/runs?limit=20'),
       ])
+      if (!hasAgentsResponse(agentResponse)) throw invalidResponseError('agents')
+      if (!hasRunsResponse(runResponse)) throw invalidResponseError('runs')
       setAgents(agentResponse.agents)
       setRuns(runResponse.runs)
       setSelectedRunId((current) => current ?? runResponse.runs[0]?.id ?? null)
     } catch (err) {
-      toastError(err)
+      const message = reviewerAgentsErrorMessage(err)
+      setLoadError(message)
+      toast.error(message)
     } finally {
       setLoading(false)
     }
@@ -418,10 +457,12 @@ function ReviewerAgentsAdminPage() {
     setRunning(agent.id)
     try {
       const response = await api.post<RunResponse>(`/reviewer-agents/${agent.id}/runs`, { repoPath: repoPath || '.', base: base || undefined, mode, light: true })
+      if (!hasRunResponse(response)) throw invalidResponseError('run')
       setSelectedRunId(response.run.id)
       setRuns((prev) => [response.run, ...prev.filter((run) => run.id !== response.run.id)])
       toast.success(`${agent.name} completed: ${response.run.blocked ? 'blocked' : response.run.status}`)
       const agentResponse = await api.get<AgentsResponse>(`/reviewer-agents${repoPath ? `?repoPath=${encodeURIComponent(repoPath)}` : ''}`)
+      if (!hasAgentsResponse(agentResponse)) throw invalidResponseError('agents')
       setAgents(agentResponse.agents)
     } catch (err) {
       toastError(err)
@@ -462,6 +503,19 @@ function ReviewerAgentsAdminPage() {
       </PageHeader>
       {loading && agents.length === 0 ? (
         <div className="flex flex-1 items-center justify-center"><Loader2 className="size-5 animate-spin text-muted-foreground" /></div>
+      ) : loadError && agents.length === 0 ? (
+        <main className="min-h-0 flex-1 overflow-y-auto p-4">
+          <Card className="border-destructive/40 bg-destructive/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base text-destructive"><ShieldAlert className="size-4" />Reviewer agents unavailable</CardTitle>
+              <CardDescription>{loadError}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>Confirm the live server is running a branch/build that mounts <code className="rounded bg-muted px-1 py-0.5">/api/reviewer-agents</code>, then refresh this page.</p>
+              <Button variant="outline" onClick={load} disabled={loading}><RefreshCw className={cn('size-4', loading && 'animate-spin')} /> Retry</Button>
+            </CardContent>
+          </Card>
+        </main>
       ) : (
         <main className="min-h-0 flex-1 overflow-y-auto p-4">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.9fr)]">
