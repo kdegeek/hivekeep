@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { config } from '@/server/config'
 import { runLocalCodeReview, type ReviewProvider, type ReviewMode } from '@/server/services/local-review'
 
 function readArg(name: string): string | undefined {
@@ -13,7 +14,7 @@ function has(name: string): boolean {
 }
 
 function readMode(): ReviewMode {
-  const raw = readArg('--mode') ?? process.env.HIVEKEEP_LOCAL_REVIEW_MODE ?? 'advisory'
+  const raw = readArg('--mode') ?? process.env.HIVEKEEP_LOCAL_REVIEW_MODE ?? config.codeReview.defaultMode
   if (raw === 'advisory' || raw === 'blocking') return raw
   console.error(`Invalid review mode: ${raw}. Valid values: advisory, blocking`)
   process.exit(1)
