@@ -112,6 +112,27 @@ exit 1
       rmSync(root, { recursive: true, force: true })
     }
   })
+
+  it('does not fall back to prompt mode after a timed-out slash command', async () => {
+    const root = makeFakeBin('kilo', `
+if [[ "$1" == "--version" ]]; then echo "7.3.44"; exit 0; fi
+if [[ "$1" == "auth" ]]; then echo 'Kilo Gateway credential active'; exit 0; fi
+if [[ "$1" == "config" ]]; then echo 'ok'; exit 0; fi
+if [[ "$1" == "run" && "$7" == "/local-review" ]]; then sleep 1; echo '{"findings":[{"severity":"major","title":"late","file":"src/late.ts"}]}'; exit 0; fi
+if [[ "$1" == "run" ]]; then echo '{"findings":[{"severity":"critical","title":"should not run","file":"src/fallback.ts"}]}'; exit 0; fi
+exit 1
+`)
+    try {
+      mkdirSync(join(root, 'repo'), { recursive: true })
+      const result = await runLocalCodeReview({ repoPath: join(root, 'repo'), provider: 'kilo', base: 'origin/main', mode: 'advisory', timeoutMs: 50 })
+      expect(result.results[0]).toMatchObject({ provider: 'kilo', status: 'failed', localReviewMode: 'slash-command' })
+      expect(result.results[0]?.error).toContain('timed out')
+      expect(result.results[0]?.rawOutput).not.toContain('should not run')
+      expect(result.findings).toHaveLength(0)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('local-review gating', () => {

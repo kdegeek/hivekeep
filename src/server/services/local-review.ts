@@ -460,7 +460,7 @@ function kiloPromptFallbackArgs(input: ReviewInput & { repoPath: string }): stri
 async function runKilo(input: ReviewInput & { repoPath: string }): Promise<ExecResult> {
   const slash = await execReviewCli('kilo', kiloSlashCommandArgs(input), input.repoPath, input.timeoutMs)
   const slashRaw = [slash.stdout, slash.stderr].filter(Boolean).join('\n')
-  if (slash.exitCode === 0 || parseReviewFindings('kilo', slashRaw).length > 0) return { ...slash, localReviewMode: 'slash-command' }
+  if (slash.exitCode === 0 || slash.timedOut || parseReviewFindings('kilo', slashRaw).length > 0) return { ...slash, localReviewMode: 'slash-command' }
 
   const fallback = await execReviewCli('kilo', kiloPromptFallbackArgs(input), input.repoPath, input.timeoutMs)
   return {
