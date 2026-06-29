@@ -2480,6 +2480,13 @@
     "empty": "No notifications",
     "markAllRead": "Mark all as read",
     "delete": "Dismiss",
+    "openRelated": "Open related item",
+    "unread": "Unread",
+    "noDetail": "No additional detail.",
+    "relatedType": "Related",
+    "relatedId": "ID",
+    "markRead": "Mark as read",
+    "preferences": "Preferences",
     "types": {
       "prompt-pending": "Input needed",
       "channel-user-pending": "User pending approval",
@@ -2502,6 +2509,14 @@
       "miniapp-notify": "A mini-app sent a notification from its background service",
       "email-pending-send-approval": "An Agent wants to send an email that needs your approval"
     }
+  },
+  "mobile": {
+    "connection": {
+      "serverUrlPlaceholder": "https://hivekeep.example.com"
+    }
+  },
+  "mobileAgents": {
+    "createFirst": "Create first Agent"
   },
   "modelPicker": {
     "placeholder": "Select a model",

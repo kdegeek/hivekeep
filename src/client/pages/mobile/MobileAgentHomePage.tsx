@@ -8,6 +8,7 @@ import {
   FolderKanban,
   Loader2,
   MessageCircle,
+  Plus,
   Settings2,
   Sparkles,
 } from 'lucide-react'
@@ -45,6 +46,7 @@ export function MobileAgentHomePage({ onOpenSettings }: MobileAgentHomePageProps
     imageModels,
     isLoading,
     agentQueueState,
+    createAgent,
     getAgent,
     updateAgent,
     deleteAgent,
@@ -52,6 +54,8 @@ export function MobileAgentHomePage({ onOpenSettings }: MobileAgentHomePageProps
     generateAvatarPreview,
     hasImageCapability,
     refetchModels,
+    generateAgentConfig,
+    generateAvatarPreviewFromConfig,
   } = useAgents()
   const { projects } = useProjects()
   const { unreadCounts, clearUnread } = useUnreadPerAgent(null)
@@ -85,6 +89,12 @@ export function MobileAgentHomePage({ onOpenSettings }: MobileAgentHomePageProps
     } catch {
       // Keep the home usable if the detail fetch fails.
     }
+  }
+
+  const openCreateAgent = () => {
+    refetchModels()
+    setEditingAgent(null)
+    setEditOpen(true)
   }
 
   return (
@@ -151,6 +161,10 @@ export function MobileAgentHomePage({ onOpenSettings }: MobileAgentHomePageProps
             </div>
             <h3 className="mt-4 font-semibold">{t('sidebar.agents.empty')}</h3>
             <p className="mt-1 text-sm text-muted-foreground">{t('sidebar.agents.emptyDescription')}</p>
+            <Button type="button" className="mt-5 rounded-2xl" onClick={openCreateAgent}>
+              <Plus className="size-4" />
+              {t('mobileAgents.createFirst', 'Create first Agent')}
+            </Button>
           </div>
         ) : (
           <div className="space-y-3">
@@ -299,10 +313,13 @@ export function MobileAgentHomePage({ onOpenSettings }: MobileAgentHomePageProps
             llmModels={llmModels}
             imageModels={imageModels}
             agent={editingAgent}
+            onCreateAgent={createAgent}
             onUpdateAgent={updateAgent}
             onDeleteAgent={deleteAgent}
             onUploadAvatar={uploadAvatar}
             onGenerateAvatarPreview={generateAvatarPreview}
+            onGenerateAgentConfig={generateAgentConfig}
+            onGenerateAvatarPreviewFromConfig={generateAvatarPreviewFromConfig}
             hasImageCapability={hasImageCapability}
             onOpenSettings={onOpenSettings}
           />

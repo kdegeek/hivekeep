@@ -43,6 +43,27 @@ export function MobileNotificationsPage({
     [notifications, selectedId, selectedSnapshot],
   )
 
+  const hasRelatedTarget = useCallback((notification: NotificationSummary) => {
+    switch (notification.type) {
+      case 'prompt:pending':
+      case 'agent:error':
+      case 'agent:alert':
+      case 'mention':
+        return Boolean(notification.agentSlug)
+      case 'cron:pending-approval':
+      case 'channel:user-pending':
+      case 'mcp:pending-approval':
+      case 'email:pending-send-approval':
+      case 'miniapp:notify':
+        return true
+      default: {
+        const _exhaustive: never = notification.type
+        void _exhaustive
+        return false
+      }
+    }
+  }, [])
+
   const openDeepLink = useCallback((notification: NotificationSummary) => {
     const closeDetail = () => {
       setSelectedId(null)
@@ -61,7 +82,7 @@ export function MobileNotificationsPage({
       case 'agent:error':
       case 'agent:alert':
       case 'mention':
-        toAgent()
+        if (!toAgent()) return
         break
       case 'cron:pending-approval':
         navigate('/tasks')
@@ -180,10 +201,12 @@ export function MobileNotificationsPage({
               </div>
 
               <SheetFooter className="border-t">
-                <Button onClick={() => openDeepLink(selectedNotification)}>
-                  <ExternalLink className="size-4" />
-                  {t('notifications.openRelated', 'Open related item')}
-                </Button>
+                {hasRelatedTarget(selectedNotification) && (
+                  <Button onClick={() => openDeepLink(selectedNotification)}>
+                    <ExternalLink className="size-4" />
+                    {t('notifications.openRelated', 'Open related item')}
+                  </Button>
+                )}
                 {!selectedNotification.isRead && (
                   <Button variant="outline" onClick={handleMarkSelectedRead}>
                     <Check className="size-4" />

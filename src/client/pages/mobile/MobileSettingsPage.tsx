@@ -30,6 +30,7 @@ import {
   getHivekeepServerUrl,
   isMobileApiRuntime,
   setHivekeepServerUrl,
+  validateHivekeepServerConnection,
 } from '@/client/lib/api'
 
 interface SettingsRouteState {
@@ -71,17 +72,22 @@ function ServerConnectionCard() {
   const { t } = useTranslation()
   const [serverUrl, setServerUrl] = useState(getInitialServerUrl)
   const [error, setError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
 
-  const saveServerUrl = (event: FormEvent<HTMLFormElement>) => {
+  const saveServerUrl = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError(null)
+    setIsSaving(true)
 
     try {
-      const normalized = setHivekeepServerUrl(serverUrl)
+      const normalized = await validateHivekeepServerConnection(serverUrl)
+      setHivekeepServerUrl(normalized)
       setServerUrl(normalized)
       toast.success(t('mobileConfig.serverSaved', 'Server connection saved'))
     } catch (err) {
       setError(getErrorMessage(err))
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -106,13 +112,13 @@ function ServerConnectionCard() {
             <Input
               value={serverUrl}
               onChange={(event) => setServerUrl(event.target.value)}
-              placeholder="https://hivekeep.example.com"
+              placeholder={t('mobile.connection.serverUrlPlaceholder', 'https://hivekeep.example.com')}
               inputMode="url"
               autoCapitalize="none"
               autoCorrect="off"
               aria-label={t('mobileConfig.server.inputLabel', 'Hivekeep server URL')}
             />
-            <Button type="submit" size="sm">
+            <Button type="submit" size="sm" disabled={isSaving}>
               {t('common.save', 'Save')}
             </Button>
           </div>

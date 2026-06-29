@@ -7,6 +7,7 @@ import type { NotificationSummary, NotificationType } from '@/shared/types'
 
 const POLL_INTERVAL_MS = 60_000
 const POLL_LIMIT = 10
+const MAX_DELIVERED_IDS = 200
 const DELIVERED_STORAGE_KEY = 'hivekeep:nativeDeliveredNotificationIds'
 const CHANNEL_ID = 'hivekeep-unread'
 
@@ -45,7 +46,7 @@ function readDeliveredIds(): Set<string> {
 
 function writeDeliveredIds(ids: Set<string>): void {
   try {
-    localStorage.setItem(DELIVERED_STORAGE_KEY, JSON.stringify([...ids].slice(-200)))
+    localStorage.setItem(DELIVERED_STORAGE_KEY, JSON.stringify([...ids].slice(-MAX_DELIVERED_IDS)))
   } catch {
     // Notification delivery is best-effort; storage failures should not break the app.
   }
@@ -62,6 +63,10 @@ function routeForNotification(extra: NativeNotificationExtra): string {
   }
 
   if (extra.type === 'cron:pending-approval') return '/tasks'
+  if (extra.type === 'channel:user-pending') return '/settings/channels'
+  if (extra.type === 'mcp:pending-approval') return '/settings/mcp'
+  if (extra.type === 'email:pending-send-approval') return '/settings/emailAccounts'
+  if (extra.type === 'miniapp:notify') return '/'
   return '/notifications'
 }
 
@@ -122,6 +127,13 @@ export function useNativeMobileNotifications(navigate: (path: string) => void): 
 
       for (const notification of freshUnread) {
         deliveredIds.add(notification.id)
+      }
+      if (deliveredIds.size > MAX_DELIVERED_IDS) {
+        const retainedIds = [...deliveredIds].slice(-MAX_DELIVERED_IDS)
+        deliveredIds.clear()
+        for (const id of retainedIds) {
+          deliveredIds.add(id)
+        }
       }
       writeDeliveredIds(deliveredIds)
     } catch {

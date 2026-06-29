@@ -108,6 +108,7 @@ test.describe('mobile smoke', () => {
   })
 
   test('uses configured API URL and shows login guard at mobile width', async ({ page }) => {
+    const runtimeErrors = collectRuntimeErrors(page, [/401 \(Unauthorized\)/])
     const requests = await installApiMock(page, { authenticated: false })
 
     await page.goto('/')
@@ -116,9 +117,11 @@ test.describe('mobile smoke', () => {
     await expect(page.locator('input[type="email"]')).toBeVisible()
     expect(requests.some((url) => url.href.startsWith(`${API_ORIGIN}/api/onboarding/status`))).toBe(true)
     expect(requests.some((url) => url.href.startsWith(`${API_ORIGIN}/api/me`))).toBe(true)
+    expect(runtimeErrors).toEqual([])
   })
 
   test('renders agent list, chat send, tasks, and notifications', async ({ page }) => {
+    const runtimeErrors = collectRuntimeErrors(page)
     const requests = await installApiMock(page, { authenticated: true })
 
     await page.goto('/')
@@ -144,13 +147,24 @@ test.describe('mobile smoke', () => {
     await expect(page.getByText('Mobile notification smoke')).toBeVisible()
 
     expect(requests.some((url) => url.pathname === '/api/notifications')).toBe(true)
+    expect(runtimeErrors).toEqual([])
   })
 })
 
+function collectRuntimeErrors(page: Page, ignoredConsoleMessages: RegExp[] = []): string[] {
+  const runtimeErrors: string[] = []
+  page.on('pageerror', (error) => runtimeErrors.push(error.stack ?? error.message))
+  page.on('console', (msg) => {
+    const text = msg.text()
+    if (msg.type() === 'error' && !ignoredConsoleMessages.some((pattern) => pattern.test(text))) {
+      runtimeErrors.push(text)
+    }
+  })
+  return runtimeErrors
+}
+
 async function installApiMock(page: Page, options: { authenticated: boolean }): Promise<URL[]> {
   const requests: URL[] = []
-  page.on('pageerror', (error) => console.log('PAGEERROR', error.stack ?? error.message))
-  page.on('console', (msg) => { if (msg.type() === 'error') console.log('BROWSERCONSOLE', msg.text()) })
 
   await page.addInitScript((serverUrl) => {
     window.localStorage.setItem('hivekeep:serverUrl', serverUrl)

@@ -71,7 +71,7 @@ export function MobileServerConnectionPage({
                 value={serverUrl}
                 onChange={(e) => setServerUrl(e.target.value)}
                 required
-                placeholder="https://hivekeep.example.com"
+                placeholder={t('mobile.connection.serverUrlPlaceholder', 'https://hivekeep.example.com')}
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}

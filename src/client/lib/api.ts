@@ -21,19 +21,35 @@ function getStoredServerUrl(): string | null {
 }
 
 export function normalizeHivekeepServerUrl(serverUrl: string): string {
-  const trimmed = serverUrl.trim()
+  let trimmed = serverUrl.trim()
   if (!trimmed) throw new Error('Hivekeep server URL is required')
-  const url = new URL(trimmed)
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error('Hivekeep server URL must start with http:// or https://')
+  if (!/^https?:\/\//i.test(trimmed)) {
+    trimmed = `http://${trimmed}`
   }
-  if (url.username || url.password) {
-    throw new Error('Hivekeep server URL must not include credentials')
+  try {
+    const url = new URL(trimmed)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      throw new Error('Hivekeep server URL must start with http:// or https://')
+    }
+    if (url.username || url.password) {
+      throw new Error('Hivekeep server URL must not include credentials')
+    }
+    url.hash = ''
+    url.search = ''
+    const pathname = url.pathname
+      .replace(/\/+$/, '')
+      .replace(/\/api$/i, '')
+    url.pathname = pathname || '/'
+    return url.toString().replace(/\/+$/, '')
+  } catch (err) {
+    if (err instanceof Error && (
+      err.message.includes('credentials') ||
+      err.message.includes('http:// or https://')
+    )) {
+      throw err
+    }
+    throw new Error('Invalid URL format. Please enter a valid server address.')
   }
-  url.hash = ''
-  url.search = ''
-  url.pathname = url.pathname.replace(/\/+$/, '')
-  return url.toString().replace(/\/+$/, '')
 }
 
 export function getHivekeepServerUrl(): string | null {

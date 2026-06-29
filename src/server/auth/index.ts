@@ -34,7 +34,7 @@ export const auth = betterAuth({
     },
   },
   trustedOrigins: process.env.TRUSTED_ORIGINS
-    ? [...process.env.TRUSTED_ORIGINS.split(','), 'capacitor://localhost']
+    ? [...process.env.TRUSTED_ORIGINS.split(',').map((origin) => origin.trim()), 'capacitor://localhost']
     : [
         config.publicUrl, 'capacitor://localhost',
         'http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000',

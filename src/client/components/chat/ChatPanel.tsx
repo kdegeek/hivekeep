@@ -1262,7 +1262,7 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
 
         {mobile ? (
           <Sheet open={isToolCallsOpen} onOpenChange={setIsToolCallsOpen}>
-            <SheetContent side="bottom" className="h-[72dvh] rounded-t-3xl p-0" showCloseButton={false}>
+            <SheetContent side="bottom" className="h-[72dvh] rounded-t-3xl p-0">
               <SheetTitle className="sr-only">{t('chat.toolCalls')}</SheetTitle>
               <ToolCallsViewer
                 toolCalls={toolCalls}

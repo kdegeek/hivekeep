@@ -106,14 +106,6 @@ function AppRoot() {
     await checkOnboarding()
   }, [checkOnboarding, refetch])
 
-  if (isMobileApp && !mobileServerUrl) {
-    return (
-      <Suspense fallback={<PageFallback />}>
-        <MobileServerConnectionPage onConnected={handleMobileConnected} />
-      </Suspense>
-    )
-  }
-
   // Warm the registry's name→domain map once. The lib falls back to 'mcp'
   // while this is in-flight; first paint may briefly show generic badges
   // for new tools, then re-render with the right colour.
@@ -128,6 +120,14 @@ function AppRoot() {
       void m.loadCustomToolNames()
     })
   }, [])
+
+  if (isMobileApp && !mobileServerUrl) {
+    return (
+      <Suspense fallback={<PageFallback />}>
+        <MobileServerConnectionPage onConnected={handleMobileConnected} />
+      </Suspense>
+    )
+  }
 
   // Loading state
   if (authLoading || isCheckingOnboarding) {
@@ -284,9 +284,6 @@ function AuthenticatedShell() {
                   />
                 }
               />
-              <Route path="/tasks" element={<TasksPage />} />
-              <Route path="/notifications" element={<MobileNotificationsPage onOpenSettings={openSettings} />} />
-              <Route path="/settings" element={<MobileSettingsPage onOpenAccount={handleOpenAccount} />} />
               <Route path="*" element={<MobileAgentHomePage onOpenSettings={openSettings} />} />
             </Routes>
           </Suspense>
