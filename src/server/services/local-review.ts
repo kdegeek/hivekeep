@@ -101,7 +101,20 @@ function asString(v: unknown): string | undefined {
 function clampOutput(s: string): string {
   const max = config.codeReview.maxOutputBytes
   if (s.length <= max) return s
-  return `[…truncated ${s.length - max} chars from the head…]\n${s.slice(-max)}`
+  const edge = Math.max(1, Math.floor(max / 2))
+  return `${s.slice(0, edge)}\n[…truncated ${s.length - max} chars from the middle…]\n${s.slice(-edge)}`
+}
+
+function redactSensitiveOutput(s: string): string {
+  return s
+    .replace(/\b(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, '$1[redacted]')
+    .replace(/\b(token|api[_-]?key|secret|password|authorization)(\s*[:=]\s*)([^\s'"`,;]+)/gi, '$1$2[redacted]')
+}
+
+function parseOptionalLine(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) return Number(value.trim())
+  return undefined
 }
 
 export async function execReviewCli(
@@ -158,8 +171,8 @@ export async function checkCodeRabbitAuth(repoPath = process.cwd()): Promise<Rev
   if (!found) return { provider: 'coderabbit', displayName: 'CodeRabbit', installed: false, authenticated: null, error: 'CodeRabbit CLI not found (`cr` or `coderabbit`).' }
   const auth = await execReviewCli(found.name, ['auth', 'status', '--agent'], repoPath, 15_000)
   const doctor = await execReviewCli(found.name, ['doctor'], repoPath, 30_000)
-  const authText = [auth.stdout, auth.stderr].filter(Boolean).join('\n').trim()
-  const doctorText = [doctor.stdout, doctor.stderr].filter(Boolean).join('\n').trim()
+  const authText = redactSensitiveOutput([auth.stdout, auth.stderr].filter(Boolean).join('\n').trim())
+  const doctorText = redactSensitiveOutput([doctor.stdout, doctor.stderr].filter(Boolean).join('\n').trim())
   return {
     provider: 'coderabbit',
     displayName: 'CodeRabbit',
@@ -178,8 +191,10 @@ export async function checkKiloAuth(repoPath = process.cwd()): Promise<ReviewPro
   if (!found) return { provider: 'kilo', displayName: 'Kilo Code', installed: false, authenticated: null, error: 'Kilo CLI not found (`kilo`).' }
   const auth = await execReviewCli('kilo', ['auth', 'list'], repoPath, 15_000)
   const configCheck = await execReviewCli('kilo', ['config', 'check'], repoPath, 15_000)
-  const text = [auth.stdout, auth.stderr, configCheck.stdout, configCheck.stderr].filter(Boolean).join('\n').trim()
-  const authenticated = auth.exitCode === 0 && /\bcredential(s)?\b|\boauth\b|Kilo Gateway|OpenAI/i.test(text)
+  const text = redactSensitiveOutput([auth.stdout, auth.stderr, configCheck.stdout, configCheck.stderr].filter(Boolean).join('\n').trim())
+  const negativeAuth = /\b(no|not|missing|absent|invalid|expired|unauthorized|unauthenticated)\b.{0,40}\b(credential|credentials|auth|login|provider|account|token|key)s?\b|\bnot logged in\b|\bnot configured\b/i.test(text)
+  const positiveAuth = /\b(Kilo Gateway|OpenAI|oauth)\b|\bcredential(s)?\b.{0,40}\b(active|configured|found|available|connected|present)\b/i.test(text)
+  const authenticated = auth.exitCode === 0 && positiveAuth && !negativeAuth
   return {
     provider: 'kilo',
     displayName: 'Kilo Code',
@@ -254,8 +269,8 @@ function findingFromObject(provider: ReviewProvider, obj: Record<string, unknown
     title: title.slice(0, 240),
     message: (asString(obj.message) ?? asString(obj.body) ?? asString(obj.description) ?? title).slice(0, 4000),
     file: asString(obj.file) ?? asString(obj.fileName) ?? asString(obj.path) ?? asString(loc.path) ?? asString(loc.file),
-    line: typeof obj.line === 'number' ? obj.line : typeof loc.line === 'number' ? loc.line : undefined,
-    endLine: typeof obj.endLine === 'number' ? obj.endLine : typeof loc.endLine === 'number' ? loc.endLine : undefined,
+    line: parseOptionalLine(obj.line) ?? parseOptionalLine(loc.line),
+    endLine: parseOptionalLine(obj.endLine) ?? parseOptionalLine(loc.endLine),
     ruleId: asString(obj.ruleId) ?? asString(obj.rule_id) ?? asString(obj.code),
     raw: obj,
   }
@@ -331,8 +346,12 @@ export function parseReviewFindings(provider: ReviewProvider, raw: string): Revi
     }
     if (!v || typeof v !== 'object') return
     const obj = v as Record<string, unknown>
-    if ((fromFindingArray && isFindingArrayItem(obj)) || isFindingCandidate(obj)) candidates.push(obj)
-    for (const [key, value] of Object.entries(obj)) {
+    const entries = Object.entries(obj)
+    const hasNestedFindingArray = entries.some(([key, value]) => FINDING_ARRAY_KEYS.has(key) && Array.isArray(value))
+    const candidate = (fromFindingArray && isFindingArrayItem(obj)) || isFindingCandidate(obj)
+    if (candidate && !hasNestedFindingArray) candidates.push(obj)
+    for (const [key, value] of entries) {
+      if (candidate && typeof value === 'string') continue
       visit(value, FINDING_ARRAY_KEYS.has(key))
     }
   }
@@ -397,7 +416,8 @@ export async function runLocalCodeReview(input: ReviewInput): Promise<ReviewRunS
   const summary = results.map((r) => r.summary).join('\n') + (blocked ? '\nGate: BLOCKED by major/critical findings.' : '\nGate: passed/advisory.')
   const artifactPath = artifactPathFor(id)
   for (const r of results) r.artifactPath = artifactPath
-  const run: ReviewRunSummary = { id, status: results.some((r) => r.status === 'failed') ? 'failed' : 'succeeded', mode, blocked, results, findings, artifactPath, summary }
+  const runStatus: ReviewRunStatus = results.some((r) => r.status === 'failed') ? 'failed' : results.every((r) => r.status === 'skipped') ? 'skipped' : 'succeeded'
+  const run: ReviewRunSummary = { id, status: runStatus, mode, blocked, results, findings, artifactPath, summary }
   persistArtifact(artifactPath, run)
   return run
 }
@@ -413,7 +433,7 @@ async function runOneProvider(provider: ReviewProvider, input: ReviewInput & { r
       return { ...base, status: statusValue, completedAt: new Date().toISOString(), error, summary: summarize(provider, [], statusValue, error), blocked: false }
     }
     const exec = provider === 'coderabbit' ? await runCodeRabbit(input) : await runKilo(input)
-    const rawOutput = [exec.stdout, exec.stderr].filter(Boolean).join('\n')
+    const rawOutput = redactSensitiveOutput([exec.stdout, exec.stderr].filter(Boolean).join('\n'))
     const findings = parseReviewFindings(provider, rawOutput)
     const failed = exec.timedOut || (exec.exitCode !== 0 && findings.length === 0)
     const statusValue: ReviewRunStatus = failed ? 'failed' : 'succeeded'
@@ -426,7 +446,7 @@ async function runOneProvider(provider: ReviewProvider, input: ReviewInput & { r
     return { ...base, status: statusValue, completedAt: new Date().toISOString(), findings, rawOutput, error, localReviewMode: exec.localReviewMode ?? status.localReviewMode, summary: summarize(provider, findings, statusValue, error), blocked }
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err)
-    return { ...base, status: 'failed', completedAt: new Date().toISOString(), error, summary: summarize(provider, [], 'failed', error), blocked: false }
+    return { ...base, status: 'failed', completedAt: new Date().toISOString(), error: redactSensitiveOutput(error), summary: summarize(provider, [], 'failed', redactSensitiveOutput(error)), blocked: input.mode === 'blocking' }
   }
 }
 

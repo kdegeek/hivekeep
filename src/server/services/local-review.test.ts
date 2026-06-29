@@ -45,9 +45,22 @@ describe('local-review parsing', () => {
   })
 
   it('parses Kilo slash-command findings from nested results', () => {
-    const findings = parseReviewFindings('kilo', JSON.stringify({ findings: [{ severity: 'high', title: 'Race', description: 'Shared state', location: { path: 'src/race.ts', line: 5 } }] }))
+    const findings = parseReviewFindings('kilo', JSON.stringify({ findings: [{ severity: 'high', title: 'Race', description: 'Shared state', location: { path: 'src/race.ts', line: '5' } }] }))
     expect(findings).toHaveLength(1)
     expect(findings[0]).toMatchObject({ provider: 'kilo', severity: 'major', file: 'src/race.ts', line: 5 })
+  })
+
+  it('does not duplicate nested finding containers or parse candidate string fields twice', () => {
+    const raw = JSON.stringify({
+      type: 'finding',
+      severity: 'major',
+      title: 'Parent container',
+      message: '| severity | title | file |\n|---|---|---|\n| high | Nested table | src/table.ts |',
+      findings: [{ severity: 'minor', title: 'Child finding', file: 'src/child.ts' }],
+    })
+    const findings = parseReviewFindings('kilo', raw)
+    expect(findings).toHaveLength(1)
+    expect(findings[0]).toMatchObject({ severity: 'minor', title: 'Child finding', file: 'src/child.ts' })
   })
 
   it('parses CodeRabbit agent findings with fileName and codegenInstructions fields', () => {
@@ -172,13 +185,14 @@ exit 1
     }
   })
 
-  it('reports missing CLIs clearly without blocking unless major/critical findings exist', async () => {
+  it('reports all-skipped advisory runs as skipped and fails closed on blocking readiness errors', async () => {
     const root = mkdtempSync(join(tmpdir(), 'hivekeep-local-review-empty-path-'))
     process.env.PATH = root
     mkdirSync(join(root, 'repo'), { recursive: true })
     try {
       const advisory = await runLocalCodeReview({ repoPath: join(root, 'repo'), provider: 'coderabbit', mode: 'advisory', timeoutMs: 1000 })
       expect(advisory.blocked).toBe(false)
+      expect(advisory.status).toBe('skipped')
       expect(advisory.results[0]).toMatchObject({ status: 'skipped', blocked: false })
 
       const blocking = await runLocalCodeReview({ repoPath: join(root, 'repo'), provider: 'coderabbit', mode: 'blocking', timeoutMs: 1000 })

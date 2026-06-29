@@ -1,7 +1,17 @@
 import { z } from 'zod'
 import { tool } from '@/server/tools/tool-helper'
 import type { ToolRegistration } from '@/server/tools/types'
+import { isAbsolute, relative, resolve } from 'node:path'
 import { resolveToolWorkspace } from '@/server/tools/workspace'
+
+function resolveRepoPath(ctx: Parameters<typeof resolveToolWorkspace>[0], repoPath?: string): string {
+  const workspace = resolveToolWorkspace(ctx)
+  if (!repoPath) return workspace
+  const resolved = resolve(repoPath)
+  const rel = relative(workspace, resolved)
+  if (rel === '' || (!rel.startsWith('..') && rel !== '..' && !isAbsolute(rel))) return resolved
+  throw new Error('repo_path must stay inside the current tool workspace/worktree')
+}
 import { checkCodeRabbitAuth, checkKiloAuth, listLocalReviewers, runLocalCodeReview } from '@/server/services/local-review'
 
 const providerSchema = z.enum(['coderabbit', 'kilo', 'all']).default('all')
@@ -13,7 +23,7 @@ export const listLocalReviewersTool: ToolRegistration = {
   create: (ctx) => tool({
     description: 'List first-class local code review providers/agents available to Hivekeep (CodeRabbit and Kilo Code), including CLI install/auth status. Does not run a review.',
     inputSchema: z.object({ repo_path: z.string().optional().describe('Repository path. Defaults to the current tool workspace/worktree.') }),
-    execute: async ({ repo_path }) => listLocalReviewers(repo_path ?? resolveToolWorkspace(ctx)),
+    execute: async ({ repo_path }) => listLocalReviewers(resolveRepoPath(ctx, repo_path)),
   }),
 }
 
@@ -28,7 +38,7 @@ export const checkCodeReviewAuthTool: ToolRegistration = {
       repo_path: z.string().optional().describe('Repository path. Defaults to the current tool workspace/worktree.'),
     }),
     execute: async ({ provider, repo_path }) => {
-      const repoPath = repo_path ?? resolveToolWorkspace(ctx)
+      const repoPath = resolveRepoPath(ctx, repo_path)
       if (provider === 'coderabbit') return { reviewers: [await checkCodeRabbitAuth(repoPath)] }
       if (provider === 'kilo') return { reviewers: [await checkKiloAuth(repoPath)] }
       return { reviewers: await listLocalReviewers(repoPath) }
@@ -51,7 +61,7 @@ export const runLocalCodeReviewTool: ToolRegistration = {
       timeout_ms: z.number().int().min(1000).optional().describe('Per-reviewer timeout in milliseconds.'),
     }),
     execute: async ({ provider, repo_path, base, base_commit, head, mode, light, timeout_ms }) => runLocalCodeReview({
-      repoPath: repo_path ?? resolveToolWorkspace(ctx),
+      repoPath: resolveRepoPath(ctx, repo_path),
       provider,
       base,
       baseCommit: base_commit,
