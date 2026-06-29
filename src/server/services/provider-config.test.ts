@@ -43,7 +43,12 @@ mock.module('@/server/logger', () => ({
 // migrate* touches the DB; not exercised here — stub so the import doesn't
 // open the real database.
 mock.module('@/server/db/index', () => ({ db: {} }))
-mock.module('@/server/db/schema', () => ({ providers: {} }))
+
+// Use the real schema module. A partial schema mock here leaks through Bun's
+// module cache when this file is run beside image-tools.test.ts; downstream
+// imports of services/vault then fail to bind exports like `vaultSecrets`.
+const _realDbSchema = await import('@/server/db/schema')
+mock.module('@/server/db/schema', () => ({ ..._realDbSchema }))
 
 const {
   vaultifyProviderConfig,

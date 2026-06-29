@@ -18,6 +18,9 @@ mock.module('@/server/services/image-generation', () => ({
   hasImageCapability: mockHasImageCapability,
   findLLMProvider: mock(() => Promise.resolve(null)),
   buildAvatarPrompt: mock(() => Promise.resolve('')),
+  buildMiniAppIconPrompt: mock((app: { name: string }) => Promise.resolve(
+    `Flat design app icon for "${app.name}". Clean, minimal, single centered symbol. Soft gradient background. No text, no letters, no words, no UI elements. Flat design app icon, square with rounded corners.`,
+  )),
   ImageGenerationError: class ImageGenerationError extends Error {
     code: string
     constructor(code: string, message: string) {
@@ -44,9 +47,12 @@ mock.module('@/server/db/index', () => ({
   },
 }))
 
+// Use the real schema module rather than a partial mock. image-tools imports
+// provider-config, which imports services/vault via the OAuth cleanup path; a
+// partial schema mock without `vaultSecrets` breaks that transitive import.
+const _realDbSchema = await import('@/server/db/schema')
 mock.module('@/server/db/schema', () => ({
-  files: {},
-  providers: {},
+  ..._realDbSchema,
 }))
 
 const mockListModelsForProvider = mock(() =>

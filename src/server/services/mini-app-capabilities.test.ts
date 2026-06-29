@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { resolve, join } from 'path'
+import { resolve, join, relative, isAbsolute } from 'path'
 
 /**
  * Tests for mini-app capability permission logic and guards.
@@ -388,7 +388,8 @@ describe('SSRF host blocking (ctx.fetch guard)', () => {
 function resolveDataPath(appDir: string, relativePath: string): string {
   const base = resolve(join(appDir, '_data'))
   const target = resolve(base, relativePath)
-  if (!target.startsWith(base + '/') && target !== base) {
+  const relativeTargetPath = relative(base, target)
+  if (relativeTargetPath.startsWith('..') || isAbsolute(relativeTargetPath)) {
     throw new Error('files: path traversal detected')
   }
   return target

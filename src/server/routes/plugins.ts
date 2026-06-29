@@ -4,7 +4,7 @@ import { pluginRegistry } from '@/server/services/pluginRegistry'
 import type { AppVariables } from '@/server/app'
 import { createLogger } from '@/server/logger'
 import { readFile } from 'fs/promises'
-import { resolve, join } from 'path'
+import { resolve, join, relative, isAbsolute } from 'path'
 import { db } from '@/server/db'
 import { userProfiles } from '@/server/db/schema'
 import { eq } from 'drizzle-orm'
@@ -158,7 +158,8 @@ pluginRoutes.get('/:name/logo', async (c) => {
     const pluginDir = resolve(process.cwd(), 'plugins', name)
     const logoPath = resolve(pluginDir, iconRel)
     // Containment check — abort if iconUrl escapes the plugin directory.
-    if (!logoPath.startsWith(pluginDir + '/') && logoPath !== pluginDir) {
+    const relativeLogoPath = relative(pluginDir, logoPath)
+    if (relativeLogoPath.startsWith('..') || isAbsolute(relativeLogoPath)) {
       return c.json({ error: { code: 'INVALID_LOGO_PATH', message: 'Logo path escapes plugin directory' } }, 400)
     }
 
