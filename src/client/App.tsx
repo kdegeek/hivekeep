@@ -31,6 +31,7 @@ const LoginPage = lazy(() => import('@/client/pages/login/LoginPage').then(m => 
 const OnboardingPage = lazy(() => import('@/client/pages/onboarding/OnboardingPage').then(m => ({ default: m.OnboardingPage })))
 const DesignSystemPage = lazy(() => import('@/client/pages/design-system/DesignSystemPage').then(m => ({ default: m.DesignSystemPage })))
 const InvitePage = lazy(() => import('@/client/pages/invite/InvitePage').then(m => ({ default: m.InvitePage })))
+const MobileAgentHomePage = lazy(() => import('@/client/pages/mobile/MobileAgentHomePage').then(m => ({ default: m.MobileAgentHomePage })))
 const MobileNotificationsPage = lazy(() => import('@/client/pages/mobile/MobileNotificationsPage').then(m => ({ default: m.MobileNotificationsPage })))
 const MobileSettingsPage = lazy(() => import('@/client/pages/mobile/MobileSettingsPage').then(m => ({ default: m.MobileSettingsPage })))
 
@@ -228,11 +229,9 @@ function AuthenticatedShell() {
         >
           <Suspense fallback={<PageFallback />}>
             <Routes>
-              <Route path="/tasks" element={<TasksPage />} />
-              <Route path="/notifications" element={<MobileNotificationsPage onOpenSettings={openSettings} />} />
-              <Route path="/settings" element={<MobileSettingsPage />} />
+              <Route path="/" element={<MobileAgentHomePage onOpenSettings={openSettings} />} />
               <Route
-                path="*"
+                path="/agent/:slug/*"
                 element={
                   <ChatPage
                     onOpenSettings={openSettings}
@@ -240,6 +239,10 @@ function AuthenticatedShell() {
                   />
                 }
               />
+              <Route path="/tasks" element={<TasksPage />} />
+              <Route path="/notifications" element={<MobileNotificationsPage onOpenSettings={openSettings} />} />
+              <Route path="/settings" element={<MobileSettingsPage />} />
+              <Route path="*" element={<MobileAgentHomePage onOpenSettings={openSettings} />} />
             </Routes>
           </Suspense>
         </MobileAppShell>

@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Bell, ListTodo, MessageCircle, Settings } from 'lucide-react'
+import { Bell, Bot, ListTodo, MessageCircle, Settings } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 import { useAuth } from '@/client/hooks/useAuth'
 import { useTasksContext } from '@/client/contexts/TasksContext'
@@ -70,7 +70,7 @@ export function MobileAppShell({
     icon: typeof MessageCircle
     badge?: { count: number; warning?: boolean }
   }> = [
-    { key: 'chat', to: '/', label: t('shortcuts.group.chat', 'Chat'), icon: MessageCircle },
+    { key: 'chat', to: '/', label: t('activityBar.agents'), icon: Bot },
     {
       key: 'tasks',
       to: '/tasks',
