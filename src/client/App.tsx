@@ -4,7 +4,7 @@ import { useAuth } from '@/client/hooks/useAuth'
 import { useTranslation } from 'react-i18next'
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { api } from '@/client/lib/api'
+import { api, getHivekeepServerUrl, isMobileApiRuntime } from '@/client/lib/api'
 import { SidePanelProvider } from '@/client/contexts/SidePanelContext'
 import { TasksProvider } from '@/client/contexts/TasksContext'
 import { CronsProvider } from '@/client/contexts/CronsContext'
@@ -34,13 +34,23 @@ const InvitePage = lazy(() => import('@/client/pages/invite/InvitePage').then(m 
 const MobileAgentHomePage = lazy(() => import('@/client/pages/mobile/MobileAgentHomePage').then(m => ({ default: m.MobileAgentHomePage })))
 const MobileNotificationsPage = lazy(() => import('@/client/pages/mobile/MobileNotificationsPage').then(m => ({ default: m.MobileNotificationsPage })))
 const MobileSettingsPage = lazy(() => import('@/client/pages/mobile/MobileSettingsPage').then(m => ({ default: m.MobileSettingsPage })))
+const MobileServerConnectionPage = lazy(() => import('@/client/pages/mobile/MobileServerConnectionPage').then(m => ({ default: m.MobileServerConnectionPage })))
 
 // Global modals rendered at App root so they survive navigation between Agents / Projets.
 const SettingsModal = lazy(() => import('@/client/pages/settings/SettingsPage').then(m => ({ default: m.SettingsModal })))
 const AccountDialog = lazy(() => import('@/client/pages/account/AccountPage').then(m => ({ default: m.AccountDialog })))
 
 const isDev = import.meta.env.DEV
-const isMobileApp = import.meta.env.VITE_HIVEKEEP_MOBILE === 'true'
+const isMobileApp = isMobileApiRuntime()
+
+function getConfiguredMobileServerUrl(): string | null {
+  if (!isMobileApp) return null
+  try {
+    return getHivekeepServerUrl()
+  } catch {
+    return null
+  }
+}
 
 function PageFallback() {
   return (
@@ -63,7 +73,8 @@ function AppRoot() {
   const { t } = useTranslation()
   const { isLoading: authLoading, isAuthenticated, login, refetch } = useAuth()
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStatus | null>(null)
-  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true)
+  const [mobileServerUrl, setMobileServerUrl] = useState(getConfiguredMobileServerUrl)
+  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(() => !isMobileApp || !!mobileServerUrl)
   const [backendError, setBackendError] = useState(false)
 
   const checkOnboarding = useCallback(async () => {
@@ -79,8 +90,28 @@ function AppRoot() {
   }, [])
 
   useEffect(() => {
+    if (isMobileApp && !mobileServerUrl) {
+      setIsCheckingOnboarding(false)
+      return
+    }
     checkOnboarding()
-  }, [checkOnboarding])
+  }, [checkOnboarding, mobileServerUrl])
+
+  const handleMobileConnected = useCallback(async (serverUrl: string) => {
+    setMobileServerUrl(serverUrl)
+    setIsCheckingOnboarding(true)
+    setBackendError(false)
+    await refetch()
+    await checkOnboarding()
+  }, [checkOnboarding, refetch])
+
+  if (isMobileApp && !mobileServerUrl) {
+    return (
+      <Suspense fallback={<PageFallback />}>
+        <MobileServerConnectionPage onConnected={handleMobileConnected} />
+      </Suspense>
+    )
+  }
 
   // Warm the registry's name→domain map once. The lib falls back to 'mcp'
   // while this is in-flight; first paint may briefly show generic badges
@@ -111,6 +142,16 @@ function AppRoot() {
 
   // Backend unreachable — show error with retry
   if (backendError) {
+    if (isMobileApp) {
+      return (
+        <Suspense fallback={<PageFallback />}>
+          <MobileServerConnectionPage
+            initialServerUrl={mobileServerUrl}
+            onConnected={handleMobileConnected}
+          />
+        </Suspense>
+      )
+    }
     return (
       <div className="surface-base flex min-h-screen items-center justify-center">
         <div className="text-center animate-fade-in max-w-md space-y-4">
