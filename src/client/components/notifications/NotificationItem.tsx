@@ -10,13 +10,14 @@ interface NotificationItemProps {
   onMarkAsRead: (id: string) => void
   onDelete: (id: string) => void
   onClick: (notification: NotificationSummary) => void
+  markReadOnClick?: boolean
 }
 
-export function NotificationItem({ notification, onMarkAsRead, onDelete, onClick }: NotificationItemProps) {
+export function NotificationItem({ notification, onMarkAsRead, onDelete, onClick, markReadOnClick = true }: NotificationItemProps) {
   const { t } = useTranslation()
 
   const handleClick = () => {
-    if (!notification.isRead) {
+    if (markReadOnClick && !notification.isRead) {
       onMarkAsRead(notification.id)
     }
     onClick(notification)
