@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { config } from '@/server/config'
-import { join, resolve } from 'path'
+import { join, resolve, relative, isAbsolute } from 'path'
 import { existsSync } from 'fs'
 import type { AppVariables } from '@/server/app'
 import {
@@ -1111,7 +1111,8 @@ miniAppRoutes.get('/:id/static/*', async (c) => {
   const fullPath = resolve(absoluteDir, assetPath)
 
   // Path traversal check
-  if (!fullPath.startsWith(absoluteDir + '/')) {
+  const relativeAssetPath = relative(absoluteDir, fullPath)
+  if (!relativeAssetPath || relativeAssetPath.startsWith('..') || isAbsolute(relativeAssetPath)) {
     return c.json({ error: { code: 'INVALID_PATH', message: 'Path traversal detected' } }, 400)
   }
 

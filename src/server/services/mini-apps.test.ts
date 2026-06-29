@@ -1,5 +1,5 @@
 import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test'
-import { resolve, join, extname } from 'path'
+import { resolve, join, extname, relative, isAbsolute } from 'path'
 
 // ─── Pure helper re-implementations for isolated testing ─────────────────────
 // These mirror the private helpers in mini-apps.ts — tested for correctness.
@@ -7,7 +7,8 @@ import { resolve, join, extname } from 'path'
 function validatePath(base: string, relativePath: string): string {
   const absoluteBase = resolve(base)
   const resolved = resolve(base, relativePath)
-  if (!resolved.startsWith(absoluteBase + '/') && resolved !== absoluteBase) {
+  const relativeResolvedPath = relative(absoluteBase, resolved)
+  if (relativeResolvedPath.startsWith('..') || isAbsolute(relativeResolvedPath)) {
     throw new Error('Invalid path: path traversal detected')
   }
   return resolved
@@ -75,7 +76,7 @@ describe('validatePath', () => {
   })
 
   it('blocks path that resolves to base prefix (e.g. /data/mini-apps/kin1/app1-evil)', () => {
-    // This tests the "+ '/'" guard: resolved must start with base + "/" or equal base
+    // This tests segment-aware containment: resolved must stay under base or equal base
     const evilBase = '/data/mini-apps/kin1/app1'
     // "../app1-evil" from base resolves to /data/mini-apps/kin1/app1-evil
     // which starts with the base string but NOT base + "/"
@@ -94,7 +95,7 @@ describe('validatePath', () => {
   it('handles paths with double slashes', () => {
     const result = validatePath(base, 'src//index.html')
     expect(result).toBe(resolve(base, 'src//index.html'))
-    expect(result.startsWith(resolve(base) + '/')).toBe(true)
+    expect(relative(resolve(base), result).startsWith('..')).toBe(false)
   })
 
   it('handles dotfiles within base', () => {

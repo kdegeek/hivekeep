@@ -1,6 +1,6 @@
 import { eq, and, desc } from 'drizzle-orm'
 import { v4 as uuid } from 'uuid'
-import { join, resolve, extname, dirname } from 'path'
+import { join, resolve, extname, dirname, relative, isAbsolute } from 'path'
 import { mkdir, unlink, readdir, stat, rm, rename } from 'fs/promises'
 import { existsSync } from 'fs'
 import { db } from '@/server/db/index'
@@ -26,7 +26,8 @@ function appDir(agentId: string, appId: string): string {
 function validatePath(base: string, relativePath: string): string {
   const absoluteBase = resolve(base)
   const resolved = resolve(base, relativePath)
-  if (!resolved.startsWith(absoluteBase + '/') && resolved !== absoluteBase) {
+  const relativeResolvedPath = relative(absoluteBase, resolved)
+  if (relativeResolvedPath.startsWith('..') || isAbsolute(relativeResolvedPath)) {
     throw new Error('Invalid path: path traversal detected')
   }
   return resolved

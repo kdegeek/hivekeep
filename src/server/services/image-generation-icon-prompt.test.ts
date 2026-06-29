@@ -1,13 +1,16 @@
 import { describe, expect, it, mock } from 'bun:test'
-import { fullMockConfig, fullMockSchema } from '../../test-helpers'
+import { fullMockConfig } from '../../test-helpers'
 
 mock.module('@/server/db/index', () => ({
   db: {},
 }))
 
+// Use the real schema module rather than a partial mock. image-generation imports
+// provider-config, which imports services/vault via the OAuth cleanup path; a
+// partial schema mock without `vaultSecrets` can break that transitive import.
+const _realDbSchema = await import('@/server/db/schema')
 mock.module('@/server/db/schema', () => ({
-  ...fullMockSchema,
-  providers: {},
+  ..._realDbSchema,
 }))
 
 mock.module('@/server/logger', () => ({
