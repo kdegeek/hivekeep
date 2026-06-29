@@ -58,6 +58,7 @@ export function MobileAppShell({
   useNotificationSound()
 
   const activeTab = getActiveTab(location.pathname)
+  const isChatDetail = location.pathname.startsWith('/agent/')
   const activeTaskCount = activeTasks.length
   const hasAwaitingTask = activeTasks.some(
     (task) => task.status === 'awaiting_human_input' || task.status === 'awaiting_agent_response',
@@ -124,47 +125,49 @@ export function MobileAppShell({
 
       <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
 
-      <nav
-        className="glass-strong shrink-0 border-t px-2 pt-1.5 shadow-[0_-8px_28px_oklch(0_0_0_/_0.08)]"
-        style={safeBottomStyle}
-        aria-label={t('appTopBar.sections', 'Sections')}
-      >
-        <div className="grid grid-cols-4 gap-1">
-          {navItems.map((item) => {
-            const Icon = item.icon
-            const active = activeTab === item.key
-            return (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => navigate(item.to)}
-                aria-current={active ? 'page' : undefined}
-                className={cn(
-                  'relative flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-2xl text-[11px] font-medium transition-colors',
-                  active
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground active:bg-muted hover:text-foreground',
-                )}
-              >
-                <Icon className="size-5" strokeWidth={1.9} />
-                <span className="max-w-full truncate px-1">{item.label}</span>
-                {item.badge && (
-                  <span
-                    className={cn(
-                      'absolute right-4 top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-semibold leading-none',
-                      item.badge.warning
-                        ? 'animate-pulse bg-warning text-warning-foreground'
-                        : 'bg-primary text-primary-foreground',
-                    )}
-                  >
-                    {item.badge.count > 99 ? '99+' : item.badge.count}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </nav>
+      {!isChatDetail && (
+        <nav
+          className="glass-strong shrink-0 border-t px-2 pt-1.5 shadow-[0_-8px_28px_oklch(0_0_0_/_0.08)]"
+          style={safeBottomStyle}
+          aria-label={t('appTopBar.sections', 'Sections')}
+        >
+          <div className="grid grid-cols-4 gap-1">
+            {navItems.map((item) => {
+              const Icon = item.icon
+              const active = activeTab === item.key
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => navigate(item.to)}
+                  aria-current={active ? 'page' : undefined}
+                  className={cn(
+                    'relative flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-2xl text-[11px] font-medium transition-colors',
+                    active
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground active:bg-muted hover:text-foreground',
+                  )}
+                >
+                  <Icon className="size-5" strokeWidth={1.9} />
+                  <span className="max-w-full truncate px-1">{item.label}</span>
+                  {item.badge && (
+                    <span
+                      className={cn(
+                        'absolute right-4 top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-semibold leading-none',
+                        item.badge.warning
+                          ? 'animate-pulse bg-warning text-warning-foreground'
+                          : 'bg-primary text-primary-foreground',
+                      )}
+                    >
+                      {item.badge.count > 99 ? '99+' : item.badge.count}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </nav>
+      )}
     </div>
   )
 }
