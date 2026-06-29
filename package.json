@@ -52,7 +52,8 @@
     "test": "bun test $(find ./src ./packages/sdk/src ./packages/create-hivekeep-plugin ./plugins -name '*.test.ts' | sort)",
     "test:e2e": "npx playwright test",
     "typecheck": "NODE_OPTIONS=\"${NODE_OPTIONS:-} --max-old-space-size=8192\" tsc --noEmit",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:e2e:mobile": "npm run mobile:build && playwright test tests/e2e/mobile-smoke.spec.ts"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.4.1",
