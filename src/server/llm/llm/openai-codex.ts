@@ -618,12 +618,9 @@ export const openaiCodexProvider: LLMProvider = {
       const chosen = downgradeEffort(request.thinkingEffort, model.thinking?.efforts ?? [])
       if (chosen) body.reasoning = { effort: chosen }
     }
-    // Codex rejects max_output_tokens; max_completion_tokens is the Responses
-    // equivalent, but the Codex backend caps it itself per-model — only set it
-    // when the caller explicitly asked.
-    if (request.maxOutputTokens != null) {
-      body.max_output_tokens = request.maxOutputTokens
-    }
+    // Codex rejects caller-supplied max output token fields (including the
+    // Responses-style `max_output_tokens`). The backend already enforces the
+    // model-specific cap, so intentionally omit request.maxOutputTokens here.
 
     // Resolve credentials and stream. We do this inside the generator so a
     // token refresh happens lazily at first iteration rather than at the

@@ -11,7 +11,7 @@
  * - A gated ctx member throws a descriptive error until its permission is granted.
  */
 
-import { join, resolve, dirname } from 'path'
+import { join, resolve, dirname, relative, isAbsolute } from 'path'
 import { mkdir, unlink, readdir, stat } from 'fs/promises'
 import { existsSync } from 'fs'
 import { createLogger } from '@/server/logger'
@@ -299,7 +299,8 @@ const MAX_DATA_FILES_PER_APP = 1_000
 function resolveDataPath(appDir: string, relativePath: string): string {
   const base = resolve(join(appDir, DATA_DIR_NAME))
   const target = resolve(base, relativePath)
-  if (!target.startsWith(base + '/') && target !== base) {
+  const relativeTargetPath = relative(base, target)
+  if (relativeTargetPath.startsWith('..') || isAbsolute(relativeTargetPath)) {
     throw new Error('files: path traversal detected')
   }
   return target
