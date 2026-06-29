@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useContext, createContext } from 'react'
 import type { ReactNode } from 'react'
-import { api } from '@/client/lib/api'
+import { api, buildApiUrl } from '@/client/lib/api'
 import i18n, { changeAppLanguage } from '@/client/lib/i18n'
 
 interface UserProfile {
@@ -68,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchUser])
 
   const login = async (email: string, password: string) => {
-    const response = await fetch('/api/auth/sign-in/email', {
+    const response = await fetch(buildApiUrl('/auth/sign-in/email'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -93,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string
     password: string
   }) => {
-    const response = await fetch('/api/auth/sign-up/email', {
+    const response = await fetch(buildApiUrl('/auth/sign-up/email'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -109,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = async () => {
-    await fetch('/api/auth/sign-out', {
+    await fetch(buildApiUrl('/auth/sign-out'), {
       method: 'POST',
       credentials: 'include',
     })

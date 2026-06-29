@@ -54,6 +54,34 @@ export function clearHivekeepServerUrl(): void {
   localStorage.removeItem(MOBILE_SERVER_URL_STORAGE_KEY)
 }
 
+export async function validateHivekeepServerConnection(serverUrl: string): Promise<string> {
+  const normalized = normalizeHivekeepServerUrl(serverUrl)
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), 10_000)
+  try {
+    const response = await fetch(`${normalized}${API_PATH_PREFIX}/health`, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      throw new Error(`Hivekeep server responded with ${response.status}`)
+    }
+    const body = (await response.json()) as { status?: unknown }
+    if (body.status !== 'ok') {
+      throw new Error('Hivekeep server health check did not return ok')
+    }
+    return normalized
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Hivekeep server did not respond in time')
+    }
+    throw err
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
+}
+
 export function buildApiUrl(path: string): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   const serverUrl = isMobileApiRuntime() ? getHivekeepServerUrl() : null
