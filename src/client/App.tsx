@@ -270,7 +270,9 @@ function AuthenticatedShell() {
         >
           <Suspense fallback={<PageFallback />}>
             <Routes>
-              <Route path="/" element={<MobileAgentHomePage onOpenSettings={openSettings} />} />
+              <Route path="/tasks" element={<TasksPage />} />
+              <Route path="/notifications" element={<MobileNotificationsPage onOpenSettings={openSettings} />} />
+              <Route path="/settings/*" element={<MobileSettingsPage onOpenAccount={handleOpenAccount} />} />
               <Route
                 path="/agent/:slug/*"
                 element={
