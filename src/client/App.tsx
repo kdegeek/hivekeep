@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { api, getHivekeepServerUrl, isMobileApiRuntime } from '@/client/lib/api'
+import { useNativeMobileNotifications } from '@/client/hooks/useNativeMobileNotifications'
 import { SidePanelProvider } from '@/client/contexts/SidePanelContext'
 import { TasksProvider } from '@/client/contexts/TasksContext'
 import { CronsProvider } from '@/client/contexts/CronsContext'
@@ -235,6 +236,7 @@ function AuthenticatedShell() {
     })
   }, [navigate])
   const openSettings = isMobileApp ? handleOpenMobileSettings : handleOpenSettings
+  useNativeMobileNotifications(navigate)
 
   // Surface the result of an email OAuth connect (the callback redirects back
   // to "/?email_connected=<addr>" or "/?email_error=<msg>"). Toast, open the
@@ -284,7 +286,7 @@ function AuthenticatedShell() {
               />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/notifications" element={<MobileNotificationsPage onOpenSettings={openSettings} />} />
-              <Route path="/settings" element={<MobileSettingsPage />} />
+              <Route path="/settings" element={<MobileSettingsPage onOpenAccount={handleOpenAccount} />} />
               <Route path="*" element={<MobileAgentHomePage onOpenSettings={openSettings} />} />
             </Routes>
           </Suspense>
