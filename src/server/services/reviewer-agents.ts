@@ -36,6 +36,13 @@ export interface ReviewerChecklist {
   updatedAt: string
 }
 
+export interface ReviewerRemediationTarget {
+  role: string
+  label: string
+  reason: string
+  agentSlug?: string
+}
+
 export interface ReviewerAgentDefinition {
   id: ReviewerAgentId
   name: string
@@ -49,7 +56,7 @@ export interface ReviewerAgentDefinition {
   checklistIds: string[]
   memoryTags: string[]
   instructionTags: string[]
-  remediationTargets: Array<{ agentSlug: string; label: string; reason: string }>
+  remediationTargets: ReviewerRemediationTarget[]
 }
 
 export interface ReviewerAgent extends ReviewerAgentDefinition {
@@ -81,8 +88,8 @@ const REVIEWER_DEFINITIONS: ReviewerAgentDefinition[] = [
     memoryTags: ['reviewer:coderabbit', 'local-review', 'pre-pr-gate'],
     instructionTags: ['reviewer-agent', 'coderabbit-cli', 'gate:major-critical'],
     remediationTargets: [
-      { agentSlug: 'hiro', label: 'Assign fix to Hiro', reason: 'Implementation and test remediation' },
-      { agentSlug: 'kaito', label: 'Escalate to Kaito', reason: 'Security, DevOps, and risk findings' },
+      { role: 'developer', label: 'Assign to developer agent', reason: 'Implementation and test remediation' },
+      { role: 'security', label: 'Escalate to security reviewer', reason: 'Security, DevOps, and risk findings' },
     ],
   },
   {
@@ -99,8 +106,8 @@ const REVIEWER_DEFINITIONS: ReviewerAgentDefinition[] = [
     memoryTags: ['reviewer:kilo', 'local-review', 'pre-commit-gate'],
     instructionTags: ['reviewer-agent', 'kilo-slash-command', 'gate:major-critical'],
     remediationTargets: [
-      { agentSlug: 'hiro', label: 'Assign fix to Hiro', reason: 'Implementation and test remediation' },
-      { agentSlug: 'kaito', label: 'Escalate to Kaito', reason: 'Security, DevOps, and risk findings' },
+      { role: 'developer', label: 'Assign to developer agent', reason: 'Implementation and test remediation' },
+      { role: 'security', label: 'Escalate to security reviewer', reason: 'Security, DevOps, and risk findings' },
     ],
   },
 ]
@@ -133,7 +140,7 @@ const SEEDED_CHECKLISTS: ReviewerChecklist[] = [
       { id: 'kilo-diff-scope', label: 'Diff scope and unintended changes', description: 'Confirm the local diff matches the task and does not include accidental edits.', required: true, defaultState: 'unchecked' },
       { id: 'kilo-runtime', label: 'Runtime and integration behavior', description: 'Check imports, route wiring, serialization, and CLI/runtime assumptions.', required: true, defaultState: 'unchecked' },
       { id: 'kilo-tests', label: 'Test and type coverage', description: 'Identify missing service/type coverage or build-only UI regressions.', required: true, defaultState: 'unchecked' },
-      { id: 'kilo-remediation', label: 'Remediation handoff clarity', description: 'Ensure findings can be assigned to Hiro/Kaito with enough context.', required: false, defaultState: 'needs-decision' },
+      { id: 'kilo-remediation', label: 'Remediation handoff clarity', description: 'Ensure findings can be assigned to the appropriate remediation agent with enough context.', required: false, defaultState: 'needs-decision' },
     ],
   },
 ]

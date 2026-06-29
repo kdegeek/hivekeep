@@ -16,7 +16,7 @@ Reviewer agents are defined in `src/server/services/reviewer-agents.ts` with sta
 - `focusAreas`
 - `checklistIds`
 - `memoryTags` and `instructionTags`
-- `remediationTargets` for Hiro/Kaito handoff seams
+- `remediationTargets` for install-configurable remediation handoff seams
 
 The MVP intentionally stores reviewer knowledge/checklists as JSON-backed service data under the code-review artifact directory (`reviewer-knowledge.json`) instead of adding a DB migration. The service boundary is stable so this can move to DB-backed persistence later.
 
@@ -77,7 +77,7 @@ UI surfaces include:
 - Review-run detail with provider, adapter mode, repo/range, status, gate decision, timestamps/duration, finding severity counts, artifact path, and raw output disclosure.
 - Checklist display/editing for seeded reviewer-specific checklists.
 - Finding state updates for remediation tracking.
-- Remediation handoff stubs for Hiro/Kaito assignment; full task spawning is intentionally left as a follow-up seam.
+- Remediation handoff stubs for assigning findings to install-configured remediation agents; full task spawning is intentionally left as a follow-up seam.
 
 ## Hook runner
 
@@ -167,7 +167,7 @@ This JSON persistence is deliberately small and filesystem-backed for the MVP. T
 
 ## Remediation loop
 
-The review result is structured so Hiro/Kaito or ticket-bound sub-Agents can consume findings, fix high-severity issues, and rerun review before push/PR. In blocking mode, major/critical findings should prevent automatic push or PR creation unless a human explicitly overrides the gate.
+The review result is structured so install-configured remediation agents or ticket-bound sub-Agents can consume findings, fix high-severity issues, and rerun review before push/PR. In blocking mode, major/critical findings should prevent automatic push or PR creation unless a human explicitly overrides the gate.
 
 The current UI supports manual state transitions:
 
@@ -182,6 +182,6 @@ The full "spawn fix task" action is exposed as a UI/service seam, but task creat
 
 - DB-backed reviewer knowledge/checklists and run history.
 - Full central-memory resolution for reviewer memory/instruction tags.
-- Spawn-fix-task flow from a finding to Hiro/Kaito with ticket comments and rerun automation.
+- Spawn-fix-task flow from a finding to an install-configured remediation agent with ticket comments and rerun automation.
 - Richer extraction for Kilo's nested task output if Kilo publishes a tighter machine-readable finding schema than JSON events containing review text.
 - Automatic PR wrapper integration after the local runner has settled.

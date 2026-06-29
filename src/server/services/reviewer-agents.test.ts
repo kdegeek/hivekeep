@@ -40,6 +40,11 @@ describe('reviewer agent definitions and knowledge', () => {
     expect(reviewerAgentIdForProvider('kilo')).toBe('kilo-code-reviewer')
     expect(coderabbit?.memoryTags).toContain('reviewer:coderabbit')
     expect(kilo?.instructionTags).toContain('kilo-slash-command')
+    expect(coderabbit?.remediationTargets).toEqual([
+      { role: 'developer', label: 'Assign to developer agent', reason: 'Implementation and test remediation' },
+      { role: 'security', label: 'Escalate to security reviewer', reason: 'Security, DevOps, and risk findings' },
+    ])
+    expect(kilo?.remediationTargets.every((target) => target.agentSlug === undefined)).toBe(true)
   })
 
   it('seeds and updates reviewer-specific checklists in the JSON knowledge store', () => {
