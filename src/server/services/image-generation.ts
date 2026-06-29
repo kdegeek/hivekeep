@@ -618,8 +618,9 @@ export async function buildMiniAppIconPrompt(app: {
   const desc = app.description?.slice(0, 300) ?? ''
   const emoji = app.icon ?? ''
 
+  let iconResult: Awaited<ReturnType<typeof runOneShot>>
   try {
-    const iconResult = await runOneShot(resolved, {
+    iconResult = await runOneShot(resolved, {
       system: [{ type: 'text', text: MINI_APP_ICON_STYLE_SYSTEM }],
       messages: [{
         role: 'user',
@@ -630,7 +631,12 @@ export async function buildMiniAppIconPrompt(app: {
       }],
       maxOutputTokens: 200,
     })
+  } catch (err) {
+    log.warn({ err, appName: app.name }, 'Mini-app icon prompt generation failed; using static fallback')
+    return staticFallback
+  }
 
+  try {
     recordUsage({
       callSite: 'icon-prompt',
       callType: 'generate-text',
@@ -644,13 +650,12 @@ export async function buildMiniAppIconPrompt(app: {
         outputTokenDetails: { reasoningTokens: iconResult.usage.reasoningTokens },
       },
     })
-
-    const generated = iconResult.text.trim()
-    return generated || staticFallback
   } catch (err) {
-    log.warn({ err, appName: app.name }, 'Mini-app icon prompt generation failed; using static fallback')
-    return staticFallback
+    log.warn({ err, appName: app.name }, 'Mini-app icon prompt usage recording failed')
   }
+
+  const generated = iconResult.text.trim()
+  return generated || staticFallback
 }
 
 /**
