@@ -412,6 +412,8 @@ bun run dev    # Vite dev server (5173) + Hono backend (3000)
 | `bun run mobile:build` | Capacitor web build with `.env.mobile` (`VITE_HIVEKEEP_MOBILE=true`; also writes to `dist/client/`) |
 | `bun run mobile:copy` | Build, then copy `dist/client/` into added Capacitor platforms |
 | `bun run mobile:sync` | Build, then sync Capacitor platforms |
+| `bun run mobile:android:apk:debug` | Build, sync, and package a debug Android APK |
+| `bun run mobile:android:apk:release` | Build, sync, and package a locally signed release Android APK |
 | `bun run start` | Start the production server |
 | `bun run db:generate` | Generate a Drizzle migration from schema changes |
 | `bun run db:migrate` | Apply pending migrations |
@@ -425,6 +427,8 @@ Output paths:
 - Web build: `dist/client/`
 - Android copy target after `cap add android` + `bun run mobile:copy` or `bun run mobile:sync`: `android/app/src/main/assets/public/`
 - iOS copy target after `cap add ios` + `bun run mobile:copy` or `bun run mobile:sync`: `ios/App/App/public/`
+
+APK packaging, local release signing, Android versioning, and self-hosted server notes are documented in [`docs/android-apk.md`](docs/android-apk.md).
 
 ### Project structure
 
