@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { config } from '@/server/config'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import { existsSync } from 'fs'
 import type { AppVariables } from '@/server/app'
 import {
@@ -1107,8 +1107,8 @@ miniAppRoutes.get('/:id/static/*', async (c) => {
   }
 
   const dir = getAppDir(app.agentId, app.id)
-  const absoluteDir = join(process.cwd(), dir)
-  const fullPath = join(absoluteDir, assetPath)
+  const absoluteDir = resolve(dir)
+  const fullPath = resolve(absoluteDir, assetPath)
 
   // Path traversal check
   if (!fullPath.startsWith(absoluteDir + '/')) {
