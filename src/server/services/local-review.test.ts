@@ -5,7 +5,7 @@ import { tmpdir } from 'os'
 import { config } from '@/server/config'
 import { _LOCAL_REVIEW_INTERNALS_FOR_TEST, runLocalCodeReview } from './local-review'
 
-const { parseReviewFindings, evaluateGate, parseJsonLines, kiloSlashCommandArgs, kiloPromptFallbackArgs, execReviewCli, getReviewRun, updateReviewFindingState } = _LOCAL_REVIEW_INTERNALS_FOR_TEST
+const { parseReviewFindings, evaluateGate, parseJsonLines, kiloSlashCommandArgs, kiloPromptFallbackArgs, execReviewCli, getReviewRun, updateReviewFindingState, trimIncompleteUtf8End, trimIncompleteUtf8Start } = _LOCAL_REVIEW_INTERNALS_FOR_TEST
 const originalPath = process.env.PATH
 const originalArtifactDir = config.codeReview.artifactDir
 const mutableCodeReviewConfig = config.codeReview as { artifactDir: string }
@@ -187,6 +187,13 @@ describe('local-review gating', () => {
     const findings = parseReviewFindings('coderabbit', JSON.stringify({ findings: [{ severity: 'minor', title: 'Nit' }] }))
     expect(evaluateGate(findings, 'blocking')).toBe(false)
   })
+
+  it('ignores fixed and ignored major findings when evaluating blocking gates', () => {
+    const findings = parseReviewFindings('coderabbit', JSON.stringify({ findings: [{ severity: 'major', title: 'Fixed' }, { severity: 'critical', title: 'Ignored' }, { severity: 'minor', title: 'Open' }] }))
+    findings[0]!.state = 'fixed'
+    findings[1]!.state = 'ignored'
+    expect(evaluateGate(findings, 'blocking')).toBe(false)
+  })
 })
 
 describe('local-review artifacts', () => {
@@ -210,10 +217,18 @@ exit 1
       expect(saved.findings[0]).toMatchObject({ provider: 'coderabbit', severity: 'minor', file: 'src/a.ts', state: 'open' })
       const updated = updateReviewFindingState(result.id, saved.findings[0].id, 'fixed', 'covered by test')
       expect(updated.findings[0]).toMatchObject({ state: 'fixed', stateNote: 'covered by test' })
+      expect(updated.blocked).toBe(false)
       expect(getReviewRun(result.id)?.findings[0]).toMatchObject({ state: 'fixed' })
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
+  })
+
+  it('preserves UTF-8 boundaries while trimming capped output edges', () => {
+    const emoji = new TextEncoder().encode('abc😀')
+    expect(new TextDecoder().decode(trimIncompleteUtf8End(emoji.slice(0, 5)))).toBe('abc')
+    expect(new TextDecoder().decode(trimIncompleteUtf8Start(emoji.slice(4)))).toBe('')
+    expect(new TextDecoder().decode(trimIncompleteUtf8Start(emoji))).toBe('abc😀')
   })
 
   it('reports all-skipped advisory runs as skipped and fails closed on blocking readiness errors', async () => {

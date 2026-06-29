@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { join, resolve, sep } from 'path'
 import { randomUUID } from 'crypto'
-import { Buffer } from 'node:buffer'
 import { config } from '@/server/config'
 
 export type ReviewProvider = 'coderabbit' | 'kilo'
@@ -116,6 +115,33 @@ function mergeExecEnv(extraEnv?: Record<string, string | undefined>): Record<str
   return merged
 }
 
+function concatChunks(chunks: Uint8Array[]): Uint8Array {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0)
+  const combined = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    combined.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return combined
+}
+
+function trimIncompleteUtf8End(bytes: Uint8Array): Uint8Array {
+  if (bytes.byteLength === 0) return bytes
+  let start = bytes.byteLength - 1
+  while (start >= 0 && (bytes[start]! & 0xc0) === 0x80) start--
+  if (start < 0) return new Uint8Array(0)
+  const lead = bytes[start]!
+  const expected = lead < 0x80 ? 1 : (lead & 0xe0) === 0xc0 ? 2 : (lead & 0xf0) === 0xe0 ? 3 : (lead & 0xf8) === 0xf0 ? 4 : 1
+  return bytes.byteLength - start >= expected ? bytes : bytes.slice(0, start)
+}
+
+function trimIncompleteUtf8Start(bytes: Uint8Array): Uint8Array {
+  let start = 0
+  while (start < bytes.byteLength && (bytes[start]! & 0xc0) === 0x80) start++
+  return start === 0 ? bytes : bytes.slice(start)
+}
+
 async function readCappedStream(stream: ReadableStream<Uint8Array> | null): Promise<string> {
   if (!stream) return ''
   const max = config.codeReview.maxOutputBytes
@@ -143,10 +169,10 @@ async function readCappedStream(stream: ReadableStream<Uint8Array> | null): Prom
     combined.set(value, tail.byteLength)
     tail = combined.byteLength > edge ? combined.slice(combined.byteLength - edge) : combined
   }
-  if (total <= max) return new TextDecoder().decode(Buffer.concat(allChunks))
   const decoder = new TextDecoder()
-  const head = decoder.decode(Buffer.concat(headChunks))
-  const tailText = decoder.decode(tail)
+  if (total <= max) return decoder.decode(concatChunks(allChunks))
+  const head = decoder.decode(trimIncompleteUtf8End(concatChunks(headChunks)))
+  const tailText = decoder.decode(trimIncompleteUtf8Start(tail))
   return `${head}\n[…truncated ${total - max} bytes from the middle…]\n${tailText}`
 }
 
@@ -414,8 +440,12 @@ export function parseReviewFindings(provider: ReviewProvider, raw: string): Revi
   ]
 }
 
+function isActiveBlockingFinding(finding: ReviewFinding): boolean {
+  return (finding.severity === 'critical' || finding.severity === 'major') && finding.state !== 'fixed' && finding.state !== 'ignored'
+}
+
 export function evaluateGate(findings: ReviewFinding[], mode: ReviewMode): boolean {
-  return mode === 'blocking' && findings.some((f) => f.severity === 'critical' || f.severity === 'major')
+  return mode === 'blocking' && findings.some(isActiveBlockingFinding)
 }
 
 function summarize(provider: ReviewProvider, findings: ReviewFinding[], status: ReviewRunStatus, err?: string): string {
@@ -494,6 +524,8 @@ export function updateReviewFindingState(runId: string, findingId: string, state
   run.findings.forEach(apply)
   run.results.forEach((result) => result.findings.forEach(apply))
   if (!touched) throw new Error(`Review finding not found: ${findingId}`)
+  run.blocked = evaluateGate(run.findings, run.mode)
+  for (const result of run.results) result.blocked = evaluateGate(result.findings, result.mode)
   persistArtifact(artifactPathFor(runId), run)
   return run
 }
@@ -616,4 +648,4 @@ async function runKilo(input: ReviewInput & { repoPath: string }): Promise<ExecR
   }
 }
 
-export const _LOCAL_REVIEW_INTERNALS_FOR_TEST = { parseReviewFindings, parseJsonLines, evaluateGate, kiloReviewPrompt, kiloSlashCommand, kiloSlashCommandArgs, kiloPromptFallbackArgs, listReviewRuns, getReviewRun, updateReviewFindingState, execReviewCli }
+export const _LOCAL_REVIEW_INTERNALS_FOR_TEST = { parseReviewFindings, parseJsonLines, evaluateGate, kiloReviewPrompt, kiloSlashCommand, kiloSlashCommandArgs, kiloPromptFallbackArgs, listReviewRuns, getReviewRun, updateReviewFindingState, execReviewCli, trimIncompleteUtf8End, trimIncompleteUtf8Start }

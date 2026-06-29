@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Navigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
   AlertTriangle,
@@ -25,6 +26,7 @@ import { Input } from '@/client/components/ui/input'
 import { Textarea } from '@/client/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/client/components/ui/select'
 import { api, toastError } from '@/client/lib/api'
+import { useAuth } from '@/client/hooks/useAuth'
 import { cn } from '@/client/lib/utils'
 
 type ReviewProvider = 'coderabbit' | 'kilo'
@@ -154,9 +156,9 @@ function counts(findings: ReviewFinding[]) {
 function gateLabel(run?: ReviewRunSummary, auth?: ReviewProviderStatus): { label: string; className: string; icon: typeof ShieldCheck } {
   if (auth && (!auth.installed || auth.authenticated === false)) return { label: 'Auth missing', className: 'bg-destructive text-white', icon: ShieldAlert }
   if (!run) return { label: 'No runs yet', className: 'bg-muted text-muted-foreground', icon: Clock3 }
+  if (run.status === 'failed') return { label: 'Review failed', className: 'bg-destructive text-white', icon: XCircle }
   if (run.blocked) return { label: 'Blocking findings', className: 'bg-destructive text-white', icon: ShieldAlert }
   if (run.findings.length > 0) return { label: 'Advisory findings', className: 'bg-amber-500 text-white', icon: AlertTriangle }
-  if (run.status === 'failed') return { label: 'Review failed', className: 'bg-destructive text-white', icon: XCircle }
   if (run.status === 'skipped') return { label: 'Skipped', className: 'bg-muted text-muted-foreground', icon: Clock3 }
   return { label: 'Clean', className: 'bg-emerald-600 text-white', icon: ShieldCheck }
 }
@@ -374,6 +376,12 @@ function RunDetail({ run, onStateChange }: { run?: ReviewRunSummary; onStateChan
 }
 
 export function ReviewerAgentsPage() {
+  const { user } = useAuth()
+  if (user?.role !== 'admin') return <Navigate to="/" replace />
+  return <ReviewerAgentsAdminPage />
+}
+
+function ReviewerAgentsAdminPage() {
   const [agents, setAgents] = useState<ReviewerAgent[]>([])
   const [runs, setRuns] = useState<ReviewRunSummary[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState<ReviewerAgentId>('coderabbit-reviewer')
@@ -439,15 +447,15 @@ export function ReviewerAgentsPage() {
         icon={GitPullRequest}
         title="Reviewer Agents"
         actions={
-          <>
-            <Input value={repoPath} onChange={(e) => setRepoPath(e.target.value)} placeholder="Repository path (blank = server cwd)" className="h-9 w-72" aria-label="Repository path" />
-            <Input value={base} onChange={(e) => setBase(e.target.value)} className="h-9 w-40" aria-label="Base ref" />
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
+            <Input value={repoPath} onChange={(e) => setRepoPath(e.target.value)} placeholder="Repository path (blank = server cwd)" className="h-9 w-full sm:w-72" aria-label="Repository path" />
+            <Input value={base} onChange={(e) => setBase(e.target.value)} className="h-9 w-full sm:w-40" aria-label="Base ref" />
             <Select value={mode} onValueChange={(value) => setMode(value as ReviewMode)}>
-              <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full sm:w-32"><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="advisory">advisory</SelectItem><SelectItem value="blocking">blocking</SelectItem></SelectContent>
             </Select>
-            <Button variant="outline" onClick={load} disabled={loading}><RefreshCw className={cn('size-4', loading && 'animate-spin')} /> Refresh</Button>
-          </>
+            <Button className="w-full sm:w-auto" variant="outline" onClick={load} disabled={loading}><RefreshCw className={cn('size-4', loading && 'animate-spin')} /> Refresh</Button>
+          </div>
         }
       >
         <p className="text-xs text-muted-foreground">First-class CodeRabbit and Kilo Code reviewer agents for pre-commit/pre-PR local review gates.</p>
@@ -490,7 +498,7 @@ export function ReviewerAgentsPage() {
                 <CardContent className="space-y-2">
                   {runs.length === 0 ? <p className="text-sm text-muted-foreground">No local review artifacts yet.</p> : runs.map((run) => (
                     <button key={run.id} type="button" onClick={() => setSelectedRunId(run.id)} className={cn('w-full rounded-md border p-2 text-left text-sm hover:border-primary', selectedRun?.id === run.id && 'border-primary bg-primary/5')}>
-                      <div className="flex items-center justify-between gap-2"><span className="truncate font-medium">{run.id}</span>{run.blocked ? <ShieldAlert className="size-4 text-destructive" /> : <CheckCircle2 className="size-4 text-emerald-600" />}</div>
+                      <div className="flex items-center justify-between gap-2"><span className="truncate font-medium">{run.id}</span>{run.status === 'failed' ? <XCircle className="size-4 text-destructive" /> : run.blocked ? <ShieldAlert className="size-4 text-destructive" /> : <CheckCircle2 className="size-4 text-emerald-600" />}</div>
                       <p className="text-xs text-muted-foreground">{run.status} · {run.mode} · {run.findings.length} finding(s)</p>
                     </button>
                   ))}
