@@ -83,6 +83,8 @@ interface MessageInputProps {
   toolCount?: number
   /** Opens the tools listing modal (owned by the parent panel). */
   onShowTools?: () => void
+  /** Native mobile chat layout: denser controls and safe-area aware composer. */
+  mobile?: boolean
 }
 
 export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProps>(function MessageInput({
@@ -114,6 +116,7 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
   onChangeThinking,
   toolCount,
   onShowTools,
+  mobile = false,
 }, ref) {
   const { t } = useTranslation()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -662,7 +665,10 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
 
   return (
     <div
-      className="relative border-t bg-background/80 backdrop-blur-sm px-3 py-3 sm:px-4 sm:py-4"
+      className={cn(
+        'relative border-t bg-background/80 backdrop-blur-sm px-3 py-3 sm:px-4 sm:py-4',
+        mobile && 'px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2',
+      )}
       onDragEnter={onAddFiles ? handleDragEnter : undefined}
       onDragLeave={onAddFiles ? handleDragLeave : undefined}
       onDragOver={onAddFiles ? handleDragOver : undefined}
@@ -688,7 +694,8 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
 
       {/* Composer surface — borderless, blends into its container */}
       <div className={cn(
-        'mx-auto max-w-3xl rounded-2xl bg-muted/50 transition-all duration-200',
+        'mx-auto rounded-2xl bg-muted/50 transition-all duration-200',
+        mobile ? 'max-w-full shadow-lg' : 'max-w-3xl',
         'focus-within:bg-muted/70 focus-within:shadow-sm',
         isDragging && 'ring-2 ring-primary/50',
       )}>
@@ -753,6 +760,7 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
               'min-h-12 max-h-48 resize-none border-0 bg-transparent dark:bg-transparent shadow-none outline-none',
               'focus-visible:ring-0 focus-visible:border-0 rounded-none',
               'px-4 py-3 text-sm',
+              mobile && 'max-h-32 text-base',
               disabledReason && 'placeholder:text-warning/70',
             )}
           />
@@ -796,7 +804,7 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
         </div>
 
         {/* Action bar */}
-        <div className="flex items-center gap-1 px-2 pb-2 pt-0.5">
+        <div className={cn('flex items-center gap-1 px-2 pb-2 pt-0.5', mobile && 'gap-0.5 overflow-x-auto')}>
           {/* Left: attach + model + thinking */}
           <div className="flex min-w-0 flex-1 items-center gap-0.5">
             {onAddFiles && (
@@ -823,7 +831,10 @@ export const MessageInput = memo(forwardRef<MessageInputHandle, MessageInputProp
                 value={modelPickerValue(model, providerId ?? '')}
                 onValueChange={onModelChange}
                 variant="ghost"
-                className="h-8 w-auto min-w-0 max-w-[160px] shrink gap-1.5 rounded-lg px-2 text-xs font-normal text-muted-foreground hover:text-foreground sm:max-w-[200px]"
+                className={cn(
+                  'h-8 w-auto min-w-0 shrink gap-1.5 rounded-lg px-2 text-xs font-normal text-muted-foreground hover:text-foreground',
+                  mobile ? 'max-w-[120px]' : 'max-w-[160px] sm:max-w-[200px]',
+                )}
               />
             )}
 
