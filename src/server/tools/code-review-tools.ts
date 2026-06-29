@@ -1,17 +1,14 @@
 import { z } from 'zod'
 import { tool } from '@/server/tools/tool-helper'
 import type { ToolRegistration } from '@/server/tools/types'
-import { isAbsolute, relative, resolve } from 'node:path'
+import { isAbsolute, resolve } from 'node:path'
 import { resolveToolEnv, resolveToolWorkspace } from '@/server/tools/workspace'
-import { checkCodeRabbitAuth, checkKiloAuth, listLocalReviewers, runLocalCodeReview } from '@/server/services/local-review'
+import { checkCodeRabbitAuth, checkKiloAuth, listLocalReviewers, runLocalCodeReview, validateReviewRepoPath } from '@/server/services/local-review'
 
 function resolveRepoPath(ctx: Parameters<typeof resolveToolWorkspace>[0], repoPath?: string): string {
   const workspace = resolveToolWorkspace(ctx)
-  if (!repoPath) return workspace
-  const resolved = isAbsolute(repoPath) ? resolve(repoPath) : resolve(workspace, repoPath)
-  const rel = relative(workspace, resolved)
-  if (rel === '' || (!rel.startsWith('..') && rel !== '..' && !isAbsolute(rel))) return resolved
-  throw new Error('repo_path must stay inside the current tool workspace/worktree')
+  const requested = repoPath ? (isAbsolute(repoPath) ? repoPath : resolve(workspace, repoPath)) : workspace
+  return validateReviewRepoPath(requested, workspace)
 }
 
 function reviewCliEnv(ctx: Parameters<typeof resolveToolEnv>[0]): Record<string, string | undefined> {
@@ -67,6 +64,7 @@ export const runLocalCodeReviewTool: ToolRegistration = {
     }),
     execute: async ({ provider, repo_path, base, base_commit, head, mode, light, timeout_ms }) => runLocalCodeReview({
       repoPath: resolveRepoPath(ctx, repo_path),
+      workspaceRoot: resolveToolWorkspace(ctx),
       provider,
       base,
       baseCommit: base_commit,

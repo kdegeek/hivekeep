@@ -1,27 +1,30 @@
 import { afterEach, describe, expect, it } from 'bun:test'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { config } from '@/server/config'
 import { _LOCAL_REVIEW_INTERNALS_FOR_TEST, checkCodeRabbitAuth, runLocalCodeReview } from './local-review'
 
-const { parseReviewFindings, evaluateGate, parseJsonLines, kiloSlashCommandArgs, kiloPromptFallbackArgs, execReviewCli, getReviewRun, updateReviewFindingState, trimIncompleteUtf8End, trimIncompleteUtf8Start } = _LOCAL_REVIEW_INTERNALS_FOR_TEST
+const { parseReviewFindings, evaluateGate, parseJsonLines, kiloSlashCommandArgs, kiloPromptFallbackArgs, execReviewCli, getReviewRun, updateReviewFindingState, trimIncompleteUtf8End, trimIncompleteUtf8Start, validateReviewRepoPath, isPathInsideOrEqual } = _LOCAL_REVIEW_INTERNALS_FOR_TEST
 const originalPath = process.env.PATH
 const originalArtifactDir = config.codeReview.artifactDir
+const originalAllowedRepoRoots = [...config.codeReview.allowedRepoRoots]
 const originalReviewCliPath = process.env.HIVEKEEP_REVIEW_CLI_PATH
-const mutableCodeReviewConfig = config.codeReview as { artifactDir: string }
+const mutableCodeReviewConfig = config.codeReview as { artifactDir: string; allowedRepoRoots: string[]; maxOutputBytes: number }
 
 afterEach(() => {
   process.env.PATH = originalPath
   if (originalReviewCliPath === undefined) delete process.env.HIVEKEEP_REVIEW_CLI_PATH
   else process.env.HIVEKEEP_REVIEW_CLI_PATH = originalReviewCliPath
   mutableCodeReviewConfig.artifactDir = originalArtifactDir
+  mutableCodeReviewConfig.allowedRepoRoots = [...originalAllowedRepoRoots]
 })
 
 function makeFakeBin(name: string, body: string): string {
   const root = mkdtempSync(join(tmpdir(), 'hivekeep-local-review-test-'))
   writeFakeBin(root, name, body)
   process.env.PATH = `${root}:${originalPath ?? ''}`
+  mutableCodeReviewConfig.allowedRepoRoots = [root]
   return root
 }
 
@@ -32,6 +35,84 @@ function writeFakeBin(root: string, name: string, body: string): string {
   chmodSync(bin, 0o755)
   return bin
 }
+
+function initGitRepo(path: string): void {
+  mkdirSync(path, { recursive: true })
+  const result = Bun.spawnSync(['git', '-C', path, 'init'], { stdout: 'pipe', stderr: 'pipe' })
+  if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr))
+}
+
+describe('local-review repo validation', () => {
+  it('allows a workspace-contained Git repo by default', () => {
+    const root = mkdtempSync(join(tmpdir(), 'hivekeep-local-review-contained-'))
+    try {
+      const repo = join(root, 'workspace', 'repo')
+      initGitRepo(repo)
+      expect(validateReviewRepoPath(repo, join(root, 'workspace'))).toBe(realpathSync(repo))
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('allows a Git repo under a configured allowed root outside the workspace', () => {
+    const root = mkdtempSync(join(tmpdir(), 'hivekeep-local-review-allowed-root-'))
+    try {
+      const workspace = join(root, 'workspace')
+      const repo = join(root, 'allowed', 'repo')
+      mkdirSync(workspace, { recursive: true })
+      initGitRepo(repo)
+      mutableCodeReviewConfig.allowedRepoRoots = [join(root, 'allowed')]
+      expect(validateReviewRepoPath(repo, workspace)).toBe(realpathSync(repo))
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects a symlink escape after resolving realpaths', () => {
+    const root = mkdtempSync(join(tmpdir(), 'hivekeep-local-review-symlink-'))
+    try {
+      const workspace = join(root, 'workspace')
+      const outsideRepo = join(root, 'outside', 'repo')
+      mkdirSync(workspace, { recursive: true })
+      initGitRepo(outsideRepo)
+      const link = join(workspace, 'repo-link')
+      symlinkSync(outsideRepo, link)
+      expect(() => validateReviewRepoPath(link, workspace)).toThrow('repo_path must resolve inside')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects non-Git directories inside allowed roots', () => {
+    const root = mkdtempSync(join(tmpdir(), 'hivekeep-local-review-non-git-'))
+    try {
+      const repo = join(root, 'workspace', 'not-git')
+      mkdirSync(repo, { recursive: true })
+      expect(() => validateReviewRepoPath(repo, join(root, 'workspace'))).toThrow('repo_path must be a Git repository')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects paths outside workspace and configured allowed roots', () => {
+    const root = mkdtempSync(join(tmpdir(), 'hivekeep-local-review-outside-'))
+    try {
+      const workspace = join(root, 'workspace')
+      const repo = join(root, 'outside', 'repo')
+      mkdirSync(workspace, { recursive: true })
+      initGitRepo(repo)
+      expect(() => validateReviewRepoPath(repo, workspace)).toThrow('repo_path must resolve inside')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('uses separator-safe containment checks', () => {
+    expect(isPathInsideOrEqual('/tmp/work', '/tmp/work')).toBe(true)
+    expect(isPathInsideOrEqual('/tmp/work', '/tmp/work/repo')).toBe(true)
+    expect(isPathInsideOrEqual('/tmp/work', '/tmp/workspace/repo')).toBe(false)
+  })
+})
 
 describe('local-review parsing', () => {
   it('parses JSON-line CodeRabbit findings', () => {
@@ -134,7 +215,7 @@ echo "unexpected args: $*" >&2
 exit 1
 `)
     try {
-      mkdirSync(join(root, 'repo'), { recursive: true })
+      initGitRepo(join(root, 'repo'))
       const result = await runLocalCodeReview({ repoPath: join(root, 'repo'), provider: 'kilo', base: 'origin/main', mode: 'advisory', timeoutMs: 1000 })
       expect(result.results[0]).toMatchObject({ provider: 'kilo', status: 'succeeded', localReviewMode: 'slash-command' })
       expect(result.findings[0]).toMatchObject({ provider: 'kilo', severity: 'minor', file: 'src/kilo.ts' })
@@ -153,7 +234,7 @@ if [[ "$1" == "run" ]]; then echo '{"findings":[{"severity":"major","title":"Fal
 exit 1
 `)
     try {
-      mkdirSync(join(root, 'repo'), { recursive: true })
+      initGitRepo(join(root, 'repo'))
       const result = await runLocalCodeReview({ repoPath: join(root, 'repo'), provider: 'kilo', base: 'origin/main', mode: 'advisory', timeoutMs: 1000 })
       expect(result.results[0]).toMatchObject({ provider: 'kilo', status: 'succeeded', localReviewMode: 'prompt-fallback' })
       expect(result.results[0]?.rawOutput).toContain('slash-command local review failed')
@@ -173,7 +254,7 @@ if [[ "$1" == "run" ]]; then echo '{"findings":[{"severity":"critical","title":"
 exit 1
 `)
     try {
-      mkdirSync(join(root, 'repo'), { recursive: true })
+      initGitRepo(join(root, 'repo'))
       const result = await runLocalCodeReview({ repoPath: join(root, 'repo'), provider: 'kilo', base: 'origin/main', mode: 'advisory', timeoutMs: 50 })
       expect(result.results[0]).toMatchObject({ provider: 'kilo', status: 'failed', localReviewMode: 'slash-command' })
       expect(result.results[0]?.error).toContain('timed out')
@@ -238,14 +319,14 @@ if [[ "$1" == "review" ]]; then echo '{"type":"finding","severity":"minor","titl
 exit 1
 `)
     try {
-      mkdirSync(join(root, 'repo'), { recursive: true })
+      initGitRepo(join(root, 'repo'))
       mutableCodeReviewConfig.artifactDir = join(root, 'artifacts')
       const result = await runLocalCodeReview({ repoPath: join(root, 'repo'), provider: 'coderabbit', mode: 'advisory', timeoutMs: 1000 })
       expect(result.artifactPath.endsWith(`${result.id}.json`)).toBe(true)
       const saved = JSON.parse(readFileSync(result.artifactPath, 'utf8'))
       expect(saved.artifactPath).toBe(result.artifactPath)
       expect(saved.results[0].artifactPath).toBe(result.artifactPath)
-      expect(saved.results[0]).toMatchObject({ provider: 'coderabbit', repoPath: join(root, 'repo'), status: 'succeeded' })
+      expect(saved.results[0]).toMatchObject({ provider: 'coderabbit', repoPath: realpathSync(join(root, 'repo')), status: 'succeeded' })
       expect(saved.findings[0]).toMatchObject({ provider: 'coderabbit', severity: 'minor', file: 'src/a.ts', state: 'open' })
       const updated = updateReviewFindingState(result.id, saved.findings[0].id, 'fixed', 'covered by test')
       expect(updated.findings[0]).toMatchObject({ state: 'fixed', stateNote: 'covered by test' })
@@ -268,7 +349,8 @@ exit 1
     process.env.PATH = root
     writeFakeBin(root, 'cr', 'exit 127')
     writeFakeBin(root, 'coderabbit', 'exit 127')
-    mkdirSync(join(root, 'repo'), { recursive: true })
+    mutableCodeReviewConfig.allowedRepoRoots = [root]
+    initGitRepo(join(root, 'repo'))
     try {
       mutableCodeReviewConfig.artifactDir = join(root, 'artifacts')
       const advisory = await runLocalCodeReview({ repoPath: join(root, 'repo'), provider: 'coderabbit', mode: 'advisory', timeoutMs: 1000 })

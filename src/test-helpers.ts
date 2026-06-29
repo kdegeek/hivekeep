@@ -75,6 +75,7 @@ export const fullMockConfig = {
   shell: { defaultTimeoutMs: 30_000, maxTimeoutMs: 600_000 },
   codeReview: {
     artifactDir: '/tmp/hivekeep-test/code-reviews',
+    allowedRepoRoots: [] as string[],
     defaultMode: 'advisory' as const,
     defaultTimeoutMs: 300_000,
     maxTimeoutMs: 900_000,

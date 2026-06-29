@@ -14,11 +14,13 @@ import {
 
 const originalPath = process.env.PATH
 const originalArtifactDir = config.codeReview.artifactDir
-const mutableCodeReviewConfig = config.codeReview as { artifactDir: string }
+const originalAllowedRepoRoots = [...config.codeReview.allowedRepoRoots]
+const mutableCodeReviewConfig = config.codeReview as { artifactDir: string; allowedRepoRoots: string[] }
 
 afterEach(() => {
   process.env.PATH = originalPath
   mutableCodeReviewConfig.artifactDir = originalArtifactDir
+  mutableCodeReviewConfig.allowedRepoRoots = [...originalAllowedRepoRoots]
 })
 
 function makeFakeBin(name: string, body: string): string {
@@ -76,6 +78,9 @@ exit 1
       chmodSync(kilo, 0o755)
       const repo = join(root, 'repo')
       mkdirSync(repo, { recursive: true })
+      const gitInit = Bun.spawnSync(['git', '-C', repo, 'init'], { stdout: 'pipe', stderr: 'pipe' })
+      if (gitInit.exitCode !== 0) throw new Error(new TextDecoder().decode(gitInit.stderr))
+      mutableCodeReviewConfig.allowedRepoRoots = [root]
       mutableCodeReviewConfig.artifactDir = join(root, 'artifacts')
       const run = await runReviewerAgentReview({ reviewerAgentId: 'coderabbit-reviewer', repoPath: repo, mode: 'blocking', timeoutMs: 1000 })
       expect(run.blocked).toBe(true)

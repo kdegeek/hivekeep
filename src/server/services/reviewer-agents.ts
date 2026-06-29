@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { dirname, join } from 'path'
+import { dirname, join, resolve } from 'path'
 import { config } from '@/server/config'
 import {
   checkCodeRabbitAuth,
@@ -7,6 +7,7 @@ import {
   listReviewRuns,
   runLocalCodeReview,
   updateReviewFindingState,
+  validateReviewRepoPath,
   type LocalReviewAdapterMode,
   type ReviewFindingState,
   type ReviewMode,
@@ -206,11 +207,12 @@ export function updateReviewerChecklist(id: string, patch: Partial<Pick<Reviewer
   return updated
 }
 
-export async function listReviewerAgents(repoPath = process.cwd(), env?: Record<string, string | undefined>): Promise<ReviewerAgent[]> {
+export async function listReviewerAgents(repoPath = process.cwd(), env?: Record<string, string | undefined>, workspaceRoot = process.cwd()): Promise<ReviewerAgent[]> {
+  const resolvedRepoPath = validateReviewRepoPath(resolve(repoPath), resolve(workspaceRoot))
   const runs = listReviewRuns(20)
   const checklists = listReviewerChecklists()
   return Promise.all(REVIEWER_DEFINITIONS.map(async (definition) => {
-    const auth = definition.provider === 'coderabbit' ? await checkCodeRabbitAuth(repoPath, env) : await checkKiloAuth(repoPath, env)
+    const auth = definition.provider === 'coderabbit' ? await checkCodeRabbitAuth(resolvedRepoPath, env) : await checkKiloAuth(resolvedRepoPath, env)
     const recentRuns = runs.filter((run) => run.results.some((result) => result.provider === definition.provider)).slice(0, 5)
     return {
       ...definition,
@@ -222,8 +224,8 @@ export async function listReviewerAgents(repoPath = process.cwd(), env?: Record<
   }))
 }
 
-export async function getReviewerAgent(id: ReviewerAgentId, repoPath = process.cwd(), env?: Record<string, string | undefined>): Promise<ReviewerAgent | undefined> {
-  const agents = await listReviewerAgents(repoPath, env)
+export async function getReviewerAgent(id: ReviewerAgentId, repoPath = process.cwd(), env?: Record<string, string | undefined>, workspaceRoot = process.cwd()): Promise<ReviewerAgent | undefined> {
+  const agents = await listReviewerAgents(repoPath, env, workspaceRoot)
   return agents.find((agent) => agent.id === id)
 }
 
@@ -236,12 +238,14 @@ export async function runReviewerAgentReview(input: {
   mode?: ReviewMode
   light?: boolean
   timeoutMs?: number
+  workspaceRoot?: string
   env?: Record<string, string | undefined>
 }): Promise<ReviewRunSummary> {
   const definition = getReviewerAgentDefinition(input.reviewerAgentId)
   if (!definition) throw new Error(`Unknown reviewer agent: ${input.reviewerAgentId}`)
   return runLocalCodeReview({
     repoPath: input.repoPath,
+    workspaceRoot: input.workspaceRoot,
     provider: definition.provider,
     base: input.base,
     baseCommit: input.baseCommit,
