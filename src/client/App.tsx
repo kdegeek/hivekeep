@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/client/lib/lazy-with-retry'
 import { useAuth } from '@/client/hooks/useAuth'
 import { useTranslation } from 'react-i18next'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { api } from '@/client/lib/api'
 import { SidePanelProvider } from '@/client/contexts/SidePanelContext'
@@ -15,6 +15,7 @@ import { UpdateOverlay } from '@/client/components/common/UpdateOverlay'
 import { GlobalUpdateDialog } from '@/client/components/common/GlobalUpdateDialog'
 import { ActivityBar } from '@/client/components/layout/ActivityBar'
 import { AppTopBar } from '@/client/components/layout/AppTopBar'
+import { MobileAppShell } from '@/client/components/layout/MobileAppShell'
 import { TooltipProvider } from '@/client/components/ui/tooltip'
 
 // Lazy-loaded pages for code splitting
@@ -30,12 +31,15 @@ const LoginPage = lazy(() => import('@/client/pages/login/LoginPage').then(m => 
 const OnboardingPage = lazy(() => import('@/client/pages/onboarding/OnboardingPage').then(m => ({ default: m.OnboardingPage })))
 const DesignSystemPage = lazy(() => import('@/client/pages/design-system/DesignSystemPage').then(m => ({ default: m.DesignSystemPage })))
 const InvitePage = lazy(() => import('@/client/pages/invite/InvitePage').then(m => ({ default: m.InvitePage })))
+const MobileNotificationsPage = lazy(() => import('@/client/pages/mobile/MobileNotificationsPage').then(m => ({ default: m.MobileNotificationsPage })))
+const MobileSettingsPage = lazy(() => import('@/client/pages/mobile/MobileSettingsPage').then(m => ({ default: m.MobileSettingsPage })))
 
 // Global modals rendered at App root so they survive navigation between Agents / Projets.
 const SettingsModal = lazy(() => import('@/client/pages/settings/SettingsPage').then(m => ({ default: m.SettingsModal })))
 const AccountDialog = lazy(() => import('@/client/pages/account/AccountPage').then(m => ({ default: m.AccountDialog })))
 
 const isDev = import.meta.env.DEV
+const isMobileApp = import.meta.env.VITE_HIVEKEEP_MOBILE === 'true'
 
 function PageFallback() {
   return (
@@ -170,6 +174,7 @@ function AppRoot() {
 // this div into the containing block for @dnd-kit's DragOverlay (also
 // position: fixed), offsetting the drag ghost on the Projects kanban.
 function AuthenticatedShell() {
+  const navigate = useNavigate()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialSection, setSettingsInitialSection] = useState<string | undefined>()
   const [settingsFilters, setSettingsFilters] = useState<{ agentId?: string } | undefined>()
@@ -182,6 +187,12 @@ function AuthenticatedShell() {
   }, [])
 
   const handleOpenAccount = useCallback(() => setAccountOpen(true), [])
+  const handleOpenMobileSettings = useCallback((section?: string, filters?: { agentId?: string }) => {
+    navigate('/settings', {
+      state: section || filters ? { section, filters } : undefined,
+    })
+  }, [navigate])
+  const openSettings = isMobileApp ? handleOpenMobileSettings : handleOpenSettings
 
   // Surface the result of an email OAuth connect (the callback redirects back
   // to "/?email_connected=<addr>" or "/?email_error=<msg>"). Toast, open the
@@ -194,12 +205,12 @@ function AuthenticatedShell() {
     if (!connected && !error) return
     if (connected) {
       toast.success(t('settings.emailAccounts.connectedToast', { email: connected }))
-      handleOpenSettings('emailAccounts')
+      openSettings('emailAccounts')
     } else if (error) {
       toast.error(decodeURIComponent(error))
     }
     window.history.replaceState({}, document.title, window.location.pathname + window.location.hash)
-  }, [t, handleOpenSettings])
+  }, [t, openSettings])
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -209,55 +220,83 @@ function AuthenticatedShell() {
     <UpdateProvider>
     <FeedbackProvider>
     <TicketMentionShell>
-      <div className="flex h-dvh w-screen flex-col overflow-hidden">
-        <AppTopBar
-          onOpenSettings={handleOpenSettings}
+      <>
+      {isMobileApp ? (
+        <MobileAppShell
+          onOpenSettings={openSettings}
           onOpenAccount={handleOpenAccount}
-        />
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <ActivityBar />
-          <div className="min-w-0 flex-1">
-            <Suspense fallback={<PageFallback />}>
-              <Routes>
-                <Route
-                  path="/projects"
-                  element={<ProjectsPage />}
-                />
-                <Route
-                  path="/projects/:projectId"
-                  element={<ProjectsPage />}
-                />
-                <Route path="/tasks" element={<TasksPage />} />
-                <Route path="/crons" element={<CronsPage />} />
-                <Route path="/files" element={<FilesPage />} />
-                <Route path="/files/:agentId" element={<FilesPage />} />
-                <Route path="/files/:sourceType/:sourceId" element={<FilesPage />} />
-                <Route path="/mini-apps" element={<MiniAppsPage />} />
-                <Route path="/models" element={<ModelRegistryPage />} />
-                <Route path="/terminal" element={<TerminalPage />} />
-                <Route
-                  path="*"
-                  element={
-                    <ChatPage
-                      onOpenSettings={handleOpenSettings}
-                      onOpenAccount={handleOpenAccount}
-                    />
-                  }
-                />
-              </Routes>
-            </Suspense>
+        >
+          <Suspense fallback={<PageFallback />}>
+            <Routes>
+              <Route path="/tasks" element={<TasksPage />} />
+              <Route path="/notifications" element={<MobileNotificationsPage onOpenSettings={openSettings} />} />
+              <Route path="/settings" element={<MobileSettingsPage />} />
+              <Route
+                path="*"
+                element={
+                  <ChatPage
+                    onOpenSettings={openSettings}
+                    onOpenAccount={handleOpenAccount}
+                  />
+                }
+              />
+            </Routes>
+          </Suspense>
+        </MobileAppShell>
+      ) : (
+        <div className="flex h-dvh w-screen flex-col overflow-hidden">
+          <AppTopBar
+            onOpenSettings={handleOpenSettings}
+            onOpenAccount={handleOpenAccount}
+          />
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <ActivityBar />
+            <div className="min-w-0 flex-1">
+              <Suspense fallback={<PageFallback />}>
+                <Routes>
+                  <Route
+                    path="/projects"
+                    element={<ProjectsPage />}
+                  />
+                  <Route
+                    path="/projects/:projectId"
+                    element={<ProjectsPage />}
+                  />
+                  <Route path="/tasks" element={<TasksPage />} />
+                  <Route path="/crons" element={<CronsPage />} />
+                  <Route path="/files" element={<FilesPage />} />
+                  <Route path="/files/:agentId" element={<FilesPage />} />
+                  <Route path="/files/:sourceType/:sourceId" element={<FilesPage />} />
+                  <Route path="/mini-apps" element={<MiniAppsPage />} />
+                  <Route path="/models" element={<ModelRegistryPage />} />
+                  <Route path="/terminal" element={<TerminalPage />} />
+                  <Route
+                    path="*"
+                    element={
+                      <ChatPage
+                        onOpenSettings={handleOpenSettings}
+                        onOpenAccount={handleOpenAccount}
+                      />
+                    }
+                  />
+                </Routes>
+              </Suspense>
+            </div>
           </div>
         </div>
+      )}
 
         {/* Global modals — rendered once, survive navigation */}
-        <Suspense fallback={null}>
-          <SettingsModal
-            open={settingsOpen}
-            onOpenChange={setSettingsOpen}
-            initialSection={settingsInitialSection}
-            initialFilters={settingsFilters}
-          />
-        </Suspense>
+        {!isMobileApp && (
+          <Suspense fallback={null}>
+            <SettingsModal
+              open={settingsOpen}
+              onOpenChange={setSettingsOpen}
+              initialSection={settingsInitialSection}
+              initialFilters={settingsFilters}
+            />
+          </Suspense>
+        )}
         <Suspense fallback={null}>
           <AccountDialog
             open={accountOpen}
@@ -268,7 +307,7 @@ function AuthenticatedShell() {
         {/* Shared update dialog + full-screen self-update overlay (global) */}
         <GlobalUpdateDialog />
         <UpdateOverlay />
-      </div>
+      </>
     </TicketMentionShell>
     </FeedbackProvider>
     </UpdateProvider>

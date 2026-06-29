@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { BellOff, CheckCheck } from 'lucide-react'
 import { Button } from '@/client/components/ui/button'
 import { NotificationItem } from './NotificationItem'
+import { cn } from '@/client/lib/utils'
 import type { NotificationSummary } from '@/shared/types'
 
 interface NotificationPanelProps {
@@ -11,6 +12,7 @@ interface NotificationPanelProps {
   onMarkAllAsRead: () => void
   onDelete: (id: string) => void
   onClick: (notification: NotificationSummary) => void
+  className?: string
 }
 
 export function NotificationPanel({
@@ -20,11 +22,12 @@ export function NotificationPanel({
   onMarkAllAsRead,
   onDelete,
   onClick,
+  className,
 }: NotificationPanelProps) {
   const { t } = useTranslation()
 
   return (
-    <div className="flex max-h-[400px] flex-col">
+    <div className={cn('flex max-h-[400px] flex-col', className)}>
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-3">
         <h3 className="text-sm font-semibold">{t('notifications.title')}</h3>
