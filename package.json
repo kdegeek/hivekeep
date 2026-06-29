@@ -35,7 +35,12 @@
     "dev": "concurrently -n client,server -c blue,green \"bun run dev:client\" \"bun run dev:server\"",
     "dev:client": "vite",
     "dev:server": "bun scripts/dev-server.ts",
-    "build": "NODE_OPTIONS=--max-old-space-size=8192 vite build",
+    "build": "node --max-old-space-size=8192 ./node_modules/vite/bin/vite.js build",
+    "mobile:build": "node --max-old-space-size=8192 ./node_modules/vite/bin/vite.js build --mode mobile",
+    "mobile:copy": "bun run mobile:build && cap copy",
+    "mobile:sync": "bun run mobile:build && cap sync",
+    "mobile:open:android": "cap open android",
+    "mobile:open:ios": "cap open ios",
     "start": "bun src/server/index.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun scripts/migrate.ts",
@@ -48,6 +53,7 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.4.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "latest",
     "@types/mailparser": "^3.4.6",
@@ -70,6 +76,9 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.139",
     "@anthropic-ai/sdk": "^0.81.0",
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
+    "@capacitor/ios": "^8.4.1",
     "@codemirror/lang-javascript": "^6.2.5",
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/lang-markdown": "^6.5.0",
