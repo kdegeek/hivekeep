@@ -523,10 +523,15 @@ export async function runLocalCodeReview(input: ReviewInput): Promise<ReviewRunS
   }
   const findings = results.flatMap((r) => r.findings)
   const blocked = evaluateGate(findings, mode)
-  const summary = results.map((r) => r.summary).join('\n') + (blocked ? '\nGate: BLOCKED by major/critical findings.' : '\nGate: passed/advisory.')
+  const runStatus: ReviewRunStatus = results.some((r) => r.status === 'failed') ? 'failed' : results.every((r) => r.status === 'skipped') ? 'skipped' : 'succeeded'
+  const gateSuffix = blocked
+    ? '\nGate: BLOCKED by major/critical findings.'
+    : runStatus === 'failed'
+      ? '\nGate: FAILED.'
+      : '\nGate: passed/advisory.'
+  const summary = results.map((r) => r.summary).join('\n') + gateSuffix
   const artifactPath = artifactPathFor(id)
   for (const r of results) r.artifactPath = artifactPath
-  const runStatus: ReviewRunStatus = results.some((r) => r.status === 'failed') ? 'failed' : results.every((r) => r.status === 'skipped') ? 'skipped' : 'succeeded'
   const run: ReviewRunSummary = normalizeFindingStates({ id, status: runStatus, mode, blocked, results, findings, artifactPath, summary })
   persistArtifact(artifactPath, run)
   return run
