@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs'
-import { join, resolve } from 'path'
+import { join, resolve, sep } from 'path'
 import { randomUUID } from 'crypto'
 import { Buffer } from 'node:buffer'
 import { config } from '@/server/config'
@@ -432,7 +432,15 @@ function ensureArtifactDir(): string {
 }
 
 function artifactPathFor(id: string): string {
-  return join(ensureArtifactDir(), `${id}.json`)
+  const dir = ensureArtifactDir()
+  if (id.includes('..') || id.includes('/') || id.includes('\\') || id.includes('\0')) {
+    throw new Error(`Invalid review run id: ${id}`)
+  }
+  const path = resolve(join(dir, `${id}.json`))
+  if (path !== dir && !path.startsWith(dir + sep)) {
+    throw new Error(`Invalid review run id: ${id}`)
+  }
+  return path
 }
 
 function persistArtifact(path: string, payload: unknown): string {
@@ -451,7 +459,12 @@ function readReviewRunArtifact(path: string): ReviewRunSummary | null {
 }
 
 export function getReviewRun(id: string): ReviewRunSummary | null {
-  const path = artifactPathFor(id)
+  let path: string
+  try {
+    path = artifactPathFor(id)
+  } catch {
+    return null
+  }
   if (!existsSync(path)) return null
   return readReviewRunArtifact(path)
 }
@@ -481,7 +494,7 @@ export function updateReviewFindingState(runId: string, findingId: string, state
   run.findings.forEach(apply)
   run.results.forEach((result) => result.findings.forEach(apply))
   if (!touched) throw new Error(`Review finding not found: ${findingId}`)
-  persistArtifact(run.artifactPath, run)
+  persistArtifact(artifactPathFor(runId), run)
   return run
 }
 

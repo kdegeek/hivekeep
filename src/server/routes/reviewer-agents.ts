@@ -1,6 +1,9 @@
-import { Hono, type Context } from 'hono'
+import { Hono, type Context, type Next } from 'hono'
+import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import type { AppVariables } from '@/server/app'
+import { db } from '@/server/db/index'
+import { userProfiles } from '@/server/db/schema'
 import { getReviewRun, listReviewRuns, type ReviewFindingState } from '@/server/services/local-review'
 import {
   getReviewerAgent,
@@ -21,6 +24,21 @@ const findingStateSchema = z.enum(['open', 'fixed', 'ignored', 'needs-decision']
 function error(c: Context<{ Variables: AppVariables }>, code: string, message: string, status: 400 | 404) {
   return c.json({ error: { code, message } }, status)
 }
+
+async function requireAdmin(c: Context<{ Variables: AppVariables }>, next: Next) {
+  const user = c.get('user')
+  const profile = await db
+    .select({ role: userProfiles.role })
+    .from(userProfiles)
+    .where(eq(userProfiles.userId, user.id))
+    .get()
+  if (!profile || profile.role !== 'admin') {
+    return c.json({ error: { code: 'FORBIDDEN', message: 'Admin access required' } }, 403)
+  }
+  return next()
+}
+
+reviewerAgentRoutes.use('*', requireAdmin)
 
 reviewerAgentRoutes.get('/', async (c) => {
   const repoPath = c.req.query('repoPath') ?? process.cwd()
