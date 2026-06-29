@@ -89,7 +89,7 @@ export function NotificationItem({ notification, onMarkAsRead, onDelete, onClick
       <Button
         variant="ghost"
         size="icon"
-        className="mt-0.5 size-5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+        className="mt-0.5 size-5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
         onClick={handleDelete}
         aria-label={t('notifications.delete')}
       >
