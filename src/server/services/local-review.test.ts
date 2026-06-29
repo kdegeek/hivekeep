@@ -5,7 +5,7 @@ import { tmpdir } from 'os'
 import { config } from '@/server/config'
 import { _LOCAL_REVIEW_INTERNALS_FOR_TEST, runLocalCodeReview } from './local-review'
 
-const { parseReviewFindings, evaluateGate, parseJsonLines, kiloSlashCommandArgs, kiloPromptFallbackArgs } = _LOCAL_REVIEW_INTERNALS_FOR_TEST
+const { parseReviewFindings, evaluateGate, parseJsonLines, kiloSlashCommandArgs, kiloPromptFallbackArgs, execReviewCli, getReviewRun, updateReviewFindingState } = _LOCAL_REVIEW_INTERNALS_FOR_TEST
 const originalPath = process.env.PATH
 const originalArtifactDir = config.codeReview.artifactDir
 const mutableCodeReviewConfig = config.codeReview as { artifactDir: string }
@@ -82,6 +82,29 @@ describe('local-review parsing', () => {
     expect(findings).toHaveLength(1)
     expect(findings[0]).toMatchObject({ provider: 'kilo', severity: 'major', title: 'Missing guard', file: 'src/a.ts', line: 42, confidence: 'high' })
   })
+
+  it('streams large CLI output into capped head/tail buffers', async () => {
+    const root = makeFakeBin('noisy-reviewer', `
+python3 - <<'PY'
+print('HEAD-FINDING {"type":"finding","severity":"minor","title":"head"}')
+print('x' * 200000)
+print('TAIL-FINDING {"type":"finding","severity":"major","title":"tail"}')
+PY
+`)
+    try {
+      mutableCodeReviewConfig.artifactDir = join(root, 'artifacts')
+      const originalMax = config.codeReview.maxOutputBytes
+      ;(config.codeReview as { maxOutputBytes: number }).maxOutputBytes = 4096
+      const result = await execReviewCli('noisy-reviewer', [], root, 1000)
+      ;(config.codeReview as { maxOutputBytes: number }).maxOutputBytes = originalMax
+      expect(result.stdout).toContain('HEAD-FINDING')
+      expect(result.stdout).toContain('TAIL-FINDING')
+      expect(result.stdout).toContain('truncated')
+      expect(result.stdout.length).toBeLessThan(9000)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('Kilo local-review adapter', () => {
@@ -96,7 +119,7 @@ describe('Kilo local-review adapter', () => {
     const root = makeFakeBin('kilo', `
 if [[ "$1" == "--version" ]]; then echo "7.3.44"; exit 0; fi
 if [[ "$1" == "auth" ]]; then echo 'Kilo Gateway credential active'; exit 0; fi
-if [[ "$1" == "config" ]]; then echo 'ok'; exit 0; fi
+if [[ "$1" == "config" ]]; then echo 'not configured optional integration'; exit 1; fi
 if [[ "$1" == "run" && "$7" == /local-review* ]]; then echo '{"findings":[{"severity":"minor","title":"Kilo nit","file":"src/kilo.ts"}]}'; exit 0; fi
 echo "unexpected args: $*" >&2
 exit 1
@@ -184,7 +207,10 @@ exit 1
       expect(saved.artifactPath).toBe(result.artifactPath)
       expect(saved.results[0].artifactPath).toBe(result.artifactPath)
       expect(saved.results[0]).toMatchObject({ provider: 'coderabbit', repoPath: join(root, 'repo'), status: 'succeeded' })
-      expect(saved.findings[0]).toMatchObject({ provider: 'coderabbit', severity: 'minor', file: 'src/a.ts' })
+      expect(saved.findings[0]).toMatchObject({ provider: 'coderabbit', severity: 'minor', file: 'src/a.ts', state: 'open' })
+      const updated = updateReviewFindingState(result.id, saved.findings[0].id, 'fixed', 'covered by test')
+      expect(updated.findings[0]).toMatchObject({ state: 'fixed', stateNote: 'covered by test' })
+      expect(getReviewRun(result.id)?.findings[0]).toMatchObject({ state: 'fixed' })
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

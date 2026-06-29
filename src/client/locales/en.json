@@ -3276,6 +3276,7 @@
     "tasks": "Tasks",
     "crons": "Scheduled Tasks",
     "apps": "Mini-Apps",
+    "reviewerAgents": "Reviewer Agents",
     "models": "Models",
     "files": "Files",
     "terminal": "Terminal",

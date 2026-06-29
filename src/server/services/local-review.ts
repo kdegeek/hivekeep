@@ -1,6 +1,7 @@
-import { mkdirSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { join, resolve } from 'path'
 import { randomUUID } from 'crypto'
+import { Buffer } from 'node:buffer'
 import { config } from '@/server/config'
 
 export type ReviewProvider = 'coderabbit' | 'kilo'
@@ -8,6 +9,7 @@ export type ReviewRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 's
 export type ReviewSeverity = 'info' | 'minor' | 'major' | 'critical'
 export type ReviewConfidence = 'low' | 'medium' | 'high'
 export type ReviewMode = 'advisory' | 'blocking'
+export type ReviewFindingState = 'open' | 'fixed' | 'ignored' | 'needs-decision'
 export type LocalReviewAdapterMode = 'native' | 'slash-command' | 'prompt-fallback'
 
 export interface ReviewFinding {
@@ -21,6 +23,9 @@ export interface ReviewFinding {
   line?: number
   endLine?: number
   ruleId?: string
+  state?: ReviewFindingState
+  stateNote?: string
+  updatedAt?: string
   raw?: unknown
 }
 
@@ -82,6 +87,14 @@ export interface ReviewRunSummary {
   summary: string
 }
 
+function normalizeFindingStates<T extends ReviewRunSummary>(run: T): T {
+  for (const finding of run.findings) finding.state ??= 'open'
+  for (const result of run.results) {
+    for (const finding of result.findings) finding.state ??= 'open'
+  }
+  return run
+}
+
 export const LOCAL_REVIEW_PROVIDERS: Array<{ id: ReviewProvider; displayName: string; description: string }> = [
   { id: 'coderabbit', displayName: 'CodeRabbit', description: 'CodeRabbit CLI-backed local reviewer (`cr review --agent --light`).' },
   { id: 'kilo', displayName: 'Kilo Code', description: "Kilo CLI-backed local reviewer using Kilo's `/local-review` slash command via `kilo run --format json --auto`." },
@@ -95,15 +108,50 @@ interface ExecResult {
   localReviewMode?: LocalReviewAdapterMode
 }
 
-function asString(v: unknown): string | undefined {
-  return typeof v === 'string' && v.trim().length > 0 ? v : undefined
+function mergeExecEnv(extraEnv?: Record<string, string | undefined>): Record<string, string> {
+  const merged: Record<string, string> = {}
+  for (const [key, value] of Object.entries({ ...process.env, ...extraEnv, NO_COLOR: '1', FORCE_COLOR: '0' })) {
+    if (typeof value === 'string') merged[key] = value
+  }
+  return merged
 }
 
-function clampOutput(s: string): string {
+async function readCappedStream(stream: ReadableStream<Uint8Array> | null): Promise<string> {
+  if (!stream) return ''
   const max = config.codeReview.maxOutputBytes
-  if (s.length <= max) return s
   const edge = Math.max(1, Math.floor(max / 2))
-  return `${s.slice(0, edge)}\n[…truncated ${s.length - max} chars from the middle…]\n${s.slice(-edge)}`
+  const reader = stream.getReader()
+  const allChunks: Uint8Array[] = []
+  const headChunks: Uint8Array[] = []
+  let total = 0
+  let headBytes = 0
+  let tail = new Uint8Array(0)
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (!value?.byteLength) continue
+    total += value.byteLength
+    if (total <= max) allChunks.push(value)
+    if (headBytes < edge) {
+      const remaining = edge - headBytes
+      const headSlice = value.slice(0, remaining)
+      headChunks.push(headSlice)
+      headBytes += headSlice.byteLength
+    }
+    const combined = new Uint8Array(tail.byteLength + value.byteLength)
+    combined.set(tail)
+    combined.set(value, tail.byteLength)
+    tail = combined.byteLength > edge ? combined.slice(combined.byteLength - edge) : combined
+  }
+  if (total <= max) return new TextDecoder().decode(Buffer.concat(allChunks))
+  const decoder = new TextDecoder()
+  const head = decoder.decode(Buffer.concat(headChunks))
+  const tailText = decoder.decode(tail)
+  return `${head}\n[…truncated ${total - max} bytes from the middle…]\n${tailText}`
+}
+
+function asString(v: unknown): string | undefined {
+  return typeof v === 'string' && v.trim().length > 0 ? v : undefined
 }
 
 function redactSensitiveOutput(s: string): string {
@@ -129,7 +177,7 @@ export async function execReviewCli(
   try {
     proc = Bun.spawn([command, ...args], {
       cwd,
-      env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0', ...env },
+      env: mergeExecEnv(env),
       stdout: 'pipe',
       stderr: 'pipe',
     })
@@ -144,11 +192,11 @@ export async function execReviewCli(
   }, Math.min(timeoutMs, config.codeReview.maxTimeoutMs))
   try {
     const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
+      readCappedStream(proc.stdout),
+      readCappedStream(proc.stderr),
       proc.exited,
     ])
-    return { exitCode, stdout: clampOutput(stdout), stderr: clampOutput(stderr), timedOut }
+    return { exitCode, stdout, stderr, timedOut }
   } catch (err) {
     return { exitCode: 127, stdout: '', stderr: err instanceof Error ? err.message : String(err), timedOut }
   } finally {
@@ -392,6 +440,51 @@ function persistArtifact(path: string, payload: unknown): string {
   return path
 }
 
+function readReviewRunArtifact(path: string): ReviewRunSummary | null {
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as ReviewRunSummary
+    if (!parsed?.id || !Array.isArray(parsed.results) || !Array.isArray(parsed.findings)) return null
+    return normalizeFindingStates(parsed)
+  } catch {
+    return null
+  }
+}
+
+export function getReviewRun(id: string): ReviewRunSummary | null {
+  const path = artifactPathFor(id)
+  if (!existsSync(path)) return null
+  return readReviewRunArtifact(path)
+}
+
+export function listReviewRuns(limit = 20): ReviewRunSummary[] {
+  const dir = ensureArtifactDir()
+  return readdirSync(dir)
+    .filter((name) => name.startsWith('review-') && name.endsWith('.json'))
+    .map((name) => readReviewRunArtifact(join(dir, name)))
+    .filter((run): run is ReviewRunSummary => Boolean(run))
+    .sort((a, b) => b.id.localeCompare(a.id))
+    .slice(0, Math.max(1, Math.min(limit, 100)))
+}
+
+export function updateReviewFindingState(runId: string, findingId: string, state: ReviewFindingState, note?: string): ReviewRunSummary {
+  const run = getReviewRun(runId)
+  if (!run) throw new Error(`Review run not found: ${runId}`)
+  let touched = false
+  const updatedAt = new Date().toISOString()
+  const apply = (finding: ReviewFinding) => {
+    if (finding.id !== findingId) return
+    finding.state = state
+    finding.stateNote = note
+    finding.updatedAt = updatedAt
+    touched = true
+  }
+  run.findings.forEach(apply)
+  run.results.forEach((result) => result.findings.forEach(apply))
+  if (!touched) throw new Error(`Review finding not found: ${findingId}`)
+  persistArtifact(run.artifactPath, run)
+  return run
+}
+
 function resolveReviewProviders(provider?: ReviewProvider | 'all'): ReviewProvider[] {
   if (!provider || provider === 'all') return ['coderabbit', 'kilo']
   if (!LOCAL_REVIEW_PROVIDERS.some((p) => p.id === provider)) {
@@ -421,7 +514,7 @@ export async function runLocalCodeReview(input: ReviewInput): Promise<ReviewRunS
   const artifactPath = artifactPathFor(id)
   for (const r of results) r.artifactPath = artifactPath
   const runStatus: ReviewRunStatus = results.some((r) => r.status === 'failed') ? 'failed' : results.every((r) => r.status === 'skipped') ? 'skipped' : 'succeeded'
-  const run: ReviewRunSummary = { id, status: runStatus, mode, blocked, results, findings, artifactPath, summary }
+  const run: ReviewRunSummary = normalizeFindingStates({ id, status: runStatus, mode, blocked, results, findings, artifactPath, summary })
   persistArtifact(artifactPath, run)
   return run
 }
@@ -505,4 +598,4 @@ async function runKilo(input: ReviewInput & { repoPath: string }): Promise<ExecR
   }
 }
 
-export const _LOCAL_REVIEW_INTERNALS_FOR_TEST = { parseReviewFindings, parseJsonLines, evaluateGate, kiloReviewPrompt, kiloSlashCommand, kiloSlashCommandArgs, kiloPromptFallbackArgs }
+export const _LOCAL_REVIEW_INTERNALS_FOR_TEST = { parseReviewFindings, parseJsonLines, evaluateGate, kiloReviewPrompt, kiloSlashCommand, kiloSlashCommandArgs, kiloPromptFallbackArgs, listReviewRuns, getReviewRun, updateReviewFindingState, execReviewCli }

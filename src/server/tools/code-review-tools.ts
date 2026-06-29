@@ -8,7 +8,7 @@ import { checkCodeRabbitAuth, checkKiloAuth, listLocalReviewers, runLocalCodeRev
 function resolveRepoPath(ctx: Parameters<typeof resolveToolWorkspace>[0], repoPath?: string): string {
   const workspace = resolveToolWorkspace(ctx)
   if (!repoPath) return workspace
-  const resolved = resolve(repoPath)
+  const resolved = isAbsolute(repoPath) ? resolve(repoPath) : resolve(workspace, repoPath)
   const rel = relative(workspace, resolved)
   if (rel === '' || (!rel.startsWith('..') && rel !== '..' && !isAbsolute(rel))) return resolved
   throw new Error('repo_path must stay inside the current tool workspace/worktree')

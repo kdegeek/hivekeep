@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Home, FolderKanban, ListTodo, CalendarClock, Folder, Blocks, Boxes, SquareTerminal, MessageSquarePlus } from 'lucide-react'
+import { Home, FolderKanban, ListTodo, CalendarClock, Folder, Blocks, Boxes, SquareTerminal, MessageSquarePlus, GitPullRequest } from 'lucide-react'
 import { cn } from '@/client/lib/utils'
 import { useTasksContext } from '@/client/contexts/TasksContext'
 import { useCronsContext } from '@/client/contexts/CronsContext'
@@ -29,11 +29,12 @@ const ITEMS: ActivityBarItem[] = [
   { matchPrefix: '/crons', navigateTo: '/crons', icon: CalendarClock, labelKey: 'activityBar.crons', badgeKey: 'crons' },
   { matchPrefix: '/files', navigateTo: '/files', icon: Folder, labelKey: 'activityBar.files' },
   { matchPrefix: '/mini-apps', navigateTo: '/mini-apps', icon: Blocks, labelKey: 'activityBar.apps' },
+  { matchPrefix: '/reviewer-agents', navigateTo: '/reviewer-agents', icon: GitPullRequest, labelKey: 'activityBar.reviewerAgents', adminOnly: true },
   { matchPrefix: '/models', navigateTo: '/models', icon: Boxes, labelKey: 'activityBar.models', adminOnly: true },
   { matchPrefix: '/terminal', navigateTo: '/terminal', icon: SquareTerminal, labelKey: 'activityBar.terminal', adminOnly: true },
 ]
 
-const SECTION_PREFIXES = ['/projects', '/tasks', '/crons', '/files', '/mini-apps', '/models', '/terminal']
+const SECTION_PREFIXES = ['/projects', '/tasks', '/crons', '/files', '/mini-apps', '/reviewer-agents', '/models', '/terminal']
 
 export function ActivityBar() {
   const { t } = useTranslation()
