@@ -264,11 +264,7 @@ export function MiniAppViewer() {
               setErrorCount((c) => c + 1)
             }
             // Forward to server for Agent tool access
-            fetch(`/api/mini-apps/${activeAppId}/console`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(entry),
-            }).catch(() => { /* best effort */ })
+            api.post(`/mini-apps/${activeAppId}/console`, entry).catch(() => { /* best effort */ })
           }
           break
         }

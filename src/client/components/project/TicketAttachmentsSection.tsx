@@ -36,7 +36,7 @@ import {
 } from '@/client/components/ui/dialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/client/components/ui/avatar'
 import { cn } from '@/client/lib/utils'
-import { getErrorMessage } from '@/client/lib/api'
+import { buildApiUrl, getErrorMessage, withNativeAuthTransport } from '@/client/lib/api'
 import { toast } from 'sonner'
 import { formatRelativeTime } from '@/client/lib/time'
 import { useTicketAttachments } from '@/client/hooks/useTicketAttachments'
@@ -422,7 +422,11 @@ function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPreviewDialo
     setTextContent(null)
     setTextError(null)
     setTextLoading(true)
-    fetch(attachment.url, { credentials: 'include' })
+    const isApiUrl = attachment.url.startsWith('/api/')
+    const url = isApiUrl
+      ? buildApiUrl(attachment.url.slice('/api'.length))
+      : attachment.url
+    fetch(url, isApiUrl ? withNativeAuthTransport() : { credentials: 'include' })
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.text()

@@ -55,7 +55,7 @@ import {
   Ticket,
 } from 'lucide-react'
 import { useAutoScroll } from '@/client/hooks/useAutoScroll'
-import { api } from '@/client/lib/api'
+import { api, buildApiUrl, withNativeAuthTransport } from '@/client/lib/api'
 import { formatTicketRef } from '@/client/lib/ticket-ref'
 import type { TaskStatus, ContextTokenBreakdown, TaskSummary } from '@/shared/types'
 
@@ -119,7 +119,10 @@ export function TaskPanelContent({
   } | null>(null)
   useEffect(() => {
     if (!task?.parentAgentId || !task?.id) { setContextData(null); return }
-    fetch(`/api/agents/${task.parentAgentId}/context-preview?taskId=${task.id}`)
+    fetch(
+      buildApiUrl(`/agents/${task.parentAgentId}/context-preview?taskId=${task.id}`),
+      withNativeAuthTransport(),
+    )
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
         if (data?.tokenEstimate) {

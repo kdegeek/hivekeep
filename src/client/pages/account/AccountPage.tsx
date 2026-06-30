@@ -22,7 +22,7 @@ import {
 } from '@/client/components/ui/dialog'
 import { Calendar, Camera, ChevronDown, ChevronUp, Crop, KeyRound, Loader2, ZoomIn } from 'lucide-react'
 import { useAuth } from '@/client/hooks/useAuth'
-import { api, toastError } from '@/client/lib/api'
+import { api, buildApiUrl, toastError, withNativeAuthTransport } from '@/client/lib/api'
 import { changeAppLanguage } from '@/client/lib/i18n'
 import { cropImage, type CropArea } from '@/client/lib/crop-image'
 import { toast } from 'sonner'
@@ -91,12 +91,11 @@ export function AccountDialog({ open, onOpenChange }: AccountDialogProps) {
     }
     setIsChangingPassword(true)
     try {
-      const res = await fetch('/api/auth/change-password', {
+      const res = await fetch(buildApiUrl('/auth/change-password'), withNativeAuthTransport({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ currentPassword, newPassword }),
-      })
+      }))
       if (!res.ok) {
         const data = await res.json().catch(() => null)
         throw new Error(data?.message ?? t('account.password.error'))
@@ -172,11 +171,10 @@ export function AccountDialog({ open, onOpenChange }: AccountDialogProps) {
       if (avatarFile) {
         const formData = new FormData()
         formData.append('file', avatarFile)
-        const avatarRes = await fetch('/api/me/avatar', {
+        const avatarRes = await fetch(buildApiUrl('/me/avatar'), withNativeAuthTransport({
           method: 'POST',
-          credentials: 'include',
           body: formData,
-        })
+        }))
         if (!avatarRes.ok) {
           const body = await avatarRes.json().catch(() => null) as { error?: { message?: string } } | null
           throw new Error(body?.error?.message ?? `Avatar upload failed (${avatarRes.status})`)

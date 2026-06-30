@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { api, ApiRequestError } from '@/client/lib/api'
+import { api, ApiRequestError, buildApiUrl, withNativeAuthTransport } from '@/client/lib/api'
 import { useSSE } from '@/client/hooks/useSSE'
 import type { TicketAttachment } from '@/shared/types'
 
@@ -76,11 +76,10 @@ export function useTicketAttachments(ticketId: string | null) {
         const formData = new FormData()
         formData.append('files', file)
         try {
-          const res = await fetch(`/api/tickets/${ticketId}/attachments`, {
+          const res = await fetch(buildApiUrl(`/tickets/${ticketId}/attachments`), withNativeAuthTransport({
             method: 'POST',
-            credentials: 'include',
             body: formData,
-          })
+          }))
           if (!res.ok) {
             const body = await res.json().catch(() => null)
             const message = body?.error?.message ?? 'Upload failed'
