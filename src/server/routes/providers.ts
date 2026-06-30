@@ -526,7 +526,7 @@ providerRoutes.get('/models', async (c) => {
             }))
         // Parallelise per-family too — a provider that exposes llm +
         // embedding + image hits 3 different upstream catalogues.
-        const familyResults = await Promise.all(
+        const settledFamilyResults = await Promise.allSettled(
           families.map(async (family): Promise<ProviderModel[]> => {
             try {
               return await withTimeout(
@@ -547,6 +547,14 @@ providerRoutes.get('/models', async (c) => {
             }
           }),
         )
+        const familyResults = settledFamilyResults.flatMap((result, index) => {
+          if (result.status === 'fulfilled') return [result.value]
+          log.warn(
+            { providerId: p.id, name: p.name, type: p.type, family: families[index], err: result.reason },
+            'Failed to list models for provider family',
+          )
+          return []
+        })
         // Chat models the admin disabled in the registry are hidden from the
         // picker (curation). Only applies when the registry is on; the chat
         // path never blocks, so an Agent already on a disabled model still runs.

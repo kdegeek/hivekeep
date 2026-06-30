@@ -100,7 +100,10 @@ export function useModels() {
       console.error('Failed to fetch models:', err)
       try {
         const data = await api.get<{ models: RegistryModel[] }>('/models')
-        setModels(registryRowsToModels(data.models))
+        setModels((prev) => [
+          ...prev.filter((model) => model.capability !== 'llm'),
+          ...registryRowsToModels(data.models),
+        ])
       } catch (fallbackErr) {
         console.error('Failed to fetch registry models:', fallbackErr)
         setModels([])
