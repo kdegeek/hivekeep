@@ -16,7 +16,7 @@ import {
 } from '@/client/components/ui/collapsible'
 import { Copy, Check, Loader2, RefreshCw, ChevronRight, ChevronDown, Layers, Clock, Lightbulb } from 'lucide-react'
 import { useCopyToClipboard } from '@/client/hooks/useCopyToClipboard'
-import { getErrorMessage } from '@/client/lib/api'
+import { buildApiUrl, getErrorMessage, withNativeAuthTransport } from '@/client/lib/api'
 
 const MarkdownContent = lazy(() =>
   import('@/client/components/chat/MarkdownContent').then((m) => ({ default: m.MarkdownContent })),
@@ -315,7 +315,10 @@ export function ContextViewerDialog({ open, onOpenChange, agentId, taskId, sessi
       if (taskId) params.set('taskId', taskId)
       if (sessionId) params.set('sessionId', sessionId)
       const qs = params.toString()
-      const res = await fetch(`/api/agents/${agentId}/context-preview${qs ? `?${qs}` : ''}`)
+      const res = await fetch(
+        buildApiUrl(`/agents/${agentId}/context-preview${qs ? `?${qs}` : ''}`),
+        withNativeAuthTransport(),
+      )
       if (!res.ok) {
         const body = await res.json().catch(() => null)
         throw new Error(body?.error?.message ?? `HTTP ${res.status}`)

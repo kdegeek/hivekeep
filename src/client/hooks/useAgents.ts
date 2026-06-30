@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { api } from '@/client/lib/api'
+import { api, buildApiUrl, withNativeAuthTransport } from '@/client/lib/api'
 import { useSSE, useSSEStatus, useSSEResync } from '@/client/hooks/useSSE'
 import { useModels, type ProviderModel } from '@/client/hooks/useModels'
 import type { AgentCompactingConfig, AgentThinkingConfig, AgentThinkingEffort, AgentKind, ContextTokenBreakdown, ContextPipelineStatus } from '@/shared/types'
@@ -414,11 +414,14 @@ export function useAgents() {
   const uploadAvatar = useCallback(async (id: string, file: File): Promise<string> => {
     const formData = new FormData()
     formData.append('file', file)
-    const response = await fetch(`/api/agents/${id}/avatar`, {
+    const response = await fetch(buildApiUrl(`/agents/${id}/avatar`), withNativeAuthTransport({
       method: 'POST',
-      credentials: 'include',
       body: formData,
-    })
+    }))
+    if (!response.ok) {
+      const errBody = await response.json().catch(() => ({})) as { error?: { message?: string } }
+      throw new Error(errBody?.error?.message || 'Avatar upload failed')
+    }
     const data = await response.json() as { avatarUrl: string }
     // Update local state immediately (SSE also propagates for other clients)
     setAgents((prev) =>

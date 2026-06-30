@@ -26,6 +26,15 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 npm_token
 .npmrc
 
+# Windows code signing certificates (use environment/CI secrets instead)
+*.pfx
+*.p12
+*.cer
+*.crt
+*.key
+*.pem
+signing.env
+
 # caches
 .eslintcache
 .cache

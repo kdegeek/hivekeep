@@ -57,6 +57,7 @@ export default defineConfig({
 					label: 'Getting Started',
 					items: [
 						{ label: 'Installation', slug: 'getting-started/installation' },
+						{ label: 'Windows desktop installer', slug: 'getting-started/windows-desktop' },
 						{ label: 'Configuration', slug: 'getting-started/configuration' },
 						{ label: 'Updating', slug: 'getting-started/updating' },
 						{ label: 'Queenie (Guided Setup)', slug: 'features/queenie' },

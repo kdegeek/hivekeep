@@ -4,12 +4,57 @@ const API_PATH_PREFIX = '/api'
 export const MOBILE_SERVER_URL_STORAGE_KEY = 'hivekeep:serverUrl'
 export const MOBILE_AUTH_TOKEN_STORAGE_KEY = 'hivekeep:mobileAuthToken'
 
+export type NativeRuntime = 'desktop' | 'mobile'
+export type AppSurface = 'desktop' | 'mobile'
+
+declare global {
+  interface Window {
+    __HIVEKEEP_DESKTOP__?: boolean
+    __HIVEKEEP_NATIVE_RUNTIME__?: NativeRuntime
+    __HIVEKEEP_SURFACE__?: AppSurface
+  }
+}
+
+function getInjectedNativeRuntime(): NativeRuntime | null {
+  if (typeof window === 'undefined') return null
+  const runtime = window.__HIVEKEEP_NATIVE_RUNTIME__
+  return runtime === 'desktop' || runtime === 'mobile' ? runtime : null
+}
+
+function getRequestedSurface(): AppSurface | null {
+  if (typeof window === 'undefined') return null
+  const searchSurface = new URLSearchParams(window.location.search).get('surface')
+  const injectedSurface = window.__HIVEKEEP_SURFACE__
+  if (searchSurface === 'mobile' || injectedSurface === 'mobile') return 'mobile'
+  if (searchSurface === 'desktop' || injectedSurface === 'desktop') return 'desktop'
+  return null
+}
+
 export function isCapacitorRuntime(): boolean {
   return typeof window !== 'undefined' && window.location.protocol === 'capacitor:'
 }
 
+export function isDesktopRuntime(): boolean {
+  return import.meta.env?.VITE_HIVEKEEP_DESKTOP === 'true' ||
+    (typeof window !== 'undefined' && window.__HIVEKEEP_DESKTOP__ === true) ||
+    getInjectedNativeRuntime() === 'desktop'
+}
+
 export function isMobileApiRuntime(): boolean {
-  return import.meta.env?.VITE_HIVEKEEP_MOBILE === 'true' || isCapacitorRuntime()
+  return import.meta.env?.VITE_HIVEKEEP_MOBILE === 'true' ||
+    isCapacitorRuntime() ||
+    getInjectedNativeRuntime() === 'mobile'
+}
+
+export function isNativeApiRuntime(): boolean {
+  return isMobileApiRuntime() || isDesktopRuntime()
+}
+
+export function shouldUseMobileSurface(): boolean {
+  const requestedSurface = getRequestedSurface()
+  if (requestedSurface === 'mobile') return true
+  if (requestedSurface === 'desktop') return false
+  return isMobileApiRuntime() && !isDesktopRuntime()
 }
 
 function getStoredServerUrl(): string | null {
@@ -71,7 +116,7 @@ export function clearHivekeepServerUrl(): void {
   localStorage.removeItem(MOBILE_SERVER_URL_STORAGE_KEY)
 }
 
-export function getMobileAuthToken(): string | null {
+export function getNativeSessionToken(): string | null {
   if (typeof localStorage === 'undefined') return null
   try {
     return localStorage.getItem(MOBILE_AUTH_TOKEN_STORAGE_KEY)
@@ -80,16 +125,68 @@ export function getMobileAuthToken(): string | null {
   }
 }
 
-export function setMobileAuthToken(token: string): void {
-  if (typeof localStorage === 'undefined') throw new Error('Auth token storage is unavailable')
-  // TODO(mobile): replace localStorage with Capacitor Preferences or a secure
-  // storage plugin once one is added to the mobile shell dependencies.
-  localStorage.setItem(MOBILE_AUTH_TOKEN_STORAGE_KEY, token)
+// Listeners notified whenever the native bearer token changes (set or cleared).
+// useSSE registers here so it can tear down and re-open the native SSE stream
+// with the new token: the live fetch embeds the Authorization header at connect
+// time, so a token change on an open stream would otherwise keep using the
+// stale header. Kept as a plain callback registry (rather than importing useSSE)
+// to avoid a circular import, since useSSE imports this module.
+type NativeSessionTokenListener = () => void
+const nativeSessionTokenListeners = new Set<NativeSessionTokenListener>()
+
+export function onNativeSessionTokenChange(listener: NativeSessionTokenListener): () => void {
+  nativeSessionTokenListeners.add(listener)
+  return () => nativeSessionTokenListeners.delete(listener)
 }
 
-export function clearMobileAuthToken(): void {
+function notifyNativeSessionTokenChange(): void {
+  for (const listener of nativeSessionTokenListeners) {
+    try {
+      listener()
+    } catch {
+      // Ignore listener errors
+    }
+  }
+}
+
+export function setNativeSessionToken(token: string): void {
+  if (typeof localStorage === 'undefined') throw new Error('Auth token storage is unavailable')
+  // TODO(native): replace localStorage with Capacitor Preferences or a secure
+  // storage plugin once one is added to the native shell dependencies.
+  localStorage.setItem(MOBILE_AUTH_TOKEN_STORAGE_KEY, token)
+  notifyNativeSessionTokenChange()
+}
+
+export function clearNativeSessionToken(): void {
   if (typeof localStorage === 'undefined') return
   localStorage.removeItem(MOBILE_AUTH_TOKEN_STORAGE_KEY)
+  notifyNativeSessionTokenChange()
+}
+
+function toHeaderRecord(headers: Headers): Record<string, string> {
+  const record: Record<string, string> = {}
+  headers.forEach((value, key) => {
+    const canonicalKey = key.toLowerCase() === 'content-type'
+      ? 'Content-Type'
+      : key.toLowerCase() === 'authorization'
+        ? 'Authorization'
+        : key
+    record[canonicalKey] = value
+  })
+  return record
+}
+
+export function withNativeAuthTransport(options: RequestInit = {}): RequestInit {
+  const headers = new Headers(options.headers)
+  const token = isNativeApiRuntime() ? getNativeSessionToken() : null
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+  return {
+    ...options,
+    credentials: isNativeApiRuntime() ? 'omit' : 'include',
+    headers: toHeaderRecord(headers),
+  }
 }
 
 export async function validateHivekeepServerConnection(serverUrl: string): Promise<string> {
@@ -98,7 +195,7 @@ export async function validateHivekeepServerConnection(serverUrl: string): Promi
   const timeoutId = window.setTimeout(() => controller.abort(), 10_000)
   try {
     const response = await fetch(`${normalized}${API_PATH_PREFIX}/health`, {
-      credentials: isMobileApiRuntime() ? 'omit' : 'include',
+      credentials: isNativeApiRuntime() ? 'omit' : 'include',
       headers: { Accept: 'application/json' },
       signal: controller.signal,
     })
@@ -196,24 +293,14 @@ export function toastError(err: unknown): void {
 
 // ─── Core fetch wrapper ───────────────────────────────────────────────────────
 
-function buildRequestHeaders(headers?: HeadersInit): Headers {
-  const requestHeaders = new Headers(headers)
-  if (!requestHeaders.has('Content-Type')) requestHeaders.set('Content-Type', 'application/json')
-
-  const token = isMobileApiRuntime() ? getMobileAuthToken() : null
-  if (token && !requestHeaders.has('Authorization')) {
-    requestHeaders.set('Authorization', `Bearer ${token}`)
-  }
-
-  return requestHeaders
-}
-
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(buildApiUrl(path), {
+  const headers = new Headers(options?.headers)
+  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+
+  const response = await fetch(buildApiUrl(path), withNativeAuthTransport({
     ...options,
-    credentials: isMobileApiRuntime() ? 'omit' : 'include',
-    headers: buildRequestHeaders(options?.headers),
-  })
+    headers,
+  }))
 
   if (!response.ok) {
     let code = 'REQUEST_FAILED'

@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Minimal capability set for the Hivekeep desktop shell.",
+  "windows": ["main", "quick-panel"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

@@ -20,7 +20,7 @@ import { useIsMobile } from '@/client/hooks/use-mobile'
 import { X, RotateCw, Maximize2, Minimize2, Sparkles, Wand2, Loader2, AlertTriangle, ClipboardList, ShieldAlert } from 'lucide-react'
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/client/lib/lazy-with-retry'
-import { api, getErrorMessage } from '@/client/lib/api'
+import { api, buildApiUrl, getErrorMessage, isNativeApiRuntime } from '@/client/lib/api'
 const TaskPanelContent = lazy(() => import('@/client/components/sidebar/TaskPanelContent').then(m => ({ default: m.TaskPanelContent })))
 const TicketPanelContent = lazy(() => import('@/client/components/sidebar/TicketPanelContent').then(m => ({ default: m.TicketPanelContent })))
 import { toast } from 'sonner'
@@ -56,6 +56,11 @@ export function MiniAppViewer() {
   const { panelOpen, activeAppId, activeAppVersion, activeAppReloadSignal, isFullPage, customTitle, openApp, closePanel, toggleFullPage, setFullPage, setCustomTitle, setBadge } = useSidePanel()
   const [app, setApp] = useState<MiniAppSummary | null>(null)
   const [iframeKey, setIframeKey] = useState(0)
+  // Native mini-app frames are served behind a one-time `_frame` token, so a
+  // src must never be reused across an app/version/reload change. Tag each
+  // minted src with the identity that produced it; the iframe stays blank until
+  // a src whose key matches the current (appId, version, iframeKey) is ready.
+  const [nativeFrame, setNativeFrame] = useState<{ key: string; src: string } | null>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const pendingShareData = useRef<unknown>(null)
 
@@ -264,11 +269,7 @@ export function MiniAppViewer() {
               setErrorCount((c) => c + 1)
             }
             // Forward to server for Agent tool access
-            fetch(`/api/mini-apps/${activeAppId}/console`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(entry),
-            }).catch(() => { /* best effort */ })
+            api.post(`/mini-apps/${activeAppId}/console`, entry).catch(() => { /* best effort */ })
           }
           break
         }
@@ -579,6 +580,37 @@ export function MiniAppViewer() {
     sendTheme()
   }, [sendAppMeta, sendTheme])
 
+  const nativeFrameKey = `${activeAppId ?? ''}:${activeAppVersion}:${iframeKey}`
+
+  useEffect(() => {
+    if (!activeAppId || !isNativeApiRuntime()) {
+      setNativeFrame(null)
+      return
+    }
+
+    let cancelled = false
+    // Clear immediately so the iframe goes blank while the new one-time token is
+    // minted, rather than briefly showing a stale/already-consumed src.
+    setNativeFrame(null)
+    api.post<{ token: string }>(`/mini-apps/${activeAppId}/frame-token`, {})
+      .then(({ token }) => {
+        if (cancelled) return
+        const params = new URLSearchParams({
+          v: String(activeAppVersion),
+          _frame: token,
+        })
+        setNativeFrame({
+          key: nativeFrameKey,
+          src: buildApiUrl(`/mini-apps/${activeAppId}/serve?${params.toString()}`),
+        })
+      })
+      .catch(() => {
+        if (!cancelled) setNativeFrame(null)
+      })
+
+    return () => { cancelled = true }
+  }, [activeAppId, activeAppVersion, iframeKey, nativeFrameKey])
+
   const errorBadge = errorCount > 0 ? (
     <div className="flex items-center gap-1 rounded-md bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive" title={`${errorCount} error${errorCount > 1 ? 's' : ''} in console`}>
       <AlertTriangle className="size-3" />
@@ -652,7 +684,11 @@ export function MiniAppViewer() {
   )
 
   const iframeSrc = activeAppId
-    ? `/api/mini-apps/${activeAppId}/serve?v=${activeAppVersion}`
+    ? (isNativeApiRuntime()
+        // Only use the minted src when it belongs to the current app/version/reload;
+        // a src from a previous identity carries an already-consumed one-time token.
+        ? (nativeFrame?.key === nativeFrameKey ? nativeFrame.src : '')
+        : buildApiUrl(`/mini-apps/${activeAppId}/serve?v=${activeAppVersion}`))
     : ''
 
   const handleDialogCancel = useCallback(() => {

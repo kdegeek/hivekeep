@@ -3,12 +3,13 @@ import type { ReactNode } from 'react'
 import {
   api,
   buildApiUrl,
-  clearMobileAuthToken,
-  getMobileAuthToken,
-  isMobileApiRuntime,
-  setMobileAuthToken,
+  clearNativeSessionToken,
+  isNativeApiRuntime,
+  setNativeSessionToken,
+  withNativeAuthTransport,
 } from '@/client/lib/api'
 import i18n, { changeAppLanguage } from '@/client/lib/i18n'
+import { resetSSE } from '@/client/hooks/useSSE'
 
 interface UserProfile {
   id: string
@@ -75,12 +76,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchUser])
 
   const login = async (email: string, password: string) => {
-    const response = await fetch(buildApiUrl('/auth/sign-in/email'), {
+    const response = await fetch(buildApiUrl('/auth/sign-in/email'), withNativeAuthTransport({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: isMobileApiRuntime() ? 'omit' : 'include',
       body: JSON.stringify({ email, password }),
-    })
+    }))
 
     const body = await response.json().catch(() => ({})) as { message?: string; token?: string }
 
@@ -88,9 +88,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(body?.message ?? 'Login failed')
     }
 
-    const mobileToken = response.headers.get('set-auth-token') ?? body.token
-    if (isMobileApiRuntime() && mobileToken) {
-      setMobileAuthToken(mobileToken)
+    const nativeToken = response.headers.get('set-auth-token') ?? body.token
+    if (isNativeApiRuntime() && nativeToken) {
+      setNativeSessionToken(nativeToken)
+      // Native clients usually sign in without a live SSE stream (the previous
+      // token was missing/expired). Re-arm the bearer-authenticated stream so
+      // realtime updates resume with the fresh token instead of staying stuck.
+      resetSSE()
     }
 
     // Verify the session was actually established — throws if not
@@ -106,12 +110,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string
     password: string
   }) => {
-    const response = await fetch(buildApiUrl('/auth/sign-up/email'), {
+    const response = await fetch(buildApiUrl('/auth/sign-up/email'), withNativeAuthTransport({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: isMobileApiRuntime() ? 'omit' : 'include',
       body: JSON.stringify(data),
-    })
+    }))
 
     const body = await response.json().catch(() => ({})) as { token?: string }
 
@@ -119,24 +122,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw body
     }
 
-    const mobileToken = response.headers.get('set-auth-token') ?? body.token
-    if (isMobileApiRuntime() && mobileToken) {
-      setMobileAuthToken(mobileToken)
+    const nativeToken = response.headers.get('set-auth-token') ?? body.token
+    if (isNativeApiRuntime() && nativeToken) {
+      setNativeSessionToken(nativeToken)
+      // Re-arm the SSE stream with the new token (see login()).
+      resetSSE()
     }
 
     await fetchUser()
   }
 
   const logout = async () => {
-    const token = isMobileApiRuntime() ? getMobileAuthToken() : null
     try {
-      await fetch(buildApiUrl('/auth/sign-out'), {
+      await fetch(buildApiUrl('/auth/sign-out'), withNativeAuthTransport({
         method: 'POST',
-        credentials: isMobileApiRuntime() ? 'omit' : 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      })
+      }))
     } finally {
-      if (isMobileApiRuntime()) clearMobileAuthToken()
+      if (isNativeApiRuntime()) clearNativeSessionToken()
       window.location.href = '/'
     }
   }

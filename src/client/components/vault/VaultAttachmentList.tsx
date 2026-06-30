@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/client/components/ui/button'
 import { Label } from '@/client/components/ui/label'
-import { api, toastError } from '@/client/lib/api'
+import { api, buildApiUrl, toastError, withNativeAuthTransport } from '@/client/lib/api'
 import { Upload, Download, File, Loader2 } from 'lucide-react'
 import { ConfirmDeleteButton } from '@/client/components/common/ConfirmDeleteButton'
 import type { VaultAttachmentSummary } from '@/shared/types'
@@ -36,11 +36,10 @@ export function VaultAttachmentList({ entryId }: VaultAttachmentListProps) {
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const response = await fetch(`/api/vault/entries/${entryId}/attachments`, {
+      const response = await fetch(buildApiUrl(`/vault/entries/${entryId}/attachments`), withNativeAuthTransport({
         method: 'POST',
-        credentials: 'include',
         body: formData,
-      })
+      }))
       if (!response.ok) {
         const err = await response.json()
         throw new Error(err?.error?.message ?? t('errors.uploadFailed'))
@@ -56,9 +55,10 @@ export function VaultAttachmentList({ entryId }: VaultAttachmentListProps) {
 
   const handleDownload = async (attachment: VaultAttachmentSummary) => {
     try {
-      const response = await fetch(`/api/vault/attachments/${attachment.id}`, {
-        credentials: 'include',
-      })
+      const response = await fetch(
+        buildApiUrl(`/vault/attachments/${attachment.id}`),
+        withNativeAuthTransport(),
+      )
       if (!response.ok) throw new Error(t('vault.downloadFailed'))
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)

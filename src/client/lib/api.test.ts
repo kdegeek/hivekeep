@@ -236,8 +236,7 @@ describe('api', () => {
     await api.get('/test')
 
     const call = fetchMock.mock.calls[0]!
-    const headers = (call[1] as RequestInit).headers as Headers
-    expect(headers.get('Content-Type')).toBe('application/json')
+    expect((call[1] as RequestInit)?.headers).toHaveProperty('Content-Type', 'application/json')
   })
 
   it('uses mobile bearer token without cookies in Capacitor runtime', async () => {
@@ -261,7 +260,6 @@ describe('api', () => {
     const call = fetchMock.mock.calls[0]!
     expect(call[0]).toBe('https://hivekeep.example.test/api/me')
     expect((call[1] as RequestInit)?.credentials).toBe('omit')
-    const headers = (call[1] as RequestInit).headers as Headers
-    expect(headers.get('Authorization')).toBe('Bearer mobile-session-token')
+    expect((call[1] as RequestInit)?.headers).toHaveProperty('Authorization', 'Bearer mobile-session-token')
   })
 })
