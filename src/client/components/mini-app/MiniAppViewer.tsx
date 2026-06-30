@@ -20,7 +20,7 @@ import { useIsMobile } from '@/client/hooks/use-mobile'
 import { X, RotateCw, Maximize2, Minimize2, Sparkles, Wand2, Loader2, AlertTriangle, ClipboardList, ShieldAlert } from 'lucide-react'
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/client/lib/lazy-with-retry'
-import { api, getErrorMessage } from '@/client/lib/api'
+import { api, buildApiUrl, getErrorMessage, isNativeApiRuntime } from '@/client/lib/api'
 const TaskPanelContent = lazy(() => import('@/client/components/sidebar/TaskPanelContent').then(m => ({ default: m.TaskPanelContent })))
 const TicketPanelContent = lazy(() => import('@/client/components/sidebar/TicketPanelContent').then(m => ({ default: m.TicketPanelContent })))
 import { toast } from 'sonner'
@@ -56,6 +56,7 @@ export function MiniAppViewer() {
   const { panelOpen, activeAppId, activeAppVersion, activeAppReloadSignal, isFullPage, customTitle, openApp, closePanel, toggleFullPage, setFullPage, setCustomTitle, setBadge } = useSidePanel()
   const [app, setApp] = useState<MiniAppSummary | null>(null)
   const [iframeKey, setIframeKey] = useState(0)
+  const [nativeFrameSrc, setNativeFrameSrc] = useState('')
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const pendingShareData = useRef<unknown>(null)
 
@@ -575,6 +576,30 @@ export function MiniAppViewer() {
     sendTheme()
   }, [sendAppMeta, sendTheme])
 
+  useEffect(() => {
+    if (!activeAppId || !isNativeApiRuntime()) {
+      setNativeFrameSrc('')
+      return
+    }
+
+    let cancelled = false
+    setNativeFrameSrc('')
+    api.post<{ token: string }>(`/mini-apps/${activeAppId}/frame-token`, {})
+      .then(({ token }) => {
+        if (cancelled) return
+        const params = new URLSearchParams({
+          v: String(activeAppVersion),
+          _frame: token,
+        })
+        setNativeFrameSrc(buildApiUrl(`/mini-apps/${activeAppId}/serve?${params.toString()}`))
+      })
+      .catch(() => {
+        if (!cancelled) setNativeFrameSrc('')
+      })
+
+    return () => { cancelled = true }
+  }, [activeAppId, activeAppVersion, iframeKey])
+
   const errorBadge = errorCount > 0 ? (
     <div className="flex items-center gap-1 rounded-md bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive" title={`${errorCount} error${errorCount > 1 ? 's' : ''} in console`}>
       <AlertTriangle className="size-3" />
@@ -648,7 +673,9 @@ export function MiniAppViewer() {
   )
 
   const iframeSrc = activeAppId
-    ? `/api/mini-apps/${activeAppId}/serve?v=${activeAppVersion}`
+    ? (isNativeApiRuntime()
+        ? nativeFrameSrc
+        : buildApiUrl(`/mini-apps/${activeAppId}/serve?v=${activeAppVersion}`))
     : ''
 
   const handleDialogCancel = useCallback(() => {

@@ -44,6 +44,25 @@ export async function authMiddleware(c: Context, next: Next) {
     return next()
   }
 
+  // Native iframe bootstrap token: iframe navigations cannot carry the native
+  // window's Authorization header. Accept a one-time query token ONLY for the
+  // mini-app frame HTML load; the served document then receives its narrower
+  // app token for subsequent /api/mini-apps/<id>/* calls.
+  const frameLoadMatch = /^\/api\/mini-apps\/([^/]+)\/serve$/.exec(path)
+  if (frameLoadMatch && c.req.method === 'GET') {
+    const token = c.req.query('_frame')
+    if (token) {
+      const { resolveFrameToken } = await import('@/server/services/mini-app-token')
+      const resolved = resolveFrameToken(token)
+      if (resolved && resolved.appId === frameLoadMatch[1]) {
+        c.set('user', { id: resolved.userId, name: '', email: '' } as never)
+        c.set('session', { id: 'mini-app-frame', userId: resolved.userId, token: 'mini-app-frame' } as never)
+        return next()
+      }
+      return c.json({ error: { code: 'UNAUTHORIZED', message: 'Invalid or expired mini-app frame token' } }, 401)
+    }
+  }
+
   // Mini-app iframe token: authorizes ONLY that app's own namespace. The opaque
   // iframe has no cookie, so this is how its SDK reaches /api/mini-apps/<id>/*.
   const miniAppMatch = /^\/api\/mini-apps\/([^/]+)(\/|$)/.exec(path)

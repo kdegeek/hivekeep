@@ -17,10 +17,10 @@ All routes return JSON. Errors follow the standard format:
 
 Authentication: HTTP-only cookie managed by Better Auth, verified by middleware on all `/api/*` routes (except `/api/auth/*`).
 
-Mobile clients use the same REST contracts as the web client. In a mobile build
-(`VITE_HIVEKEEP_MOBILE=true`) or native Capacitor runtime, the client stores a
-server base URL in localStorage key `hivekeep:serverUrl` and resolves every API
-path to `<server>/api/<path>`.
+Mobile/native clients use the same REST contracts as the web client. In a
+mobile build (`VITE_HIVEKEEP_MOBILE=true`) or native Capacitor runtime, the
+client stores a server base URL in localStorage key `hivekeep:serverUrl` and
+resolves every API path to `<server>/api/<path>`.
 
 ---
 
@@ -46,9 +46,8 @@ Mobile connection behavior:
 - the Android app accepts only `http://` or `https://` server URLs;
 - URLs with embedded credentials are rejected; query strings, fragments, and
   trailing slashes are stripped before the URL is saved;
-- subsequent mobile REST calls use credentialed fetches against the saved server
-  (`credentials: "include"`), so the Better Auth session cookie is scoped to the
-  self-hosted server;
+- subsequent native REST calls use `Authorization: Bearer <Better Auth session
+  token>` against the saved server and omit cookies;
 - `buildApiUrl('/sse')` resolves to `<server>/api/sse` for the global SSE stream.
 
 ---
@@ -1990,6 +1989,40 @@ WebSocket upgrade (Better Auth session cookie required, same guards as `/status`
 
 > The full mini-app CRUD (files, storage, snapshots, console, icons) is documented on the `docs-site/` side (Mini-Apps section). This section covers the **backend runtime** contracts (`_server.js`).
 
+### `POST /api/mini-apps/:id/frame-token`
+
+Authenticated helper for native bearer-authenticated clients that need to load
+the mini-app iframe. The parent window calls this route with its normal
+`Authorization: Bearer <Better Auth session token>` header, then appends the
+returned one-time token to the iframe URL:
+
+```typescript
+// Response 200
+{ token: string } // opaque, one-use, expires after ~60 seconds
+
+// Native iframe URL shape
+buildApiUrl(`/mini-apps/${id}/serve?v=${version}&_frame=${token}`)
+```
+
+The `_frame` query token is accepted only by `GET /api/mini-apps/:id/serve`.
+The served document then receives the narrower per-load mini-app token used by
+the SDK for its own `/api/mini-apps/:id/*` calls.
+
+### `GET /api/mini-apps/:id/serve`
+
+Serves the mini-app entry HTML for the iframe. Web clients load it with the
+normal session cookie; native clients resolve the iframe URL through
+`buildApiUrl()` and include the one-time `_frame` token described above because
+iframe navigations cannot attach an `Authorization` header.
+
+The parent iframe sandbox remains:
+
+```text
+allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads
+```
+
+It intentionally does **not** include `allow-same-origin`.
+
 ### `ALL /api/mini-apps/:id/api/*`
 
 Proxy to the Hono routes of the app's `_server.js` (loaded lazily, or at boot if `app.json` declares `"background": true`). `404 NO_BACKEND` if the app has no backend, `404 NO_HTTP_ROUTES` if the module only exports lifecycle hooks.
@@ -2015,7 +2048,7 @@ POST /api/mini-apps/:id/platform/contacts        -> proxy POST /api/contacts    
 
 Errors: `403 PERMISSION_REQUIRED` (permission not granted), `403 RESOURCE_FORBIDDEN` (resource forbidden via the gateway: `auth`, `onboarding`, `vault`, `database`, `users`, `mini-apps`, `sse`, `health`, `uploads`), `400 INVALID_PATH`.
 
-> Security: the iframe is same-origin (session cookie). The **mini-app origin guard** (`auth/mini-app-origin-guard.ts`) sandboxes the iframes to their own namespace `/api/mini-apps/<id>/*` via the `Referer` (layer 1, non-breaking), so the gateway is the path to reach the resources. This is defense in depth (a hostile app can drop its Referer); the full barrier (scoped token instead of the cookie + removal of `allow-same-origin`) remains a planned hardening (layer 2).
+> Security: the iframe runs at an opaque origin (sandbox without `allow-same-origin`). The `/serve` route mints a short-lived app token bound to `(appId, userId)` and injects it into the HTML; the SDK sends it as `x-hivekeep-app-token` (or `?_t=` for EventSource) and middleware accepts it only for that app's `/api/mini-apps/<id>/*` namespace. The platform gateway is therefore the path to reach broader REST resources, subject to granted `platform:*` permissions.
 
 ### `POST /api/mini-apps/:id/client-event`
 
