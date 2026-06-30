@@ -631,7 +631,6 @@ function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPreviewDialo
               <iframe
                 src={previewUrl}
                 title={attachment.name}
-                sandbox=""
                 className="h-[65vh] w-full"
               />
             ) : (
