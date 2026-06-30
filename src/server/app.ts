@@ -81,6 +81,7 @@ const log = createLogger('http')
 // credentialed global policy below can't emit ACAO for a 'null' origin.
 const globalCors = cors({
   origin: [
+    'capacitor://localhost',
     'http://localhost:5173',
     'http://localhost:3000',
     ...(process.env.TRUSTED_ORIGINS ? process.env.TRUSTED_ORIGINS.split(',').map(o => o.trim()) : []),

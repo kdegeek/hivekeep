@@ -10,6 +10,7 @@ import { EmptyState } from '@/client/components/common/EmptyState'
 import { PageHeader } from '@/client/components/layout/PageHeader'
 import { TimelineTaskCard, groupByDay } from '@/client/components/tasks/TimelineTaskCard'
 import { TaskCapacityBar } from '@/client/components/tasks/TaskCapacityBar'
+import { useIsMobile } from '@/client/hooks/use-mobile'
 
 // Lazy-loaded: pulls in the CodeMirror prompt editor, so keep it out of the
 // tasks-page bundle until the user actually opens the launcher.
@@ -17,6 +18,8 @@ const OrphanTaskDialog = lazy(() => import('@/client/components/chat/OrphanTaskD
 import { useTasksContext } from '@/client/contexts/TasksContext'
 import { useSidePanel } from '@/client/contexts/SidePanelContext'
 import type { TaskSummary } from '@/shared/types'
+
+type MobileTaskSection = 'active' | 'queued' | 'history'
 
 // Side panel viewer — task detail opens here (state lives in SidePanelProvider
 // at the App root, so it survives navigation). Rendered on every page that can
@@ -56,6 +59,7 @@ function Column({
 
 export function TasksPage() {
   const { t } = useTranslation()
+  const isMobile = useIsMobile()
   const { openTask } = useSidePanel()
   const {
     activeTasks,
@@ -72,6 +76,7 @@ export function TasksPage() {
   const [queueFilter, setQueueFilter] = useState<string | null>(null)
   const [queueFilterOpen, setQueueFilterOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [mobileSection, setMobileSection] = useState<MobileTaskSection>('active')
   const sentinelRef = useRef<HTMLDivElement>(null)
 
   const hasLiveTasks = activeTasks.length > 0 || queuedTasks.length > 0
@@ -87,7 +92,7 @@ export function TasksPage() {
     )
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [loadMore])
+  }, [loadMore, isMobile, mobileSection])
 
   // Deduplicate history vs active/queued
   const nonHistoryIds = useMemo(() => {
@@ -140,6 +145,11 @@ export function TasksPage() {
   const isEmpty = activeTasks.length === 0 && queuedTasks.length === 0 && deduplicatedHistory.length === 0 && !isLoading
   const totalItems = activeTasks.length + queuedTasks.length + deduplicatedHistory.length
   const searching = searchQuery.trim().length > 0
+  const mobileSections: Array<{ key: MobileTaskSection; label: string; count: number }> = [
+    { key: 'active', label: t('sidebar.tasks.activeLabel'), count: activeTasks.length },
+    { key: 'queued', label: t('sidebar.tasks.queuedLabel'), count: queuedTasks.length },
+    { key: 'history', label: t('sidebar.tasks.historyLabel'), count: deduplicatedHistory.length },
+  ]
 
   return (
     <div className="surface-base flex h-full overflow-hidden">
@@ -185,134 +195,169 @@ export function TasksPage() {
             </div>
           </div>
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto p-4 lg:overflow-hidden">
-            <div className="grid h-full grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-0 lg:divide-x lg:divide-border">
+          <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4 lg:overflow-hidden">
+            {isMobile && (
+              <div className="sticky top-0 z-10 mb-3 grid grid-cols-3 gap-1 rounded-2xl border border-border/70 bg-background/95 p-1 shadow-sm backdrop-blur">
+                {mobileSections.map((section) => (
+                  <button
+                    key={section.key}
+                    type="button"
+                    onClick={() => setMobileSection(section.key)}
+                    className={cn(
+                      'flex min-w-0 flex-col items-center rounded-xl px-2 py-1.5 text-[11px] font-medium transition-colors',
+                      mobileSection === section.key
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-muted-foreground active:bg-muted hover:text-foreground',
+                    )}
+                  >
+                    <span className="truncate">{section.label}</span>
+                    <span className={cn(
+                      'text-[10px] tabular-nums',
+                      mobileSection === section.key ? 'text-primary-foreground/80' : 'text-muted-foreground/70',
+                    )}>
+                      {section.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className={cn(
+              'grid h-full grid-cols-1 gap-4',
+              !isMobile && 'lg:grid-cols-3 lg:gap-0 lg:divide-x lg:divide-border',
+            )}>
               {/* Active */}
-              <Column
-                accent="bg-primary"
-                pulse
-                label={t('sidebar.tasks.activeLabel')}
-                count={activeTasks.length}
-              >
-                {activeTasks.length === 0 ? (
-                  <p className="px-2 py-3 text-center text-xs text-muted-foreground">
-                    {t('sidebar.tasks.empty')}
-                  </p>
-                ) : (
-                  activeTasks.map((task, i) => (
-                    <TimelineTaskCard
-                      key={task.id}
-                      task={task}
-                      onClick={() => handleOpenTask(task)}
-                      isLast={i === activeTasks.length - 1}
-                      nowMs={nowMs}
-                    />
-                  ))
-                )}
-              </Column>
+              {(!isMobile || mobileSection === 'active') && (
+                <Column
+                  accent="bg-primary"
+                  pulse
+                  label={t('sidebar.tasks.activeLabel')}
+                  count={activeTasks.length}
+                >
+                  {activeTasks.length === 0 ? (
+                    <p className="px-2 py-3 text-center text-xs text-muted-foreground">
+                      {t('sidebar.tasks.empty')}
+                    </p>
+                  ) : (
+                    activeTasks.map((task, i) => (
+                      <TimelineTaskCard
+                        key={task.id}
+                        task={task}
+                        onClick={() => handleOpenTask(task)}
+                        isLast={i === activeTasks.length - 1}
+                        nowMs={nowMs}
+                      />
+                    ))
+                  )}
+                </Column>
+              )}
 
               {/* Queued */}
-              <Column
-                accent="bg-queued/50"
-                label={t('sidebar.tasks.queuedLabel')}
-                count={filteredQueuedTasks.length}
-                action={queueGroups.size > 1 ? (
-                  <div className="relative">
-                    <button
-                      onClick={() => setQueueFilterOpen((prev) => !prev)}
-                      className="flex items-center gap-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      {queueFilter ?? t('sidebar.tasks.queueFilter.all')}
-                      <ChevronDown className="size-3" />
-                    </button>
-                    {queueFilterOpen && (
-                      <div className="absolute right-0 top-full z-20 mt-1 min-w-[160px] rounded-md border bg-popover p-1 shadow-md">
-                        <button
-                          onClick={() => { setQueueFilter(null); setQueueFilterOpen(false) }}
-                          className={cn(
-                            'w-full rounded px-2 py-1 text-left text-[11px] transition-colors hover:bg-accent',
-                            !queueFilter && 'font-medium text-foreground',
-                          )}
-                        >
-                          {t('sidebar.tasks.queueFilter.all')}
-                        </button>
-                        {Array.from(queueGroups.entries()).map(([group, count]) => (
+              {(!isMobile || mobileSection === 'queued') && (
+                <Column
+                  accent="bg-queued/50"
+                  label={t('sidebar.tasks.queuedLabel')}
+                  count={filteredQueuedTasks.length}
+                  action={queueGroups.size > 1 ? (
+                    <div className="relative">
+                      <button
+                        onClick={() => setQueueFilterOpen((prev) => !prev)}
+                        className="flex items-center gap-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        {queueFilter ?? t('sidebar.tasks.queueFilter.all')}
+                        <ChevronDown className="size-3" />
+                      </button>
+                      {queueFilterOpen && (
+                        <div className="absolute right-0 top-full z-20 mt-1 min-w-[160px] rounded-md border bg-popover p-1 shadow-md">
                           <button
-                            key={group}
-                            onClick={() => { setQueueFilter(group); setQueueFilterOpen(false) }}
+                            onClick={() => { setQueueFilter(null); setQueueFilterOpen(false) }}
                             className={cn(
                               'w-full rounded px-2 py-1 text-left text-[11px] transition-colors hover:bg-accent',
-                              queueFilter === group && 'font-medium text-foreground',
+                              !queueFilter && 'font-medium text-foreground',
                             )}
                           >
-                            {group} ({count})
+                            {t('sidebar.tasks.queueFilter.all')}
                           </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : undefined}
-              >
-                {filteredQueuedTasks.length === 0 ? (
-                  <p className="px-2 py-3 text-center text-xs text-muted-foreground">
-                    {t('sidebar.tasks.empty')}
-                  </p>
-                ) : (
-                  filteredQueuedTasks.map((task, i) => (
-                    <TimelineTaskCard
-                      key={task.id}
-                      task={task}
-                      onClick={() => handleOpenTask(task)}
-                      isLast={i === filteredQueuedTasks.length - 1}
-                      queuePosition={queuePositions.get(task.id)}
-                      nowMs={nowMs}
-                    />
-                  ))
-                )}
-              </Column>
+                          {Array.from(queueGroups.entries()).map(([group, count]) => (
+                            <button
+                              key={group}
+                              onClick={() => { setQueueFilter(group); setQueueFilterOpen(false) }}
+                              className={cn(
+                                'w-full rounded px-2 py-1 text-left text-[11px] transition-colors hover:bg-accent',
+                                queueFilter === group && 'font-medium text-foreground',
+                              )}
+                            >
+                              {group} ({count})
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : undefined}
+                >
+                  {filteredQueuedTasks.length === 0 ? (
+                    <p className="px-2 py-3 text-center text-xs text-muted-foreground">
+                      {t('sidebar.tasks.empty')}
+                    </p>
+                  ) : (
+                    filteredQueuedTasks.map((task, i) => (
+                      <TimelineTaskCard
+                        key={task.id}
+                        task={task}
+                        onClick={() => handleOpenTask(task)}
+                        isLast={i === filteredQueuedTasks.length - 1}
+                        queuePosition={queuePositions.get(task.id)}
+                        nowMs={nowMs}
+                      />
+                    ))
+                  )}
+                </Column>
+              )}
 
               {/* History */}
-              <Column
-                accent="bg-border"
-                label={t('sidebar.tasks.historyLabel')}
-                count={deduplicatedHistory.length}
-              >
-                {deduplicatedHistory.length === 0 && !isLoading ? (
-                  <p className="px-2 py-3 text-center text-xs text-muted-foreground">
-                    {t('sidebar.tasks.empty')}
-                  </p>
-                ) : (
-                  historyGroups.map(([label, tasks], groupIdx) => {
-                    const isLastGroup = groupIdx === historyGroups.length - 1
-                    return (
-                      <div key={label}>
-                        <div className="relative mb-0.5 mt-1 flex items-center gap-3">
-                          <div className="flex w-4 shrink-0 flex-col items-center">
-                            <div className="size-1.5 rounded-full bg-border" />
+              {(!isMobile || mobileSection === 'history') && (
+                <Column
+                  accent="bg-border"
+                  label={t('sidebar.tasks.historyLabel')}
+                  count={deduplicatedHistory.length}
+                >
+                  {deduplicatedHistory.length === 0 && !isLoading ? (
+                    <p className="px-2 py-3 text-center text-xs text-muted-foreground">
+                      {t('sidebar.tasks.empty')}
+                    </p>
+                  ) : (
+                    historyGroups.map(([label, tasks], groupIdx) => {
+                      const isLastGroup = groupIdx === historyGroups.length - 1
+                      return (
+                        <div key={label}>
+                          <div className="relative mb-0.5 mt-1 flex items-center gap-3">
+                            <div className="flex w-4 shrink-0 flex-col items-center">
+                              <div className="size-1.5 rounded-full bg-border" />
+                            </div>
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              {label}
+                            </span>
                           </div>
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                            {label}
-                          </span>
+                          {tasks.map((task, i) => (
+                            <TimelineTaskCard
+                              key={task.id}
+                              task={task}
+                              onClick={() => handleOpenTask(task)}
+                              isLast={isLastGroup && i === tasks.length - 1 && !hasMore}
+                              nowMs={nowMs}
+                            />
+                          ))}
                         </div>
-                        {tasks.map((task, i) => (
-                          <TimelineTaskCard
-                            key={task.id}
-                            task={task}
-                            onClick={() => handleOpenTask(task)}
-                            isLast={isLastGroup && i === tasks.length - 1 && !hasMore}
-                            nowMs={nowMs}
-                          />
-                        ))}
-                      </div>
-                    )
-                  })
-                )}
-                <div ref={sentinelRef} className="flex justify-center py-2">
-                  {(isLoadingMore || (isLoading && totalItems === 0)) && (
-                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                      )
+                    })
                   )}
-                </div>
-              </Column>
+                  <div ref={sentinelRef} className="flex justify-center py-2">
+                    {(isLoadingMore || (isLoading && totalItems === 0)) && (
+                      <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
+                </Column>
+              )}
             </div>
           </div>
         )}

@@ -23,14 +23,27 @@ import { useFaviconBadge } from '@/client/hooks/useFaviconBadge'
 import { Bot, ChevronRight, Command, MessageSquare, Network, Plus, Sparkles } from 'lucide-react'
 import { useUnreadPerAgent } from '@/client/hooks/useUnreadPerAgent'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/client/components/ui/tooltip'
-import { api } from '@/client/lib/api'
+import { api, isMobileApiRuntime } from '@/client/lib/api'
 import { useAuth } from '@/client/hooks/useAuth'
+import { Avatar, AvatarFallback, AvatarImage } from '@/client/components/ui/avatar'
+import { cn } from '@/client/lib/utils'
 
 interface ChatPageProps {
   /** Open the global settings modal (mounted at App.tsx root). */
   onOpenSettings: (section?: string, filters?: { agentId?: string }) => void
   /** Open the global account dialog (mounted at App.tsx root). */
   onOpenAccount: () => void
+}
+
+const isMobileApp = isMobileApiRuntime()
+
+function agentInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('') || 'AI'
 }
 
 export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
@@ -231,6 +244,170 @@ export function ChatPage({ onOpenSettings, onOpenAccount }: ChatPageProps) {
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [agents, navigate, handleOpenSettings])
+
+  if (isMobileApp) {
+    return (
+      <div className="surface-chat flex h-full min-h-0 flex-col overflow-hidden">
+        <ConnectionBanner />
+
+        <div className="glass-strong shrink-0 border-b px-2 py-2">
+          <div className="flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {agents.map((agent) => {
+              const unread = unreadPerAgent.get(agent.id) ?? 0
+              const isSelected = agent.id === selectedAgent?.id
+              const isProcessing = agentQueueState.get(agent.id)?.isProcessing ?? false
+
+              return (
+                <button
+                  key={agent.id}
+                  type="button"
+                  onClick={() => handleSelectAgent(agent.slug)}
+                  aria-current={isSelected ? 'page' : undefined}
+                  className={cn(
+                    'relative flex min-w-0 shrink-0 items-center gap-2 rounded-2xl border px-2.5 py-2 text-left transition-all active:scale-[0.98]',
+                    isSelected
+                      ? 'border-primary/40 bg-primary/10 text-primary shadow-sm'
+                      : 'border-border/70 bg-background/70 text-muted-foreground',
+                  )}
+                >
+                  <Avatar className="size-8 rounded-xl">
+                    {agent.avatarUrl && <AvatarImage src={agent.avatarUrl} alt={agent.name} />}
+                    <AvatarFallback className="gradient-primary text-[10px] font-bold text-white">
+                      {agentInitials(agent.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="max-w-28 truncate text-xs font-semibold">{agent.name}</span>
+                  {isProcessing && (
+                    <span className="size-2 shrink-0 animate-pulse rounded-full bg-warning" aria-label={t('agent.processing')} />
+                  )}
+                  {unread > 0 && (
+                    <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground shadow">
+                      {unread > 99 ? '99+' : unread}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={handleOpenCreateModal}
+              className="size-12 shrink-0 rounded-2xl bg-background/70"
+              aria-label={t('sidebar.agents.create')}
+            >
+              <Plus className="size-4" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <Routes>
+            <Route
+              path="*"
+              element={
+                selectedAgent ? (
+                  <ChatPanel
+                    key={selectedAgent.id}
+                    mobile
+                    agent={{
+                      id: selectedAgent.id,
+                      name: selectedAgent.name,
+                      role: selectedAgent.role,
+                      model: selectedAgent.model,
+                      providerId: selectedAgent.providerId ?? null,
+                      avatarUrl: selectedAgent.avatarUrl,
+                      activeProjectId: selectedAgent.activeProjectId,
+                      thinkingEnabled: selectedAgent.thinkingEnabled,
+                      thinkingEffort: selectedAgent.thinkingEffort,
+                    }}
+                    llmModels={llmModels}
+                    modelUnavailable={unavailableAgentIds.has(selectedAgent.id)}
+                    queueState={agentQueueState.get(selectedAgent.id)}
+                    onModelChange={(modelId, providerId) => handleModelChange(selectedAgent.id, modelId, providerId)}
+                    onEditAgent={(opts) => handleOpenEditModal(undefined, opts?.initialTab)}
+                    onOpenSettings={handleOpenSettings}
+                  />
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+                    <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                      <Bot className="size-7" />
+                    </div>
+                    <p className="text-sm text-muted-foreground">{t('chat.selectAgent')}</p>
+                    <Button type="button" variant="outline" onClick={() => navigate('/')}>
+                      {t('activityBar.agents')}
+                    </Button>
+                  </div>
+                )
+              }
+            />
+          </Routes>
+        </div>
+
+        <Suspense fallback={null}>
+          {showCreateModal && (
+            <AgentFormModal
+              open={showCreateModal}
+              onOpenChange={setShowCreateModal}
+              llmModels={llmModels}
+              imageModels={imageModels}
+              onCreateAgent={createAgent}
+              onUpdateAgent={updateAgent}
+              onUploadAvatar={uploadAvatar}
+              onGenerateAvatarPreview={generateAvatarPreview}
+              onGenerateAgentConfig={generateAgentConfig}
+              onGenerateAvatarPreviewFromConfig={generateAvatarPreviewFromConfig}
+              hasImageCapability={hasImageCapability}
+              onOpenSettings={onOpenSettings}
+            />
+          )}
+
+          {showEditModal && (
+            <AgentFormModal
+              open={showEditModal}
+              onOpenChange={setShowEditModal}
+              initialTab={editInitialTab}
+              llmModels={llmModels}
+              imageModels={imageModels}
+              agent={editingAgent}
+              onUpdateAgent={updateAgent}
+              onDeleteAgent={handleDeleteAgent}
+              onUploadAvatar={uploadAvatar}
+              onGenerateAvatarPreview={generateAvatarPreview}
+              hasImageCapability={hasImageCapability}
+              onOpenSettings={onOpenSettings}
+            />
+          )}
+
+          <MiniAppViewer />
+        </Suspense>
+
+        <StatusNotifications />
+
+        {showOnboardingModal && configuratorAgent && (
+          <OnboardingChatModal
+            open={showOnboardingModal}
+            onDismiss={dismissOnboardingModal}
+            agent={{
+              id: configuratorAgent.id,
+              name: configuratorAgent.name,
+              role: configuratorAgent.role,
+              model: configuratorAgent.model,
+              providerId: configuratorAgent.providerId ?? null,
+              avatarUrl: configuratorAgent.avatarUrl,
+              activeProjectId: configuratorAgent.activeProjectId,
+              thinkingEnabled: configuratorAgent.thinkingEnabled,
+              thinkingEffort: configuratorAgent.thinkingEffort,
+            }}
+            llmModels={llmModels}
+            queueState={agentQueueState.get(configuratorAgent.id)}
+            onModelChange={(modelId, providerId) => handleModelChange(configuratorAgent.id, modelId, providerId)}
+            onOpenSettings={handleOpenSettings}
+          />
+        )}
+      </div>
+    )
+  }
 
   // The shadcn SidebarProvider wrapper defaults to `min-h-svh` (full viewport
   // height). We're now inside an AuthenticatedShell with an AppTopBar above

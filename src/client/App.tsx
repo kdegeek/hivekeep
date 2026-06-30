@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback, Suspense, type ReactNode } from 'reac
 import { lazyWithRetry as lazy } from '@/client/lib/lazy-with-retry'
 import { useAuth } from '@/client/hooks/useAuth'
 import { useTranslation } from 'react-i18next'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { api } from '@/client/lib/api'
+import { api, getHivekeepServerUrl, isMobileApiRuntime } from '@/client/lib/api'
+import { useNativeMobileNotifications } from '@/client/hooks/useNativeMobileNotifications'
 import { SidePanelProvider } from '@/client/contexts/SidePanelContext'
 import { TasksProvider } from '@/client/contexts/TasksContext'
 import { CronsProvider } from '@/client/contexts/CronsContext'
@@ -15,6 +16,7 @@ import { UpdateOverlay } from '@/client/components/common/UpdateOverlay'
 import { GlobalUpdateDialog } from '@/client/components/common/GlobalUpdateDialog'
 import { ActivityBar } from '@/client/components/layout/ActivityBar'
 import { AppTopBar } from '@/client/components/layout/AppTopBar'
+import { MobileAppShell } from '@/client/components/layout/MobileAppShell'
 import { TooltipProvider } from '@/client/components/ui/tooltip'
 
 // Lazy-loaded pages for code splitting
@@ -31,12 +33,26 @@ const LoginPage = lazy(() => import('@/client/pages/login/LoginPage').then(m => 
 const OnboardingPage = lazy(() => import('@/client/pages/onboarding/OnboardingPage').then(m => ({ default: m.OnboardingPage })))
 const DesignSystemPage = lazy(() => import('@/client/pages/design-system/DesignSystemPage').then(m => ({ default: m.DesignSystemPage })))
 const InvitePage = lazy(() => import('@/client/pages/invite/InvitePage').then(m => ({ default: m.InvitePage })))
+const MobileAgentHomePage = lazy(() => import('@/client/pages/mobile/MobileAgentHomePage').then(m => ({ default: m.MobileAgentHomePage })))
+const MobileNotificationsPage = lazy(() => import('@/client/pages/mobile/MobileNotificationsPage').then(m => ({ default: m.MobileNotificationsPage })))
+const MobileSettingsPage = lazy(() => import('@/client/pages/mobile/MobileSettingsPage').then(m => ({ default: m.MobileSettingsPage })))
+const MobileServerConnectionPage = lazy(() => import('@/client/pages/mobile/MobileServerConnectionPage').then(m => ({ default: m.MobileServerConnectionPage })))
 
 // Global modals rendered at App root so they survive navigation between Agents / Projets.
 const SettingsModal = lazy(() => import('@/client/pages/settings/SettingsPage').then(m => ({ default: m.SettingsModal })))
 const AccountDialog = lazy(() => import('@/client/pages/account/AccountPage').then(m => ({ default: m.AccountDialog })))
 
 const isDev = import.meta.env.DEV
+const isMobileApp = isMobileApiRuntime()
+
+function getConfiguredMobileServerUrl(): string | null {
+  if (!isMobileApp) return null
+  try {
+    return getHivekeepServerUrl()
+  } catch {
+    return null
+  }
+}
 
 function PageFallback() {
   return (
@@ -59,7 +75,8 @@ function AppRoot() {
   const { t } = useTranslation()
   const { isLoading: authLoading, isAuthenticated, login, refetch } = useAuth()
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStatus | null>(null)
-  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true)
+  const [mobileServerUrl, setMobileServerUrl] = useState(getConfiguredMobileServerUrl)
+  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(() => !isMobileApp || !!mobileServerUrl)
   const [backendError, setBackendError] = useState(false)
 
   const checkOnboarding = useCallback(async () => {
@@ -75,8 +92,20 @@ function AppRoot() {
   }, [])
 
   useEffect(() => {
+    if (isMobileApp && !mobileServerUrl) {
+      setIsCheckingOnboarding(false)
+      return
+    }
     checkOnboarding()
-  }, [checkOnboarding])
+  }, [checkOnboarding, mobileServerUrl])
+
+  const handleMobileConnected = useCallback(async (serverUrl: string) => {
+    setMobileServerUrl(serverUrl)
+    setIsCheckingOnboarding(true)
+    setBackendError(false)
+    await refetch()
+    await checkOnboarding()
+  }, [checkOnboarding, refetch])
 
   // Warm the registry's name→domain map once. The lib falls back to 'mcp'
   // while this is in-flight; first paint may briefly show generic badges
@@ -93,6 +122,14 @@ function AppRoot() {
     })
   }, [])
 
+  if (isMobileApp && !mobileServerUrl) {
+    return (
+      <Suspense fallback={<PageFallback />}>
+        <MobileServerConnectionPage onConnected={handleMobileConnected} />
+      </Suspense>
+    )
+  }
+
   // Loading state
   if (authLoading || isCheckingOnboarding) {
     return (
@@ -107,6 +144,16 @@ function AppRoot() {
 
   // Backend unreachable — show error with retry
   if (backendError) {
+    if (isMobileApp) {
+      return (
+        <Suspense fallback={<PageFallback />}>
+          <MobileServerConnectionPage
+            initialServerUrl={mobileServerUrl}
+            onConnected={handleMobileConnected}
+          />
+        </Suspense>
+      )
+    }
     return (
       <div className="surface-base flex min-h-screen items-center justify-center">
         <div className="text-center animate-fade-in max-w-md space-y-4">
@@ -177,6 +224,7 @@ function RequireAdmin({ children }: { children: ReactNode }) {
 }
 
 function AuthenticatedShell() {
+  const navigate = useNavigate()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialSection, setSettingsInitialSection] = useState<string | undefined>()
   const [settingsFilters, setSettingsFilters] = useState<{ agentId?: string } | undefined>()
@@ -189,6 +237,13 @@ function AuthenticatedShell() {
   }, [])
 
   const handleOpenAccount = useCallback(() => setAccountOpen(true), [])
+  const handleOpenMobileSettings = useCallback((section?: string, filters?: { agentId?: string }) => {
+    navigate('/settings', {
+      state: section || filters ? { section, filters } : undefined,
+    })
+  }, [navigate])
+  const openSettings = isMobileApp ? handleOpenMobileSettings : handleOpenSettings
+  useNativeMobileNotifications(navigate)
 
   // Surface the result of an email OAuth connect (the callback redirects back
   // to "/?email_connected=<addr>" or "/?email_error=<msg>"). Toast, open the
@@ -201,12 +256,12 @@ function AuthenticatedShell() {
     if (!connected && !error) return
     if (connected) {
       toast.success(t('settings.emailAccounts.connectedToast', { email: connected }))
-      handleOpenSettings('emailAccounts')
+      openSettings('emailAccounts')
     } else if (error) {
       toast.error(decodeURIComponent(error))
     }
     window.history.replaceState({}, document.title, window.location.pathname + window.location.hash)
-  }, [t, handleOpenSettings])
+  }, [t, openSettings])
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -216,56 +271,86 @@ function AuthenticatedShell() {
     <UpdateProvider>
     <FeedbackProvider>
     <TicketMentionShell>
-      <div className="flex h-dvh w-screen flex-col overflow-hidden">
-        <AppTopBar
-          onOpenSettings={handleOpenSettings}
+      <>
+      {isMobileApp ? (
+        <MobileAppShell
+          onOpenSettings={openSettings}
           onOpenAccount={handleOpenAccount}
-        />
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <ActivityBar />
-          <div className="min-w-0 flex-1">
-            <Suspense fallback={<PageFallback />}>
-              <Routes>
-                <Route
-                  path="/projects"
-                  element={<ProjectsPage />}
-                />
-                <Route
-                  path="/projects/:projectId"
-                  element={<ProjectsPage />}
-                />
-                <Route path="/tasks" element={<TasksPage />} />
-                <Route path="/crons" element={<CronsPage />} />
-                <Route path="/files" element={<FilesPage />} />
-                <Route path="/files/:agentId" element={<FilesPage />} />
-                <Route path="/files/:sourceType/:sourceId" element={<FilesPage />} />
-                <Route path="/mini-apps" element={<MiniAppsPage />} />
-                <Route path="/reviewer-agents" element={<RequireAdmin><ReviewerAgentsPage /></RequireAdmin>} />
-                <Route path="/models" element={<ModelRegistryPage />} />
-                <Route path="/terminal" element={<TerminalPage />} />
-                <Route
-                  path="*"
-                  element={
-                    <ChatPage
-                      onOpenSettings={handleOpenSettings}
-                      onOpenAccount={handleOpenAccount}
-                    />
-                  }
-                />
-              </Routes>
-            </Suspense>
-          </div>
+        >
+          <Suspense fallback={<PageFallback />}>
+            <Routes>
+              <Route path="/tasks" element={<TasksPage />} />
+              <Route path="/notifications" element={<MobileNotificationsPage onOpenSettings={openSettings} />} />
+              <Route path="/settings/*" element={<MobileSettingsPage onOpenAccount={handleOpenAccount} />} />
+              <Route path="/models" element={<ModelRegistryPage />} />
+              <Route
+                path="/agent/:slug/*"
+                element={
+                  <ChatPage
+                    onOpenSettings={openSettings}
+                    onOpenAccount={handleOpenAccount}
+                  />
+                }
+              />
+              <Route path="*" element={<MobileAgentHomePage onOpenSettings={openSettings} />} />
+            </Routes>
+          </Suspense>
+        </MobileAppShell>
+      ) : (
+        <div className="flex h-dvh w-screen flex-col overflow-hidden">
+         <AppTopBar
+           onOpenSettings={handleOpenSettings}
+           onOpenAccount={handleOpenAccount}
+         />
+         <div className="flex min-h-0 flex-1 overflow-hidden">
+           <ActivityBar />
+           <div className="min-w-0 flex-1">
+             <Suspense fallback={<PageFallback />}>
+               <Routes>
+                 <Route
+                   path="/projects"
+                   element={<ProjectsPage />}
+                 />
+                 <Route
+                   path="/projects/:projectId"
+                   element={<ProjectsPage />}
+                 />
+                 <Route path="/tasks" element={<TasksPage />} />
+                 <Route path="/crons" element={<CronsPage />} />
+                 <Route path="/files" element={<FilesPage />} />
+                 <Route path="/files/:agentId" element={<FilesPage />} />
+                 <Route path="/files/:sourceType/:sourceId" element={<FilesPage />} />
+                 <Route path="/mini-apps" element={<MiniAppsPage />} />
+                 <Route path="/reviewer-agents" element={<RequireAdmin><ReviewerAgentsPage /></RequireAdmin>} />
+                 <Route path="/models" element={<ModelRegistryPage />} />
+                 <Route path="/terminal" element={<TerminalPage />} />
+                 <Route
+                   path="*"
+                   element={
+                     <ChatPage
+                       onOpenSettings={handleOpenSettings}
+                       onOpenAccount={handleOpenAccount}
+                     />
+                   }
+                 />
+               </Routes>
+             </Suspense>
+           </div>
+         </div>
         </div>
+      )}
 
         {/* Global modals — rendered once, survive navigation */}
-        <Suspense fallback={null}>
-          <SettingsModal
-            open={settingsOpen}
-            onOpenChange={setSettingsOpen}
-            initialSection={settingsInitialSection}
-            initialFilters={settingsFilters}
-          />
-        </Suspense>
+        {!isMobileApp && (
+          <Suspense fallback={null}>
+            <SettingsModal
+              open={settingsOpen}
+              onOpenChange={setSettingsOpen}
+              initialSection={settingsInitialSection}
+              initialFilters={settingsFilters}
+            />
+          </Suspense>
+        )}
         <Suspense fallback={null}>
           <AccountDialog
             open={accountOpen}
@@ -276,7 +361,7 @@ function AuthenticatedShell() {
         {/* Shared update dialog + full-screen self-update overlay (global) */}
         <GlobalUpdateDialog />
         <UpdateOverlay />
-      </div>
+      </>
     </TicketMentionShell>
     </FeedbackProvider>
     </UpdateProvider>

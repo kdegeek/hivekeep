@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next'
-import { BellOff, CheckCheck } from 'lucide-react'
+import { BellOff, CheckCheck, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/client/components/ui/button'
 import { NotificationItem } from './NotificationItem'
+import { cn } from '@/client/lib/utils'
 import type { NotificationSummary } from '@/shared/types'
 
 interface NotificationPanelProps {
@@ -11,6 +12,9 @@ interface NotificationPanelProps {
   onMarkAllAsRead: () => void
   onDelete: (id: string) => void
   onClick: (notification: NotificationSummary) => void
+  onOpenPreferences?: () => void
+  markReadOnClick?: boolean
+  className?: string
 }
 
 export function NotificationPanel({
@@ -20,25 +24,41 @@ export function NotificationPanel({
   onMarkAllAsRead,
   onDelete,
   onClick,
+  onOpenPreferences,
+  markReadOnClick,
+  className,
 }: NotificationPanelProps) {
   const { t } = useTranslation()
 
   return (
-    <div className="flex max-h-[400px] flex-col">
+    <div className={cn('flex max-h-[400px] flex-col', className)}>
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-3">
         <h3 className="text-sm font-semibold">{t('notifications.title')}</h3>
-        {unreadCount > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1.5 text-xs text-muted-foreground"
-            onClick={onMarkAllAsRead}
-          >
-            <CheckCheck className="size-3.5" />
-            {t('notifications.markAllRead')}
-          </Button>
-        )}
+        <div className="flex items-center gap-1.5">
+          {unreadCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 text-xs text-muted-foreground"
+              onClick={onMarkAllAsRead}
+            >
+              <CheckCheck className="size-3.5" />
+              {t('notifications.markAllRead')}
+            </Button>
+          )}
+          {onOpenPreferences && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 text-xs text-muted-foreground"
+              onClick={onOpenPreferences}
+            >
+              <SlidersHorizontal className="size-3.5" />
+              {t('notifications.preferences', 'Preferences')}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* List */}
@@ -57,6 +77,7 @@ export function NotificationPanel({
                 onMarkAsRead={onMarkAsRead}
                 onDelete={onDelete}
                 onClick={onClick}
+                markReadOnClick={markReadOnClick}
               />
             ))}
           </div>

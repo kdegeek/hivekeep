@@ -1,6 +1,128 @@
 import { toast } from 'sonner'
 
-const BASE_URL = '/api'
+const API_PATH_PREFIX = '/api'
+export const MOBILE_SERVER_URL_STORAGE_KEY = 'hivekeep:serverUrl'
+
+export function isCapacitorRuntime(): boolean {
+  return typeof window !== 'undefined' && window.location.protocol === 'capacitor:'
+}
+
+export function isMobileApiRuntime(): boolean {
+  return import.meta.env?.VITE_HIVEKEEP_MOBILE === 'true' || isCapacitorRuntime()
+}
+
+function getStoredServerUrl(): string | null {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    return localStorage.getItem(MOBILE_SERVER_URL_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function normalizeHivekeepServerUrl(serverUrl: string): string {
+  let trimmed = serverUrl.trim()
+  if (!trimmed) throw new Error('Hivekeep server URL is required')
+  if (!/^https?:\/\//i.test(trimmed)) {
+    trimmed = `http://${trimmed}`
+  }
+  try {
+    const url = new URL(trimmed)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      throw new Error('Hivekeep server URL must start with http:// or https://')
+    }
+    if (url.username || url.password) {
+      throw new Error('Hivekeep server URL must not include credentials')
+    }
+    url.hash = ''
+    url.search = ''
+    const pathname = url.pathname
+      .replace(/\/+$/, '')
+      .replace(/\/api$/i, '')
+    url.pathname = pathname || '/'
+    return url.toString().replace(/\/+$/, '')
+  } catch (err) {
+    if (err instanceof Error && (
+      err.message.includes('credentials') ||
+      err.message.includes('http:// or https://')
+    )) {
+      throw err
+    }
+    throw new Error('Invalid URL format. Please enter a valid server address.')
+  }
+}
+
+export function getHivekeepServerUrl(): string | null {
+  const stored = getStoredServerUrl()
+  if (!stored) return null
+  return normalizeHivekeepServerUrl(stored)
+}
+
+export function setHivekeepServerUrl(serverUrl: string): string {
+  if (typeof localStorage === 'undefined') throw new Error('Server URL storage is unavailable')
+  const normalized = normalizeHivekeepServerUrl(serverUrl)
+  localStorage.setItem(MOBILE_SERVER_URL_STORAGE_KEY, normalized)
+  return normalized
+}
+
+export function clearHivekeepServerUrl(): void {
+  if (typeof localStorage === 'undefined') return
+  localStorage.removeItem(MOBILE_SERVER_URL_STORAGE_KEY)
+}
+
+export async function validateHivekeepServerConnection(serverUrl: string): Promise<string> {
+  const normalized = normalizeHivekeepServerUrl(serverUrl)
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), 10_000)
+  try {
+    const response = await fetch(`${normalized}${API_PATH_PREFIX}/health`, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      throw new Error(`Hivekeep server responded with ${response.status}`)
+    }
+    const body = (await response.json()) as { status?: unknown }
+    if (body.status !== 'ok') {
+      throw new Error('Hivekeep server health check did not return ok')
+    }
+    return normalized
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Hivekeep server did not respond in time')
+    }
+    throw err
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
+}
+
+export function buildApiUrl(path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  const serverUrl = isMobileApiRuntime() ? getHivekeepServerUrl() : null
+  if (!serverUrl && isCapacitorRuntime()) {
+    throw new Error('Hivekeep server URL is not configured')
+  }
+  return serverUrl
+    ? `${serverUrl}${API_PATH_PREFIX}${normalizedPath}`
+    : `${API_PATH_PREFIX}${normalizedPath}`
+}
+
+/**
+ * Resolve a server-relative asset path (e.g. an agent avatar URL stored as
+ * `/api/...`) to a fully-qualified URL for the current runtime. On the mobile
+ * (Capacitor) runtime this prefixes the configured Hivekeep server root, the
+ * same way {@link buildApiUrl} does for API calls; on the web it returns the
+ * path unchanged so the browser resolves it against the document origin.
+ */
+export function resolveApiAssetUrl(path: string): string {
+  if (!path) return path
+  // Absolute URLs (http(s)://, data:, blob:, capacitor://) are returned as-is.
+  if (/^(https?:|data:|blob:|capacitor:)/i.test(path)) return path
+  if (!isMobileApiRuntime()) return path
+  return buildApiUrl(path)
+}
 
 // ─── Custom error class ───────────────────────────────────────────────────────
 
@@ -53,7 +175,7 @@ export function toastError(err: unknown): void {
 // ─── Core fetch wrapper ───────────────────────────────────────────────────────
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetch(buildApiUrl(path), {
     ...options,
     credentials: 'include',
     headers: {

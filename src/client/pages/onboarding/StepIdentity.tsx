@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '@/client/components/ui/alert'
 import { Avatar, AvatarFallback, AvatarImage } from '@/client/components/ui/avatar'
 import { AlertCircle, Camera, Loader2 } from 'lucide-react'
 import { useAuth } from '@/client/hooks/useAuth'
-import { api, getErrorMessage } from '@/client/lib/api'
+import { api, buildApiUrl, getErrorMessage } from '@/client/lib/api'
 import { getUserInitials } from '@/client/lib/utils'
 import { validateProfileFields } from '@/shared/profile-validation'
 import { translateProfileErrorCode } from '@/client/lib/profile-validation-i18n'
@@ -235,7 +235,7 @@ export function StepIdentity({ onComplete }: StepIdentityProps) {
       if (avatarFile) {
         const formData = new FormData()
         formData.append('file', avatarFile)
-        await fetch('/api/me/avatar', {
+        await fetch(buildApiUrl('/me/avatar'), {
           method: 'POST',
           credentials: 'include',
           body: formData,

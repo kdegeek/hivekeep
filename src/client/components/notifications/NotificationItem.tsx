@@ -10,13 +10,14 @@ interface NotificationItemProps {
   onMarkAsRead: (id: string) => void
   onDelete: (id: string) => void
   onClick: (notification: NotificationSummary) => void
+  markReadOnClick?: boolean
 }
 
-export function NotificationItem({ notification, onMarkAsRead, onDelete, onClick }: NotificationItemProps) {
+export function NotificationItem({ notification, onMarkAsRead, onDelete, onClick, markReadOnClick = true }: NotificationItemProps) {
   const { t } = useTranslation()
 
   const handleClick = () => {
-    if (!notification.isRead) {
+    if (markReadOnClick && !notification.isRead) {
       onMarkAsRead(notification.id)
     }
     onClick(notification)
@@ -27,10 +28,19 @@ export function NotificationItem({ notification, onMarkAsRead, onDelete, onClick
     onDelete(notification.id)
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    e.preventDefault()
+    handleClick()
+  }
+
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={handleClick}
+      onKeyDown={handleKeyDown}
       className={`group flex w-full items-start gap-3 rounded-md px-3 py-2.5 text-left transition-colors ${
         !notification.isRead
           ? 'border-l-[3px] border-primary bg-primary/10 hover:bg-primary/15'
@@ -79,11 +89,12 @@ export function NotificationItem({ notification, onMarkAsRead, onDelete, onClick
       <Button
         variant="ghost"
         size="icon"
-        className="mt-0.5 size-5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+        className="mt-0.5 size-5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
         onClick={handleDelete}
+        aria-label={t('notifications.delete')}
       >
         <X className="size-3" />
       </Button>
-    </button>
+    </div>
   )
 }

@@ -39,7 +39,7 @@ export const ToolCallsViewer = React.memo(function ToolCallsViewer({ toolCalls, 
               <TooltipContent side="bottom">{t('tools.viewer.showAvailable', 'View available tools')}</TooltipContent>
             </Tooltip>
           )}
-          <Button variant="ghost" size="icon-xs" onClick={onClose}>
+          <Button variant="ghost" size="icon-xs" onClick={onClose} aria-label={t('common.close')}>
             <X className="size-3.5" />
           </Button>
         </div>

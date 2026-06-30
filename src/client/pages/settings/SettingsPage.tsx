@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from 'react'
+import { useState, useEffect, createContext, useContext, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Dialog,
@@ -277,26 +277,151 @@ function SettingsFooter() {
   )
 }
 
-export function SettingsModal({ open, onOpenChange, initialSection, initialFilters }: SettingsModalProps) {
+function SettingsWorkspace({
+  initialSection,
+  initialFilters,
+  onClose,
+  showFooter = true,
+}: {
+  initialSection?: string
+  initialFilters?: SettingsFilters
+  onClose: () => void
+  showFooter?: boolean
+}) {
   const { t } = useTranslation()
   const [activeSection, setActiveSection] = useState<SectionId>('general')
+  const shellFooterClearanceStyle: CSSProperties | undefined = showFooter
+    ? undefined
+    : { paddingBottom: '7rem' }
 
-  // Navigate to requested section when modal opens
+  // Navigate to requested section when this settings surface opens.
   useEffect(() => {
-    if (open && initialSection && allSections.some((s) => s.id === initialSection)) {
+    if (initialSection && allSections.some((s) => s.id === initialSection)) {
       setActiveSection(initialSection as SectionId)
     }
-  }, [open, initialSection])
+  }, [initialSection])
 
   const ActiveComponent = sectionComponents[activeSection]
 
   return (
+    <SidebarProvider className="!min-h-0 !h-full flex flex-1 flex-col">
+      {/* Body: sidebar + content */}
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        {/* Mobile section selector */}
+        <div className="shrink-0 border-b px-4 py-3 md:hidden">
+          <Select value={activeSection} onValueChange={(v) => setActiveSection(v)}>
+            <SelectTrigger className="w-full">
+              <SelectValue>
+                {(() => {
+                  const section = allSections.find((s) => s.id === activeSection)
+                  if (!section) return null
+                  const Icon = section.icon
+                  return (
+                    <span className="flex items-center gap-2">
+                      <Icon className="size-4" />
+                      {t(section.labelKey)}
+                    </span>
+                  )
+                })()}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {sectionGroups.map((group) => (
+                <div key={group.groupKey}>
+                  <p className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                    {t(group.groupKey)}
+                  </p>
+                  {group.items.map(({ id, icon: Icon, labelKey }) => (
+                    <SelectItem key={id} value={id}>
+                      <span className="flex items-center gap-2">
+                        <Icon className="size-4" />
+                        {t(labelKey)}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </div>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Desktop settings sidebar */}
+        <nav
+          className="hidden md:block w-56 shrink-0 border-r surface-sidebar overflow-y-auto py-4 px-3"
+          style={shellFooterClearanceStyle}
+        >
+          {sectionGroups.map((group, gi) => (
+            <div key={group.groupKey} className={gi > 0 ? 'mt-4' : ''}>
+              <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                {t(group.groupKey)}
+              </p>
+              <SidebarMenu>
+                {group.items.map(({ id, icon: Icon, labelKey }) => (
+                  <SidebarMenuItem key={id}>
+                    <SidebarMenuButton
+                      onClick={() => setActiveSection(id)}
+                      isActive={activeSection === id}
+                      tooltip={t(labelKey)}
+                    >
+                      <Icon className="size-4" />
+                      <span>{t(labelKey)}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </div>
+          ))}
+        </nav>
+
+        {/* Main content */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-6" style={shellFooterClearanceStyle}>
+          <div className="mx-auto max-w-2xl">
+            <SettingsCloseContext.Provider value={onClose}>
+              <SettingsNavContext.Provider value={setActiveSection}>
+                {ActiveComponent && (
+                  activeSection === 'tokenUsage' && initialFilters
+                    ? <TokenUsageSettings initialAgentFilter={initialFilters.agentId} />
+                    : <ActiveComponent />
+                )}
+              </SettingsNavContext.Provider>
+            </SettingsCloseContext.Provider>
+          </div>
+        </div>
+      </div>
+
+      {/* Version + stats footer */}
+      {showFooter && <SettingsFooter />}
+    </SidebarProvider>
+  )
+}
+
+export function SettingsPage({
+  initialSection,
+  initialFilters,
+  showFooter = true,
+}: {
+  initialSection?: string
+  initialFilters?: SettingsFilters
+  showFooter?: boolean
+}) {
+  return (
+    <div className="surface-base flex h-full min-h-0 overflow-hidden">
+      <SettingsWorkspace
+        initialSection={initialSection}
+        initialFilters={initialFilters}
+        onClose={() => {}}
+        showFooter={showFooter}
+      />
+    </div>
+  )
+}
+
+export function SettingsModal({ open, onOpenChange, initialSection, initialFilters }: SettingsModalProps) {
+  const { t } = useTranslation()
+
+  return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[min(92vh,720px)] max-h-[92vh] flex-col overflow-hidden p-0 sm:max-w-5xl">
-        {/* Local SidebarProvider — required by SidebarMenuButton (uses useSidebar
-            for tooltip/mobile state). SettingsModal is now rendered at App.tsx
-            root, outside of ChatPage's SidebarProvider, so it needs its own. */}
-        <SidebarProvider className="!min-h-0 !h-full flex flex-col">
         {/* Header */}
         <DialogHeader className="shrink-0 border-b px-6 py-4">
           <DialogTitle>{t('settings.title')}</DialogTitle>
@@ -305,90 +430,13 @@ export function SettingsModal({ open, onOpenChange, initialSection, initialFilte
           </DialogDescription>
         </DialogHeader>
 
-        {/* Body: sidebar + content */}
-        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-          {/* Mobile section selector */}
-          <div className="shrink-0 border-b px-4 py-3 md:hidden">
-            <Select value={activeSection} onValueChange={(v) => setActiveSection(v)}>
-              <SelectTrigger className="w-full">
-                <SelectValue>
-                  {(() => {
-                    const section = allSections.find((s) => s.id === activeSection)
-                    if (!section) return null
-                    const Icon = section.icon
-                    return (
-                      <span className="flex items-center gap-2">
-                        <Icon className="size-4" />
-                        {t(section.labelKey)}
-                      </span>
-                    )
-                  })()}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {sectionGroups.map((group) => (
-                  <div key={group.groupKey}>
-                    <p className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                      {t(group.groupKey)}
-                    </p>
-                    {group.items.map(({ id, icon: Icon, labelKey }) => (
-                      <SelectItem key={id} value={id}>
-                        <span className="flex items-center gap-2">
-                          <Icon className="size-4" />
-                          {t(labelKey)}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </div>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Desktop settings sidebar */}
-          <nav className="hidden md:block w-56 shrink-0 border-r surface-sidebar overflow-y-auto py-4 px-3">
-            {sectionGroups.map((group, gi) => (
-              <div key={group.groupKey} className={gi > 0 ? 'mt-4' : ''}>
-                <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                  {t(group.groupKey)}
-                </p>
-                <SidebarMenu>
-                  {group.items.map(({ id, icon: Icon, labelKey }) => (
-                    <SidebarMenuItem key={id}>
-                      <SidebarMenuButton
-                        onClick={() => setActiveSection(id)}
-                        isActive={activeSection === id}
-                        tooltip={t(labelKey)}
-                      >
-                        <Icon className="size-4" />
-                        <span>{t(labelKey)}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </div>
-            ))}
-          </nav>
-
-          {/* Main content */}
-          <div className="flex-1 overflow-y-auto p-4 md:p-6">
-            <div className="mx-auto max-w-2xl">
-              <SettingsCloseContext.Provider value={() => onOpenChange(false)}>
-                <SettingsNavContext.Provider value={setActiveSection}>
-                  {ActiveComponent && (
-                    activeSection === 'tokenUsage' && initialFilters
-                      ? <TokenUsageSettings initialAgentFilter={initialFilters.agentId} />
-                      : <ActiveComponent />
-                  )}
-                </SettingsNavContext.Provider>
-              </SettingsCloseContext.Provider>
-            </div>
-          </div>
-        </div>
-
-        {/* Version + stats footer */}
-        <SettingsFooter />
-        </SidebarProvider>
+        {/* Local SidebarProvider is inside SettingsWorkspace — required by
+            SidebarMenuButton (uses useSidebar for tooltip/mobile state). */}
+        <SettingsWorkspace
+          initialSection={initialSection}
+          initialFilters={initialFilters}
+          onClose={() => onOpenChange(false)}
+        />
       </DialogContent>
     </Dialog>
   )

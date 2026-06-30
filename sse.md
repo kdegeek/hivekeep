@@ -9,6 +9,9 @@ Référence pour **éviter les bugs de synchro temps réel** (état périmé, me
 ## 1. Le modèle en 30 secondes
 
 - **Une seule connexion SSE par client** (`EventSource` sur `/api/sse`), multiplexée par `agentId`. Pas de connexion par-Agent.
+- **Mobile Android** : même contrat, même stream. Le client Capacitor résout
+  `/api/sse` en `<serveur-configuré>/api/sse` via l'URL stockée localement
+  (`hivekeep:serverUrl`). Aucun event mobile spécifique n'est ajouté.
 - **Émission serveur** via `sseManager` (`src/server/sse/index.ts`) :
   | Méthode | Portée | Quand l'utiliser |
   |---|---|---|

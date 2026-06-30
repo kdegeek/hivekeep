@@ -6,14 +6,22 @@ import { Input } from '@/client/components/ui/input'
 import { Label } from '@/client/components/ui/label'
 import { Switch } from '@/client/components/ui/switch'
 import { MarkdownEditor } from '@/client/components/ui/markdown-editor'
-import { api, getErrorMessage, toastError } from '@/client/lib/api'
+import {
+  api,
+  clearHivekeepServerUrl,
+  getErrorMessage,
+  getHivekeepServerUrl,
+  isMobileApiRuntime,
+  toastError,
+  validateHivekeepServerConnection,
+} from '@/client/lib/api'
 import { Skeleton } from '@/client/components/ui/skeleton'
 import { InfoTip } from '@/client/components/common/InfoTip'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
 import { getToolCallsDefaultOpen, setToolCallsDefaultOpen } from '@/client/lib/tool-call-prefs'
 import { useAuth } from '@/client/hooks/useAuth'
 import { getPublicUrlMismatch } from '@/client/lib/public-url'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Loader2, RefreshCw, Server } from 'lucide-react'
 
 const MAX_CONCURRENT_UPPER_BOUND = 1000
 const MAX_QUEUE_UPPER_BOUND = 100_000
@@ -21,9 +29,18 @@ const MAX_QUEUE_UPPER_BOUND = 100_000
 export function GeneralSettings() {
   const { t } = useTranslation()
   const { user } = useAuth()
+  const isMobileApp = isMobileApiRuntime()
 
   const [isLoading, setIsLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
+  const [checkingServer, setCheckingServer] = useState(false)
+  const [mobileServerUrl] = useState(() => {
+    try {
+      return getHivekeepServerUrl()
+    } catch {
+      return null
+    }
+  })
 
   // Configured public URL (best-effort, for the misconfiguration warning).
   const [publicUrl, setPublicUrl] = useState<string | null>(null)
@@ -124,6 +141,24 @@ export function GeneralSettings() {
     setGlobalPrompt(initialGlobalPrompt)
   }
 
+  const handleReconnectServer = async () => {
+    if (!mobileServerUrl) return
+    setCheckingServer(true)
+    try {
+      await validateHivekeepServerConnection(mobileServerUrl)
+      toast.success(t('mobile.connection.connected', 'Connected to Hivekeep server'))
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err))
+    } finally {
+      setCheckingServer(false)
+    }
+  }
+
+  const handleChangeServer = () => {
+    clearHivekeepServerUrl()
+    window.location.href = '/'
+  }
+
   const MAX_PROMPT_LENGTH = 10000
   const hasPromptChanges = globalPrompt !== initialGlobalPrompt
   const hasChanges = hasPromptChanges
@@ -203,6 +238,36 @@ export function GeneralSettings() {
       <p className="text-sm text-muted-foreground">
         {t('settings.general.description')}
       </p>
+
+      {isMobileApp && (
+        <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4">
+          <div className="flex items-start gap-3">
+            <Server className="mt-0.5 size-4 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1 space-y-1">
+              <h3 className="text-sm font-medium">
+                {t('mobile.connection.settingsTitle', 'Hivekeep server')}
+              </h3>
+              <p className="break-all text-xs text-muted-foreground">
+                {mobileServerUrl ?? t('mobile.connection.noServer', 'No server configured')}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleReconnectServer}
+              disabled={!mobileServerUrl || checkingServer}
+            >
+              {checkingServer ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+              {t('mobile.connection.reconnect', 'Reconnect')}
+            </Button>
+            <Button type="button" variant="ghost" onClick={handleChangeServer}>
+              {t('mobile.connection.changeServer', 'Change server')}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Global prompt */}
       <div className="space-y-2">

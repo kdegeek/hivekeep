@@ -55,9 +55,9 @@ import { useMentionables } from '@/client/hooks/useMentionables'
 import { useProject } from '@/client/hooks/useProjects'
 import { cn, getUserInitials } from '@/client/lib/utils'
 import { useSidePanel } from '@/client/contexts/SidePanelContext'
-import { ArrowDown, ArrowUp, Upload, Pin, PinOff, AlertTriangle, Bot, Loader2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Upload, Pin, PinOff, AlertTriangle, Bot, Loader2, Search, Settings2, Wrench } from 'lucide-react'
 import { toast } from 'sonner'
-import { api } from '@/client/lib/api'
+import { api, resolveApiAssetUrl } from '@/client/lib/api'
 
 interface AgentInfo {
   id: string
@@ -93,13 +93,16 @@ interface ChatPanelProps {
    *  desktop sidebar trigger. Everything else (messages, input, prompts, secure
    *  input) is unchanged. */
   compact?: boolean
+  /** Native mobile route: keep the full chat data/behavior, but render mobile
+   *  chrome and tool details as overlays instead of desktop sidebars. */
+  mobile?: boolean
   /** When true, reasoning/thinking blocks are hidden in every message (used by
    *  the onboarding modal so Queenie's meta-reasoning doesn't break first-use
    *  magic). The same thread shows thinking normally in the regular chat. */
   hideThinking?: boolean
 }
 
-export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueState, onModelChange, onEditAgent, onOpenSettings, compact = false, hideThinking = false }: ChatPanelProps) {
+export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueState, onModelChange, onEditAgent, onOpenSettings, compact = false, mobile = false, hideThinking = false }: ChatPanelProps) {
   const { t } = useTranslation()
   const { user } = useAuth()
   const userInitials = user ? getUserInitials(user) : 'U'
@@ -980,7 +983,7 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
   return (
     <WorkspacePathProvider agentId={agent.id}>
     <div
-      className="relative flex min-h-0 min-w-0 flex-1 flex-col"
+      className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col"
       onDragEnter={handlePanelDragEnter}
       onDragLeave={handlePanelDragLeave}
       onDragOver={handlePanelDragOver}
@@ -1008,10 +1011,62 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
       )}
 
       {/* Conversation header — minimal in compact (onboarding modal) mode */}
-      {compact ? (
+      {mobile ? (
+        <div className="glass-strong flex shrink-0 items-center gap-3 border-b px-3 py-2.5">
+          {agent.avatarUrl ? (
+            <img src={resolveApiAssetUrl(agent.avatarUrl)} alt={agent.name} className="size-10 rounded-2xl object-cover shadow-sm" />
+          ) : (
+            <div className="flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <Bot className="size-5" />
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="truncate text-sm font-semibold">{agent.name}</p>
+              {queueState?.isProcessing && <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />}
+            </div>
+            <p className="truncate text-xs text-muted-foreground">{agent.role}</p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-9 rounded-xl"
+            onClick={toggleSearch}
+            aria-label={t('chat.search.open', 'Search conversation')}
+          >
+            <Search className="size-4" />
+          </Button>
+          <Button
+            type="button"
+            variant={isToolCallsOpen ? 'secondary' : 'ghost'}
+            size="icon"
+            className="relative size-9 rounded-xl"
+            onClick={toggleToolCalls}
+            aria-label={t('chat.toolCalls', 'Tool calls')}
+          >
+            <Wrench className="size-4" />
+            {toolCallCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
+                {toolCallCount > 99 ? '99+' : toolCallCount}
+              </span>
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-9 rounded-xl"
+            onClick={() => onEditAgent()}
+            aria-label={t('mobileAgents.openSettings', 'Settings')}
+          >
+            <Settings2 className="size-4" />
+          </Button>
+        </div>
+      ) : compact ? (
         <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
           {agent.avatarUrl ? (
-            <img src={agent.avatarUrl} alt={agent.name} className="size-9 rounded-full object-cover" />
+            <img src={resolveApiAssetUrl(agent.avatarUrl)} alt={agent.name} className="size-9 rounded-full object-cover" />
           ) : (
             <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary">
               <Bot className="size-5" />
@@ -1104,7 +1159,7 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
         <ScrollArea className="min-h-0 flex-1">
           <SearchHighlightProvider value={searchQuery}>
           <MentionLookupProvider users={mentionableUsers} agents={mentionableAgents}>
-          <div className="mx-auto min-w-0 max-w-3xl py-4 px-2 md:px-0">
+          <div className={cn('mx-auto min-w-0 py-4', mobile ? 'max-w-full px-1.5' : 'max-w-3xl px-2 md:px-0')}>
             {/* Sentinel for infinite scroll — triggers loading older messages */}
             {hasMore && <div ref={topSentinelRef} className="h-px" />}
             {isLoadingMore && (
@@ -1205,19 +1260,32 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
           </button>
         </div>
 
-        {/* Tool calls side panel — animated width wrapper */}
-        <div
-          className={`shrink-0 overflow-hidden transition-[width] duration-300 ease-out ${
-            isToolCallsOpen ? 'w-80 lg:w-96' : 'w-0'
-          }`}
-        >
-          <ToolCallsViewer
-            toolCalls={toolCalls}
-            toolCallCount={toolCallCount}
-            onClose={toggleToolCalls}
-            onShowAvailableTools={() => { void refetchAgentTools(); setToolsModalOpen(true) }}
-          />
-        </div>
+        {mobile ? (
+          <Sheet open={isToolCallsOpen} onOpenChange={setIsToolCallsOpen}>
+            <SheetContent side="bottom" className="h-[72dvh] rounded-t-3xl p-0">
+              <SheetTitle className="sr-only">{t('chat.toolCalls')}</SheetTitle>
+              <ToolCallsViewer
+                toolCalls={toolCalls}
+                toolCallCount={toolCallCount}
+                onClose={toggleToolCalls}
+                onShowAvailableTools={() => { void refetchAgentTools(); setToolsModalOpen(true) }}
+              />
+            </SheetContent>
+          </Sheet>
+        ) : (
+          <div
+            className={`shrink-0 overflow-hidden transition-[width] duration-300 ease-out ${
+              isToolCallsOpen ? 'w-80 lg:w-96' : 'w-0'
+            }`}
+          >
+            <ToolCallsViewer
+              toolCalls={toolCalls}
+              toolCallCount={toolCallCount}
+              onClose={toggleToolCalls}
+              onShowAvailableTools={() => { void refetchAgentTools(); setToolsModalOpen(true) }}
+            />
+          </div>
+        )}
 
         {/* Mini-app / task / ticket side panel is mounted at ChatPage level
             so it works even when no Agent is selected (an empty Agents page can
@@ -1287,6 +1355,7 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
         onChangeThinking={updateThinking}
         toolCount={agentToolCount}
         onShowTools={() => { void refetchAgentTools(); setToolsModalOpen(true) }}
+        mobile={mobile}
       />
 
       {/* Tools listing modal (composer tools badge) — mounted on demand so the
