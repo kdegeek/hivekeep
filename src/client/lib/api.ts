@@ -109,6 +109,21 @@ export function buildApiUrl(path: string): string {
     : `${API_PATH_PREFIX}${normalizedPath}`
 }
 
+/**
+ * Resolve a server-relative asset path (e.g. an agent avatar URL stored as
+ * `/api/...`) to a fully-qualified URL for the current runtime. On the mobile
+ * (Capacitor) runtime this prefixes the configured Hivekeep server root, the
+ * same way {@link buildApiUrl} does for API calls; on the web it returns the
+ * path unchanged so the browser resolves it against the document origin.
+ */
+export function resolveApiAssetUrl(path: string): string {
+  if (!path) return path
+  // Absolute URLs (http(s)://, data:, blob:, capacitor://) are returned as-is.
+  if (/^(https?:|data:|blob:|capacitor:)/i.test(path)) return path
+  if (!isMobileApiRuntime()) return path
+  return buildApiUrl(path)
+}
+
 // ─── Custom error class ───────────────────────────────────────────────────────
 
 export class ApiRequestError extends Error {
