@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs'
-import { join, resolve, sep } from 'path'
+import { existsSync, mkdirSync, realpathSync, readdirSync, readFileSync, writeFileSync } from 'fs'
+import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { randomUUID } from 'crypto'
 import { config } from '@/server/config'
+import { getCodeReviewAllowedRepoRootsOverride } from '@/server/services/app-settings'
 
 export type ReviewProvider = 'coderabbit' | 'kilo'
 export type ReviewRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'skipped'
@@ -30,6 +31,7 @@ export interface ReviewFinding {
 
 export interface ReviewInput {
   repoPath: string
+  workspaceRoot?: string
   provider?: ReviewProvider | 'all'
   base?: string
   baseCommit?: string
@@ -158,6 +160,63 @@ function mergeExecEnv(extraEnv?: Record<string, string | undefined>): Record<str
   }
   merged.PATH = reviewCliPath(extraEnv)
   return merged
+}
+
+function realpathForReview(path: string, label: string): string {
+  try {
+    return realpathSync(path)
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    throw new Error(`${label} does not exist or cannot be resolved: ${path}. ${detail}`)
+  }
+}
+
+export function isPathInsideOrEqual(parent: string, child: string): boolean {
+  const rel = relative(parent, child)
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+}
+
+export function validateReviewRepoPathWithAllowedRoots(repoPath: string, workspaceRoot: string, allowedRepoRoots: string[]): string {
+  const repoRealPath = realpathForReview(repoPath, 'repo_path')
+  const workspaceRealPath = realpathForReview(workspaceRoot, 'workspace root')
+  const allowedRoots = allowedRepoRoots.flatMap((root) => {
+    try {
+      return [realpathForReview(root, 'configured code-review allowed root')]
+    } catch {
+      return []
+    }
+  })
+  const allowedByRoot = [workspaceRealPath, ...allowedRoots].some((root) => isPathInsideOrEqual(root, repoRealPath))
+  if (!allowedByRoot) {
+    throw new Error('repo_path must resolve inside the current tool workspace/worktree or a configured code-review allowed root')
+  }
+
+  const gitTopLevel = gitTopLevelForRepo(repoRealPath)
+  if (!gitTopLevel || !isPathInsideOrEqual(gitTopLevel, repoRealPath)) {
+    throw new Error(`repo_path must be a Git repository root or contain a Git worktree: ${repoPath}`)
+  }
+
+  return repoRealPath
+}
+
+export function validateReviewRepoPath(repoPath: string, workspaceRoot: string): string {
+  return validateReviewRepoPathWithAllowedRoots(repoPath, workspaceRoot, config.codeReview.allowedRepoRoots)
+}
+
+export async function validateReviewRepoPathEffective(repoPath: string, workspaceRoot: string): Promise<string> {
+  const override = await getCodeReviewAllowedRepoRootsOverride()
+  return validateReviewRepoPathWithAllowedRoots(repoPath, workspaceRoot, override ?? config.codeReview.allowedRepoRoots)
+}
+
+function gitTopLevelForRepo(repoPath: string): string | null {
+  const result = Bun.spawnSync(['git', '-C', repoPath, 'rev-parse', '--show-toplevel'], {
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  if (result.exitCode !== 0) return null
+  const text = new TextDecoder().decode(result.stdout).trim()
+  if (!text) return null
+  return realpathForReview(text, 'Git repository root')
 }
 
 function concatChunks(chunks: Uint8Array[]): Uint8Array {
@@ -590,7 +649,9 @@ function resolveReviewMode(mode?: string): ReviewMode {
 }
 
 export async function runLocalCodeReview(input: ReviewInput): Promise<ReviewRunSummary> {
-  const repoPath = resolve(input.repoPath)
+  const workspaceRoot = resolve(input.workspaceRoot ?? process.cwd())
+  const requestedRepoPath = isAbsolute(input.repoPath) ? input.repoPath : resolve(workspaceRoot, input.repoPath)
+  const repoPath = await validateReviewRepoPathEffective(requestedRepoPath, workspaceRoot)
   const mode = resolveReviewMode(input.mode)
   const providers = resolveReviewProviders(input.provider)
   const id = `review-${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`
@@ -693,4 +754,4 @@ async function runKilo(input: ReviewInput & { repoPath: string }): Promise<ExecR
   }
 }
 
-export const _LOCAL_REVIEW_INTERNALS_FOR_TEST = { parseReviewFindings, parseJsonLines, evaluateGate, kiloReviewPrompt, kiloSlashCommand, kiloSlashCommandArgs, kiloPromptFallbackArgs, listReviewRuns, getReviewRun, updateReviewFindingState, execReviewCli, trimIncompleteUtf8End, trimIncompleteUtf8Start }
+export const _LOCAL_REVIEW_INTERNALS_FOR_TEST = { parseReviewFindings, parseJsonLines, evaluateGate, kiloReviewPrompt, kiloSlashCommand, kiloSlashCommandArgs, kiloPromptFallbackArgs, listReviewRuns, getReviewRun, updateReviewFindingState, execReviewCli, trimIncompleteUtf8End, trimIncompleteUtf8Start, validateReviewRepoPath, validateReviewRepoPathEffective, validateReviewRepoPathWithAllowedRoots, isPathInsideOrEqual }

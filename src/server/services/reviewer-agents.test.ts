@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { tmpdir } from 'os'
 import { config } from '@/server/config'
 import {
@@ -14,11 +14,13 @@ import {
 
 const originalPath = process.env.PATH
 const originalArtifactDir = config.codeReview.artifactDir
-const mutableCodeReviewConfig = config.codeReview as { artifactDir: string }
+const originalAllowedRepoRoots = [...config.codeReview.allowedRepoRoots]
+const mutableCodeReviewConfig = config.codeReview as { artifactDir: string; allowedRepoRoots: string[] }
 
 afterEach(() => {
   process.env.PATH = originalPath
   mutableCodeReviewConfig.artifactDir = originalArtifactDir
+  mutableCodeReviewConfig.allowedRepoRoots = [...originalAllowedRepoRoots]
 })
 
 function makeFakeBin(name: string, body: string): string {
@@ -62,6 +64,36 @@ describe('reviewer agent definitions and knowledge', () => {
     }
   })
 
+  it('resolves relative reviewer-agent repo paths from the supplied workspace root', async () => {
+    const root = makeFakeBin('cr', `
+if [[ "$1" == "--version" ]]; then echo "0.0.0-test"; exit 0; fi
+if [[ "$1" == "auth" ]]; then echo '{"authenticated":true}'; exit 0; fi
+if [[ "$1" == "doctor" ]]; then echo 'doctor ok'; exit 0; fi
+exit 1
+`)
+    try {
+      const kilo = join(root, 'kilo')
+      writeFileSync(kilo, `#!/usr/bin/env bash\nexit 127\n`)
+      chmodSync(kilo, 0o755)
+      const repo = join(root, 'repo')
+      mkdirSync(repo, { recursive: true })
+      const gitInit = Bun.spawnSync(['git', '-C', repo, 'init'], { stdout: 'pipe', stderr: 'pipe' })
+      if (gitInit.exitCode !== 0) throw new Error(new TextDecoder().decode(gitInit.stderr))
+      mutableCodeReviewConfig.allowedRepoRoots = []
+      mutableCodeReviewConfig.artifactDir = join(root, 'artifacts')
+      const previousCwd = process.cwd()
+      process.chdir(tmpdir())
+      try {
+        const agents = await listReviewerAgents(basename(repo), undefined, root)
+        expect(agents.find((agent) => agent.id === 'coderabbit-reviewer')?.auth.installed).toBe(true)
+      } finally {
+        process.chdir(previousCwd)
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('maps reviewer-agent runs back to provider artifacts and recent summaries', async () => {
     const root = makeFakeBin('cr', `
 if [[ "$1" == "--version" ]]; then echo "0.0.0-test"; exit 0; fi
@@ -76,6 +108,9 @@ exit 1
       chmodSync(kilo, 0o755)
       const repo = join(root, 'repo')
       mkdirSync(repo, { recursive: true })
+      const gitInit = Bun.spawnSync(['git', '-C', repo, 'init'], { stdout: 'pipe', stderr: 'pipe' })
+      if (gitInit.exitCode !== 0) throw new Error(new TextDecoder().decode(gitInit.stderr))
+      mutableCodeReviewConfig.allowedRepoRoots = [root]
       mutableCodeReviewConfig.artifactDir = join(root, 'artifacts')
       const run = await runReviewerAgentReview({ reviewerAgentId: 'coderabbit-reviewer', repoPath: repo, mode: 'blocking', timeoutMs: 1000 })
       expect(run.blocked).toBe(true)

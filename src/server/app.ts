@@ -65,6 +65,7 @@ import { terminalRoutes } from '@/server/routes/terminal'
 import { usageRoutes } from '@/server/routes/usage'
 import { versionCheckRoutes } from '@/server/routes/version-check'
 import { reviewerAgentRoutes } from '@/server/routes/reviewer-agents'
+import { getServerRuntimeContext } from '@/server/services/server-runtime'
 
 export type AppVariables = {
   session: { id: string; userId: string; token: string }
@@ -114,12 +115,12 @@ app.use('/api/*', miniAppOriginGuard)
 app.use('/api/*', authMiddleware)
 
 // Health check (no auth required — used by Docker HEALTHCHECK and orchestrators)
-const serverStartedAt = Date.now()
 app.get('/api/health', (c) => {
+  const runtime = getServerRuntimeContext()
   return c.json({
     status: 'ok',
     version: config.version,
-    uptime: Math.floor((Date.now() - serverStartedAt) / 1000),
+    uptime: runtime.uptimeSeconds,
     timestamp: Date.now(),
   })
 })
@@ -138,8 +139,8 @@ app.get('/api/changelog', async (c) => {
 })
 
 // System info (authenticated — stats about the instance)
-const startedAt = Date.now()
 app.get('/api/info', async (c) => {
+  const runtime = getServerRuntimeContext()
   const [
     [agentCount],
     [providerCount],
@@ -165,8 +166,8 @@ app.get('/api/info', async (c) => {
     // Surfaced so the client can warn when the browser's origin doesn't match
     // the configured public URL (invites/webhooks/OAuth callbacks build on it).
     publicUrl: config.publicUrl,
-    startedAt,
-    uptimeMs: Date.now() - startedAt,
+    startedAt: runtime.startedAt.getTime(),
+    uptimeMs: runtime.uptimeMs,
     stats: {
       agents: agentCount!.value,
       providers: providerCount!.value,

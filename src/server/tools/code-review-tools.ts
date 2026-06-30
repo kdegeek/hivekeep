@@ -1,17 +1,14 @@
 import { z } from 'zod'
 import { tool } from '@/server/tools/tool-helper'
 import type { ToolRegistration } from '@/server/tools/types'
-import { isAbsolute, relative, resolve } from 'node:path'
+import { isAbsolute, resolve } from 'node:path'
 import { resolveToolEnv, resolveToolWorkspace } from '@/server/tools/workspace'
-import { checkCodeRabbitAuth, checkKiloAuth, listLocalReviewers, runLocalCodeReview } from '@/server/services/local-review'
+import { checkCodeRabbitAuth, checkKiloAuth, listLocalReviewers, runLocalCodeReview, validateReviewRepoPathEffective } from '@/server/services/local-review'
 
-function resolveRepoPath(ctx: Parameters<typeof resolveToolWorkspace>[0], repoPath?: string): string {
+async function resolveRepoPath(ctx: Parameters<typeof resolveToolWorkspace>[0], repoPath?: string): Promise<string> {
   const workspace = resolveToolWorkspace(ctx)
-  if (!repoPath) return workspace
-  const resolved = isAbsolute(repoPath) ? resolve(repoPath) : resolve(workspace, repoPath)
-  const rel = relative(workspace, resolved)
-  if (rel === '' || (!rel.startsWith('..') && rel !== '..' && !isAbsolute(rel))) return resolved
-  throw new Error('repo_path must stay inside the current tool workspace/worktree')
+  const requested = repoPath ? (isAbsolute(repoPath) ? repoPath : resolve(workspace, repoPath)) : workspace
+  return validateReviewRepoPathEffective(requested, workspace)
 }
 
 function reviewCliEnv(ctx: Parameters<typeof resolveToolEnv>[0]): Record<string, string | undefined> {
@@ -27,7 +24,7 @@ export const listLocalReviewersTool: ToolRegistration = {
   create: (ctx) => tool({
     description: 'List first-class local code review providers/agents available to Hivekeep (CodeRabbit and Kilo Code), including CLI install/auth status. Does not run a review.',
     inputSchema: z.object({ repo_path: z.string().optional().describe('Repository path. Defaults to the current tool workspace/worktree.') }),
-    execute: async ({ repo_path }) => listLocalReviewers(resolveRepoPath(ctx, repo_path), reviewCliEnv(ctx)),
+    execute: async ({ repo_path }) => listLocalReviewers(await resolveRepoPath(ctx, repo_path), reviewCliEnv(ctx)),
   }),
 }
 
@@ -42,7 +39,7 @@ export const checkCodeReviewAuthTool: ToolRegistration = {
       repo_path: z.string().optional().describe('Repository path. Defaults to the current tool workspace/worktree.'),
     }),
     execute: async ({ provider, repo_path }) => {
-      const repoPath = resolveRepoPath(ctx, repo_path)
+      const repoPath = await resolveRepoPath(ctx, repo_path)
       const env = reviewCliEnv(ctx)
       if (provider === 'coderabbit') return { reviewers: [await checkCodeRabbitAuth(repoPath, env)] }
       if (provider === 'kilo') return { reviewers: [await checkKiloAuth(repoPath, env)] }
@@ -66,7 +63,8 @@ export const runLocalCodeReviewTool: ToolRegistration = {
       timeout_ms: z.number().int().min(1000).optional().describe('Per-reviewer timeout in milliseconds.'),
     }),
     execute: async ({ provider, repo_path, base, base_commit, head, mode, light, timeout_ms }) => runLocalCodeReview({
-      repoPath: resolveRepoPath(ctx, repo_path),
+      repoPath: await resolveRepoPath(ctx, repo_path),
+      workspaceRoot: resolveToolWorkspace(ctx),
       provider,
       base,
       baseCommit: base_commit,

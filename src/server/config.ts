@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
-import { join, resolve } from 'path'
+import { delimiter, join, resolve } from 'path'
 import os from 'os'
 import { parseModelEnv } from '@/shared/model-ref'
 
@@ -145,6 +145,14 @@ function findServiceFilePath(): string | null {
     if (existsSync(path)) return path
   }
   return null
+}
+
+function parseDelimitedList(value?: string): string[] {
+  return (value ?? '')
+    .split(',')
+    .flatMap((part) => part.split(delimiter))
+    .map((part) => part.trim())
+    .filter(Boolean)
 }
 
 /** Resolve the server-wide IANA timezone for all schedule interpretation.
@@ -544,6 +552,8 @@ export const config = {
   codeReview: {
     /** Durable local-review JSON artifacts. Defaults outside Agent workspaces. */
     artifactDir: process.env.HIVEKEEP_CODE_REVIEW_DIR ?? `${dataDir}/code-reviews`,
+    /** Additional host roots whose Git repositories may be reviewed outside the current tool workspace. */
+    allowedRepoRoots: parseDelimitedList(process.env.HIVEKEEP_CODE_REVIEW_ALLOWED_ROOTS),
     /** Advisory by default: report findings without making network CLIs a hard local gate. */
     defaultMode: (process.env.HIVEKEEP_CODE_REVIEW_MODE === 'blocking' ? 'blocking' : 'advisory') as 'advisory' | 'blocking',
     defaultTimeoutMs: Number(process.env.HIVEKEEP_CODE_REVIEW_TIMEOUT_MS ?? 300_000),

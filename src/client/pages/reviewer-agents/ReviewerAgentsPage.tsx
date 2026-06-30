@@ -128,7 +128,7 @@ interface ReviewerAgent {
   checklistIds: string[]
   memoryTags: string[]
   instructionTags: string[]
-  remediationTargets: Array<{ agentSlug: string; label: string; reason: string }>
+  remediationTargets: Array<{ role?: string; agentSlug?: string; label: string; reason: string }>
   auth: ReviewProviderStatus
   recentRuns: ReviewRunSummary[]
   latestRun?: ReviewRunSummary
@@ -153,7 +153,11 @@ function isStringArray(value: unknown): value is string[] {
 }
 
 function isRemediationTarget(value: unknown): boolean {
-  return isRecord(value) && typeof value.agentSlug === 'string' && typeof value.label === 'string' && typeof value.reason === 'string'
+  return isRecord(value)
+    && (value.role === undefined || typeof value.role === 'string')
+    && (value.agentSlug === undefined || typeof value.agentSlug === 'string')
+    && typeof value.label === 'string'
+    && typeof value.reason === 'string'
 }
 
 function isReviewProviderStatus(value: unknown): value is ReviewProviderStatus {
@@ -261,7 +265,7 @@ function isReviewerAgent(value: unknown): value is ReviewerAgent {
     && Array.isArray(value.checklists) && value.checklists.every(isReviewerChecklist)
 }
 
-function hasAgentsResponse(value: unknown): value is AgentsResponse {
+export function hasAgentsResponse(value: unknown): value is AgentsResponse {
   return isRecord(value) && Array.isArray(value.agents) && value.agents.every(isReviewerAgent)
 }
 
@@ -658,7 +662,7 @@ function ReviewerAgentsAdminPage() {
                     <CardHeader><CardTitle className="text-sm">Remediation handoff</CardTitle><CardDescription>Task assignment seam for follow-up fixes.</CardDescription></CardHeader>
                     <CardContent className="space-y-2 text-sm">
                       {selectedAgent.remediationTargets.map((target) => (
-                        <div key={target.agentSlug} className="flex items-center justify-between rounded-md border border-border p-2">
+                        <div key={`${target.agentSlug ?? ''}:${target.role ?? ''}:${target.label}:${target.reason}`} className="flex items-center justify-between rounded-md border border-border p-2">
                           <div><p className="font-medium">{target.label}</p><p className="text-xs text-muted-foreground">{target.reason}</p></div>
                           <Button size="sm" variant="outline" onClick={() => toast.info('Spawn-fix flow is stubbed for follow-up; finding state tracking is active.')}><ExternalLink className="size-3" /> Stub</Button>
                         </div>
