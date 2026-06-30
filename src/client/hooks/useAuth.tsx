@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback, useContext, createContext } from 'react'
 import type { ReactNode } from 'react'
-import { api, buildApiUrl } from '@/client/lib/api'
+import {
+  api,
+  buildApiUrl,
+  clearNativeSessionToken,
+  isNativeApiRuntime,
+  setNativeSessionToken,
+  withNativeAuthTransport,
+} from '@/client/lib/api'
 import i18n, { changeAppLanguage } from '@/client/lib/i18n'
 
 interface UserProfile {
@@ -68,16 +75,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchUser])
 
   const login = async (email: string, password: string) => {
-    const response = await fetch(buildApiUrl('/auth/sign-in/email'), {
+    const response = await fetch(buildApiUrl('/auth/sign-in/email'), withNativeAuthTransport({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({ email, password }),
-    })
+    }))
 
     if (!response.ok) {
       const body = await response.json().catch(() => ({}))
       throw new Error(body?.message ?? 'Login failed')
+    }
+
+    const body = await response.json().catch(() => ({})) as { token?: unknown }
+    if (isNativeApiRuntime() && typeof body.token === 'string' && body.token) {
+      setNativeSessionToken(body.token)
     }
 
     // Verify the session was actually established — throws if not
@@ -93,26 +104,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string
     password: string
   }) => {
-    const response = await fetch(buildApiUrl('/auth/sign-up/email'), {
+    const response = await fetch(buildApiUrl('/auth/sign-up/email'), withNativeAuthTransport({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify(data),
-    })
+    }))
 
     if (!response.ok) {
       const error = await response.json()
       throw error
     }
 
+    const body = await response.json().catch(() => ({})) as { token?: unknown }
+    if (isNativeApiRuntime() && typeof body.token === 'string' && body.token) {
+      setNativeSessionToken(body.token)
+    }
+
     await fetchUser()
   }
 
   const logout = async () => {
-    await fetch(buildApiUrl('/auth/sign-out'), {
+    await fetch(buildApiUrl('/auth/sign-out'), withNativeAuthTransport({
       method: 'POST',
-      credentials: 'include',
-    })
+    }))
+    if (isNativeApiRuntime()) clearNativeSessionToken()
     window.location.href = '/'
   }
 
