@@ -4,6 +4,7 @@ import { APIError } from 'better-auth/api'
 import { db } from '@/server/db/index'
 import * as schema from '@/server/db/schema'
 import { config } from '@/server/config'
+import { trustedOrigins } from '@/server/auth/origins'
 
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_BASE_URL ?? config.publicUrl,
@@ -33,13 +34,7 @@ export const auth = betterAuth({
       maxAge: 5 * 60, // 5 minutes
     },
   },
-  trustedOrigins: process.env.TRUSTED_ORIGINS
-    ? [...process.env.TRUSTED_ORIGINS.split(',').map((origin) => origin.trim()), 'capacitor://localhost', 'http://localhost']
-    : [
-        config.publicUrl, 'capacitor://localhost', 'http://localhost',
-        'http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000',
-        'http://127.0.0.1:5173', 'http://127.0.0.1:5174', 'http://127.0.0.1:3000',
-      ],
+  trustedOrigins,
   advanced: {
     defaultCookieAttributes: {
       sameSite: 'none',

@@ -1,6 +1,6 @@
 import { describe, it, expect, mock, beforeEach } from 'bun:test'
 import { Hono } from 'hono'
-import { fullMockSchema, fullMockDrizzleOrm } from '../../test-helpers'
+import { fullMockConfig, fullMockSchema, fullMockDrizzleOrm } from '../../test-helpers'
 
 // We test the middleware's path-skipping logic by mounting it in a real Hono app
 // and sending test requests. The auth.api.getSession is mocked to control behavior.
@@ -34,6 +34,7 @@ mock.module('@/server/db/index', () => ({
 }))
 
 mock.module('@/server/db/schema', () => ({ ...fullMockSchema }))
+mock.module('@/server/config', () => ({ config: { ...fullMockConfig, publicUrl: 'https://hivekeep.example.test' } }))
 mock.module('drizzle-orm', () => ({ ...fullMockDrizzleOrm }))
 
 // ─── Import after mocking ────────────────────────────────────────────────────
@@ -203,6 +204,56 @@ describe('authMiddleware', () => {
       // Verify headers were passed
       const callArgs = mockGetSession.mock.calls[0] as [{ headers: Headers }]
       expect(callArgs[0].headers).toBeDefined()
+    })
+
+    it('blocks unsafe cross-site cookie requests from untrusted origins before session lookup', async () => {
+      const res = await app.request('/api/agents', {
+        method: 'POST',
+        headers: {
+          origin: 'https://evil.example',
+          cookie: 'better-auth.session_token=test-token',
+        },
+      })
+      expect(res.status).toBe(403)
+      const body = await res.json()
+      expect(body.error.code).toBe('CSRF_BLOCKED')
+      expect(mockGetSession).not.toHaveBeenCalled()
+    })
+
+    it('allows trusted mobile origins to use cookie credentials', async () => {
+      mockGetSession = mock(() => Promise.resolve({
+        session: { id: 'sess-1', userId: 'user-1' },
+        user: { id: 'user-1', name: 'Test User', email: 'test@example.com' },
+      }))
+      mockDbGet = mock(() => Promise.resolve({ userId: 'user-1' }))
+
+      const res = await app.request('/api/agents', {
+        method: 'POST',
+        headers: {
+          origin: 'http://localhost',
+          cookie: 'better-auth.session_token=test-token',
+        },
+      })
+      expect(res.status).toBe(200)
+      expect(mockGetSession).toHaveBeenCalledTimes(1)
+    })
+
+    it('allows bearer-auth requests from untrusted origins without relying on cookies', async () => {
+      mockGetSession = mock(() => Promise.resolve({
+        session: { id: 'sess-1', userId: 'user-1' },
+        user: { id: 'user-1', name: 'Test User', email: 'test@example.com' },
+      }))
+      mockDbGet = mock(() => Promise.resolve({ userId: 'user-1' }))
+
+      const res = await app.request('/api/agents', {
+        method: 'POST',
+        headers: {
+          origin: 'https://third-party.example',
+          authorization: 'Bearer test-token',
+        },
+      })
+      expect(res.status).toBe(200)
+      expect(mockGetSession).toHaveBeenCalledTimes(1)
     })
   })
 })
