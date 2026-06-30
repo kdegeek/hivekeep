@@ -4,8 +4,8 @@
   "version": "1.9.0",
   "identifier": "com.marlburrow.hivekeep",
   "build": {
-    "beforeDevCommand": "npm run dev:client",
-    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run dev:client -- --mode desktop",
+    "beforeBuildCommand": "npm run build -- --mode desktop",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../dist/client"
   },
@@ -16,7 +16,10 @@
         "title": "Hivekeep",
         "width": 1280,
         "height": 800,
-        "resizable": true
+        "minWidth": 960,
+        "minHeight": 640,
+        "resizable": true,
+        "decorations": true
       }
     ],
     "security": {
