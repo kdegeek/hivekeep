@@ -3619,6 +3619,7 @@
         "rename": "Rinomina",
         "delete": "Elimina",
         "noPreview": "Nessuna anteprima disponibile. Scarica il file per aprirlo.",
+        "previewFailed": "Impossibile caricare l'anteprima. Scarica il file per aprirlo.",
         "renameTitle": "Rinomina allegato",
         "renameDescription": "Scegli un nuovo nome file. Il contenuto del file non viene modificato.",
         "renamePlaceholder": "Nuovo nome file",

@@ -3619,6 +3619,7 @@
         "rename": "Renomear",
         "delete": "Excluir",
         "noPreview": "Visualização indisponível. Baixe o arquivo para abri-lo.",
+        "previewFailed": "Não foi possível carregar a visualização. Baixe o arquivo para abri-lo.",
         "renameTitle": "Renomear anexo",
         "renameDescription": "Escolha um novo nome de arquivo. O conteúdo do arquivo não é modificado.",
         "renamePlaceholder": "Novo nome de arquivo",

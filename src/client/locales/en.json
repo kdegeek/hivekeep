@@ -3638,6 +3638,7 @@
         "rename": "Rename",
         "delete": "Delete",
         "noPreview": "No preview available. Download the file to open it.",
+        "previewFailed": "Could not load the preview. Download the file to open it.",
         "renameTitle": "Rename attachment",
         "renameDescription": "Choose a new filename. The file content is not modified.",
         "renamePlaceholder": "New filename",

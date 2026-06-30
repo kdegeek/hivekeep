@@ -75,10 +75,13 @@ jobs:
       - name: Build Tauri Windows bundle
         run: bunx tauri build --bundles msi,nsis
         env:
-          # Require a signed bundle on push/workflow_dispatch (where secrets are
-          # available); PR builds (incl. forks without secret access) may stay
-          # unsigned so the build still passes without leaking signing material.
-          WINDOWS_SIGNING_REQUIRED: ${{ github.event_name != 'pull_request' }}
+          # Enforce signing only when a signing certificate is actually
+          # configured (and never on PRs, incl. forks without secret access, so
+          # those builds stay unsigned without leaking signing material). Gating
+          # on the cert secret keeps signing strictly required once a cert is
+          # present, while avoiding an impossible "require signing with no
+          # certificate" state that would fail every push to main.
+          WINDOWS_SIGNING_REQUIRED: ${{ github.event_name != 'pull_request' && (secrets.WINDOWS_SIGNING_CERTIFICATE_PFX_BASE64 != '' || secrets.WINDOWS_SIGNING_CERTIFICATE_THUMBPRINT != '') }}
           WINDOWS_SIGNING_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PFX_BASE64 }}
           WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
           WINDOWS_SIGNING_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_THUMBPRINT }}

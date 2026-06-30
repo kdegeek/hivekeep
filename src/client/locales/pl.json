@@ -3647,6 +3647,7 @@
         "rename": "Zmień nazwę",
         "delete": "Usuń",
         "noPreview": "Podgląd niedostępny. Pobierz plik, aby go otworzyć.",
+        "previewFailed": "Nie udało się załadować podglądu. Pobierz plik, aby go otworzyć.",
         "renameTitle": "Zmień nazwę załącznika",
         "renameDescription": "Wybierz nową nazwę pliku. Zawartość pliku nie zostanie zmieniona.",
         "renamePlaceholder": "Nowa nazwa pliku",

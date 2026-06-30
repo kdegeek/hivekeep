@@ -93,31 +93,59 @@ async function fetchAuthedAssetBlob(apiUrl: string): Promise<Blob> {
  * runtime, an API-served URL is fetched with bearer auth and exposed as an
  * object URL, which is revoked on cleanup / when the input changes.
  */
-function useAuthedAssetUrl(url: string | null | undefined): string | null {
-  const [resolved, setResolved] = useState<string | null>(
-    url && !needsNativeAssetAuth(url) ? url : null,
-  )
+type AuthedAssetStatus = 'idle' | 'loading' | 'ready' | 'error'
+
+interface AuthedAsset {
+  url: string | null
+  status: AuthedAssetStatus
+}
+
+/**
+ * Resolve an asset URL for rendering, fetching it with native bearer auth into
+ * an object URL when the native runtime requires it (pass-through on web).
+ *
+ * Returns the resolved URL alongside an explicit status so callers can tell a
+ * still-loading fetch apart from a failed one (a 401/404/network error). A
+ * `null` URL with `status: 'error'` must surface a failure state rather than an
+ * indefinite loading spinner.
+ */
+function useAuthedAssetUrl(url: string | null | undefined): AuthedAsset {
+  const initialAsset = (): AuthedAsset =>
+    !!url && !needsNativeAssetAuth(url)
+      ? { url: url as string, status: 'ready' }
+      : { url: null, status: url ? 'loading' : 'idle' }
+
+  const [asset, setAsset] = useState<AuthedAsset>(initialAsset)
+
+  // Adjust state during render when the `url` prop changes so the first render
+  // with a new URL never returns the previous asset (which would briefly show
+  // the old preview as "ready" before the effect resets it).
+  const [prevUrl, setPrevUrl] = useState(url)
+  if (url !== prevUrl) {
+    setPrevUrl(url)
+    setAsset(initialAsset())
+  }
 
   useEffect(() => {
     if (!url) {
-      setResolved(null)
+      setAsset({ url: null, status: 'idle' })
       return
     }
     if (!needsNativeAssetAuth(url)) {
-      setResolved(url)
+      setAsset({ url, status: 'ready' })
       return
     }
     let cancelled = false
     let objectUrl: string | null = null
-    setResolved(null)
+    setAsset({ url: null, status: 'loading' })
     fetchAuthedAssetBlob(url)
       .then((blob) => {
         if (cancelled) return
         objectUrl = URL.createObjectURL(blob)
-        setResolved(objectUrl)
+        setAsset({ url: objectUrl, status: 'ready' })
       })
       .catch(() => {
-        if (!cancelled) setResolved(null)
+        if (!cancelled) setAsset({ url: null, status: 'error' })
       })
     return () => {
       cancelled = true
@@ -125,7 +153,7 @@ function useAuthedAssetUrl(url: string | null | undefined): string | null {
     }
   }, [url])
 
-  return resolved
+  return asset
 }
 
 /**
@@ -421,7 +449,7 @@ function AttachmentRow({ att, onPreview, onRename, onDelete }: AttachmentRowProp
   const { t } = useTranslation()
   const Icon = attachmentIcon(att)
   const isImage = att.mimeType.startsWith('image/')
-  const thumbnailUrl = useAuthedAssetUrl(isImage ? att.url : null)
+  const { url: thumbnailUrl } = useAuthedAssetUrl(isImage ? att.url : null)
 
   async function handleDownload() {
     try {
@@ -538,7 +566,7 @@ function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPreviewDialo
   // Resolve the binary-preview URL with native bearer auth when required so the
   // `<img>`/`<iframe>` load works on the native runtime (object URL on native,
   // pass-through on web).
-  const previewUrl = useAuthedAssetUrl(
+  const { url: previewUrl, status: previewStatus } = useAuthedAssetUrl(
     attachment && (isImage || isPdf) ? attachment.url : null,
   )
 
@@ -602,7 +630,9 @@ function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPreviewDialo
               />
             ) : (
               <div className="flex h-40 items-center justify-center p-4 text-center text-xs text-muted-foreground">
-                {t('common.loading')}
+                {previewStatus === 'error'
+                  ? t('projects.ticket.attachments.previewFailed')
+                  : t('common.loading')}
               </div>
             ))}
           {isPdf &&
@@ -614,7 +644,9 @@ function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPreviewDialo
               />
             ) : (
               <div className="flex h-40 items-center justify-center p-4 text-center text-xs text-muted-foreground">
-                {t('common.loading')}
+                {previewStatus === 'error'
+                  ? t('projects.ticket.attachments.previewFailed')
+                  : t('common.loading')}
               </div>
             ))}
           {isText && (
