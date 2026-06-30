@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 
 const API_PATH_PREFIX = '/api'
 export const MOBILE_SERVER_URL_STORAGE_KEY = 'hivekeep:serverUrl'
+export const MOBILE_AUTH_TOKEN_STORAGE_KEY = 'hivekeep:mobileAuthToken'
 
 export function isCapacitorRuntime(): boolean {
   return typeof window !== 'undefined' && window.location.protocol === 'capacitor:'
@@ -70,13 +71,34 @@ export function clearHivekeepServerUrl(): void {
   localStorage.removeItem(MOBILE_SERVER_URL_STORAGE_KEY)
 }
 
+export function getMobileAuthToken(): string | null {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    return localStorage.getItem(MOBILE_AUTH_TOKEN_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function setMobileAuthToken(token: string): void {
+  if (typeof localStorage === 'undefined') throw new Error('Auth token storage is unavailable')
+  // TODO(mobile): replace localStorage with Capacitor Preferences or a secure
+  // storage plugin once one is added to the mobile shell dependencies.
+  localStorage.setItem(MOBILE_AUTH_TOKEN_STORAGE_KEY, token)
+}
+
+export function clearMobileAuthToken(): void {
+  if (typeof localStorage === 'undefined') return
+  localStorage.removeItem(MOBILE_AUTH_TOKEN_STORAGE_KEY)
+}
+
 export async function validateHivekeepServerConnection(serverUrl: string): Promise<string> {
   const normalized = normalizeHivekeepServerUrl(serverUrl)
   const controller = new AbortController()
   const timeoutId = window.setTimeout(() => controller.abort(), 10_000)
   try {
     const response = await fetch(`${normalized}${API_PATH_PREFIX}/health`, {
-      credentials: 'include',
+      credentials: isMobileApiRuntime() ? 'omit' : 'include',
       headers: { Accept: 'application/json' },
       signal: controller.signal,
     })
@@ -174,14 +196,23 @@ export function toastError(err: unknown): void {
 
 // ─── Core fetch wrapper ───────────────────────────────────────────────────────
 
+function buildRequestHeaders(headers?: HeadersInit): Headers {
+  const requestHeaders = new Headers(headers)
+  if (!requestHeaders.has('Content-Type')) requestHeaders.set('Content-Type', 'application/json')
+
+  const token = isMobileApiRuntime() ? getMobileAuthToken() : null
+  if (token && !requestHeaders.has('Authorization')) {
+    requestHeaders.set('Authorization', `Bearer ${token}`)
+  }
+
+  return requestHeaders
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(buildApiUrl(path), {
     ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    credentials: isMobileApiRuntime() ? 'omit' : 'include',
+    headers: buildRequestHeaders(options?.headers),
   })
 
   if (!response.ok) {

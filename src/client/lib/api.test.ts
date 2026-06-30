@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, mock, type Mock } from 'bun:test'
-import { ApiRequestError, getErrorMessage, api } from './api'
+import {
+  ApiRequestError,
+  MOBILE_AUTH_TOKEN_STORAGE_KEY,
+  MOBILE_SERVER_URL_STORAGE_KEY,
+  api,
+  getErrorMessage,
+} from './api'
 
 // ─── getErrorMessage ──────────────────────────────────────────────────────────
 
@@ -95,11 +101,15 @@ describe('ApiRequestError', () => {
 
 describe('api', () => {
   const originalFetch = globalThis.fetch
+  const originalWindow = globalThis.window
+  const originalLocalStorage = globalThis.localStorage
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let fetchMock: Mock<any>
 
   afterEach(() => {
     globalThis.fetch = originalFetch
+    globalThis.window = originalWindow
+    globalThis.localStorage = originalLocalStorage
   })
 
   function setupFetchMock(response: {
@@ -226,6 +236,32 @@ describe('api', () => {
     await api.get('/test')
 
     const call = fetchMock.mock.calls[0]!
-    expect((call[1] as RequestInit)?.headers).toHaveProperty('Content-Type', 'application/json')
+    const headers = (call[1] as RequestInit).headers as Headers
+    expect(headers.get('Content-Type')).toBe('application/json')
+  })
+
+  it('uses mobile bearer token without cookies in Capacitor runtime', async () => {
+    setupFetchMock({ json: () => Promise.resolve({ ok: true }) })
+    const store = new Map<string, string>([
+      [MOBILE_SERVER_URL_STORAGE_KEY, 'https://hivekeep.example.test'],
+      [MOBILE_AUTH_TOKEN_STORAGE_KEY, 'mobile-session-token'],
+    ])
+    globalThis.window = { location: { protocol: 'capacitor:' } } as Window & typeof globalThis
+    globalThis.localStorage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => { store.set(key, value) },
+      removeItem: (key: string) => { store.delete(key) },
+      clear: () => { store.clear() },
+      key: (index: number) => Array.from(store.keys())[index] ?? null,
+      get length() { return store.size },
+    }
+
+    await api.get('/me')
+
+    const call = fetchMock.mock.calls[0]!
+    expect(call[0]).toBe('https://hivekeep.example.test/api/me')
+    expect((call[1] as RequestInit)?.credentials).toBe('omit')
+    const headers = (call[1] as RequestInit).headers as Headers
+    expect(headers.get('Authorization')).toBe('Bearer mobile-session-token')
   })
 })
