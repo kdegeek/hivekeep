@@ -6,6 +6,13 @@ const MOBILE_ORIGINS = [
   'https://localhost',
 ]
 
+const DESKTOP_ORIGINS = [
+  // Tauri v2 uses tauri://localhost on macOS/Linux/iOS and
+  // http://tauri.localhost on Windows/Android for bundled assets.
+  'tauri://localhost',
+  'http://tauri.localhost',
+]
+
 const DEV_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:5174',
@@ -24,8 +31,8 @@ function uniqueOrigins(origins: Array<string | undefined>) {
 }
 
 export const trustedOrigins = process.env.TRUSTED_ORIGINS
-  ? uniqueOrigins([...parseOrigins(process.env.TRUSTED_ORIGINS), ...MOBILE_ORIGINS])
-  : uniqueOrigins([config.publicUrl, ...MOBILE_ORIGINS, ...DEV_ORIGINS])
+  ? uniqueOrigins([...parseOrigins(process.env.TRUSTED_ORIGINS), ...MOBILE_ORIGINS, ...DESKTOP_ORIGINS])
+  : uniqueOrigins([config.publicUrl, ...MOBILE_ORIGINS, ...DESKTOP_ORIGINS, ...DEV_ORIGINS])
 
 export function isTrustedOrigin(origin: string | undefined) {
   return Boolean(origin && trustedOrigins.includes(origin))
