@@ -36,7 +36,12 @@ import {
 } from '@/client/components/ui/dialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/client/components/ui/avatar'
 import { cn } from '@/client/lib/utils'
-import { buildApiUrl, getErrorMessage, withNativeAuthTransport } from '@/client/lib/api'
+import {
+  buildApiUrl,
+  getErrorMessage,
+  isNativeApiRuntime,
+  withNativeAuthTransport,
+} from '@/client/lib/api'
 import { toast } from 'sonner'
 import { formatRelativeTime } from '@/client/lib/time'
 import { useTicketAttachments } from '@/client/hooks/useTicketAttachments'
@@ -61,6 +66,92 @@ function formatBytes(size: number): string {
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
   if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`
   return `${(size / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
+
+/**
+ * Whether a stored attachment URL must be fetched with the native bearer
+ * transport. On the native (Tauri/Capacitor) runtime, API-served assets sit
+ * behind bearer auth, so a bare `<img src>`/`<iframe src>`/`<a href>` (which
+ * cannot attach the `Authorization` header) would 401. On the web the browser's
+ * session cookie authenticates those direct requests, so no rewrite is needed.
+ */
+function needsNativeAssetAuth(url: string | null | undefined): boolean {
+  return isNativeApiRuntime() && !!url && url.startsWith('/api/')
+}
+
+/** Fetch an API-served asset with the native bearer transport. */
+async function fetchAuthedAssetBlob(apiUrl: string): Promise<Blob> {
+  const url = buildApiUrl(apiUrl.slice('/api'.length))
+  const response = await fetch(url, withNativeAuthTransport())
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  return response.blob()
+}
+
+/**
+ * Resolve a displayable URL for an attachment. On the web (or for already
+ * absolute/blob URLs) the original URL is returned unchanged. On the native
+ * runtime, an API-served URL is fetched with bearer auth and exposed as an
+ * object URL, which is revoked on cleanup / when the input changes.
+ */
+function useAuthedAssetUrl(url: string | null | undefined): string | null {
+  const [resolved, setResolved] = useState<string | null>(
+    url && !needsNativeAssetAuth(url) ? url : null,
+  )
+
+  useEffect(() => {
+    if (!url) {
+      setResolved(null)
+      return
+    }
+    if (!needsNativeAssetAuth(url)) {
+      setResolved(url)
+      return
+    }
+    let cancelled = false
+    let objectUrl: string | null = null
+    setResolved(null)
+    fetchAuthedAssetBlob(url)
+      .then((blob) => {
+        if (cancelled) return
+        objectUrl = URL.createObjectURL(blob)
+        setResolved(objectUrl)
+      })
+      .catch(() => {
+        if (!cancelled) setResolved(null)
+      })
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [url])
+
+  return resolved
+}
+
+/**
+ * Trigger a browser download for an attachment. On the web this follows the
+ * server's `?download=1` URL directly (cookie-authenticated). On the native
+ * runtime it fetches the asset with bearer auth and saves the resulting blob.
+ */
+async function downloadAttachment(url: string, name: string): Promise<void> {
+  if (!needsNativeAssetAuth(url)) {
+    const a = document.createElement('a')
+    a.href = `${url}?download=1`
+    a.download = name
+    a.rel = 'noopener'
+    a.click()
+    return
+  }
+  const blob = await fetchAuthedAssetBlob(url)
+  const objectUrl = URL.createObjectURL(blob)
+  try {
+    const a = document.createElement('a')
+    a.href = objectUrl
+    a.download = name
+    a.click()
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
 }
 
 export function TicketAttachmentsSection({ ticketId }: TicketAttachmentsSectionProps) {
@@ -236,96 +327,18 @@ export function TicketAttachmentsSection({ ticketId }: TicketAttachmentsSectionP
 
       {attachments.length > 0 && (
         <ul className="space-y-1">
-          {attachments.map((att) => {
-            const Icon = attachmentIcon(att)
-            const isImage = att.mimeType.startsWith('image/')
-            return (
-              <li
-                key={att.id}
-                className="group flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5"
-              >
-                {isImage ? (
-                  <img
-                    src={att.url}
-                    alt={att.name}
-                    className="size-8 shrink-0 rounded object-cover ring-1 ring-border"
-                    loading="lazy"
-                  />
-                ) : (
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
-                    <Icon className="size-4" />
-                  </span>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1">
-                    <p className="truncate text-xs font-medium" title={att.name}>
-                      {att.name}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                    <span>{formatBytes(att.size)}</span>
-                    <span>·</span>
-                    <span>{formatRelativeTime(att.createdAt)}</span>
-                    {att.uploadedBy && (
-                      <>
-                        <span>·</span>
-                        <span className="inline-flex items-center gap-1">
-                          <Avatar className="size-3.5">
-                            {att.uploadedBy.avatarUrl && (
-                              <AvatarImage src={att.uploadedBy.avatarUrl} alt={att.uploadedBy.name} />
-                            )}
-                            <AvatarFallback className="text-[7px]">
-                              {att.uploadedBy.name.slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span>{att.uploadedBy.name}</span>
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-0.5 opacity-70 group-hover:opacity-100">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-6"
-                    onClick={() => setPreviewAttachment(att)}
-                    title={t('projects.ticket.attachments.preview')}
-                  >
-                    <Eye className="size-3.5" />
-                  </Button>
-                  <a
-                    href={`${att.url}?download=1`}
-                    className="inline-flex size-6 items-center justify-center rounded-md text-foreground/70 hover:bg-accent hover:text-foreground"
-                    title={t('projects.ticket.attachments.download')}
-                  >
-                    <Download className="size-3.5" />
-                  </a>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-6"
-                    onClick={() => {
-                      setRenameTarget(att)
-                      setRenameValue(att.name)
-                    }}
-                    title={t('projects.ticket.attachments.rename')}
-                  >
-                    <Pencil className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-6 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    onClick={() => setDeleteTarget(att)}
-                    title={t('projects.ticket.attachments.delete')}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </div>
-              </li>
-            )
-          })}
+          {attachments.map((att) => (
+            <AttachmentRow
+              key={att.id}
+              att={att}
+              onPreview={() => setPreviewAttachment(att)}
+              onRename={() => {
+                setRenameTarget(att)
+                setRenameValue(att.name)
+              }}
+              onDelete={() => setDeleteTarget(att)}
+            />
+          ))}
         </ul>
       )}
 
@@ -397,6 +410,111 @@ export function TicketAttachmentsSection({ ticketId }: TicketAttachmentsSectionP
   )
 }
 
+interface AttachmentRowProps {
+  att: TicketAttachment
+  onPreview: () => void
+  onRename: () => void
+  onDelete: () => void
+}
+
+function AttachmentRow({ att, onPreview, onRename, onDelete }: AttachmentRowProps) {
+  const { t } = useTranslation()
+  const Icon = attachmentIcon(att)
+  const isImage = att.mimeType.startsWith('image/')
+  const thumbnailUrl = useAuthedAssetUrl(isImage ? att.url : null)
+
+  async function handleDownload() {
+    try {
+      await downloadAttachment(att.url, att.name)
+    } catch (err) {
+      toast.error(getErrorMessage(err))
+    }
+  }
+
+  return (
+    <li className="group flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5">
+      {isImage && thumbnailUrl ? (
+        <img
+          src={thumbnailUrl}
+          alt={att.name}
+          className="size-8 shrink-0 rounded object-cover ring-1 ring-border"
+          loading="lazy"
+        />
+      ) : (
+        <span className="flex size-8 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
+          <Icon className="size-4" />
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1">
+          <p className="truncate text-xs font-medium" title={att.name}>
+            {att.name}
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <span>{formatBytes(att.size)}</span>
+          <span>·</span>
+          <span>{formatRelativeTime(att.createdAt)}</span>
+          {att.uploadedBy && (
+            <>
+              <span>·</span>
+              <span className="inline-flex items-center gap-1">
+                <Avatar className="size-3.5">
+                  {att.uploadedBy.avatarUrl && (
+                    <AvatarImage src={att.uploadedBy.avatarUrl} alt={att.uploadedBy.name} />
+                  )}
+                  <AvatarFallback className="text-[7px]">
+                    {att.uploadedBy.name.slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <span>{att.uploadedBy.name}</span>
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-0.5 opacity-70 group-hover:opacity-100">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6"
+          onClick={onPreview}
+          title={t('projects.ticket.attachments.preview')}
+        >
+          <Eye className="size-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6 text-foreground/70 hover:text-foreground"
+          onClick={handleDownload}
+          title={t('projects.ticket.attachments.download')}
+        >
+          <Download className="size-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6"
+          onClick={onRename}
+          title={t('projects.ticket.attachments.rename')}
+        >
+          <Pencil className="size-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          onClick={onDelete}
+          title={t('projects.ticket.attachments.delete')}
+        >
+          <Trash2 className="size-3.5" />
+        </Button>
+      </div>
+    </li>
+  )
+}
+
 interface AttachmentPreviewDialogProps {
   attachment: TicketAttachment | null
   onClose: () => void
@@ -408,12 +526,21 @@ function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPreviewDialo
   const [textLoading, setTextLoading] = useState(false)
   const [textError, setTextError] = useState<string | null>(null)
 
+  const isImage = !!attachment && attachment.mimeType.startsWith('image/')
+  const isPdf = !!attachment && attachment.mimeType === 'application/pdf'
   const isText =
     !!attachment &&
     (attachment.mimeType.startsWith('text/') ||
       attachment.mimeType === 'application/json' ||
       attachment.mimeType === 'application/xml' ||
       attachment.mimeType === 'application/x-yaml')
+
+  // Resolve the binary-preview URL with native bearer auth when required so the
+  // `<img>`/`<iframe>` load works on the native runtime (object URL on native,
+  // pass-through on web).
+  const previewUrl = useAuthedAssetUrl(
+    attachment && (isImage || isPdf) ? attachment.url : null,
+  )
 
   // Lazily fetch text content when the preview is for a text-y mime.
   useEffect(() => {
@@ -456,9 +583,6 @@ function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPreviewDialo
 
   if (!attachment) return null
 
-  const isImage = attachment.mimeType.startsWith('image/')
-  const isPdf = attachment.mimeType === 'application/pdf'
-
   return (
     <Dialog open={!!attachment} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[90vh] sm:max-w-3xl">
@@ -469,20 +593,30 @@ function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPreviewDialo
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[65vh] min-h-[200px] overflow-auto rounded-md border border-border bg-muted/30">
-          {isImage && (
-            <img
-              src={attachment.url}
-              alt={attachment.name}
-              className="mx-auto max-h-[65vh] object-contain"
-            />
-          )}
-          {isPdf && (
-            <iframe
-              src={attachment.url}
-              title={attachment.name}
-              className="h-[65vh] w-full"
-            />
-          )}
+          {isImage &&
+            (previewUrl ? (
+              <img
+                src={previewUrl}
+                alt={attachment.name}
+                className="mx-auto max-h-[65vh] object-contain"
+              />
+            ) : (
+              <div className="flex h-40 items-center justify-center p-4 text-center text-xs text-muted-foreground">
+                {t('common.loading')}
+              </div>
+            ))}
+          {isPdf &&
+            (previewUrl ? (
+              <iframe
+                src={previewUrl}
+                title={attachment.name}
+                className="h-[65vh] w-full"
+              />
+            ) : (
+              <div className="flex h-40 items-center justify-center p-4 text-center text-xs text-muted-foreground">
+                {t('common.loading')}
+              </div>
+            ))}
           {isText && (
             <pre className="m-0 max-h-[65vh] whitespace-pre-wrap break-words p-3 text-xs">
               {textLoading
@@ -499,13 +633,21 @@ function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPreviewDialo
           )}
         </div>
         <DialogFooter>
-          <a
-            href={`${attachment.url}?download=1`}
-            className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-accent"
+          <Button
+            variant="outline"
+            onClick={() => {
+              void (async () => {
+                try {
+                  await downloadAttachment(attachment.url, attachment.name)
+                } catch (err) {
+                  toast.error(getErrorMessage(err))
+                }
+              })()
+            }}
           >
             <Download className="mr-1 size-4" />
             {t('projects.ticket.attachments.download')}
-          </a>
+          </Button>
           <Button onClick={() => handleOpenChange(false)}>{t('common.close')}</Button>
         </DialogFooter>
       </DialogContent>

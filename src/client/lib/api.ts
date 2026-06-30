@@ -125,16 +125,42 @@ export function getNativeSessionToken(): string | null {
   }
 }
 
+// Listeners notified whenever the native bearer token changes (set or cleared).
+// useSSE registers here so it can tear down and re-open the native SSE stream
+// with the new token: the live fetch embeds the Authorization header at connect
+// time, so a token change on an open stream would otherwise keep using the
+// stale header. Kept as a plain callback registry (rather than importing useSSE)
+// to avoid a circular import, since useSSE imports this module.
+type NativeSessionTokenListener = () => void
+const nativeSessionTokenListeners = new Set<NativeSessionTokenListener>()
+
+export function onNativeSessionTokenChange(listener: NativeSessionTokenListener): () => void {
+  nativeSessionTokenListeners.add(listener)
+  return () => nativeSessionTokenListeners.delete(listener)
+}
+
+function notifyNativeSessionTokenChange(): void {
+  for (const listener of nativeSessionTokenListeners) {
+    try {
+      listener()
+    } catch {
+      // Ignore listener errors
+    }
+  }
+}
+
 export function setNativeSessionToken(token: string): void {
   if (typeof localStorage === 'undefined') throw new Error('Auth token storage is unavailable')
   // TODO(native): replace localStorage with Capacitor Preferences or a secure
   // storage plugin once one is added to the native shell dependencies.
   localStorage.setItem(MOBILE_AUTH_TOKEN_STORAGE_KEY, token)
+  notifyNativeSessionTokenChange()
 }
 
 export function clearNativeSessionToken(): void {
   if (typeof localStorage === 'undefined') return
   localStorage.removeItem(MOBILE_AUTH_TOKEN_STORAGE_KEY)
+  notifyNativeSessionTokenChange()
 }
 
 function toHeaderRecord(headers: Headers): Record<string, string> {

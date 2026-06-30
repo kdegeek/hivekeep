@@ -75,6 +75,10 @@ jobs:
       - name: Build Tauri Windows bundle
         run: bunx tauri build --bundles msi,nsis
         env:
+          # Require a signed bundle on push/workflow_dispatch (where secrets are
+          # available); PR builds (incl. forks without secret access) may stay
+          # unsigned so the build still passes without leaking signing material.
+          WINDOWS_SIGNING_REQUIRED: ${{ github.event_name != 'pull_request' }}
           WINDOWS_SIGNING_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PFX_BASE64 }}
           WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
           WINDOWS_SIGNING_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_THUMBPRINT }}

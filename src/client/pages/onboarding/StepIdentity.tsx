@@ -235,10 +235,14 @@ export function StepIdentity({ onComplete }: StepIdentityProps) {
       if (avatarFile) {
         const formData = new FormData()
         formData.append('file', avatarFile)
-        await fetch(buildApiUrl('/me/avatar'), withNativeAuthTransport({
+        const avatarRes = await fetch(buildApiUrl('/me/avatar'), withNativeAuthTransport({
           method: 'POST',
           body: formData,
         }))
+        if (!avatarRes.ok) {
+          const data = await avatarRes.json().catch(() => ({}))
+          throw new Error(data?.error?.message || 'Avatar upload failed')
+        }
       }
 
       onComplete()

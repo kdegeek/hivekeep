@@ -31,6 +31,9 @@ npm_token
 *.p12
 *.cer
 *.crt
+*.key
+*.pem
+signing.env
 
 # caches
 .eslintcache

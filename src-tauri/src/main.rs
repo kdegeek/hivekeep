@@ -64,17 +64,13 @@ fn main() {
                     }
                 }
             }
-            MAIN_WINDOW_LABEL => match event {
-                WindowEvent::CloseRequested { api, .. } => {
+            MAIN_WINDOW_LABEL => {
+                if let WindowEvent::CloseRequested { api, .. } = event {
                     save_main_window_placement(window);
                     api.prevent_close();
                     let _ = window.hide();
                 }
-                WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
-                    save_main_window_placement(window);
-                }
-                _ => {}
-            },
+            }
             _ => {}
         })
         .run(tauri::generate_context!())
@@ -117,7 +113,12 @@ fn build_tray_icon(app: &tauri::App) -> tauri::Result<()> {
             OPEN_MAIN_MENU_ID => open_main_window(app),
             QUICK_PANEL_MENU_ID => toggle_quick_panel_at_cursor(app),
             SETTINGS_MENU_ID => open_settings(app),
-            QUIT_MENU_ID => app.exit(0),
+            QUIT_MENU_ID => {
+                if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+                    save_main_window_placement(&window.as_ref().window());
+                }
+                app.exit(0);
+            }
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -206,8 +207,22 @@ fn anchored_panel_position(
             y = anchor.y + margin;
         }
 
-        x = x.clamp(left + margin, right - QUICK_PANEL_WIDTH - margin);
-        y = y.clamp(top + margin, bottom - QUICK_PANEL_HEIGHT - margin);
+        // Guard against work areas smaller than the panel: clamp() panics when min > max.
+        let min_x = left + margin;
+        let max_x = right - QUICK_PANEL_WIDTH - margin;
+        if min_x <= max_x {
+            x = x.clamp(min_x, max_x);
+        } else {
+            x = min_x;
+        }
+
+        let min_y = top + margin;
+        let max_y = bottom - QUICK_PANEL_HEIGHT - margin;
+        if min_y <= max_y {
+            y = y.clamp(min_y, max_y);
+        } else {
+            y = min_y;
+        }
     }
 
     PhysicalPosition::new(x.round() as i32, y.round() as i32)
@@ -250,6 +265,12 @@ fn restore_main_window_placement(app: &AppHandle, window: &WebviewWindow) {
 }
 
 fn save_main_window_placement(window: &Window) {
+    // Skip saving while minimized/maximized: those report off-screen coordinates
+    // (e.g. (-32000, -32000)) or maximized dimensions that would corrupt the
+    // restored default placement on next launch.
+    if window.is_minimized().unwrap_or(false) || window.is_maximized().unwrap_or(false) {
+        return;
+    }
     let Ok(position) = window.outer_position() else {
         return;
     };
@@ -282,10 +303,38 @@ fn load_main_window_placement(app: &AppHandle) -> Option<MainWindowPlacement> {
         height: parts.next()?.parse().ok()?,
     };
 
-    (parts.next().is_none()
-        && placement.width >= MIN_MAIN_WINDOW_WIDTH
-        && placement.height >= MIN_MAIN_WINDOW_HEIGHT)
-        .then_some(placement)
+    if parts.next().is_some()
+        || placement.width < MIN_MAIN_WINDOW_WIDTH
+        || placement.height < MIN_MAIN_WINDOW_HEIGHT
+    {
+        return None;
+    }
+
+    // Discard stale placements that no longer intersect any connected monitor
+    // (e.g. the window was last shown on an external display that is now gone),
+    // otherwise restoring would leave the window invisible and inaccessible.
+    if !placement_is_visible(app, &placement) {
+        return None;
+    }
+
+    Some(placement)
+}
+
+fn placement_is_visible(app: &AppHandle, placement: &MainWindowPlacement) -> bool {
+    let Ok(monitors) = app.available_monitors() else {
+        // If monitor enumeration fails, fall back to trusting the saved placement.
+        return true;
+    };
+
+    monitors.into_iter().any(|monitor| {
+        let area = monitor.work_area();
+        let left = area.position.x;
+        let top = area.position.y;
+        let right = left + area.size.width as i32;
+        let bottom = top + area.size.height as i32;
+
+        placement.x >= left && placement.x < right && placement.y >= top && placement.y < bottom
+    })
 }
 
 fn window_state_path(app: &AppHandle) -> Option<PathBuf> {

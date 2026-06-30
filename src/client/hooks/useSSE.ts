@@ -1,5 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react'
-import { buildApiUrl, isNativeApiRuntime, withNativeAuthTransport } from '@/client/lib/api'
+import { buildApiUrl, isNativeApiRuntime, onNativeSessionTokenChange, withNativeAuthTransport } from '@/client/lib/api'
 
 type SSEEventHandler = (data: Record<string, unknown>) => void
 type HandlersMap = Record<string, SSEEventHandler>
@@ -293,11 +293,14 @@ function handleNativeSSEBlock(block: string) {
     }
   }
 
-  if (data.length === 0) return
+  // Check for the connection-confirmation event before bailing on empty data:
+  // servers commonly send `event: connected` with no `data` payload, and
+  // dropping it would leave the client stuck without ever marking 'connected'.
   if (eventName === 'connected') {
     handleConnected()
     return
   }
+  if (data.length === 0) return
   if (eventName !== 'message') return
 
   try {
@@ -413,6 +416,33 @@ export function resetSSE() {
   if (state.subscribers.size > 0) {
     connect()
   }
+}
+
+// Native SSE embeds the bearer token into the live fetch at connect time, so a
+// token change (login on another tab, token refresh, logout) does not reach an
+// already-open stream. Tear the current stream down and reconnect with the new
+// token. Cookie-based (web) SSE picks up the new cookie on its own, so this only
+// needs to act in the native runtime. Registered once below for native runtimes.
+export function reconnectSSE() {
+  if (!isNativeApiRuntime()) return
+  state.consecutiveFailures = 0
+  if (state.reconnectTimer) {
+    clearTimeout(state.reconnectTimer)
+    state.reconnectTimer = null
+  }
+  if (state.eventSource) {
+    state.eventSource.close()
+    state.eventSource = null
+  }
+  // Only re-open if something is still listening; otherwise the next mount will
+  // connect with the fresh token via the normal subscribe path.
+  if (state.subscribers.size > 0) {
+    connect()
+  }
+}
+
+if (isNativeApiRuntime()) {
+  onNativeSessionTokenChange(reconnectSSE)
 }
 
 // ---------------------------------------------------------------------------

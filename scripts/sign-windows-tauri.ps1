@@ -60,7 +60,7 @@ $digestAlgorithm = if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_DIGEST_
   $env:WINDOWS_SIGNING_DIGEST_ALGORITHM
 }
 $timestampUrl = if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_TIMESTAMP_URL)) {
-  "http://timestamp.digicert.com"
+  "https://timestamp.digicert.com"
 } else {
   $env:WINDOWS_SIGNING_TIMESTAMP_URL
 }

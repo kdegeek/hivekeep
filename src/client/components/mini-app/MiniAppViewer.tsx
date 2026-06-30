@@ -56,7 +56,11 @@ export function MiniAppViewer() {
   const { panelOpen, activeAppId, activeAppVersion, activeAppReloadSignal, isFullPage, customTitle, openApp, closePanel, toggleFullPage, setFullPage, setCustomTitle, setBadge } = useSidePanel()
   const [app, setApp] = useState<MiniAppSummary | null>(null)
   const [iframeKey, setIframeKey] = useState(0)
-  const [nativeFrameSrc, setNativeFrameSrc] = useState('')
+  // Native mini-app frames are served behind a one-time `_frame` token, so a
+  // src must never be reused across an app/version/reload change. Tag each
+  // minted src with the identity that produced it; the iframe stays blank until
+  // a src whose key matches the current (appId, version, iframeKey) is ready.
+  const [nativeFrame, setNativeFrame] = useState<{ key: string; src: string } | null>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const pendingShareData = useRef<unknown>(null)
 
@@ -576,14 +580,18 @@ export function MiniAppViewer() {
     sendTheme()
   }, [sendAppMeta, sendTheme])
 
+  const nativeFrameKey = `${activeAppId ?? ''}:${activeAppVersion}:${iframeKey}`
+
   useEffect(() => {
     if (!activeAppId || !isNativeApiRuntime()) {
-      setNativeFrameSrc('')
+      setNativeFrame(null)
       return
     }
 
     let cancelled = false
-    setNativeFrameSrc('')
+    // Clear immediately so the iframe goes blank while the new one-time token is
+    // minted, rather than briefly showing a stale/already-consumed src.
+    setNativeFrame(null)
     api.post<{ token: string }>(`/mini-apps/${activeAppId}/frame-token`, {})
       .then(({ token }) => {
         if (cancelled) return
@@ -591,14 +599,17 @@ export function MiniAppViewer() {
           v: String(activeAppVersion),
           _frame: token,
         })
-        setNativeFrameSrc(buildApiUrl(`/mini-apps/${activeAppId}/serve?${params.toString()}`))
+        setNativeFrame({
+          key: nativeFrameKey,
+          src: buildApiUrl(`/mini-apps/${activeAppId}/serve?${params.toString()}`),
+        })
       })
       .catch(() => {
-        if (!cancelled) setNativeFrameSrc('')
+        if (!cancelled) setNativeFrame(null)
       })
 
     return () => { cancelled = true }
-  }, [activeAppId, activeAppVersion, iframeKey])
+  }, [activeAppId, activeAppVersion, iframeKey, nativeFrameKey])
 
   const errorBadge = errorCount > 0 ? (
     <div className="flex items-center gap-1 rounded-md bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive" title={`${errorCount} error${errorCount > 1 ? 's' : ''} in console`}>
@@ -674,7 +685,9 @@ export function MiniAppViewer() {
 
   const iframeSrc = activeAppId
     ? (isNativeApiRuntime()
-        ? nativeFrameSrc
+        // Only use the minted src when it belongs to the current app/version/reload;
+        // a src from a previous identity carries an already-consumed one-time token.
+        ? (nativeFrame?.key === nativeFrameKey ? nativeFrame.src : '')
         : buildApiUrl(`/mini-apps/${activeAppId}/serve?v=${activeAppVersion}`))
     : ''
 

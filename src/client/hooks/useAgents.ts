@@ -418,6 +418,10 @@ export function useAgents() {
       method: 'POST',
       body: formData,
     }))
+    if (!response.ok) {
+      const errBody = await response.json().catch(() => ({})) as { error?: { message?: string } }
+      throw new Error(errBody?.error?.message || 'Avatar upload failed')
+    }
     const data = await response.json() as { avatarUrl: string }
     // Update local state immediately (SSE also propagates for other clients)
     setAgents((prev) =>

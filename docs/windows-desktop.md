@@ -109,35 +109,35 @@ running in the background.
   notifications, active/running tasks, and shortcuts back into the main window.
 - The quick panel uses the same configured server and authenticated session as
   the main desktop window.
-- Closing the main window may leave the tray process running, depending on the
-  desktop shell settings. Use the tray menu's quit action when you want to stop
-  the desktop client completely.
+- Closing the main window does not exit the app: the close request is intercepted
+  and the window is hidden, so Hivekeep keeps running in the tray. Use the tray
+  menu's Quit action when you want to stop the desktop client completely.
 - Tray state is client-side convenience only. Agent execution, scheduled jobs,
   notification records, and SSE events still come from the server.
 - If the server is unreachable or the session expires, the tray panel should show
   the same reconnect/login path as the full app rather than silently failing.
 
-## Trusted origins and auth
+## Auth and trusted origins
 
-The desktop shell uses the same HTTP-only session cookie and Better Auth-backed
-API routes as the browser UI. The server must allow the origin that the Windows
-WebView uses when it makes credentialed API requests.
+Unlike the browser UI (which relies on the Better Auth HTTP-only session cookie),
+the Windows desktop shell authenticates with a bearer token. The native runtime
+attaches `Authorization: Bearer <token>` to every API and SSE request via
+`withNativeAuthTransport` and does not send cookies. The server must therefore
+have Better Auth's bearer plugin enabled so it accepts these tokens; this is the
+default server configuration.
 
-For normal browser/reverse-proxy access, continue to set `PUBLIC_URL` to the URL
-users open and use `TRUSTED_ORIGINS` for any additional browser origins. For the
-Windows desktop shell, include the desktop WebView origin in the server's trusted
-origin/CORS configuration when it differs from `PUBLIC_URL`.
+Because the desktop shell omits cookies and relies on bearer auth rather than
+credentialed cross-origin requests, the custom-protocol WebView origin
+(`http://tauri.localhost` on Windows) generally does not need to be added to
+`TRUSTED_ORIGINS`/CORS. Continue to set `PUBLIC_URL` to the URL users open and use
+`TRUSTED_ORIGINS` for additional browser origins. If a future build switches the
+desktop shell back to cookie-based credentialed requests, the WebView origin shown
+in devtools would then need to be listed in the server's Better Auth trusted
+origins.
 
-Tauri's default custom-protocol origin is platform dependent. On Windows it is
-normally `http://tauri.localhost` unless the desktop configuration opts into an
-HTTPS custom-protocol origin; dev builds can also involve `http://localhost:5173`.
-If the desktop app cannot log in or API calls fail with CORS/auth errors, verify
-that the exact origin shown in WebView devtools is listed in `TRUSTED_ORIGINS`
-and in the server's Better Auth trusted origins.
-
-Keep reverse proxies configured to forward cookies and SSE responses. The global
-SSE stream remains `GET /api/sse`: one multiplexed EventSource per desktop
-client, with no desktop-specific event types required by the server contract.
+The global SSE stream remains `GET /api/sse`: one multiplexed EventSource per
+desktop client (authenticated with the same bearer token), with no
+desktop-specific event types required by the server contract.
 
 ## Signing secrets
 
@@ -159,13 +159,23 @@ previously installed desktop releases.
 
 PowerShell example for a local signed build:
 
+`scripts/sign-windows-tauri.ps1` reads the certificate from
+`WINDOWS_SIGNING_CERTIFICATE_PFX_BASE64` (base64-encoded PFX) and
+`WINDOWS_SIGNING_CERTIFICATE_PASSWORD`, or alternatively from
+`WINDOWS_SIGNING_CERTIFICATE_THUMBPRINT` for a cert already installed in the
+Windows store. Set those exact names, otherwise the script logs a warning and
+produces an unsigned installer:
+
 ```powershell
-$env:WINDOWS_CERTIFICATE="C:\secrets\hivekeep-windows.pfx"
-$env:WINDOWS_CERTIFICATE_PASSWORD="<certificate password>"
-$env:TAURI_SIGNING_PRIVATE_KEY="<updater private key>"
-$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD="<updater key password>"
+$env:WINDOWS_SIGNING_CERTIFICATE_PFX_BASE64 = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes("C:\secrets\hivekeep-windows.pfx"))
+$env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD = "<certificate password>"
 bun run desktop:build
+bun run desktop:bundle:win
 ```
+
+The Tauri updater private key (`TAURI_SIGNING_PRIVATE_KEY` /
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`) is separate: it signs auto-update manifests
+and is consumed by Tauri's updater, not by the Authenticode signing script above.
 
 Unset those variables after the build if the terminal session will remain open.
 

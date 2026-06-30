@@ -9,6 +9,7 @@ import {
   withNativeAuthTransport,
 } from '@/client/lib/api'
 import i18n, { changeAppLanguage } from '@/client/lib/i18n'
+import { resetSSE } from '@/client/hooks/useSSE'
 
 interface UserProfile {
   id: string
@@ -90,6 +91,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const nativeToken = response.headers.get('set-auth-token') ?? body.token
     if (isNativeApiRuntime() && nativeToken) {
       setNativeSessionToken(nativeToken)
+      // Native clients usually sign in without a live SSE stream (the previous
+      // token was missing/expired). Re-arm the bearer-authenticated stream so
+      // realtime updates resume with the fresh token instead of staying stuck.
+      resetSSE()
     }
 
     // Verify the session was actually established — throws if not
@@ -120,6 +125,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const nativeToken = response.headers.get('set-auth-token') ?? body.token
     if (isNativeApiRuntime() && nativeToken) {
       setNativeSessionToken(nativeToken)
+      // Re-arm the SSE stream with the new token (see login()).
+      resetSSE()
     }
 
     await fetchUser()

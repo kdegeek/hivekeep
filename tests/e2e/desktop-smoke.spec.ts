@@ -3,6 +3,7 @@ import { expect, test, type Page, type Route } from 'playwright/test'
 
 const API_ORIGIN = 'http://127.0.0.1:38889'
 const DESKTOP_ORIGIN = 'http://127.0.0.1:4174'
+const AUTH_TOKEN = 'desktop-smoke-bearer-token'
 const now = new Date('2026-06-28T12:00:00.000Z').toISOString()
 
 const user = {
@@ -103,7 +104,7 @@ test.describe('desktop smoke', () => {
     const packageJson = JSON.parse(readFileSync('package.json', 'utf8')) as { scripts: Record<string, string> }
     expect(packageJson.scripts['desktop:dev']).toBe('tauri dev')
     expect(packageJson.scripts['desktop:build']).toBe('node --max-old-space-size=8192 ./node_modules/vite/bin/vite.js build --mode desktop')
-    expect(packageJson.scripts['desktop:bundle:win']).toBe('tauri build --bundles nsis')
+    expect(packageJson.scripts['desktop:bundle:win']).toBe('tauri build --bundles msi,nsis')
 
     const desktopEnv = readFileSync('.env.desktop', 'utf8')
     expect(desktopEnv).toContain('VITE_HIVEKEEP_DESKTOP=true')
@@ -190,9 +191,10 @@ function collectRuntimeErrors(page: Page): string[] {
 async function installApiMock(page: Page, options: { authenticated: boolean }): Promise<URL[]> {
   const requests: URL[] = []
 
-  await page.addInitScript((serverUrl) => {
+  await page.addInitScript(({ serverUrl, authToken }) => {
     window.localStorage.setItem('hivekeep:serverUrl', serverUrl)
-  }, API_ORIGIN)
+    window.localStorage.setItem('hivekeep:mobileAuthToken', authToken)
+  }, { serverUrl: API_ORIGIN, authToken: AUTH_TOKEN })
 
   await page.route(`${API_ORIGIN}/api/**`, async (route) => {
     const url = new URL(route.request().url())
@@ -219,6 +221,17 @@ async function fulfillApi(route: Route, url: URL, options: { authenticated: bool
   }
 
   const path = url.pathname.replace(/^\/api/, '') || '/'
+
+  // The desktop/native runtime authenticates with a bearer token via
+  // withNativeAuthTransport (no cookies). Enforce it on authenticated routes so
+  // this test fails if the native transport stops sending the Authorization
+  // header. /health and /onboarding/status are public and skip the check.
+  if (options.authenticated && path !== '/health' && path !== '/onboarding/status') {
+    const authHeader = await request.headerValue('authorization')
+    if (authHeader !== `Bearer ${AUTH_TOKEN}`) {
+      return json(route, { error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, 401)
+    }
+  }
 
   if (path === '/sse') {
     await route.fulfill({
