@@ -47,15 +47,8 @@
         "startMenuFolder": "Hivekeep"
       },
       "signCommand": {
-        "cmd": "powershell",
-        "args": [
-          "-NoProfile",
-          "-ExecutionPolicy",
-          "Bypass",
-          "-Command",
-          "& { param($target) $script = if (Test-Path -LiteralPath 'scripts/sign-windows-tauri.ps1') { 'scripts/sign-windows-tauri.ps1' } else { '../scripts/sign-windows-tauri.ps1' }; & $script $target }",
-          "%1"
-        ]
+        "cmd": "cmd",
+        "args": ["/c", "sign-windows-tauri.cmd", "%1"]
       }
     }
   }

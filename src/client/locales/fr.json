@@ -3622,6 +3622,7 @@
         "rename": "Renommer",
         "delete": "Supprimer",
         "noPreview": "Aucun aperçu disponible. Télécharge le fichier pour l'ouvrir.",
+        "previewFailed": "Impossible de charger l'aperçu. Télécharge le fichier pour l'ouvrir.",
         "renameTitle": "Renommer la pièce jointe",
         "renameDescription": "Choisis un nouveau nom de fichier. Le contenu n'est pas modifié.",
         "renamePlaceholder": "Nouveau nom",

@@ -3619,6 +3619,7 @@
         "rename": "Umbenennen",
         "delete": "Löschen",
         "noPreview": "Keine Vorschau verfügbar. Lade die Datei herunter, um sie zu öffnen.",
+        "previewFailed": "Die Vorschau konnte nicht geladen werden. Lade die Datei herunter, um sie zu öffnen.",
         "renameTitle": "Anhang umbenennen",
         "renameDescription": "Wähle einen neuen Dateinamen. Der Dateiinhalt wird nicht verändert.",
         "renamePlaceholder": "Neuer Dateiname",

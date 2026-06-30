@@ -3619,6 +3619,7 @@
         "rename": "Renombrar",
         "delete": "Eliminar",
         "noPreview": "Vista previa no disponible. Descarga el archivo para abrirlo.",
+        "previewFailed": "No se pudo cargar la vista previa. Descarga el archivo para abrirlo.",
         "renameTitle": "Renombrar adjunto",
         "renameDescription": "Elige un nuevo nombre de archivo. El contenido no se modifica.",
         "renamePlaceholder": "Nuevo nombre de archivo",

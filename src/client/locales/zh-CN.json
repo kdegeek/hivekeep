@@ -3619,6 +3619,7 @@
         "rename": "重命名",
         "delete": "删除",
         "noPreview": "无法预览。请下载文件后打开。",
+        "previewFailed": "无法加载预览。请下载文件后打开。",
         "renameTitle": "重命名附件",
         "renameDescription": "选择新文件名。文件内容不会被修改。",
         "renamePlaceholder": "新文件名",
