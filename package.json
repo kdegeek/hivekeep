@@ -52,7 +52,7 @@
     "db:snapshot": "bun scripts/db-snapshot.ts create",
     "db:snapshot:list": "bun scripts/db-snapshot.ts list",
     "db:snapshot:restore": "bun scripts/db-snapshot.ts restore",
-    "test": "bun test $(find ./src ./packages/sdk/src ./packages/create-hivekeep-plugin ./plugins -name '*.test.ts' | sort)",
+    "test": "bun test ./src ./packages/sdk/src ./packages/create-hivekeep-plugin ./plugins",
     "test:e2e": "npx playwright test",
     "typecheck": "NODE_OPTIONS=\"${NODE_OPTIONS:-} --max-old-space-size=8192\" tsc --noEmit",
     "prepare": "husky",
