@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 
 const API_PATH_PREFIX = '/api'
 export const MOBILE_SERVER_URL_STORAGE_KEY = 'hivekeep:serverUrl'
-export const MOBILE_AUTH_TOKEN_STORAGE_KEY = 'auth_token'
+export const MOBILE_AUTH_TOKEN_STORAGE_KEY = 'hivekeep:mobileAuthToken'
 
 export type NativeRuntime = 'desktop' | 'mobile'
 export type AppSurface = 'desktop' | 'mobile'
@@ -126,7 +126,9 @@ export function getNativeSessionToken(): string | null {
 }
 
 export function setNativeSessionToken(token: string): void {
-  if (typeof localStorage === 'undefined') return
+  if (typeof localStorage === 'undefined') throw new Error('Auth token storage is unavailable')
+  // TODO(native): replace localStorage with Capacitor Preferences or a secure
+  // storage plugin once one is added to the native shell dependencies.
   localStorage.setItem(MOBILE_AUTH_TOKEN_STORAGE_KEY, token)
 }
 

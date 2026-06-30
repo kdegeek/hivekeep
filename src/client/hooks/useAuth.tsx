@@ -81,14 +81,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({ email, password }),
     }))
 
+    const body = await response.json().catch(() => ({})) as { message?: string; token?: string }
+
     if (!response.ok) {
-      const body = await response.json().catch(() => ({}))
       throw new Error(body?.message ?? 'Login failed')
     }
 
-    const body = await response.json().catch(() => ({})) as { token?: unknown }
-    if (isNativeApiRuntime() && typeof body.token === 'string' && body.token) {
-      setNativeSessionToken(body.token)
+    const nativeToken = response.headers.get('set-auth-token') ?? body.token
+    if (isNativeApiRuntime() && nativeToken) {
+      setNativeSessionToken(nativeToken)
     }
 
     // Verify the session was actually established — throws if not
@@ -110,25 +111,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify(data),
     }))
 
+    const body = await response.json().catch(() => ({})) as { token?: string }
+
     if (!response.ok) {
-      const error = await response.json()
-      throw error
+      throw body
     }
 
-    const body = await response.json().catch(() => ({})) as { token?: unknown }
-    if (isNativeApiRuntime() && typeof body.token === 'string' && body.token) {
-      setNativeSessionToken(body.token)
+    const nativeToken = response.headers.get('set-auth-token') ?? body.token
+    if (isNativeApiRuntime() && nativeToken) {
+      setNativeSessionToken(nativeToken)
     }
 
     await fetchUser()
   }
 
   const logout = async () => {
-    await fetch(buildApiUrl('/auth/sign-out'), withNativeAuthTransport({
-      method: 'POST',
-    }))
-    if (isNativeApiRuntime()) clearNativeSessionToken()
-    window.location.href = '/'
+    try {
+      await fetch(buildApiUrl('/auth/sign-out'), withNativeAuthTransport({
+        method: 'POST',
+      }))
+    } finally {
+      if (isNativeApiRuntime()) clearNativeSessionToken()
+      window.location.href = '/'
+    }
   }
 
   return (

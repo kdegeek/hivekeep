@@ -6,6 +6,7 @@ import { createLogger } from '@/server/logger'
 import { db } from '@/server/db/index'
 import { agents, providers, channels, crons, memories, mcpServers, contacts, user } from '@/server/db/schema'
 import { authMiddleware } from '@/server/auth/middleware'
+import { trustedOrigins } from '@/server/auth/origins'
 import { miniAppOriginGuard } from '@/server/auth/mini-app-origin-guard'
 import { authRoutes } from '@/server/routes/auth'
 import { meRoutes } from '@/server/routes/me'
@@ -80,13 +81,7 @@ const log = createLogger('http')
 // so those routes carry their own permissive cors (see routes/mini-apps.ts). The
 // credentialed global policy below can't emit ACAO for a 'null' origin.
 const globalCors = cors({
-  origin: [
-    'capacitor://localhost',
-    'http://localhost:5173',
-    'http://localhost:3000',
-    ...(process.env.TRUSTED_ORIGINS ? process.env.TRUSTED_ORIGINS.split(',').map(o => o.trim()) : []),
-    ...(config.publicUrl ? [config.publicUrl] : []),
-  ],
+  origin: trustedOrigins,
   credentials: true,
 })
 app.use('*', (c, next) => (c.req.path.startsWith('/api/mini-apps/') ? next() : globalCors(c, next)))

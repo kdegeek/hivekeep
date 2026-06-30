@@ -4,6 +4,7 @@ import { auth } from '@/server/auth/index'
 import { db } from '@/server/db/index'
 import { userProfiles } from '@/server/db/schema'
 import { createLogger } from '@/server/logger'
+import { isTrustedOrigin } from '@/server/auth/origins'
 
 const log = createLogger('auth')
 
@@ -22,6 +23,18 @@ export async function authMiddleware(c: Context, next: Next) {
 
   // CORS preflight is never authenticated (no credentials are sent on it).
   if (c.req.method === 'OPTIONS') return next()
+
+  const method = c.req.method.toUpperCase()
+  const origin = c.req.header('origin')
+  const hasCookie = Boolean(c.req.header('cookie'))
+  const hasBearerAuth = c.req.header('authorization')?.toLowerCase().startsWith('bearer ') ?? false
+  if (origin && hasCookie && !hasBearerAuth && !isTrustedOrigin(origin) && !['GET', 'HEAD'].includes(method)) {
+    log.warn({ path, method, origin }, 'Blocked cross-site cookie request from untrusted origin')
+    return c.json(
+      { error: { code: 'CSRF_BLOCKED', message: 'Cross-site cookie request blocked' } },
+      403,
+    )
+  }
 
   // Skip auth for Better Auth routes, onboarding, health check, and the public
   // mini-app SDK assets (loaded by the opaque-origin iframe without credentials).
