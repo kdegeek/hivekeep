@@ -209,6 +209,10 @@ docker run -d \
 
 > This path requires the published container image. If the pull fails with `manifest unknown` or a `403`, the image is not public yet, use the native installer above (it builds locally and needs no registry image), or build from source. See the [install docs](https://marlburrow.github.io/hivekeep/docs/) for the Docker Compose path and reverse-proxy setup. The installer also offers a hardened Docker mode: `bash <(curl -fsSL .../install.sh) --docker`.
 
+### Windows desktop app
+
+For a Windows Start menu app, install or expose a Hivekeep server with one of the options above, then download the Windows desktop installer from the latest GitHub release. The desktop app connects to your Hivekeep URL and keeps the same agents, files, and notifications available in a native window. See [`docs/windows-desktop.md`](docs/windows-desktop.md).
+
 ### Recovery one-liners
 
 ```bash
@@ -418,7 +422,14 @@ bun run dev    # Vite dev server (5173) + Hono backend (3000)
 | `bun run db:generate` | Generate a Drizzle migration from schema changes |
 | `bun run db:migrate` | Apply pending migrations |
 
-### Mobile build contract
+Installer and app packaging docs:
+
+| Target | Documentation |
+|---|---|
+| Android APK | [`docs/android-apk.md`](docs/android-apk.md) |
+| Windows desktop installer | [`docs/windows-desktop.md`](docs/windows-desktop.md) |
+
+### Mobile and desktop app packaging
 
 Capacitor uses `capacitor.config.ts` with `webDir: 'dist/client'`, so the Bun/Vite web build output remains unchanged. The mobile build loads `.env.mobile`, which sets `VITE_HIVEKEEP_MOBILE=true`; Vite exposes that flag to client code as `import.meta.env.VITE_HIVEKEEP_MOBILE`.
 
@@ -428,7 +439,7 @@ Output paths:
 - Android copy target after `cap add android` + `bun run mobile:copy` or `bun run mobile:sync`: `android/app/src/main/assets/public/`
 - iOS copy target after `cap add ios` + `bun run mobile:copy` or `bun run mobile:sync`: `ios/App/App/public/`
 
-APK packaging, local release signing, Android versioning, and self-hosted server notes are documented in [`docs/android-apk.md`](docs/android-apk.md).
+APK packaging, local release signing, Android versioning, and self-hosted server notes are documented in [`docs/android-apk.md`](docs/android-apk.md). Windows desktop installer usage is documented in [`docs/windows-desktop.md`](docs/windows-desktop.md).
 
 ### Project structure
 
