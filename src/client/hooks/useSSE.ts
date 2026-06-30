@@ -1,5 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react'
-import { buildApiUrl } from '@/client/lib/api'
+import { buildApiUrl, isNativeApiRuntime, withNativeAuthTransport } from '@/client/lib/api'
 
 type SSEEventHandler = (data: Record<string, unknown>) => void
 type HandlersMap = Record<string, SSEEventHandler>
@@ -55,7 +55,7 @@ const MAX_RECONNECT_MS = 60000
 type ResyncListener = () => void
 
 interface SSEState {
-  eventSource: EventSource | null
+  eventSource: SSEConnection | null
   reconnectTimer: ReturnType<typeof setTimeout> | null
   teardownTimer: ReturnType<typeof setTimeout> | null
   subscribers: Set<React.MutableRefObject<HandlersMap>>
@@ -93,6 +93,17 @@ function getState(): SSEState {
 
 const state = getState()
 
+interface SSEConnection {
+  readyState: number
+  close: () => void
+}
+
+const EVENT_SOURCE_CLOSED = 2
+
+function isClosed(connection: SSEConnection): boolean {
+  return connection.readyState === EVENT_SOURCE_CLOSED
+}
+
 function dispatch(data: Record<string, unknown>) {
   const type = data.type as string
   for (const ref of state.subscribers) {
@@ -127,10 +138,15 @@ function notifyResync() {
 
 function connect() {
   // Clean up stale EventSource that got into CLOSED state without onerror
-  if (state.eventSource && state.eventSource.readyState === EventSource.CLOSED) {
+  if (state.eventSource && isClosed(state.eventSource)) {
     state.eventSource = null
   }
   if (state.eventSource) return
+
+  if (isNativeApiRuntime()) {
+    connectNative()
+    return
+  }
 
   const es = new EventSource(buildApiUrl('/sse'), { withCredentials: true })
   state.eventSource = es
@@ -144,14 +160,7 @@ function connect() {
   })
 
   es.addEventListener('connected', () => {
-    state.consecutiveFailures = 0
-    // A reconnect (we were connected before) means we likely missed events
-    // while the stream was down — tell consumers to refetch. The very first
-    // connect is skipped: consumers load their own initial state on mount.
-    const wasReconnect = state.hasEverConnected
-    state.hasEverConnected = true
-    setStatus('connected')
-    if (wasReconnect) notifyResync()
+    handleConnected()
   })
 
   es.onerror = () => {
@@ -169,6 +178,132 @@ function connect() {
 
     setStatus('reconnecting')
     scheduleReconnect()
+  }
+}
+
+function handleConnected() {
+  state.consecutiveFailures = 0
+  // A reconnect (we were connected before) means we likely missed events
+  // while the stream was down — tell consumers to refetch. The very first
+  // connect is skipped: consumers load their own initial state on mount.
+  const wasReconnect = state.hasEverConnected
+  state.hasEverConnected = true
+  setStatus('connected')
+  if (wasReconnect) notifyResync()
+}
+
+function handleConnectionError(connection: SSEConnection) {
+  connection.close()
+  if (state.eventSource === connection) {
+    state.eventSource = null
+  }
+  state.consecutiveFailures++
+
+  // After too many consecutive failures (likely expired session), stop
+  // retrying to avoid flooding the server with 401s. resetSSE() will
+  // restart the connection after a successful login.
+  if (state.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+    setStatus('disconnected')
+    return
+  }
+
+  setStatus('reconnecting')
+  scheduleReconnect()
+}
+
+function connectNative() {
+  const controller = new AbortController()
+  const connection: SSEConnection = {
+    readyState: 0,
+    close: () => {
+      connection.readyState = EVENT_SOURCE_CLOSED
+      controller.abort()
+    },
+  }
+  state.eventSource = connection
+
+  void (async () => {
+    try {
+      const response = await fetch(buildApiUrl('/sse'), withNativeAuthTransport({
+        headers: { Accept: 'text/event-stream' },
+        signal: controller.signal,
+      }))
+      if (state.eventSource !== connection || isClosed(connection)) {
+        await response.body?.cancel()
+        return
+      }
+      if (!response.ok || !response.body) {
+        throw new Error(`SSE connection failed with status ${response.status}`)
+      }
+      connection.readyState = 1
+      await readNativeSSEStream(response.body)
+      if (state.eventSource !== connection || isClosed(connection)) return
+      handleConnectionError(connection)
+    } catch {
+      if (state.eventSource !== connection || isClosed(connection)) return
+      handleConnectionError(connection)
+    }
+  })()
+}
+
+async function readNativeSSEStream(body: ReadableStream<Uint8Array>) {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      buffer = drainSSEBuffer(buffer)
+    }
+    buffer += decoder.decode()
+    drainSSEBuffer(`${buffer}\n\n`)
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+function drainSSEBuffer(buffer: string): string {
+  const blocks = buffer.split(/\r?\n\r?\n/)
+  const remainder = blocks.pop() ?? ''
+  for (const block of blocks) {
+    handleNativeSSEBlock(block)
+  }
+  return remainder
+}
+
+function handleNativeSSEBlock(block: string) {
+  let eventName = 'message'
+  const data: string[] = []
+
+  for (const line of block.split(/\r?\n/)) {
+    if (!line || line.startsWith(':')) continue
+    const separator = line.indexOf(':')
+    const field = separator === -1 ? line : line.slice(0, separator)
+    const value = separator === -1
+      ? ''
+      : line.slice(separator + 1).replace(/^ /, '')
+
+    if (field === 'event') {
+      eventName = value
+    } else if (field === 'data') {
+      data.push(value)
+    }
+  }
+
+  if (data.length === 0) return
+  if (eventName === 'connected') {
+    handleConnected()
+    return
+  }
+  if (eventName !== 'message') return
+
+  try {
+    dispatch(JSON.parse(data.join('\n')) as Record<string, unknown>)
+  } catch {
+    // Ignore parse errors
   }
 }
 
@@ -271,7 +406,7 @@ export function useSSEResync(callback: () => void) {
 export function resetSSE() {
   state.consecutiveFailures = 0
   // If already connected, nothing to do
-  if (state.eventSource && state.eventSource.readyState !== EventSource.CLOSED) return
+  if (state.eventSource && !isClosed(state.eventSource)) return
   // If a reconnect is already scheduled, let it proceed with reset counter
   if (state.reconnectTimer) return
   // Only reconnect if there are active subscribers
@@ -293,7 +428,7 @@ export function resetSSE() {
 function reconnectNow() {
   if (state.subscribers.size === 0) return
   // Already healthy — leave it alone.
-  if (state.eventSource && state.eventSource.readyState !== EventSource.CLOSED) return
+  if (state.eventSource && !isClosed(state.eventSource)) return
   // Reset the give-up counter and cancel any long backoff so we retry now
   // instead of waiting out the (up to 60s) delay.
   state.consecutiveFailures = 0
