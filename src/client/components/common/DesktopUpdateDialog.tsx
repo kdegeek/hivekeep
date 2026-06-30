@@ -22,14 +22,15 @@ export function DesktopUpdateDialog() {
   const { t } = useTranslation()
   const { state, startUpdate, dismiss } = useDesktopUpdater()
 
-  const open = state.status === 'available' || state.status === 'downloading' || state.status === 'restarting'
+  const open = state.status === 'available' || state.status === 'downloading' || state.status === 'restarting' || (state.status === 'error' && state.version !== null)
   if (!open) return null
 
   const busy = state.status === 'downloading' || state.status === 'restarting'
+  const failed = state.status === 'error'
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next && !busy) dismiss() }}>
-      <DialogContent variant="panel" size="lg" showCloseButton={!busy}>
+      <DialogContent variant="panel" size="lg" showCloseButton={!busy && !failed}>
         <DialogHeader>
           <div className="flex items-center gap-2">
             <div className="rounded-lg bg-primary/10 p-2">
@@ -60,6 +61,10 @@ export function DesktopUpdateDialog() {
               <Progress value={state.progress ?? 0} variant="gradient" active />
             </div>
           )}
+
+          {failed && state.error && (
+            <p className="text-sm text-destructive">{state.error}</p>
+          )}
         </DialogBody>
 
         <DialogFooter>
@@ -68,7 +73,7 @@ export function DesktopUpdateDialog() {
               {t('desktopUpdate.later')}
             </Button>
           )}
-          <Button onClick={() => void startUpdate()} disabled={busy}>
+          <Button onClick={() => void startUpdate()} disabled={busy && !failed}>
             {busy ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Download className="size-4 mr-2" />}
             {t('desktopUpdate.updateButton')}
           </Button>

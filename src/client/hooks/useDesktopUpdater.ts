@@ -76,7 +76,12 @@ export function useDesktopUpdater() {
       setState((s) => ({ ...s, status: 'restarting', progress: 100 }))
       await relaunch()
     } catch (err) {
-      setState({ status: 'error', version: null, body: null, progress: undefined, error: err instanceof Error ? err.message : String(err) })
+      setState((s) => ({
+        ...s,
+        status: 'error',
+        progress: undefined,
+        error: err instanceof Error ? err.message : String(err),
+      }))
     }
   }, [])
 
