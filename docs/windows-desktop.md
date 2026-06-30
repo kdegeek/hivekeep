@@ -171,6 +171,10 @@ Unset those variables after the build if the terminal session will remain open.
 
 ## Manual smoke checklist
 
+Automated Playwright smoke tests cover the desktop build flags, the main desktop
+shell, and the quick-panel `?surface=mobile` route. Native tray and window-manager
+behavior still needs a real Windows desktop session.
+
 Before publishing a Windows desktop build, verify the following on a clean
 Windows account or VM:
 
@@ -185,11 +189,27 @@ Windows account or VM:
   one chat/agent page without WebView console errors.
 - Realtime updates arrive through `/api/sse` after sending a message or changing
   a task from another client.
-- Tray icon appears, quick panel opens, shortcuts focus the main window, and the
-  quit action fully exits the desktop process.
-- Closing and reopening the main window preserves the saved server URL and does
-  not create duplicate tray icons.
 - Offline/server-down behavior shows a clear reconnect path, then recovers after
   the server returns.
 - Signed release installer and upgrade path are accepted by Windows SmartScreen
   and replace a previous version without losing local desktop app state.
+
+### Tray/window behaviors that need manual verification
+
+These checks depend on the Windows tray, focus model, and window manager, so they
+are intentionally manual instead of Playwright-only:
+
+- Tray icon appears after launch and does not duplicate after hiding/showing the
+  main window.
+- Left-clicking the tray icon toggles the quick panel near the cursor and keeps it
+  inside the current monitor work area.
+- Right-clicking the tray icon opens a menu with Open Hivekeep, Quick Panel,
+  Settings / Server URL, and Quit actions.
+- Open Hivekeep restores, unminimizes, and focuses the main window.
+- Settings / Server URL focuses the main window and opens the settings/server
+  configuration path.
+- The quick panel hides on blur and does not immediately reopen from the same
+  blur/click interaction.
+- Closing the main window hides it to the tray instead of exiting the process.
+- Reopening the main window preserves its previous valid size and position.
+- Quit from the tray fully exits the desktop process and removes the tray icon.
