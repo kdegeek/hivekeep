@@ -2415,6 +2415,29 @@
       "noLogs": "No log entries",
       "entries": "{{count}} entries"
     },
+    "codeReview": {
+      "title": "Code Review",
+      "description": "Configure host repository roots that local CodeRabbit and Kilo reviewer tools may access outside the current Agent workspace.",
+      "fetchError": "Failed to load code review settings",
+      "saveSuccess": "Code review repository roots saved",
+      "resetSuccess": "Code review roots reset to environment fallback",
+      "securityTitle": "Security boundary",
+      "securityDescription": "Agents with local review tools may run reviewer CLIs against Git repositories under these roots. Keep the list narrow and only include paths you trust for code review access.",
+      "allowedRootsLabel": "Allowed repository roots",
+      "allowedRootsHint": "Absolute paths only. Blank entries are ignored; duplicates are removed on save. Changes apply immediately and do not require restart.",
+      "source": "Source: {{source}}",
+      "sourceSettings": "Settings override",
+      "sourceEnv": "environment fallback",
+      "rootPlaceholder": "/Users/kdegeek/hivekeep",
+      "absolutePathError": "Enter an absolute path.",
+      "removeRoot": "Remove root",
+      "addRoot": "Add root",
+      "envFallback": "Environment fallback if the Settings override is reset: {{roots}}",
+      "saving": "Saving…",
+      "discard": "Discard",
+      "resetting": "Resetting…",
+      "resetToEnv": "Reset to env fallback"
+    },
     "tokenUsage": {
       "title": "Token Usage",
       "description": "Monitor LLM token consumption across providers, models, and agents",
@@ -2877,7 +2900,10 @@
       "update_project_knowledge": "Update Project Knowledge",
       "delete_project_knowledge": "Delete Project Knowledge",
       "pin_project_knowledge": "Pin Project Knowledge",
-      "get_mini_app_backend_status": "Mini-App Backend Status"
+      "get_mini_app_backend_status": "Mini-App Backend Status",
+      "list_local_reviewers": "List Local Reviewers",
+      "check_code_review_auth": "Check Code Review Auth",
+      "run_local_code_review": "Run Local Code Review"
     },
     "renderers": {
       "rawJson": "Raw JSON",
@@ -3288,10 +3314,20 @@
     "tasks": "Tasks",
     "crons": "Scheduled Tasks",
     "apps": "Mini-Apps",
+    "reviewerAgents": "Reviewer Agents",
     "models": "Models",
     "files": "Files",
     "terminal": "Terminal",
     "feedback": "Feedback"
+  },
+  "reviewerAgents": {
+    "loadError": {
+      "title": "Reviewer agents unavailable",
+      "description": "Confirm the live server is running a branch/build that mounts /api/reviewer-agents, then refresh this page.",
+      "retry": "Retry",
+      "invalidResponse": "Reviewer agents API returned an invalid {{resource}} response. The server may be running a build that does not include the reviewer agents API routes.",
+      "notFound": "Reviewer agents API route was not found. Deploy a server build that includes /api/reviewer-agents."
+    }
   },
   "terminal": {
     "title": "Terminal",

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, beforeAll } from 'bun:test'
+import { delimiter } from 'node:path'
 
 /**
  * Tests for src/server/config.ts
@@ -69,7 +70,7 @@ describe('config', () => {
         'compacting', 'memory', 'queue', 'tasks', 'crons', 'tools',
         'humanPrompts', 'interAgent', 'mcp', 'vault', 'workspace',
         'upload', 'fileStorage', 'webhooks', 'channels', 'quickSessions',
-        'webBrowsing', 'invitations', 'notifications', 'wakeups', 'publicUrl',
+        'webBrowsing', 'invitations', 'notifications', 'wakeups', 'publicUrl', 'codeReview',
       ]
       for (const key of expectedKeys) {
         expect(config).toHaveProperty(key)
@@ -273,6 +274,11 @@ describe('config', () => {
     it('PUBLIC_URL override', async () => {
       const c = await loadConfigWithEnv({ PUBLIC_URL: 'https://hivekeep.example.com' })
       expect(c.publicUrl).toBe('https://hivekeep.example.com')
+    })
+
+    it('HIVEKEEP_CODE_REVIEW_ALLOWED_ROOTS parses path-delimited and comma-separated roots', async () => {
+      const c = await loadConfigWithEnv({ HIVEKEEP_CODE_REVIEW_ALLOWED_ROOTS: `/repos/one${delimiter}/repos/two,/repos/three` })
+      expect(c.codeReview.allowedRepoRoots).toEqual(['/repos/one', '/repos/two', '/repos/three'])
     })
   })
 

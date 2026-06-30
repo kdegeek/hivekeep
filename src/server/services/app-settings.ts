@@ -442,6 +442,34 @@ function parseNonNegativeIntSetting(raw: string | null, fallback: number): numbe
   return n
 }
 
+const CODE_REVIEW_ALLOWED_REPO_ROOTS_KEY = 'code_review_allowed_repo_roots'
+
+function parseAllowedRepoRoots(raw: string | null): string[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((value): value is string => typeof value === 'string')
+  } catch {
+    return []
+  }
+}
+
+export async function getCodeReviewAllowedRepoRootsOverride(): Promise<string[] | null> {
+  const raw = await getSetting(CODE_REVIEW_ALLOWED_REPO_ROOTS_KEY)
+  if (raw === null) return null
+  return parseAllowedRepoRoots(raw)
+}
+
+export async function getCodeReviewAllowedRepoRoots(): Promise<string[]> {
+  return (await getCodeReviewAllowedRepoRootsOverride()) ?? config.codeReview.allowedRepoRoots
+}
+
+export async function setCodeReviewAllowedRepoRoots(value: string[] | null): Promise<void> {
+  if (value === null) return deleteSetting(CODE_REVIEW_ALLOWED_REPO_ROOTS_KEY)
+  return setSetting(CODE_REVIEW_ALLOWED_REPO_ROOTS_KEY, JSON.stringify(value))
+}
+
 export async function getMaxConcurrentTasks(): Promise<number> {
   return parsePositiveIntSetting(await getSetting('tasks_max_concurrent'), DEFAULT_MAX_CONCURRENT_TASKS)
 }

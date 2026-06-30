@@ -1,8 +1,51 @@
 import { describe, expect, it } from 'bun:test'
 import { mkdirSync, rmSync, writeFileSync } from 'fs'
-import { STATIC_CODEX_MODELS, mapCodexModel } from './openai-codex'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { STATIC_CODEX_MODELS, mapCodexModel, openaiCodexProvider } from './openai-codex'
 import { codexAccountIdFromTokens } from './_codex-auth'
 import type { PkceTokenResponse } from './_oauth-pkce'
+import type { ChatRequest } from './types'
+import type { ProviderConfig } from '@/server/llm/core/types'
+
+function makeJwt(claims: Record<string, unknown>): string {
+  const seg = Buffer.from(JSON.stringify(claims)).toString('base64url')
+  return `header.${seg}.sig`
+}
+
+function createCodexAuthConfig(): { config: ProviderConfig; cleanup: () => void } {
+  const dir = join(tmpdir(), `hivekeep-codex-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  mkdirSync(dir, { recursive: true })
+  const authFilePath = join(dir, 'auth.json')
+  writeFileSync(
+    authFilePath,
+    JSON.stringify({
+      auth_mode: 'chatgpt',
+      tokens: {
+        access_token: makeJwt({ exp: Math.floor(Date.now() / 1000) + 3600 }),
+        refresh_token: 'refresh-token',
+        id_token: makeJwt({}),
+        account_id: 'acc_test',
+      },
+      last_refresh: new Date().toISOString(),
+    }),
+  )
+  return { config: { authFilePath }, cleanup: () => rmSync(dir, { recursive: true, force: true }) }
+}
+
+function codexSseResponse(text = 'ok'): Response {
+  return new Response(
+    `data: ${JSON.stringify({ type: 'response.output_text.delta', delta: text })}\n\n` +
+      `data: ${JSON.stringify({ type: 'response.completed', response: { usage: { input_tokens: 3, output_tokens: 1 } } })}\n\n` +
+      'data: [DONE]\n\n',
+    { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+  )
+}
+
+const basicRequest = (overrides: Partial<ChatRequest> = {}): ChatRequest => ({
+  messages: [{ role: 'user', content: [{ type: 'text', text: 'Say ok' }] }],
+  ...overrides,
+})
 
 describe('STATIC_CODEX_MODELS (fallback catalog)', () => {
   it('ships the curated Codex fallback slugs in probe/default order', () => {
@@ -93,6 +136,129 @@ describe('mapCodexModel', () => {
       supported_reasoning_levels: [{ effort: 'medium' }, { effort: 'bogus' }, {}],
     })
     expect(m.thinking?.efforts).toEqual(['medium'])
+  })
+})
+
+describe('openaiCodexProvider.chat request serialization', () => {
+  it('omits unsupported max_output_tokens even when caller passes maxOutputTokens', async () => {
+    const { config, cleanup } = createCodexAuthConfig()
+    const originalFetch = globalThis.fetch
+    let capturedBody: Record<string, unknown> | undefined
+    globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>
+      return codexSseResponse()
+    }) as typeof fetch
+
+    try {
+      const chunks = []
+      for await (const chunk of openaiCodexProvider.chat(
+        { id: 'gpt-5.5', name: 'GPT-5.5', contextWindow: 400000 },
+        basicRequest({ maxOutputTokens: 200 }),
+        config,
+      )) {
+        chunks.push(chunk)
+      }
+
+      expect(chunks.some((chunk) => chunk.type === 'finish')).toBe(true)
+      expect(capturedBody).toBeDefined()
+      expect(capturedBody).not.toHaveProperty('max_output_tokens')
+      expect(capturedBody).not.toHaveProperty('max_completion_tokens')
+      expect(capturedBody).not.toHaveProperty('max_tokens')
+    } finally {
+      globalThis.fetch = originalFetch
+      cleanup()
+    }
+  })
+
+  it('keeps supported Responses fields intact while omitting token cap fields', async () => {
+    const { config, cleanup } = createCodexAuthConfig()
+    const originalFetch = globalThis.fetch
+    let capturedBody: Record<string, unknown> | undefined
+    globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>
+      return codexSseResponse()
+    }) as typeof fetch
+
+    try {
+      for await (const _chunk of openaiCodexProvider.chat(
+        {
+          id: 'gpt-5.5',
+          name: 'GPT-5.5',
+          contextWindow: 400000,
+          thinking: { efforts: ['low', 'medium', 'high'] },
+        },
+        basicRequest({
+          system: [{ type: 'text', text: 'Be concise.' }],
+          thinkingEffort: 'high',
+          maxOutputTokens: 123,
+          tools: [{
+            name: 'lookup',
+            description: 'Look something up',
+            inputSchema: { type: 'object', properties: { q: { type: 'string' } } },
+          }],
+        }),
+        config,
+      )) {
+        // Drain the stream so the request is issued.
+      }
+
+      expect(capturedBody).toMatchObject({
+        model: 'gpt-5.5',
+        stream: true,
+        store: false,
+        instructions: 'Be concise.',
+        reasoning: { effort: 'high' },
+      })
+      expect(capturedBody?.input).toEqual([
+        { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Say ok' }] },
+      ])
+      expect(capturedBody?.tools).toEqual([{
+        type: 'function',
+        name: 'lookup',
+        description: 'Look something up',
+        parameters: { type: 'object', properties: { q: { type: 'string' } } },
+      }])
+      expect(capturedBody).not.toHaveProperty('max_output_tokens')
+    } finally {
+      globalThis.fetch = originalFetch
+      cleanup()
+    }
+  })
+
+  it('allows helper-style one-shot requests with maxOutputTokens to complete against Codex serialization', async () => {
+    const { config, cleanup } = createCodexAuthConfig()
+    const originalFetch = globalThis.fetch
+    let capturedBody: Record<string, unknown> | undefined
+    globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>
+      if ('max_output_tokens' in capturedBody || 'max_completion_tokens' in capturedBody || 'max_tokens' in capturedBody) {
+        return new Response('unsupported token cap field', { status: 400 })
+      }
+      return codexSseResponse('helper prompt')
+    }) as typeof fetch
+
+    try {
+      let text = ''
+      let finishReason = 'unknown'
+      for await (const chunk of openaiCodexProvider.chat(
+        { id: 'gpt-5.5', name: 'GPT-5.5', contextWindow: 400000 },
+        basicRequest({
+          system: [{ type: 'text', text: 'Write a short icon prompt.' }],
+          maxOutputTokens: 200,
+        }),
+        config,
+      )) {
+        if (chunk.type === 'text-delta') text += chunk.text
+        if (chunk.type === 'finish') finishReason = chunk.reason
+      }
+
+      expect(text).toBe('helper prompt')
+      expect(finishReason).toBe('stop')
+      expect(capturedBody).not.toHaveProperty('max_output_tokens')
+    } finally {
+      globalThis.fetch = originalFetch
+      cleanup()
+    }
   })
 })
 
