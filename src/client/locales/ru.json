@@ -2440,7 +2440,27 @@
       "entries": "{{count}} записей"
     },
     "codeReview": {
-      "title": "Code Review"
+      "title": "Code Review",
+      "description": "Configure host repository roots that local CodeRabbit and Kilo reviewer tools may access outside the current Agent workspace.",
+      "fetchError": "Failed to load code review settings",
+      "saveSuccess": "Code review repository roots saved",
+      "resetSuccess": "Code review roots reset to environment fallback",
+      "securityTitle": "Security boundary",
+      "securityDescription": "Agents with local review tools may run reviewer CLIs against Git repositories under these roots. Keep the list narrow and only include paths you trust for code review access.",
+      "allowedRootsLabel": "Allowed repository roots",
+      "allowedRootsHint": "Absolute paths only. Blank entries are ignored; duplicates are removed on save. Changes apply immediately and do not require restart.",
+      "source": "Source: {{source}}",
+      "sourceSettings": "Settings override",
+      "sourceEnv": "environment fallback",
+      "rootPlaceholder": "/Users/kdegeek/hivekeep",
+      "absolutePathError": "Enter an absolute path.",
+      "removeRoot": "Remove root",
+      "addRoot": "Add root",
+      "envFallback": "Environment fallback if the Settings override is reset: {{roots}}",
+      "saving": "Saving…",
+      "discard": "Discard",
+      "resetting": "Resetting…",
+      "resetToEnv": "Reset to env fallback"
     },
     "tokenUsage": {
       "title": "Расход токенов",

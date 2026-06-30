@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'fs'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { tmpdir } from 'os'
 import { config } from '@/server/config'
 import { _LOCAL_REVIEW_INTERNALS_FOR_TEST, checkCodeRabbitAuth, runLocalCodeReview } from './local-review'
@@ -82,6 +82,18 @@ describe('local-review repo validation', () => {
     }
   })
 
+  it('ignores configured allowed roots that no longer exist', () => {
+    const root = mkdtempSync(join(tmpdir(), 'hivekeep-local-review-missing-root-'))
+    try {
+      const workspace = join(root, 'workspace')
+      const repo = join(workspace, 'repo')
+      initGitRepo(repo)
+      expect(validateReviewRepoPathWithAllowedRoots(repo, workspace, [join(root, 'missing')])).toBe(realpathSync(repo))
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('rejects a symlink escape after resolving realpaths', () => {
     const root = mkdtempSync(join(tmpdir(), 'hivekeep-local-review-symlink-'))
     try {
@@ -103,6 +115,19 @@ describe('local-review repo validation', () => {
       const repo = join(root, 'workspace', 'not-git')
       mkdirSync(repo, { recursive: true })
       expect(() => validateReviewRepoPath(repo, join(root, 'workspace'))).toThrow('repo_path must be a Git repository')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('accepts a nested directory inside a Git worktree', () => {
+    const root = mkdtempSync(join(tmpdir(), 'hivekeep-local-review-nested-git-'))
+    try {
+      const repo = join(root, 'workspace', 'repo')
+      const nested = join(repo, 'packages', 'app')
+      initGitRepo(repo)
+      mkdirSync(nested, { recursive: true })
+      expect(validateReviewRepoPath(nested, join(root, 'workspace'))).toBe(realpathSync(nested))
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
@@ -217,6 +242,31 @@ describe('Kilo local-review adapter', () => {
     expect(kiloSlashCommandArgs({ repoPath: '/repo', baseCommit: 'abc123' })).toEqual(['run', '--format', 'json', '--auto', '--dir', '/repo', '/local-review abc123'])
     expect(kiloSlashCommandArgs({ repoPath: '/repo', head: 'working tree' })).toEqual(['run', '--format', 'json', '--auto', '--dir', '/repo', '/local-review-uncommitted'])
     expect(kiloPromptFallbackArgs({ repoPath: '/repo', base: 'origin/main' }).at(-1)).toContain('dedicated local code reviewer')
+  })
+
+  it('resolves relative review paths from the supplied workspace root', async () => {
+    const root = makeFakeBin('cr', `
+if [[ "$1" == "--version" ]]; then echo "0.0.0-test"; exit 0; fi
+if [[ "$1" == "auth" ]]; then echo '{"authenticated":true}'; exit 0; fi
+if [[ "$1" == "doctor" ]]; then echo 'doctor ok'; exit 0; fi
+if [[ "$1" == "review" ]]; then echo '{"type":"finding","severity":"minor","title":"Relative repo","file":"src/review.ts"}'; exit 0; fi
+exit 1
+`)
+    try {
+      const repo = join(root, 'repo')
+      initGitRepo(repo)
+      mutableCodeReviewConfig.artifactDir = join(root, 'artifacts')
+      const previousCwd = process.cwd()
+      process.chdir(tmpdir())
+      try {
+        const result = await runLocalCodeReview({ repoPath: basename(repo), workspaceRoot: root, provider: 'coderabbit', mode: 'advisory', timeoutMs: 1000 })
+        expect(result.results[0]?.repoPath).toBe(realpathSync(repo))
+      } finally {
+        process.chdir(previousCwd)
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('records slash-command adapter mode in Kilo results', async () => {

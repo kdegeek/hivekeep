@@ -65,7 +65,7 @@ import { terminalRoutes } from '@/server/routes/terminal'
 import { usageRoutes } from '@/server/routes/usage'
 import { versionCheckRoutes } from '@/server/routes/version-check'
 import { reviewerAgentRoutes } from '@/server/routes/reviewer-agents'
-import { SERVER_STARTED_AT, getServerRuntimeContext } from '@/server/services/server-runtime'
+import { getServerRuntimeContext } from '@/server/services/server-runtime'
 
 export type AppVariables = {
   session: { id: string; userId: string; token: string }
@@ -139,8 +139,8 @@ app.get('/api/changelog', async (c) => {
 })
 
 // System info (authenticated — stats about the instance)
-const startedAt = SERVER_STARTED_AT
 app.get('/api/info', async (c) => {
+  const runtime = getServerRuntimeContext()
   const [
     [agentCount],
     [providerCount],
@@ -166,8 +166,8 @@ app.get('/api/info', async (c) => {
     // Surfaced so the client can warn when the browser's origin doesn't match
     // the configured public URL (invites/webhooks/OAuth callbacks build on it).
     publicUrl: config.publicUrl,
-    startedAt,
-    uptimeMs: Date.now() - startedAt,
+    startedAt: runtime.startedAt.getTime(),
+    uptimeMs: runtime.uptimeMs,
     stats: {
       agents: agentCount!.value,
       providers: providerCount!.value,

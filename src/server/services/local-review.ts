@@ -179,14 +179,20 @@ export function isPathInsideOrEqual(parent: string, child: string): boolean {
 export function validateReviewRepoPathWithAllowedRoots(repoPath: string, workspaceRoot: string, allowedRepoRoots: string[]): string {
   const repoRealPath = realpathForReview(repoPath, 'repo_path')
   const workspaceRealPath = realpathForReview(workspaceRoot, 'workspace root')
-  const allowedRoots = allowedRepoRoots.map((root) => realpathForReview(root, 'configured code-review allowed root'))
+  const allowedRoots = allowedRepoRoots.flatMap((root) => {
+    try {
+      return [realpathForReview(root, 'configured code-review allowed root')]
+    } catch {
+      return []
+    }
+  })
   const allowedByRoot = [workspaceRealPath, ...allowedRoots].some((root) => isPathInsideOrEqual(root, repoRealPath))
   if (!allowedByRoot) {
     throw new Error('repo_path must resolve inside the current tool workspace/worktree or a configured code-review allowed root')
   }
 
   const gitTopLevel = gitTopLevelForRepo(repoRealPath)
-  if (!gitTopLevel || !isPathInsideOrEqual(repoRealPath, gitTopLevel)) {
+  if (!gitTopLevel || !isPathInsideOrEqual(gitTopLevel, repoRealPath)) {
     throw new Error(`repo_path must be a Git repository root or contain a Git worktree: ${repoPath}`)
   }
 
@@ -643,7 +649,9 @@ function resolveReviewMode(mode?: string): ReviewMode {
 }
 
 export async function runLocalCodeReview(input: ReviewInput): Promise<ReviewRunSummary> {
-  const repoPath = await validateReviewRepoPathEffective(resolve(input.repoPath), resolve(input.workspaceRoot ?? process.cwd()))
+  const workspaceRoot = resolve(input.workspaceRoot ?? process.cwd())
+  const requestedRepoPath = isAbsolute(input.repoPath) ? input.repoPath : resolve(workspaceRoot, input.repoPath)
+  const repoPath = await validateReviewRepoPathEffective(requestedRepoPath, workspaceRoot)
   const mode = resolveReviewMode(input.mode)
   const providers = resolveReviewProviders(input.provider)
   const id = `review-${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`

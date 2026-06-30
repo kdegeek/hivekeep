@@ -388,6 +388,13 @@ describe('settings routes', () => {
       expect(mockSetCodeReviewAllowedRepoRoots).not.toHaveBeenCalled()
     })
 
+    itMocked('rejects a literal null request body', async () => {
+      const app = createApp()
+      const res = await app.request('/api/settings/code-review/allowed-repo-roots', json(null))
+      expect(res.status).toBe(400)
+      expect(mockSetCodeReviewAllowedRepoRoots).not.toHaveBeenCalled()
+    })
+
     itMocked('resets to env fallback', async () => {
       const app = createApp()
       const res = await app.request('/api/settings/code-review/allowed-repo-roots', { method: 'DELETE' })

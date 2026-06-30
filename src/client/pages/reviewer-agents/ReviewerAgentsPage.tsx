@@ -662,7 +662,7 @@ function ReviewerAgentsAdminPage() {
                     <CardHeader><CardTitle className="text-sm">Remediation handoff</CardTitle><CardDescription>Task assignment seam for follow-up fixes.</CardDescription></CardHeader>
                     <CardContent className="space-y-2 text-sm">
                       {selectedAgent.remediationTargets.map((target) => (
-                        <div key={target.agentSlug ?? target.role ?? target.label} className="flex items-center justify-between rounded-md border border-border p-2">
+                        <div key={`${target.agentSlug ?? ''}:${target.role ?? ''}:${target.label}:${target.reason}`} className="flex items-center justify-between rounded-md border border-border p-2">
                           <div><p className="font-medium">{target.label}</p><p className="text-xs text-muted-foreground">{target.reason}</p></div>
                           <Button size="sm" variant="outline" onClick={() => toast.info('Spawn-fix flow is stubbed for follow-up; finding state tracking is active.')}><ExternalLink className="size-3" /> Stub</Button>
                         </div>

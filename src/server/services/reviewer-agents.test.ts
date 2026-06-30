@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { tmpdir } from 'os'
 import { config } from '@/server/config'
 import {
@@ -59,6 +59,36 @@ describe('reviewer agent definitions and knowledge', () => {
       const updated = updateReviewerChecklist(initial[0]!.id, { title: 'Updated CodeRabbit checklist' })
       expect(updated.title).toBe('Updated CodeRabbit checklist')
       expect(listReviewerChecklists('coderabbit-reviewer')[0]?.title).toBe('Updated CodeRabbit checklist')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('resolves relative reviewer-agent repo paths from the supplied workspace root', async () => {
+    const root = makeFakeBin('cr', `
+if [[ "$1" == "--version" ]]; then echo "0.0.0-test"; exit 0; fi
+if [[ "$1" == "auth" ]]; then echo '{"authenticated":true}'; exit 0; fi
+if [[ "$1" == "doctor" ]]; then echo 'doctor ok'; exit 0; fi
+exit 1
+`)
+    try {
+      const kilo = join(root, 'kilo')
+      writeFileSync(kilo, `#!/usr/bin/env bash\nexit 127\n`)
+      chmodSync(kilo, 0o755)
+      const repo = join(root, 'repo')
+      mkdirSync(repo, { recursive: true })
+      const gitInit = Bun.spawnSync(['git', '-C', repo, 'init'], { stdout: 'pipe', stderr: 'pipe' })
+      if (gitInit.exitCode !== 0) throw new Error(new TextDecoder().decode(gitInit.stderr))
+      mutableCodeReviewConfig.allowedRepoRoots = []
+      mutableCodeReviewConfig.artifactDir = join(root, 'artifacts')
+      const previousCwd = process.cwd()
+      process.chdir(tmpdir())
+      try {
+        const agents = await listReviewerAgents(basename(repo), undefined, root)
+        expect(agents.find((agent) => agent.id === 'coderabbit-reviewer')?.auth.installed).toBe(true)
+      } finally {
+        process.chdir(previousCwd)
+      }
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

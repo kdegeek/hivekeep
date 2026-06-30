@@ -14,13 +14,13 @@ export interface ServerRuntimeContext {
  * process is restarted, which lets Agents distinguish host uptime from app
  * freshness on each top-level turn.
  */
-export function getServerRuntimeContext(now = Date.now()): ServerRuntimeContext {
-  const uptimeMs = Math.max(0, now - SERVER_STARTED_AT)
+export function getServerRuntimeContext(uptimeMs = process.uptime() * 1000): ServerRuntimeContext {
+  const normalizedUptimeMs = Math.max(0, Math.floor(uptimeMs))
   return {
     startedAt: new Date(SERVER_STARTED_AT),
     startedAtIso: new Date(SERVER_STARTED_AT).toISOString(),
-    uptimeMs,
-    uptimeSeconds: Math.floor(uptimeMs / 1000),
+    uptimeMs: normalizedUptimeMs,
+    uptimeSeconds: Math.floor(normalizedUptimeMs / 1000),
   }
 }
 

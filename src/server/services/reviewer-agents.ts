@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { dirname, join, resolve } from 'path'
+import { dirname, isAbsolute, join, resolve } from 'path'
 import { config } from '@/server/config'
 import {
   checkCodeRabbitAuth,
@@ -208,7 +208,9 @@ export function updateReviewerChecklist(id: string, patch: Partial<Pick<Reviewer
 }
 
 export async function listReviewerAgents(repoPath = process.cwd(), env?: Record<string, string | undefined>, workspaceRoot = process.cwd()): Promise<ReviewerAgent[]> {
-  const resolvedRepoPath = await validateReviewRepoPathEffective(resolve(repoPath), resolve(workspaceRoot))
+  const resolvedWorkspaceRoot = resolve(workspaceRoot)
+  const requestedRepoPath = isAbsolute(repoPath) ? repoPath : resolve(resolvedWorkspaceRoot, repoPath)
+  const resolvedRepoPath = await validateReviewRepoPathEffective(requestedRepoPath, resolvedWorkspaceRoot)
   const runs = listReviewRuns(20)
   const checklists = listReviewerChecklists()
   return Promise.all(REVIEWER_DEFINITIONS.map(async (definition) => {

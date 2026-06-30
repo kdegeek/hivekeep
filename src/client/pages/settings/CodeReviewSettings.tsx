@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { AlertTriangle, RotateCcw, Trash2 } from 'lucide-react'
 import { Button } from '@/client/components/ui/button'
@@ -33,6 +34,7 @@ function isAbsolutePath(value: string): boolean {
 }
 
 export function CodeReviewSettings() {
+  const { t } = useTranslation()
   const [isLoading, setIsLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [roots, setRoots] = useState<string[]>([''])
@@ -53,7 +55,7 @@ export function CodeReviewSettings() {
       setFetchError(null)
     } catch (err: unknown) {
       setFetchError(getErrorMessage(err))
-      toast.error('Failed to load code review settings')
+      toast.error(t('settings.codeReview.fetchError'))
     } finally {
       setIsLoading(false)
     }
@@ -66,7 +68,8 @@ export function CodeReviewSettings() {
   const normalizedRoots = useMemo(() => normalizeClientRoots(roots), [roots])
   const hasChanges = JSON.stringify(normalizedRoots) !== JSON.stringify(initialRoots)
   const invalidRoots = normalizedRoots.filter((root) => !isAbsolutePath(root))
-  const canSave = hasChanges && invalidRoots.length === 0 && !saving
+  const isSubmitting = saving || resetting
+  const canSave = hasChanges && invalidRoots.length === 0 && !isSubmitting
 
   const updateRoot = (index: number, value: string) => {
     setRoots((current) => current.map((root, i) => (i === index ? value : root)))
@@ -80,6 +83,7 @@ export function CodeReviewSettings() {
   }
 
   const handleSave = async () => {
+    if (isSubmitting) return
     setSaving(true)
     try {
       const data = await api.put<CodeReviewRootsResponse>('/settings/code-review/allowed-repo-roots', {
@@ -90,7 +94,7 @@ export function CodeReviewSettings() {
       setInitialRoots(data.allowedRepoRoots)
       setSource(data.source)
       setEnvFallback(data.envFallback)
-      toast.success('Code review repository roots saved')
+      toast.success(t('settings.codeReview.saveSuccess'))
     } catch (err: unknown) {
       toastError(err)
     } finally {
@@ -99,6 +103,7 @@ export function CodeReviewSettings() {
   }
 
   const handleReset = async () => {
+    if (isSubmitting) return
     setResetting(true)
     try {
       const data = await api.delete<CodeReviewRootsResponse>('/settings/code-review/allowed-repo-roots')
@@ -107,7 +112,7 @@ export function CodeReviewSettings() {
       setInitialRoots(data.allowedRepoRoots)
       setSource(data.source)
       setEnvFallback(data.envFallback)
-      toast.success('Code review roots reset to environment fallback')
+      toast.success(t('settings.codeReview.resetSuccess'))
     } catch (err: unknown) {
       toastError(err)
     } finally {
@@ -134,7 +139,7 @@ export function CodeReviewSettings() {
           setFetchError(null)
           loadSettings().catch(() => {})
         }}>
-          Retry
+          {t('common.retry')}
         </Button>
       </div>
     )
@@ -143,30 +148,30 @@ export function CodeReviewSettings() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <h2 className="text-lg font-semibold">Code Review</h2>
+        <h2 className="text-lg font-semibold">{t('settings.codeReview.title')}</h2>
         <p className="text-sm text-muted-foreground">
-          Configure host repository roots that local CodeRabbit and Kilo reviewer tools may access outside the current Agent workspace.
+          {t('settings.codeReview.description')}
         </p>
       </div>
 
       <Alert className="border-amber-500/30 bg-amber-500/5 text-amber-900 dark:text-amber-100">
         <AlertTriangle className="size-4" />
-        <AlertTitle>Security boundary</AlertTitle>
+        <AlertTitle>{t('settings.codeReview.securityTitle')}</AlertTitle>
         <AlertDescription>
-          Agents with local review tools may run reviewer CLIs against Git repositories under these roots. Keep the list narrow and only include paths you trust for code review access.
+          {t('settings.codeReview.securityDescription')}
         </AlertDescription>
       </Alert>
 
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <Label>Allowed repository roots</Label>
+            <Label>{t('settings.codeReview.allowedRootsLabel')}</Label>
             <p className="mt-1 text-xs text-muted-foreground">
-              Absolute paths only. Blank entries are ignored; duplicates are removed on save. Changes apply immediately and do not require restart.
+              {t('settings.codeReview.allowedRootsHint')}
             </p>
           </div>
           <span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
-            Source: {source === 'settings' ? 'Settings override' : 'environment fallback'}
+            {t('settings.codeReview.source', { source: source === 'settings' ? t('settings.codeReview.sourceSettings') : t('settings.codeReview.sourceEnv') })}
           </span>
         </div>
 
@@ -180,12 +185,12 @@ export function CodeReviewSettings() {
                   <Input
                     value={root}
                     onChange={(e) => updateRoot(index, e.target.value)}
-                    placeholder="/Users/kdegeek/hivekeep"
+                    placeholder={t('settings.codeReview.rootPlaceholder')}
                     aria-invalid={invalid}
                     className={invalid ? 'border-destructive focus-visible:ring-destructive' : undefined}
                   />
                   {invalid && (
-                    <p className="text-xs text-destructive">Enter an absolute path.</p>
+                    <p className="text-xs text-destructive">{t('settings.codeReview.absolutePathError')}</p>
                   )}
                 </div>
                 <Button
@@ -193,7 +198,7 @@ export function CodeReviewSettings() {
                   variant="ghost"
                   size="icon"
                   onClick={() => removeRoot(index)}
-                  aria-label="Remove root"
+                  aria-label={t('settings.codeReview.removeRoot')}
                 >
                   <Trash2 className="size-4" />
                 </Button>
@@ -203,28 +208,28 @@ export function CodeReviewSettings() {
         </div>
 
         <Button type="button" variant="outline" onClick={() => setRoots((current) => [...current, ''])}>
-          Add root
+          {t('settings.codeReview.addRoot')}
         </Button>
       </div>
 
       {source === 'settings' && envFallback.length > 0 && (
         <p className="text-xs text-muted-foreground">
-          Environment fallback if the Settings override is reset: {envFallback.join(', ')}
+          {t('settings.codeReview.envFallback', { roots: envFallback.join(', ') })}
         </p>
       )}
 
       <div className="flex flex-wrap items-center gap-2">
         <Button onClick={handleSave} disabled={!canSave}>
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? t('settings.codeReview.saving') : t('common.save')}
         </Button>
         {hasChanges && (
-          <Button variant="ghost" onClick={() => setRoots(initialRoots.length > 0 ? initialRoots : [''])}>
-            Discard
+          <Button variant="ghost" disabled={isSubmitting} onClick={() => setRoots(initialRoots.length > 0 ? initialRoots : [''])}>
+            {t('settings.codeReview.discard')}
           </Button>
         )}
-        <Button variant="outline" onClick={handleReset} disabled={resetting || source === 'env'}>
+        <Button variant="outline" onClick={handleReset} disabled={isSubmitting || source === 'env'}>
           <RotateCcw className="mr-2 size-4" />
-          {resetting ? 'Resetting…' : 'Reset to env fallback'}
+          {resetting ? t('settings.codeReview.resetting') : t('settings.codeReview.resetToEnv')}
         </Button>
       </div>
     </div>

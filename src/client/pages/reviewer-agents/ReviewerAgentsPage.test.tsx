@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { hasAgentsResponse } from './ReviewerAgentsPage'
+import { hasAgentsResponse } from '@/client/pages/reviewer-agents/ReviewerAgentsPage'
 
 const baseChecklist = {
   id: 'coderabbit-default-review',

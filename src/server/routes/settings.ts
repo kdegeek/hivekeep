@@ -757,7 +757,10 @@ settingsRoutes.get('/code-review/allowed-repo-roots', async (c) => {
 // PUT /api/settings/code-review/allowed-repo-roots
 settingsRoutes.put('/code-review/allowed-repo-roots', async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  const normalized = normalizeCodeReviewAllowedRoots((body as { allowedRepoRoots?: unknown }).allowedRepoRoots)
+  const allowedRepoRoots = body && typeof body === 'object' && !Array.isArray(body)
+    ? (body as { allowedRepoRoots?: unknown }).allowedRepoRoots
+    : undefined
+  const normalized = normalizeCodeReviewAllowedRoots(allowedRepoRoots)
   if ('error' in normalized) {
     return c.json({ error: { code: 'INVALID_BODY', message: normalized.error } }, 400)
   }
