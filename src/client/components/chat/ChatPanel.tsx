@@ -57,7 +57,7 @@ import { cn, getUserInitials } from '@/client/lib/utils'
 import { useSidePanel } from '@/client/contexts/SidePanelContext'
 import { ArrowDown, ArrowUp, Upload, Pin, PinOff, AlertTriangle, Bot, Loader2, Search, Settings2, Wrench } from 'lucide-react'
 import { toast } from 'sonner'
-import { api } from '@/client/lib/api'
+import { api, resolveApiAssetUrl } from '@/client/lib/api'
 
 interface AgentInfo {
   id: string
@@ -983,7 +983,7 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
   return (
     <WorkspacePathProvider agentId={agent.id}>
     <div
-      className="relative flex min-h-0 min-w-0 flex-1 flex-col"
+      className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col"
       onDragEnter={handlePanelDragEnter}
       onDragLeave={handlePanelDragLeave}
       onDragOver={handlePanelDragOver}
@@ -1014,7 +1014,7 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
       {mobile ? (
         <div className="glass-strong flex shrink-0 items-center gap-3 border-b px-3 py-2.5">
           {agent.avatarUrl ? (
-            <img src={agent.avatarUrl} alt={agent.name} className="size-10 rounded-2xl object-cover shadow-sm" />
+            <img src={resolveApiAssetUrl(agent.avatarUrl)} alt={agent.name} className="size-10 rounded-2xl object-cover shadow-sm" />
           ) : (
             <div className="flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <Bot className="size-5" />
@@ -1033,7 +1033,7 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
             size="icon"
             className="size-9 rounded-xl"
             onClick={toggleSearch}
-            aria-label={t('chat.search', 'Search')}
+            aria-label={t('chat.search.open', 'Search conversation')}
           >
             <Search className="size-4" />
           </Button>
@@ -1043,7 +1043,7 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
             size="icon"
             className="relative size-9 rounded-xl"
             onClick={toggleToolCalls}
-            aria-label={t('chat.toolCalls')}
+            aria-label={t('chat.toolCalls', 'Tool calls')}
           >
             <Wrench className="size-4" />
             {toolCallCount > 0 && (
@@ -1066,7 +1066,7 @@ export function ChatPanel({ agent, llmModels, modelUnavailable = false, queueSta
       ) : compact ? (
         <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
           {agent.avatarUrl ? (
-            <img src={agent.avatarUrl} alt={agent.name} className="size-9 rounded-full object-cover" />
+            <img src={resolveApiAssetUrl(agent.avatarUrl)} alt={agent.name} className="size-9 rounded-full object-cover" />
           ) : (
             <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary">
               <Bot className="size-5" />

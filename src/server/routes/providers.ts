@@ -11,6 +11,7 @@ import {
   listVoicesForProvider,
   getPluginProviderMeta,
 } from '@/server/providers/index'
+import type { ProviderModel } from '@/server/providers/index'
 import {
   loadProviderConfig,
   vaultifyProviderConfig,
@@ -33,6 +34,20 @@ import { generateProviderSlug } from '@/server/services/provider-slug'
 
 const log = createLogger('routes:providers')
 const providerRoutes = new Hono()
+const MODEL_LIST_TIMEOUT_MS = 8_000
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), ms)
+  })
+
+  try {
+    return await Promise.race([promise, timeout])
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+  }
+}
 
 // GET /api/providers — list all providers
 providerRoutes.get('/', async (c) => {
@@ -499,10 +514,38 @@ providerRoutes.get('/models', async (c) => {
           (f): f is 'llm' | 'embedding' | 'image' =>
             f === 'llm' || f === 'embedding' || f === 'image',
         )
+        const registryFallback = (): ProviderModel[] =>
+          listRegistryByProvider(p.id)
+            .filter((row) => row.enabled && !row.stale)
+            .map((row) => ({
+              id: row.modelId,
+              name: row.displayName ?? row.modelId,
+              capability: 'llm' as const,
+              ...(row.contextWindow != null ? { contextWindow: row.contextWindow } : {}),
+              ...(row.maxOutput != null ? { maxOutput: row.maxOutput } : {}),
+            }))
         // Parallelise per-family too — a provider that exposes llm +
         // embedding + image hits 3 different upstream catalogues.
         const familyResults = await Promise.all(
-          families.map((family) => listModelsForProvider(p.type, providerConfig, family)),
+          families.map(async (family): Promise<ProviderModel[]> => {
+            try {
+              return await withTimeout(
+                listModelsForProvider(p.type, providerConfig, family),
+                MODEL_LIST_TIMEOUT_MS,
+                `Timed out listing ${family} models after ${MODEL_LIST_TIMEOUT_MS}ms`,
+              )
+            } catch (err) {
+              if (family === 'llm') {
+                const fallback = registryFallback()
+                log.warn(
+                  { providerId: p.id, name: p.name, type: p.type, family, fallbackCount: fallback.length, err },
+                  'Falling back to registry models for provider',
+                )
+                return fallback
+              }
+              throw err
+            }
+          }),
         )
         // Chat models the admin disabled in the registry are hidden from the
         // picker (curation). Only applies when the registry is on; the chat

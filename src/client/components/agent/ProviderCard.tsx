@@ -102,6 +102,8 @@ export function ProviderCard({ provider, isTesting, onTest, onEdit, onDelete }: 
                   variant="ghost"
                   size="icon-xs"
                   onClick={() => { closeSettings(); navigate('/models') }}
+                  aria-label={t('settings.providers.modelsModal.openForProvider', 'Browse models for {{name}}', { name: provider.name })}
+                  title={t('settings.providers.modelsModal.openForProvider', 'Browse models for {{name}}', { name: provider.name })}
                 >
                   <List className="size-3.5" />
                 </Button>
@@ -119,6 +121,8 @@ export function ProviderCard({ provider, isTesting, onTest, onEdit, onDelete }: 
               size="icon-xs"
               onClick={onTest}
               disabled={isTesting}
+              aria-label={t('settings.providers.testProvider', 'Test {{name}}', { name: provider.name })}
+              title={t('settings.providers.testProvider', 'Test {{name}}', { name: provider.name })}
             >
               {isTesting ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -132,6 +136,8 @@ export function ProviderCard({ provider, isTesting, onTest, onEdit, onDelete }: 
               variant="ghost"
               size="icon-xs"
               onClick={onEdit}
+              aria-label={t('common.editItem', 'Edit {{name}}', { name: provider.name })}
+              title={t('common.editItem', 'Edit {{name}}', { name: provider.name })}
             >
               <Pencil className="size-3.5" />
             </Button>

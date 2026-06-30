@@ -275,6 +275,7 @@ function AuthenticatedShell() {
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/notifications" element={<MobileNotificationsPage onOpenSettings={openSettings} />} />
               <Route path="/settings/*" element={<MobileSettingsPage onOpenAccount={handleOpenAccount} />} />
+              <Route path="/models" element={<ModelRegistryPage />} />
               <Route
                 path="/agent/:slug/*"
                 element={

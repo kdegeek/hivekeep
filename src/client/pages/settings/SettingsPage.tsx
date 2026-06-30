@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from 'react'
+import { useState, useEffect, createContext, useContext, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Dialog,
@@ -278,13 +278,18 @@ function SettingsWorkspace({
   initialSection,
   initialFilters,
   onClose,
+  showFooter = true,
 }: {
   initialSection?: string
   initialFilters?: SettingsFilters
   onClose: () => void
+  showFooter?: boolean
 }) {
   const { t } = useTranslation()
   const [activeSection, setActiveSection] = useState<SectionId>('general')
+  const shellFooterClearanceStyle: CSSProperties | undefined = showFooter
+    ? undefined
+    : { paddingBottom: '7rem' }
 
   // Navigate to requested section when this settings surface opens.
   useEffect(() => {
@@ -338,7 +343,10 @@ function SettingsWorkspace({
         </div>
 
         {/* Desktop settings sidebar */}
-        <nav className="hidden md:block w-56 shrink-0 border-r surface-sidebar overflow-y-auto py-4 px-3">
+        <nav
+          className="hidden md:block w-56 shrink-0 border-r surface-sidebar overflow-y-auto py-4 px-3"
+          style={shellFooterClearanceStyle}
+        >
           {sectionGroups.map((group, gi) => (
             <div key={group.groupKey} className={gi > 0 ? 'mt-4' : ''}>
               <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
@@ -363,7 +371,7 @@ function SettingsWorkspace({
         </nav>
 
         {/* Main content */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6" style={shellFooterClearanceStyle}>
           <div className="mx-auto max-w-2xl">
             <SettingsCloseContext.Provider value={onClose}>
               <SettingsNavContext.Provider value={setActiveSection}>
@@ -379,7 +387,7 @@ function SettingsWorkspace({
       </div>
 
       {/* Version + stats footer */}
-      <SettingsFooter />
+      {showFooter && <SettingsFooter />}
     </SidebarProvider>
   )
 }
@@ -387,9 +395,11 @@ function SettingsWorkspace({
 export function SettingsPage({
   initialSection,
   initialFilters,
+  showFooter = true,
 }: {
   initialSection?: string
   initialFilters?: SettingsFilters
+  showFooter?: boolean
 }) {
   return (
     <div className="surface-base flex h-full min-h-0 overflow-hidden">
@@ -397,6 +407,7 @@ export function SettingsPage({
         initialSection={initialSection}
         initialFilters={initialFilters}
         onClose={() => {}}
+        showFooter={showFooter}
       />
     </div>
   )

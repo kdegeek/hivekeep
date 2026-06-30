@@ -172,11 +172,17 @@ export function MobileAgentHomePage({ onOpenSettings }: MobileAgentHomePageProps
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 {t('mobileAgents.cardsHeading', 'Agents')}
               </p>
-              {queuedCount > 0 && (
-                <Badge variant="secondary" className="rounded-full">
-                  {t('mobileAgents.queuedSummary', '{{count}} queued', { count: queuedCount })}
-                </Badge>
-              )}
+              <div className="flex items-center gap-2">
+                {queuedCount > 0 && (
+                  <Badge variant="secondary" className="rounded-full">
+                    {t('mobileAgents.queuedSummary', '{{count}} queued', { count: queuedCount })}
+                  </Badge>
+                )}
+                <Button type="button" size="sm" variant="outline" className="h-8 rounded-xl" onClick={openCreateAgent}>
+                  <Plus className="size-4" />
+                  {t('mobileAgents.create', 'New Agent')}
+                </Button>
+              </div>
             </div>
 
             {agents.map((agent, index) => {

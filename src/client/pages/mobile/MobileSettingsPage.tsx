@@ -244,6 +244,7 @@ export function MobileSettingsPage({ onOpenAccount }: MobileSettingsPageProps) {
       <SettingsPage
         initialSection={initialSection}
         initialFilters={state?.filters}
+        showFooter={false}
       />
     )
   }

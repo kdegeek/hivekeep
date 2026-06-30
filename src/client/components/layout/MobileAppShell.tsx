@@ -11,11 +11,18 @@ import { HivekeepLogo } from '@/client/components/common/HivekeepLogo'
 import { ThemeToggle } from '@/client/components/common/ThemeToggle'
 import { UserMenu } from '@/client/components/common/UserMenu'
 import { SSEStatusIndicator } from '@/client/components/common/SSEStatusIndicator'
+import { isCapacitorRuntime } from '@/client/lib/api'
 
 type MobileTabKey = 'chat' | 'tasks' | 'notifications' | 'settings'
 
 const safeTopStyle: CSSProperties = { paddingTop: 'env(safe-area-inset-top)' }
 const safeBottomStyle: CSSProperties = { paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }
+const nativeBottomNavStyle: CSSProperties = {
+  left: 0,
+  right: 0,
+  bottom: 0,
+  paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))',
+}
 
 export function MobilePage({ children, className }: { children: ReactNode; className?: string }) {
   return (
@@ -26,8 +33,22 @@ export function MobilePage({ children, className }: { children: ReactNode; class
 }
 
 export function MobilePageBody({ children, className }: { children: ReactNode; className?: string }) {
+  const nativeScrollClearanceStyle: CSSProperties | undefined = isCapacitorRuntime()
+    ? { paddingBottom: 'calc(7rem + max(1.25rem, env(safe-area-inset-bottom)))' }
+    : undefined
+  const scrollSurfaceStyle: CSSProperties = {
+    ...nativeScrollClearanceStyle,
+    background: 'var(--color-background)',
+    backfaceVisibility: 'hidden',
+    transform: 'translateZ(0)',
+    WebkitBackfaceVisibility: 'hidden',
+  }
+
   return (
-    <div className={cn('min-h-0 flex-1 overflow-y-auto px-4 py-3', className)}>
+    <div
+      className={cn('min-h-0 flex-1 overflow-y-auto px-4 py-3', className)}
+      style={scrollSurfaceStyle}
+    >
       {children}
     </div>
   )
@@ -36,7 +57,7 @@ export function MobilePageBody({ children, className }: { children: ReactNode; c
 function getActiveTab(pathname: string): MobileTabKey {
   if (pathname.startsWith('/tasks')) return 'tasks'
   if (pathname.startsWith('/notifications')) return 'notifications'
-  if (pathname.startsWith('/settings')) return 'settings'
+  if (pathname.startsWith('/settings') || pathname.startsWith('/models')) return 'settings'
   return 'chat'
 }
 
@@ -59,6 +80,7 @@ export function MobileAppShell({
 
   const activeTab = getActiveTab(location.pathname)
   const isChatDetail = location.pathname.startsWith('/agent/')
+  const isNativeMobile = isCapacitorRuntime()
   const activeTaskCount = activeTasks.length
   const hasAwaitingTask = activeTasks.some(
     (task) => task.status === 'awaiting_human_input' || task.status === 'awaiting_agent_response',
@@ -91,8 +113,20 @@ export function MobileAppShell({
 
   const title = navItems.find((item) => item.key === activeTab)?.label ?? 'Hivekeep'
 
+  const mainStyle: CSSProperties = {
+    paddingBottom: isChatDetail
+      ? undefined
+      : isNativeMobile
+        ? 'calc(4.25rem + max(1.25rem, env(safe-area-inset-bottom)))'
+        : 'calc(4.25rem + max(0.5rem, env(safe-area-inset-bottom)))',
+  }
+  const navStyle: CSSProperties = {
+    ...(isNativeMobile ? nativeBottomNavStyle : safeBottomStyle),
+    background: 'var(--color-background)',
+  }
+
   return (
-    <div className="surface-base flex h-dvh w-screen flex-col overflow-hidden" style={safeTopStyle}>
+    <div className="surface-base relative flex h-dvh w-screen flex-col overflow-hidden" style={safeTopStyle}>
       <header className="surface-header flex h-12 shrink-0 items-center gap-2 border-b px-3">
         <button
           type="button"
@@ -123,12 +157,17 @@ export function MobileAppShell({
         </div>
       </header>
 
-      <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden" style={mainStyle}>{children}</main>
 
       {!isChatDetail && (
         <nav
-          className="glass-strong shrink-0 border-t px-2 pt-1.5 shadow-[0_-8px_28px_oklch(0_0_0_/_0.08)]"
-          style={safeBottomStyle}
+          className={cn(
+            'fixed z-50 px-2 pt-1.5',
+            isNativeMobile
+              ? 'border-t'
+              : 'inset-x-0 bottom-0 border-t',
+          )}
+          style={navStyle}
           aria-label={t('appTopBar.sections', 'Sections')}
         >
           <div className="grid grid-cols-4 gap-1">

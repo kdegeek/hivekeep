@@ -1,6 +1,8 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
+@source "../";
+@source "../../shared";
 
 /*
  * Hivekeep Design Tokens — Aurora
@@ -4605,4 +4607,3 @@ body {
 [data-slot="scroll-area-viewport"] > div {
   display: block !important;
 }
-
