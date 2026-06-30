@@ -3223,6 +3223,15 @@
     "updateSuccess": "Обновлено до {{version}}!",
     "updateFailed": "Не удалось обновиться"
   },
+  "desktopUpdate": {
+    "title": "Доступно обновление приложения",
+    "description": "Hivekeep {{version}} готов к установке",
+    "releaseNotes": "Что нового",
+    "updateButton": "Обновить и перезапустить",
+    "later": "Позже",
+    "downloading": "Загрузка обновления...",
+    "restarting": "Перезапуск Hivekeep..."
+  },
   "whatsNew": {
     "title": "Что нового",
     "description": "У вас версия v{{version}}",

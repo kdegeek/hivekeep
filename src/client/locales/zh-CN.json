@@ -3196,6 +3196,15 @@
     "updateSuccess": "已更新到 {{version}}！",
     "updateFailed": "更新失败"
   },
+  "desktopUpdate": {
+    "title": "桌面更新可用",
+    "description": "Hivekeep {{version}} 已准备好安装",
+    "releaseNotes": "更新内容",
+    "updateButton": "更新并重启",
+    "later": "稍后",
+    "downloading": "正在下载更新...",
+    "restarting": "正在重启 Hivekeep..."
+  },
   "whatsNew": {
     "title": "更新内容",
     "description": "你正在运行 v{{version}}",

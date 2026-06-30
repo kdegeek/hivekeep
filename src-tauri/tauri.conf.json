@@ -26,8 +26,17 @@
       "capabilities": ["default"]
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ0QjA0MUM4RUMzOUJCNkIKUldScnV6bnN5RUd3Ukd5bllyRytRamR2bUhXRXVSSmxDNVFYL2RjR25OcmVnNTRmNHp0enlOM0IK",
+      "endpoints": [
+        "https://github.com/MarlBurroW/hivekeep/releases/latest/download/latest.json"
+      ]
+    }
+  },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": ["msi", "nsis"],
     "publisher": "marlburrow",
     "icon": [

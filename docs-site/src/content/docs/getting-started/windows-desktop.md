@@ -21,7 +21,7 @@ If Windows SmartScreen warns about an unsigned or newly published installer, onl
 
 ## Update
 
-Download and run the newer `Hivekeep-Setup-*.exe` from the latest release. The desktop app keeps using the same server URL after an update.
+The desktop app checks for updates on launch and offers to download, install, and restart in place. You can also download and run the newer `Hivekeep-Setup-*.exe` from the latest release yourself. Either way, the desktop app keeps using the same server URL after an update.
 
 ## Troubleshooting
 

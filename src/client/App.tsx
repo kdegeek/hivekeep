@@ -5,7 +5,9 @@ import { useTranslation } from 'react-i18next'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { api, getHivekeepServerUrl, isMobileApiRuntime, shouldUseMobileSurface } from '@/client/lib/api'
+import { installNativeLinkHandling } from '@/client/lib/native-links'
 import { useNativeMobileNotifications } from '@/client/hooks/useNativeMobileNotifications'
+import { useNativeDesktopNotifications } from '@/client/hooks/useNativeDesktopNotifications'
 import { SidePanelProvider } from '@/client/contexts/SidePanelContext'
 import { TasksProvider } from '@/client/contexts/TasksContext'
 import { CronsProvider } from '@/client/contexts/CronsContext'
@@ -14,6 +16,7 @@ import { UpdateProvider } from '@/client/contexts/UpdateContext'
 import { FeedbackProvider } from '@/client/contexts/FeedbackContext'
 import { UpdateOverlay } from '@/client/components/common/UpdateOverlay'
 import { GlobalUpdateDialog } from '@/client/components/common/GlobalUpdateDialog'
+import { DesktopUpdateDialog } from '@/client/components/common/DesktopUpdateDialog'
 import { ActivityBar } from '@/client/components/layout/ActivityBar'
 import { AppTopBar } from '@/client/components/layout/AppTopBar'
 import { MobileAppShell } from '@/client/components/layout/MobileAppShell'
@@ -107,6 +110,12 @@ function AppRoot() {
     await refetch()
     await checkOnboarding()
   }, [checkOnboarding, refetch])
+
+  // Desktop only, no-ops everywhere else: route external link clicks through
+  // the OS browser instead of the app's own webview (see native-links.ts).
+  useEffect(() => {
+    installNativeLinkHandling()
+  }, [])
 
   // Warm the registry's name→domain map once. The lib falls back to 'mcp'
   // while this is in-flight; first paint may briefly show generic badges
@@ -245,6 +254,7 @@ function AuthenticatedShell() {
   }, [navigate])
   const openSettings = useMobileRouteTree ? handleOpenMobileSettings : handleOpenSettings
   useNativeMobileNotifications(navigate)
+  useNativeDesktopNotifications()
 
   useEffect(() => {
     if (!(window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__) return
@@ -386,6 +396,9 @@ function AuthenticatedShell() {
         {/* Shared update dialog + full-screen self-update overlay (global) */}
         <GlobalUpdateDialog />
         <UpdateOverlay />
+        {/* Desktop binary self-update (Tauri updater) — distinct from the server
+            update flow above. No-ops outside the desktop shell. */}
+        <DesktopUpdateDialog />
       </>
     </TicketMentionShell>
     </FeedbackProvider>

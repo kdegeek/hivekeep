@@ -10,6 +10,7 @@ import { FormDialog } from '@/client/components/common/FormDialog'
 import { FormField } from '@/client/components/common/FormField'
 import { ProviderIcon } from '@/client/components/common/ProviderIcon'
 import { api, getErrorMessage } from '@/client/lib/api'
+import { openExternalUrl } from '@/client/lib/native-links'
 import { useProviderTypes } from '@/client/hooks/useProviderTypes'
 import { cn } from '@/client/lib/utils'
 import type { ProviderType } from '@/shared/types'
@@ -228,7 +229,7 @@ export function ProviderFormDialog({ open, onOpenChange, onSaved, provider, prov
       setSignInToken(res.state)
       setSignInUrl(res.authUrl)
       setSignInStatus('awaiting')
-      window.open(res.authUrl, '_blank', 'noopener,noreferrer')
+      void openExternalUrl(res.authUrl)
     } catch (err: unknown) {
       setError(getErrorMessage(err) || t('onboarding.providers.testFailed'))
       setSignInStatus('idle')

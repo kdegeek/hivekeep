@@ -3196,6 +3196,15 @@
     "updateSuccess": "Atualizado para {{version}}!",
     "updateFailed": "Falha na atualização"
   },
+  "desktopUpdate": {
+    "title": "Atualização do desktop disponível",
+    "description": "Hivekeep {{version}} está pronto para instalar",
+    "releaseNotes": "Novidades",
+    "updateButton": "Atualizar e reiniciar",
+    "later": "Mais tarde",
+    "downloading": "Baixando atualização...",
+    "restarting": "Reiniciando o Hivekeep..."
+  },
   "whatsNew": {
     "title": "Novidades",
     "description": "Você está rodando a v{{version}}",
