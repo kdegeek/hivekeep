@@ -5,7 +5,7 @@
   "identifier": "com.marlburrow.hivekeep",
   "build": {
     "beforeDevCommand": "npm run dev:client -- --mode desktop",
-    "beforeBuildCommand": "npm run build -- --mode desktop",
+    "beforeBuildCommand": "npm run desktop:build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../dist/client"
   },
