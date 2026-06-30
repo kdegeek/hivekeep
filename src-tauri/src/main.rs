@@ -1,20 +1,32 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::{
+    fs,
+    path::PathBuf,
     sync::Mutex,
     time::{Duration, Instant},
 };
 
 use tauri::{
+    menu::MenuBuilder,
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
-    WindowEvent,
+    AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, Size, WebviewUrl, WebviewWindow,
+    WebviewWindowBuilder, Window, WindowEvent,
 };
 
+const MAIN_WINDOW_LABEL: &str = "main";
 const QUICK_PANEL_LABEL: &str = "quick-panel";
 const QUICK_PANEL_WIDTH: f64 = 390.0;
 const QUICK_PANEL_HEIGHT: f64 = 620.0;
 const TRAY_BLUR_SUPPRESS_TOGGLE_MS: u64 = 300;
+const WINDOW_STATE_FILE: &str = "window-state.txt";
+const MIN_MAIN_WINDOW_WIDTH: u32 = 960;
+const MIN_MAIN_WINDOW_HEIGHT: u32 = 640;
+const OPEN_MAIN_MENU_ID: &str = "open-main";
+const QUICK_PANEL_MENU_ID: &str = "quick-panel";
+const SETTINGS_MENU_ID: &str = "settings";
+const QUIT_MENU_ID: &str = "quit";
+const OPEN_SETTINGS_EVENT: &str = "hivekeep-open-settings";
 
 #[derive(Default)]
 struct QuickPanelState {
@@ -34,12 +46,15 @@ fn main() {
         .manage(QuickPanelState::default())
         .invoke_handler(tauri::generate_handler![hide_quick_panel])
         .setup(|app| {
+            if let Some(main_window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+                restore_main_window_placement(app.handle(), &main_window);
+            }
             build_quick_panel(app.handle())?;
             build_tray_icon(app)?;
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if window.label() == QUICK_PANEL_LABEL {
+        .on_window_event(|window, event| match window.label() {
+            QUICK_PANEL_LABEL => {
                 if let WindowEvent::Focused(false) = event {
                     let _ = window.hide();
                     if let Some(state) = window.try_state::<QuickPanelState>() {
@@ -49,6 +64,18 @@ fn main() {
                     }
                 }
             }
+            MAIN_WINDOW_LABEL => match event {
+                WindowEvent::CloseRequested { api, .. } => {
+                    save_main_window_placement(window);
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+                WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
+                    save_main_window_placement(window);
+                }
+                _ => {}
+            },
+            _ => {}
         })
         .run(tauri::generate_context!())
         .expect("error while running Hivekeep");
@@ -74,9 +101,25 @@ fn build_quick_panel(app: &AppHandle) -> tauri::Result<WebviewWindow> {
 }
 
 fn build_tray_icon(app: &tauri::App) -> tauri::Result<()> {
+    let menu = MenuBuilder::new(app)
+        .text(OPEN_MAIN_MENU_ID, "Open Hivekeep")
+        .text(QUICK_PANEL_MENU_ID, "Quick Panel")
+        .text(SETTINGS_MENU_ID, "Settings / Server URL")
+        .separator()
+        .text(QUIT_MENU_ID, "Quit")
+        .build()?;
+
     let mut builder = TrayIconBuilder::new()
         .tooltip("Hivekeep")
+        .menu(&menu)
         .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            OPEN_MAIN_MENU_ID => open_main_window(app),
+            QUICK_PANEL_MENU_ID => toggle_quick_panel_at_cursor(app),
+            SETTINGS_MENU_ID => open_settings(app),
+            QUIT_MENU_ID => app.exit(0),
+            _ => {}
+        })
         .on_tray_icon_event(|tray, event| {
             let TrayIconEvent::Click {
                 position,
@@ -97,6 +140,27 @@ fn build_tray_icon(app: &tauri::App) -> tauri::Result<()> {
 
     builder.build(app)?;
     Ok(())
+}
+
+fn open_main_window(app: &AppHandle) {
+    let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) else {
+        return;
+    };
+
+    let _ = window.show();
+    let _ = window.unminimize();
+    let _ = window.set_focus();
+}
+
+fn open_settings(app: &AppHandle) {
+    open_main_window(app);
+    let _ = app.emit_to(MAIN_WINDOW_LABEL, OPEN_SETTINGS_EVENT, "general");
+}
+
+fn toggle_quick_panel_at_cursor(app: &AppHandle) {
+    if let Ok(position) = app.cursor_position() {
+        toggle_quick_panel(app, position);
+    }
 }
 
 fn toggle_quick_panel(app: &AppHandle, anchor: PhysicalPosition<f64>) {
@@ -163,4 +227,67 @@ fn work_area_containing(app: &AppHandle, x: f64, y: f64) -> Option<(f64, f64, f6
             (x >= left && x <= right && y >= top && y <= bottom)
                 .then_some((left, top, right, bottom))
         })
+}
+
+#[derive(Clone, Copy)]
+struct MainWindowPlacement {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+}
+
+fn restore_main_window_placement(app: &AppHandle, window: &WebviewWindow) {
+    let Some(placement) = load_main_window_placement(app) else {
+        return;
+    };
+
+    let _ = window.set_position(PhysicalPosition::new(placement.x, placement.y));
+    let _ = window.set_size(Size::Physical(PhysicalSize::new(
+        placement.width,
+        placement.height,
+    )));
+}
+
+fn save_main_window_placement(window: &Window) {
+    let Ok(position) = window.outer_position() else {
+        return;
+    };
+    let Ok(size) = window.inner_size() else {
+        return;
+    };
+    let Some(path) = window_state_path(window.app_handle()) else {
+        return;
+    };
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+
+    let placement = format!(
+        "{},{},{},{}",
+        position.x, position.y, size.width, size.height
+    );
+    let _ = fs::write(path, placement);
+}
+
+fn load_main_window_placement(app: &AppHandle) -> Option<MainWindowPlacement> {
+    let path = window_state_path(app)?;
+    let contents = fs::read_to_string(path).ok()?;
+    let mut parts = contents.trim().split(',');
+
+    let placement = MainWindowPlacement {
+        x: parts.next()?.parse().ok()?,
+        y: parts.next()?.parse().ok()?,
+        width: parts.next()?.parse().ok()?,
+        height: parts.next()?.parse().ok()?,
+    };
+
+    (parts.next().is_none()
+        && placement.width >= MIN_MAIN_WINDOW_WIDTH
+        && placement.height >= MIN_MAIN_WINDOW_HEIGHT)
+        .then_some(placement)
+}
+
+fn window_state_path(app: &AppHandle) -> Option<PathBuf> {
+    Some(app.path().app_config_dir().ok()?.join(WINDOW_STATE_FILE))
 }

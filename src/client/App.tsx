@@ -246,6 +246,30 @@ function AuthenticatedShell() {
   const openSettings = useMobileRouteTree ? handleOpenMobileSettings : handleOpenSettings
   useNativeMobileNotifications(navigate)
 
+  useEffect(() => {
+    if (!(window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__) return
+
+    let disposed = false
+    let cleanup: (() => void) | undefined
+    void import('@tauri-apps/api/event')
+      .then(({ listen }) => listen<string>('hivekeep-open-settings', (event) => {
+        openSettings(event.payload || undefined)
+      }))
+      .then((unlisten) => {
+        if (disposed) {
+          unlisten()
+          return
+        }
+        cleanup = unlisten
+      })
+      .catch(() => undefined)
+
+    return () => {
+      disposed = true
+      cleanup?.()
+    }
+  }, [openSettings])
+
   // Surface the result of an email OAuth connect (the callback redirects back
   // to "/?email_connected=<addr>" or "/?email_error=<msg>"). Toast, open the
   // Email accounts settings on success, then strip the query params.
