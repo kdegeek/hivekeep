@@ -420,7 +420,7 @@ function buildContextBlock(): string {
   const envFileLine = env?.envFilePath
     ? `\nConfig file: ${env.envFilePath}`
     : ''
-  const runtime = getServerRuntimeContext(now.getTime())
+  const runtime = getServerRuntimeContext()
   const serverStarted = runtime.startedAt.toLocaleString('en-US', {
     year: 'numeric',
     month: 'long',

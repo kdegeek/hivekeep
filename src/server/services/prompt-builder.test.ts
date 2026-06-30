@@ -155,6 +155,23 @@ describe('buildSystemPrompt', () => {
     expect(result).toContain('resets when Hivekeep restarts')
   })
 
+  it('reports a plausible server uptime (not epoch-scale)', () => {
+    const result = buildSystemPrompt(makeParams())
+    const lines = result.split('\n')
+    const uptimeLine = lines.find((l) => l.includes('Server process uptime:'))
+    expect(uptimeLine).toBeDefined()
+    // Uptime should be seconds or minutes, not decades.
+    // A test process running for <60s typically shows "0s" or "Ns".
+    // Epoch ms (~1.78e12) would render as "20600d" — reject any days value > 365.
+    if (uptimeLine) {
+      const match = uptimeLine.match(/(\d+)d/)
+      if (match) {
+        const days = parseInt(match[1] ?? '0', 10)
+        expect(days).toBeLessThanOrEqual(1)
+      }
+    }
+  })
+
   // --- Initiative ---
 
   it('includes initiative and proactivity instructions for main agent', () => {
