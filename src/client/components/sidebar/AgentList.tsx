@@ -28,6 +28,7 @@ import {
 } from '@/client/components/ui/sidebar'
 import { Plus, Bot, Download } from 'lucide-react'
 import { EmptyState } from '@/client/components/common/EmptyState'
+import { buildApiUrl, withNativeAuthTransport } from '@/client/lib/api'
 
 interface AgentSummary {
   id: string
@@ -101,10 +102,10 @@ export const AgentList = memo(function AgentList({ agents, llmModels, selectedAg
 
   const handleExportAgent = useCallback(async (agentId: string) => {
     try {
-      const token = localStorage.getItem('auth_token') || ''
-      const res = await fetch(`/api/agents/${agentId}/export`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await fetch(
+        buildApiUrl(`/agents/${agentId}/export`),
+        withNativeAuthTransport(),
+      )
       if (!res.ok) return
       const data = await res.json()
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })

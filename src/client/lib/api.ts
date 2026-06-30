@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 
 const API_PATH_PREFIX = '/api'
 export const MOBILE_SERVER_URL_STORAGE_KEY = 'hivekeep:serverUrl'
+export const MOBILE_AUTH_TOKEN_STORAGE_KEY = 'auth_token'
 
 export type NativeRuntime = 'desktop' | 'mobile'
 export type AppSurface = 'desktop' | 'mobile'
@@ -43,6 +44,10 @@ export function isMobileApiRuntime(): boolean {
   return import.meta.env?.VITE_HIVEKEEP_MOBILE === 'true' ||
     isCapacitorRuntime() ||
     getInjectedNativeRuntime() === 'mobile'
+}
+
+export function isNativeApiRuntime(): boolean {
+  return isMobileApiRuntime() || isDesktopRuntime()
 }
 
 export function shouldUseMobileSurface(): boolean {
@@ -111,13 +116,58 @@ export function clearHivekeepServerUrl(): void {
   localStorage.removeItem(MOBILE_SERVER_URL_STORAGE_KEY)
 }
 
+export function getNativeSessionToken(): string | null {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    return localStorage.getItem(MOBILE_AUTH_TOKEN_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function setNativeSessionToken(token: string): void {
+  if (typeof localStorage === 'undefined') return
+  localStorage.setItem(MOBILE_AUTH_TOKEN_STORAGE_KEY, token)
+}
+
+export function clearNativeSessionToken(): void {
+  if (typeof localStorage === 'undefined') return
+  localStorage.removeItem(MOBILE_AUTH_TOKEN_STORAGE_KEY)
+}
+
+function toHeaderRecord(headers: Headers): Record<string, string> {
+  const record: Record<string, string> = {}
+  headers.forEach((value, key) => {
+    const canonicalKey = key.toLowerCase() === 'content-type'
+      ? 'Content-Type'
+      : key.toLowerCase() === 'authorization'
+        ? 'Authorization'
+        : key
+    record[canonicalKey] = value
+  })
+  return record
+}
+
+export function withNativeAuthTransport(options: RequestInit = {}): RequestInit {
+  const headers = new Headers(options.headers)
+  const token = isNativeApiRuntime() ? getNativeSessionToken() : null
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+  return {
+    ...options,
+    credentials: isNativeApiRuntime() ? 'omit' : 'include',
+    headers: toHeaderRecord(headers),
+  }
+}
+
 export async function validateHivekeepServerConnection(serverUrl: string): Promise<string> {
   const normalized = normalizeHivekeepServerUrl(serverUrl)
   const controller = new AbortController()
   const timeoutId = window.setTimeout(() => controller.abort(), 10_000)
   try {
     const response = await fetch(`${normalized}${API_PATH_PREFIX}/health`, {
-      credentials: 'include',
+      credentials: isNativeApiRuntime() ? 'omit' : 'include',
       headers: { Accept: 'application/json' },
       signal: controller.signal,
     })
@@ -216,14 +266,13 @@ export function toastError(err: unknown): void {
 // ─── Core fetch wrapper ───────────────────────────────────────────────────────
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(buildApiUrl(path), {
+  const headers = new Headers(options?.headers)
+  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+
+  const response = await fetch(buildApiUrl(path), withNativeAuthTransport({
     ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  })
+    headers,
+  }))
 
   if (!response.ok) {
     let code = 'REQUEST_FAILED'

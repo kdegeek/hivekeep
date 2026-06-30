@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { api, getErrorMessage } from '@/client/lib/api'
+import { api, buildApiUrl, getErrorMessage, withNativeAuthTransport } from '@/client/lib/api'
 import { useSSE, useSSEResync } from '@/client/hooks/useSSE'
 import { sourceApiBase, sourceQuery, changeMatchesSource, sameSource } from '@/client/lib/workspace-source'
 import type { WorkspaceEntry, WorkspaceSourceRef } from '@/shared/types'
@@ -345,7 +345,7 @@ export function useWorkspaceFiles(source: WorkspaceSourceRef | null) {
       const formData = new FormData()
       formData.append('path', dirPath)
       for (const file of files) formData.append('file', file)
-      const res = await fetch(`/api${reqUrl('/upload')}`, { method: 'POST', credentials: 'include', body: formData })
+      const res = await fetch(buildApiUrl(reqUrl('/upload')), withNativeAuthTransport({ method: 'POST', body: formData }))
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
         throw new Error(data?.error?.message ?? 'Upload failed')

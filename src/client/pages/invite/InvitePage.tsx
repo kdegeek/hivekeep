@@ -10,7 +10,13 @@ import { Alert, AlertDescription } from '@/client/components/ui/alert'
 import { Avatar, AvatarFallback, AvatarImage } from '@/client/components/ui/avatar'
 import { AlertCircle, Camera, Loader2, ArrowLeft } from 'lucide-react'
 import { LanguageSelector, AgentLanguageSelector } from '@/client/components/common/LanguageSelector'
-import { getErrorMessage } from '@/client/lib/api'
+import {
+  buildApiUrl,
+  getErrorMessage,
+  isNativeApiRuntime,
+  setNativeSessionToken,
+  withNativeAuthTransport,
+} from '@/client/lib/api'
 import { getUserInitials } from '@/client/lib/utils'
 import { validateProfileFields } from '@/shared/profile-validation'
 import { translateProfileErrorCode } from '@/client/lib/profile-validation-i18n'
@@ -49,7 +55,7 @@ export function InvitePage() {
       return
     }
 
-    fetch(`/api/invitations/${token}/validate`)
+    fetch(buildApiUrl(`/invitations/${token}/validate`), withNativeAuthTransport())
       .then((res) => res.json())
       .then((data) => {
         setValid(data.valid)
@@ -88,7 +94,10 @@ export function InvitePage() {
 
     // Re-validate token before submitting
     try {
-      const validateRes = await fetch(`/api/invitations/${token}/validate`)
+      const validateRes = await fetch(
+        buildApiUrl(`/invitations/${token}/validate`),
+        withNativeAuthTransport(),
+      )
       const validateData = await validateRes.json()
       if (!validateData.valid) {
         setError(t('invite.invalidToken'))
@@ -103,27 +112,30 @@ export function InvitePage() {
 
     try {
       // 1. Register via Better Auth
-      const signupRes = await fetch('/api/auth/sign-up/email', {
+      const signupRes = await fetch(buildApiUrl('/auth/sign-up/email'), withNativeAuthTransport({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           name: `${firstName} ${lastName}`,
           email,
           password,
         }),
-      })
+      }))
 
       if (!signupRes.ok) {
         const data = await signupRes.json().catch(() => ({}))
         throw new Error(data?.message || data?.error?.message || 'Registration failed')
       }
 
+      const signupBody = await signupRes.json().catch(() => ({})) as { token?: unknown }
+      if (isNativeApiRuntime() && typeof signupBody.token === 'string' && signupBody.token) {
+        setNativeSessionToken(signupBody.token)
+      }
+
       // 2. Create user profile with invitation token
-      const profileRes = await fetch('/api/onboarding/profile', {
+      const profileRes = await fetch(buildApiUrl('/onboarding/profile'), withNativeAuthTransport({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           firstName,
           lastName,
@@ -132,7 +144,7 @@ export function InvitePage() {
           agentLanguage,
           invitationToken: token,
         }),
-      })
+      }))
 
       if (!profileRes.ok) {
         const data = await profileRes.json().catch(() => ({}))
@@ -143,11 +155,10 @@ export function InvitePage() {
       if (avatarFile) {
         const formData = new FormData()
         formData.append('file', avatarFile)
-        await fetch('/api/me/avatar', {
+        await fetch(buildApiUrl('/me/avatar'), withNativeAuthTransport({
           method: 'POST',
-          credentials: 'include',
           body: formData,
-        })
+        }))
       }
 
       setSuccess(true)

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import { buildApiUrl, withNativeAuthTransport } from '@/client/lib/api'
 
 export interface PendingFile {
   /** Client-side unique ID for React keys and removal */
@@ -101,11 +102,10 @@ async function uploadSingleFile(
     formData.append('file', entry.file)
     formData.append('agentId', agentId)
 
-    const res = await fetch('/api/files/upload', {
+    const res = await fetch(buildApiUrl('/files/upload'), withNativeAuthTransport({
       method: 'POST',
-      credentials: 'include',
       body: formData,
-    })
+    }))
 
     if (!res.ok) {
       const data = await res.json().catch(() => null)

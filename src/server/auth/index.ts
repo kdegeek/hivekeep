@@ -1,6 +1,7 @@
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { APIError } from 'better-auth/api'
+import { bearer } from 'better-auth/plugins/bearer'
 import { db } from '@/server/db/index'
 import * as schema from '@/server/db/schema'
 import { config } from '@/server/config'
@@ -33,6 +34,9 @@ export const auth = betterAuth({
       maxAge: 5 * 60, // 5 minutes
     },
   },
+  plugins: [
+    bearer(),
+  ],
   trustedOrigins: process.env.TRUSTED_ORIGINS
     ? [...process.env.TRUSTED_ORIGINS.split(',').map((origin) => origin.trim()), 'capacitor://localhost']
     : [

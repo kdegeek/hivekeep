@@ -36,6 +36,7 @@ import { useAutoScroll } from '@/client/hooks/useAutoScroll'
 import { cn } from '@/client/lib/utils'
 import { ContextBar } from '@/client/components/chat/ContextBar'
 import type { ContextTokenBreakdown } from '@/shared/types'
+import { buildApiUrl, withNativeAuthTransport } from '@/client/lib/api'
 
 interface LLMModel {
   id: string
@@ -87,7 +88,10 @@ export function QuickChatPanel({ agentId, agentName, agentAvatarUrl, agentModel,
     apiContextTokens?: number
   } | null>(null)
   useEffect(() => {
-    fetch(`/api/agents/${agentId}/context-preview?sessionId=${sessionId}`)
+    fetch(
+      buildApiUrl(`/agents/${agentId}/context-preview?sessionId=${sessionId}`),
+      withNativeAuthTransport(),
+    )
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
         if (data?.tokenEstimate) {

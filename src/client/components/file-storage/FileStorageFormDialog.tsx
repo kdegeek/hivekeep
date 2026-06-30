@@ -8,7 +8,7 @@ import { Label } from '@/client/components/ui/label'
 import { Switch } from '@/client/components/ui/switch'
 import { InfoTip } from '@/client/components/common/InfoTip'
 import { AgentSelector } from '@/client/components/common/AgentSelector'
-import { api, getErrorMessage } from '@/client/lib/api'
+import { api, buildApiUrl, getErrorMessage, withNativeAuthTransport } from '@/client/lib/api'
 import type { StoredFileData } from '@/client/components/file-storage/FileStorageCard'
 
 /** Creation-summary shape returned by the share endpoints (url included). */
@@ -143,11 +143,10 @@ export function FileStorageFormDialog({
         if (expiresIn) formData.append('expiresIn', expiresIn)
         formData.append('readAndBurn', String(readAndBurn))
 
-        const response = await fetch('/api/file-storage', {
+        const response = await fetch(buildApiUrl('/file-storage'), withNativeAuthTransport({
           method: 'POST',
-          credentials: 'include',
           body: formData,
-        })
+        }))
 
         if (!response.ok) {
           const err = await response.json()

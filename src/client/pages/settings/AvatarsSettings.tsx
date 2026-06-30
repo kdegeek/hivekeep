@@ -11,7 +11,7 @@ import { ModelPicker, modelPickerValue } from '@/client/components/common/ModelP
 import { InfoTip } from '@/client/components/common/InfoTip'
 import { FormField } from '@/client/components/common/FormField'
 import { HelpPanel } from '@/client/components/common/HelpPanel'
-import { api, getErrorMessage, toastError } from '@/client/lib/api'
+import { api, buildApiUrl, getErrorMessage, toastError, withNativeAuthTransport } from '@/client/lib/api'
 import { useModels } from '@/client/hooks/useModels'
 import { useAgents } from '@/client/hooks/useAgents'
 import { useSSE } from '@/client/hooks/useSSE'
@@ -147,11 +147,10 @@ export function AvatarsSettings() {
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const res = await fetch('/api/settings/avatar-base/upload', {
+      const res = await fetch(buildApiUrl('/settings/avatar-base/upload'), withNativeAuthTransport({
         method: 'POST',
-        credentials: 'include',
         body: formData,
-      })
+      }))
       if (!res.ok) {
         const body = await res.json().catch(() => null) as { error?: { message?: string } } | null
         throw new Error(body?.error?.message ?? t('settings.avatars.base.uploadFailed'))
