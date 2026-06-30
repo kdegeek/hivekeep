@@ -16,6 +16,17 @@ import * as HostReact from 'react'
 // components/chat/CustomToolRenderer.tsx.
 ;(window as unknown as { __HIVEKEEP_REACT__?: typeof HostReact }).__HIVEKEEP_REACT__ = HostReact
 
+if (new URLSearchParams(window.location.search).get('quickPanel') === '1') {
+  window.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return
+    event.preventDefault()
+    event.stopPropagation()
+    void import('@tauri-apps/api/core')
+      .then(({ invoke }) => invoke('hide_quick_panel'))
+      .catch(() => undefined)
+  }, true)
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>

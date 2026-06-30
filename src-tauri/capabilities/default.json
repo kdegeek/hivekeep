@@ -1,6 +1,6 @@
 {
   "identifier": "default",
   "description": "Minimal capability set for the Hivekeep desktop shell.",
-  "windows": ["main"],
+  "windows": ["main", "quick-panel"],
   "permissions": []
 }
