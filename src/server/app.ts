@@ -82,6 +82,7 @@ const log = createLogger('http')
 const globalCors = cors({
   origin: [
     'capacitor://localhost',
+    'http://localhost',
     'http://localhost:5173',
     'http://localhost:3000',
     ...(process.env.TRUSTED_ORIGINS ? process.env.TRUSTED_ORIGINS.split(',').map(o => o.trim()) : []),
