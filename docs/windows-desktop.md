@@ -126,18 +126,64 @@ attaches `Authorization: Bearer <token>` to every API and SSE request via
 have Better Auth's bearer plugin enabled so it accepts these tokens; this is the
 default server configuration.
 
-Because the desktop shell omits cookies and relies on bearer auth rather than
-credentialed cross-origin requests, the custom-protocol WebView origin
-(`http://tauri.localhost` on Windows) generally does not need to be added to
-`TRUSTED_ORIGINS`/CORS. Continue to set `PUBLIC_URL` to the URL users open and use
-`TRUSTED_ORIGINS` for additional browser origins. If a future build switches the
-desktop shell back to cookie-based credentialed requests, the WebView origin shown
-in devtools would then need to be listed in the server's Better Auth trusted
-origins.
+The WebView origin still has to be in the server's trusted-origins allowlist —
+omitting cookies does not exempt a request from CORS. A `fetch()` in the
+default `cors` mode needs a matching `Access-Control-Allow-Origin` response
+header before the browser will let the page read the response, regardless of
+whether credentials are sent. `src/server/auth/origins.ts` ships
+`tauri://localhost` (macOS/Linux) and `http://tauri.localhost`
+(Windows/Android) in its default `DESKTOP_ORIGINS` list, which feeds both the
+CORS middleware and Better Auth's own origin check, so a stock server already
+trusts the desktop shell out of the box. If you've overridden
+`TRUSTED_ORIGINS`, make sure it still includes those two values — `origins.ts`
+always unions your override with `DESKTOP_ORIGINS`, so you don't need to
+repeat them yourself. If the WebView ever reports a different literal origin
+(check the failing request's `Origin` header in DevTools), that exact string
+needs to go in `DESKTOP_ORIGINS`.
 
 The global SSE stream remains `GET /api/sse`: one multiplexed EventSource per
 desktop client (authenticated with the same bearer token), with no
 desktop-specific event types required by the server contract.
+
+## Native shell capabilities
+
+- **Single instance.** `tauri-plugin-single-instance` is registered first in
+  the Rust `Builder` chain (a Tauri requirement). Launching the app again
+  while it's already running — including from a Start Menu shortcut while
+  hidden in the tray — focuses the existing main window instead of opening a
+  second one.
+- **External links and OAuth sign-in.** The webview has no shell-open
+  permission by default, so a plain link click or `window.open()` used to
+  navigate the app's own webview to a dead URL. `src/client/lib/native-links.ts`
+  routes external `http(s)` links (provider API-key pages, OAuth authorize
+  URLs, release notes, etc.) through `tauri-plugin-opener` into the OS
+  browser instead. This only gets a link open in the browser — it does not
+  complete an OAuth round trip back into the app (no custom URI scheme /
+  deep-link handler is registered), so OAuth "connect account" flows still
+  need a manual return to the desktop app after sign-in.
+- **Native OS notifications.** `useNativeDesktopNotifications` fires a Windows
+  toast via `tauri-plugin-notification` when the server pushes a
+  `notification:new` SSE event while the main window is unfocused — e.g. a
+  background agent task finishing while Hivekeep is minimized to the tray.
+  Focus state comes from a `hivekeep-window-focus` event emitted by Rust on
+  `WindowEvent::Focused`, not the page's `document.visibilityState`, which
+  isn't a reliable signal once the window is hidden to the tray rather than
+  just backgrounded. Catch-up after a dropped/reconnected SSE stream reuses
+  the existing `useSSEResync` mechanism against `GET /api/notifications`.
+  Clicking a toast does not yet deep-link to the related page (relies on
+  Windows' default behavior of focusing the originating app).
+- **Auto-update.** The desktop binary checks `plugins.updater.endpoints` in
+  `tauri.conf.json` (a GitHub Releases `latest.json`) via `tauri-plugin-updater`
+  on launch and offers to download, install, and relaunch. This is separate
+  from the web/Docker server-update flow (`UpdateContext`) — that flow
+  updates the server the browser talks to; it has no way to replace a
+  desktop installer. Publishing a release that the updater can see requires
+  `.github/workflows/release-desktop.yml`, which needs `TAURI_SIGNING_PRIVATE_KEY`
+  / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` repo secrets (the keypair generated
+  via `tauri signer generate`, public half embedded in `tauri.conf.json`) in
+  addition to the Windows code-signing secrets above. Trigger it by pushing a
+  `v*.*.*` tag or running it manually via `workflow_dispatch`; it publishes a
+  **draft** GitHub Release for review before going live.
 
 ## Signing secrets
 
