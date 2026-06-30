@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Hivekeep",
-  "version": "1.9.0",
+  "version": "../package.json",
   "identifier": "com.marlburrow.hivekeep",
   "build": {
     "beforeDevCommand": "npm run dev:client",
@@ -25,11 +25,35 @@
   },
   "bundle": {
     "active": true,
+    "targets": ["msi", "nsis"],
+    "publisher": "marlburrow",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "http://timestamp.digicert.com",
+      "wix": {
+        "language": "en-US"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "startMenuFolder": "Hivekeep"
+      },
+      "signCommand": {
+        "cmd": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          "& { param($target) $script = if (Test-Path -LiteralPath 'scripts/sign-windows-tauri.ps1') { 'scripts/sign-windows-tauri.ps1' } else { '../scripts/sign-windows-tauri.ps1' }; & $script $target }",
+          "%1"
+        ]
+      }
+    }
   }
 }
