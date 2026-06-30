@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback, useContext, createContext } from 'react'
 import type { ReactNode } from 'react'
-import { api, buildApiUrl } from '@/client/lib/api'
+import {
+  api,
+  buildApiUrl,
+  clearMobileAuthToken,
+  getMobileAuthToken,
+  isMobileApiRuntime,
+  setMobileAuthToken,
+} from '@/client/lib/api'
 import i18n, { changeAppLanguage } from '@/client/lib/i18n'
 
 interface UserProfile {
@@ -71,13 +78,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await fetch(buildApiUrl('/auth/sign-in/email'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
+      credentials: isMobileApiRuntime() ? 'omit' : 'include',
       body: JSON.stringify({ email, password }),
     })
 
+    const body = await response.json().catch(() => ({})) as { message?: string; token?: string }
+
     if (!response.ok) {
-      const body = await response.json().catch(() => ({}))
       throw new Error(body?.message ?? 'Login failed')
+    }
+
+    const mobileToken = response.headers.get('set-auth-token') ?? body.token
+    if (isMobileApiRuntime() && mobileToken) {
+      setMobileAuthToken(mobileToken)
     }
 
     // Verify the session was actually established — throws if not
@@ -96,24 +109,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await fetch(buildApiUrl('/auth/sign-up/email'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
+      credentials: isMobileApiRuntime() ? 'omit' : 'include',
       body: JSON.stringify(data),
     })
 
+    const body = await response.json().catch(() => ({})) as { token?: string }
+
     if (!response.ok) {
-      const error = await response.json()
-      throw error
+      throw body
+    }
+
+    const mobileToken = response.headers.get('set-auth-token') ?? body.token
+    if (isMobileApiRuntime() && mobileToken) {
+      setMobileAuthToken(mobileToken)
     }
 
     await fetchUser()
   }
 
   const logout = async () => {
-    await fetch(buildApiUrl('/auth/sign-out'), {
-      method: 'POST',
-      credentials: 'include',
-    })
-    window.location.href = '/'
+    const token = isMobileApiRuntime() ? getMobileAuthToken() : null
+    try {
+      await fetch(buildApiUrl('/auth/sign-out'), {
+        method: 'POST',
+        credentials: isMobileApiRuntime() ? 'omit' : 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
+    } finally {
+      if (isMobileApiRuntime()) clearMobileAuthToken()
+      window.location.href = '/'
+    }
   }
 
   return (

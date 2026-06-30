@@ -220,7 +220,7 @@ describe('authMiddleware', () => {
       expect(mockGetSession).not.toHaveBeenCalled()
     })
 
-    it('allows trusted mobile origins to use cookie credentials', async () => {
+    it('allows trusted mobile origin requests to reach session auth', async () => {
       mockGetSession = mock(() => Promise.resolve({
         session: { id: 'sess-1', userId: 'user-1' },
         user: { id: 'user-1', name: 'Test User', email: 'test@example.com' },
@@ -254,6 +254,20 @@ describe('authMiddleware', () => {
       })
       expect(res.status).toBe(200)
       expect(mockGetSession).toHaveBeenCalledTimes(1)
+    })
+
+    it('blocks untrusted unsafe cookie requests even when the mobile origin is trusted', async () => {
+      const res = await app.request('/api/agents', {
+        method: 'POST',
+        headers: {
+          origin: 'https://evil.example',
+          cookie: 'better-auth.session_token=test-token',
+        },
+      })
+      expect(res.status).toBe(403)
+      const body = await res.json()
+      expect(body.error.code).toBe('CSRF_BLOCKED')
+      expect(mockGetSession).not.toHaveBeenCalled()
     })
   })
 })

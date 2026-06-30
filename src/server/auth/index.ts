@@ -1,6 +1,7 @@
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { APIError } from 'better-auth/api'
+import { bearer } from 'better-auth/plugins/bearer'
 import { db } from '@/server/db/index'
 import * as schema from '@/server/db/schema'
 import { config } from '@/server/config'
@@ -35,12 +36,7 @@ export const auth = betterAuth({
     },
   },
   trustedOrigins,
-  advanced: {
-    defaultCookieAttributes: {
-      sameSite: 'none',
-      secure: true,
-    },
-  },
+  plugins: [bearer()],
 })
 
 export type Session = typeof auth.$Infer.Session
