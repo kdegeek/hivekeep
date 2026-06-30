@@ -4,7 +4,7 @@ import { useAuth } from '@/client/hooks/useAuth'
 import { useTranslation } from 'react-i18next'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { api, getHivekeepServerUrl, isMobileApiRuntime } from '@/client/lib/api'
+import { api, getHivekeepServerUrl, isMobileApiRuntime, shouldUseMobileSurface } from '@/client/lib/api'
 import { useNativeMobileNotifications } from '@/client/hooks/useNativeMobileNotifications'
 import { SidePanelProvider } from '@/client/contexts/SidePanelContext'
 import { TasksProvider } from '@/client/contexts/TasksContext'
@@ -43,10 +43,11 @@ const SettingsModal = lazy(() => import('@/client/pages/settings/SettingsPage').
 const AccountDialog = lazy(() => import('@/client/pages/account/AccountPage').then(m => ({ default: m.AccountDialog })))
 
 const isDev = import.meta.env.DEV
-const isMobileApp = isMobileApiRuntime()
+const isMobileApiApp = isMobileApiRuntime()
+const useMobileRouteTree = shouldUseMobileSurface()
 
 function getConfiguredMobileServerUrl(): string | null {
-  if (!isMobileApp) return null
+  if (!isMobileApiApp) return null
   try {
     return getHivekeepServerUrl()
   } catch {
@@ -76,7 +77,7 @@ function AppRoot() {
   const { isLoading: authLoading, isAuthenticated, login, refetch } = useAuth()
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStatus | null>(null)
   const [mobileServerUrl, setMobileServerUrl] = useState(getConfiguredMobileServerUrl)
-  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(() => !isMobileApp || !!mobileServerUrl)
+  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(() => !isMobileApiApp || !!mobileServerUrl)
   const [backendError, setBackendError] = useState(false)
 
   const checkOnboarding = useCallback(async () => {
@@ -92,7 +93,7 @@ function AppRoot() {
   }, [])
 
   useEffect(() => {
-    if (isMobileApp && !mobileServerUrl) {
+    if (isMobileApiApp && !mobileServerUrl) {
       setIsCheckingOnboarding(false)
       return
     }
@@ -122,7 +123,7 @@ function AppRoot() {
     })
   }, [])
 
-  if (isMobileApp && !mobileServerUrl) {
+  if (isMobileApiApp && !mobileServerUrl) {
     return (
       <Suspense fallback={<PageFallback />}>
         <MobileServerConnectionPage onConnected={handleMobileConnected} />
@@ -144,7 +145,7 @@ function AppRoot() {
 
   // Backend unreachable — show error with retry
   if (backendError) {
-    if (isMobileApp) {
+    if (isMobileApiApp) {
       return (
         <Suspense fallback={<PageFallback />}>
           <MobileServerConnectionPage
@@ -242,7 +243,7 @@ function AuthenticatedShell() {
       state: section || filters ? { section, filters } : undefined,
     })
   }, [navigate])
-  const openSettings = isMobileApp ? handleOpenMobileSettings : handleOpenSettings
+  const openSettings = useMobileRouteTree ? handleOpenMobileSettings : handleOpenSettings
   useNativeMobileNotifications(navigate)
 
   // Surface the result of an email OAuth connect (the callback redirects back
@@ -272,7 +273,7 @@ function AuthenticatedShell() {
     <FeedbackProvider>
     <TicketMentionShell>
       <>
-      {isMobileApp ? (
+      {useMobileRouteTree ? (
         <MobileAppShell
           onOpenSettings={openSettings}
           onOpenAccount={handleOpenAccount}
@@ -341,7 +342,7 @@ function AuthenticatedShell() {
       )}
 
         {/* Global modals — rendered once, survive navigation */}
-        {!isMobileApp && (
+        {!useMobileRouteTree && (
           <Suspense fallback={null}>
             <SettingsModal
               open={settingsOpen}

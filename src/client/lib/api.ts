@@ -3,12 +3,53 @@ import { toast } from 'sonner'
 const API_PATH_PREFIX = '/api'
 export const MOBILE_SERVER_URL_STORAGE_KEY = 'hivekeep:serverUrl'
 
+export type NativeRuntime = 'desktop' | 'mobile'
+export type AppSurface = 'desktop' | 'mobile'
+
+declare global {
+  interface Window {
+    __HIVEKEEP_DESKTOP__?: boolean
+    __HIVEKEEP_NATIVE_RUNTIME__?: NativeRuntime
+    __HIVEKEEP_SURFACE__?: AppSurface
+  }
+}
+
+function getInjectedNativeRuntime(): NativeRuntime | null {
+  if (typeof window === 'undefined') return null
+  const runtime = window.__HIVEKEEP_NATIVE_RUNTIME__
+  return runtime === 'desktop' || runtime === 'mobile' ? runtime : null
+}
+
+function getRequestedSurface(): AppSurface | null {
+  if (typeof window === 'undefined') return null
+  const searchSurface = new URLSearchParams(window.location.search).get('surface')
+  const injectedSurface = window.__HIVEKEEP_SURFACE__
+  if (searchSurface === 'mobile' || injectedSurface === 'mobile') return 'mobile'
+  if (searchSurface === 'desktop' || injectedSurface === 'desktop') return 'desktop'
+  return null
+}
+
 export function isCapacitorRuntime(): boolean {
   return typeof window !== 'undefined' && window.location.protocol === 'capacitor:'
 }
 
+export function isDesktopRuntime(): boolean {
+  return import.meta.env?.VITE_HIVEKEEP_DESKTOP === 'true' ||
+    (typeof window !== 'undefined' && window.__HIVEKEEP_DESKTOP__ === true) ||
+    getInjectedNativeRuntime() === 'desktop'
+}
+
 export function isMobileApiRuntime(): boolean {
-  return import.meta.env?.VITE_HIVEKEEP_MOBILE === 'true' || isCapacitorRuntime()
+  return import.meta.env?.VITE_HIVEKEEP_MOBILE === 'true' ||
+    isCapacitorRuntime() ||
+    getInjectedNativeRuntime() === 'mobile'
+}
+
+export function shouldUseMobileSurface(): boolean {
+  const requestedSurface = getRequestedSurface()
+  if (requestedSurface === 'mobile') return true
+  if (requestedSurface === 'desktop') return false
+  return isMobileApiRuntime() && !isDesktopRuntime()
 }
 
 function getStoredServerUrl(): string | null {
