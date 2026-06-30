@@ -110,12 +110,21 @@ interface AuthedAsset {
  * indefinite loading spinner.
  */
 function useAuthedAssetUrl(url: string | null | undefined): AuthedAsset {
-  const passThrough = !!url && !needsNativeAssetAuth(url)
-  const [asset, setAsset] = useState<AuthedAsset>(
-    passThrough
+  const initialAsset = (): AuthedAsset =>
+    !!url && !needsNativeAssetAuth(url)
       ? { url: url as string, status: 'ready' }
-      : { url: null, status: url ? 'loading' : 'idle' },
-  )
+      : { url: null, status: url ? 'loading' : 'idle' }
+
+  const [asset, setAsset] = useState<AuthedAsset>(initialAsset)
+
+  // Adjust state during render when the `url` prop changes so the first render
+  // with a new URL never returns the previous asset (which would briefly show
+  // the old preview as "ready" before the effect resets it).
+  const [prevUrl, setPrevUrl] = useState(url)
+  if (url !== prevUrl) {
+    setPrevUrl(url)
+    setAsset(initialAsset())
+  }
 
   useEffect(() => {
     if (!url) {
