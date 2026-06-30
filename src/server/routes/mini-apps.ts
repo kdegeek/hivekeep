@@ -57,9 +57,26 @@ export const miniAppRoutes = new Hono<{ Variables: AppVariables }>()
 miniAppRoutes.use('*', cors({
   origin: '*',
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'x-hivekeep-app-token'],
+  allowHeaders: ['Authorization', 'Content-Type', 'x-hivekeep-app-token'],
   maxAge: 600,
 }))
+
+// ─── Native iframe bootstrap ───────────────────────────────────────────────
+
+miniAppRoutes.post('/:id/frame-token', async (c) => {
+  const app = await getMiniAppRow(c.req.param('id'))
+  if (!app) {
+    return c.json({ error: { code: 'NOT_FOUND', message: 'App not found' } }, 404)
+  }
+
+  const user = c.get('user') as { id: string } | undefined
+  if (!user?.id) {
+    return c.json({ error: { code: 'UNAUTHORIZED', message: 'Authentication required' } }, 401)
+  }
+
+  const { mintFrameToken } = await import('@/server/services/mini-app-token')
+  return c.json({ token: mintFrameToken(app.id, user.id) })
+})
 
 // ─── Lookup by slug ─────────────────────────────────────────────────────────
 
