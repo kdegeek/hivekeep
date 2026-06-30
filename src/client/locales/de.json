@@ -3196,6 +3196,15 @@
     "updateSuccess": "Auf {{version}} aktualisiert!",
     "updateFailed": "Update fehlgeschlagen"
   },
+  "desktopUpdate": {
+    "title": "Desktop-Update verfügbar",
+    "description": "Hivekeep {{version}} ist bereit zur Installation",
+    "releaseNotes": "Was ist neu",
+    "updateButton": "Aktualisieren und neu starten",
+    "later": "Später",
+    "downloading": "Update wird heruntergeladen...",
+    "restarting": "Hivekeep wird neu gestartet..."
+  },
   "whatsNew": {
     "title": "Was ist neu",
     "description": "Du nutzt v{{version}}",

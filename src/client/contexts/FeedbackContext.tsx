@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { lazy, Suspense } from 'react'
 import { api } from '@/client/lib/api'
+import { openExternalUrl } from '@/client/lib/native-links'
 import { useAuth } from '@/client/hooks/useAuth'
 
 const FeedbackDialog = lazy(() =>
@@ -73,7 +74,7 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
     // Optimistic: flip locally so the banner CTA updates instantly.
     setState((s) => ({ ...s, starred: true, shouldPrompt: false }))
     patch('starred')
-    window.open(state.githubUrl, '_blank', 'noopener,noreferrer')
+    void openExternalUrl(state.githubUrl)
   }, [patch, state.githubUrl])
 
   const snooze = useCallback(() => {

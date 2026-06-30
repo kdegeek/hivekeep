@@ -15,6 +15,7 @@ import { Label } from '@/client/components/ui/label'
 import { useSecretPrompts } from '@/client/hooks/useSecretPrompts'
 import { useSSE } from '@/client/hooks/useSSE'
 import { QrPairingView } from '@/client/components/channel/QrPairingView'
+import { openExternalUrl } from '@/client/lib/native-links'
 
 /**
  * Secure-input modal: appears when the configurator Agent requests a secret
@@ -104,7 +105,7 @@ export function SecretPromptModal({ agentId }: { agentId: string | null }) {
                 type="button"
                 variant="secondary"
                 className="w-full"
-                onClick={() => window.open(prompt.oauth!.authorizeUrl, '_blank', 'noopener,noreferrer')}
+                onClick={() => void openExternalUrl(prompt.oauth!.authorizeUrl)}
               >
                 <LogIn className="size-4" />
                 {t('secretPrompt.oauthSignIn', { provider: prompt.oauth.providerDisplayName })}

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useSSE } from '@/client/hooks/useSSE'
 import { useProviderTypes } from '@/client/hooks/useProviderTypes'
+import { openExternalUrl } from '@/client/lib/native-links'
 import { CheckCircle2, XCircle, AlertTriangle, ArrowUpCircle } from 'lucide-react'
 
 /**
@@ -62,7 +63,7 @@ export function StatusNotifications() {
           action: releaseUrl
             ? {
                 label: t('statusNotifications.viewRelease', 'View'),
-                onClick: () => window.open(releaseUrl, '_blank'),
+                onClick: () => void openExternalUrl(releaseUrl),
               }
             : undefined,
         },

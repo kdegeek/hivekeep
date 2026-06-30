@@ -3199,6 +3199,15 @@
     "updateSuccess": "Mis à jour vers {{version}} !",
     "updateFailed": "Échec de la mise à jour"
   },
+  "desktopUpdate": {
+    "title": "Mise à jour du bureau disponible",
+    "description": "Hivekeep {{version}} est prêt à être installé",
+    "releaseNotes": "Nouveautés",
+    "updateButton": "Mettre à jour et redémarrer",
+    "later": "Plus tard",
+    "downloading": "Téléchargement de la mise à jour...",
+    "restarting": "Redémarrage de Hivekeep..."
+  },
   "whatsNew": {
     "title": "Nouveautés",
     "description": "Vous utilisez la v{{version}}",

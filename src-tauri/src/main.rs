@@ -27,6 +27,12 @@ const QUICK_PANEL_MENU_ID: &str = "quick-panel";
 const SETTINGS_MENU_ID: &str = "settings";
 const QUIT_MENU_ID: &str = "quit";
 const OPEN_SETTINGS_EVENT: &str = "hivekeep-open-settings";
+// Whether the main window currently has OS focus. Emitted instead of relying
+// on the webview's document.visibilityState, which is unreliable once the
+// window is hidden to the tray rather than just backgrounded — the frontend
+// uses this to decide whether a new notification should also fire a native
+// OS toast (only when the user isn't already looking at the app).
+const WINDOW_FOCUS_EVENT: &str = "hivekeep-window-focus";
 
 #[derive(Default)]
 struct QuickPanelState {
@@ -43,6 +49,16 @@ fn hide_quick_panel(app: AppHandle) -> Result<(), String> {
 
 fn main() {
     tauri::Builder::default()
+        // Must be registered before any other plugin (Tauri requirement): a second
+        // launch attempt is redirected here instead of opening a second window, so
+        // Hivekeep stays a true single-instance tray app.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            open_main_window(app);
+        }))
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(QuickPanelState::default())
         .invoke_handler(tauri::generate_handler![hide_quick_panel])
         .setup(|app| {
@@ -69,6 +85,9 @@ fn main() {
                     save_main_window_placement(window);
                     api.prevent_close();
                     let _ = window.hide();
+                }
+                if let WindowEvent::Focused(is_focused) = event {
+                    let _ = window.emit(WINDOW_FOCUS_EVENT, *is_focused);
                 }
             }
             _ => {}

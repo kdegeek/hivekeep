@@ -3196,6 +3196,15 @@
     "updateSuccess": "{{version}}にアップデートしました!",
     "updateFailed": "アップデートに失敗しました"
   },
+  "desktopUpdate": {
+    "title": "デスクトップアップデートが利用可能です",
+    "description": "Hivekeep {{version}}のインストール準備ができました",
+    "releaseNotes": "新着情報",
+    "updateButton": "更新して再起動",
+    "later": "後で",
+    "downloading": "アップデートをダウンロード中...",
+    "restarting": "Hivekeepを再起動中..."
+  },
   "whatsNew": {
     "title": "新着情報",
     "description": "v{{version}}を実行中",
