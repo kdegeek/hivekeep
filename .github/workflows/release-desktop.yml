@@ -91,7 +91,7 @@ jobs:
           "tag=$tag" >> $env:GITHUB_OUTPUT
 
       - name: Build, sign, and publish via Tauri Action
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Windows Authenticode signing (installer/uninstaller) — same gating
